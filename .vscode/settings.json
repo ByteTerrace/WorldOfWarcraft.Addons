@@ -1,0 +1,17 @@
+{
+    "Lua.diagnostics.globals": [
+        "ActionButton5",
+        "ActionButton9",
+        "ActionButton11",
+        "RegisterAttributeDriver",
+        "MultiBarBottomLeft",
+        "MultiBarBottomRight",
+        "MultiBarLeft",
+        "MultiBarRight",
+        "CharacterMicroButton",
+        "MainMenuBar",
+        "LOW",
+        "Add",
+        "PLAYER"
+    ]
+}

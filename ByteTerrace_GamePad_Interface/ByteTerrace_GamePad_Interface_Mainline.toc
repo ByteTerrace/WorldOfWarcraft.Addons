@@ -1,0 +1,9 @@
+## Author: kittoes@byteterrace.com
+## Dependencies: ByteTerrace
+## Interface: 100207
+## Notes: Pardon all the dust!
+## SavedVariables: ByteTerrace_GamePad_Interface
+## Title: ByteTerrace |cFFFF69B4GamePad Interface|r
+## Version: 0.0.0-alpha
+
+ByteTerrace_GamePad_Interface.lua

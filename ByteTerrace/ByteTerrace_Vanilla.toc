@@ -1,0 +1,7 @@
+## Author: kittoes@byteterrace.com
+## Interface: 11503
+## Notes: Base library for ByteTerrace World of Warcraft AddOns.
+## Title: ByteTerrace
+## Version: 0.0.0-alpha
+
+ByteTerrace.lua

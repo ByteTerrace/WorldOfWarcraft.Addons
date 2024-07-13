@@ -1,9 +1,10 @@
 ---@type string
 local addOnName = select(1, ...)
 local api = ByteTerrace
----@param bindingCount integer
+local bindingButton
+local isBindingUpdatePending = false
 ---@param secureButton ButtonFromTemplate
-local initializeDriver = function (bindingCount, secureButton)
+local initializeDriver = function (secureButton)
     secureButton:EnableGamePadButton(true)
     secureButton:RegisterForClicks("AnyDown", "AnyUp")
     secureButton:SetAttribute("action", 1)
@@ -12,7 +13,6 @@ local initializeDriver = function (bindingCount, secureButton)
     secureButton:SetAttribute("ActionBarPage-State3", 5)
     secureButton:SetAttribute("ActionBarPage-State4", 4)
     secureButton:SetAttribute("ActionBarPage-State5", 3)
-    secureButton:SetAttribute("ActionBinding-Count", bindingCount)
     secureButton:SetAttribute("type", "actionbar")
     ---@diagnostic disable-next-line: undefined-field
     secureButton:WrapScript(secureButton, "OnClick", [[
@@ -58,18 +58,33 @@ local initializeDriver = function (bindingCount, secureButton)
     end
 end
 ---@generic FrameTemplateType
----@param bindings table
+---@param bindings table<string, any>
 ---@param secureButton ButtonFromTemplate
----@return integer
 local setBindings = function (bindings, secureButton)
-    SetOverrideBindingClick(secureButton, true, bindings.Modifier1.Input, secureButton:GetName(), bindings.Modifier1.Input)
-    SetOverrideBindingClick(secureButton, true, bindings.Modifier2.Input, secureButton:GetName(), bindings.Modifier2.Input)
+    if (InCombatLockdown()) then
+        isBindingUpdatePending = true
+
+        return
+    end
 
     local actionCount = 0
+    local bindingOverrides
+    local gamePadType = select(2, api.GamePad.GetType(1))
+
+    if (nil ~= gamePadType) then
+        bindingOverrides = gamePadType.BindingOverrides
+    end
+
+    SetOverrideBindingClick(secureButton, true, bindings.Modifier1.Input, secureButton:GetName(), bindings.Modifier1.Input)
+    SetOverrideBindingClick(secureButton, true, bindings.Modifier2.Input, secureButton:GetName(), bindings.Modifier2.Input)
 
     for bindingName, bindingTable in pairs(bindings) do
         local input = bindingTable.Input
         local states = bindingTable.States
+
+        if (nil ~= bindingOverrides[input]) then
+            input = bindingOverrides[input]
+        end
 
         secureButton:SetAttribute((bindingName .. "-Input"), input)
 
@@ -86,14 +101,13 @@ local setBindings = function (bindings, secureButton)
         end
     end
 
-    return actionCount
+    secureButton:SetAttribute("ActionBinding-Count", actionCount)
 end
 
 api.Events.Register({
     ADDON_LOADED = function (name)
         if (addOnName == name) then
             local addOnSettings = _G[addOnName]
-            local controllerButton = CreateFrame("Button", "ByteTerraceGamePadActionBarControllerButton", UIParent, "SecureActionButtonTemplate, SecureHandlerStateTemplate")
 
             if (nil == addOnSettings) then
                 addOnSettings = {
@@ -183,7 +197,7 @@ api.Events.Register({
                             },
                         },
                         Action13 = {
-                            Input = "PADSOCIAL",
+                            Input = "PADBACK",
                             States = {
                                 [1] = "TOGGLEWORLDMAP",
                                 [2] = "OPENALLBAGS",
@@ -201,6 +215,12 @@ api.Events.Register({
                                 [4] = "TOGGLEGAMEMENU",
                                 [5] = "TOGGLEGAMEMENU",
                             },
+                        },
+                        Action15 = {
+                            Input = "PADSOCIAL",
+                        },
+                        Action16 = {
+                            Input = "PADSYSTEM",
                         },
                         Modifier1 = {
                             Input = "PADLTRIGGER",
@@ -253,12 +273,23 @@ api.Events.Register({
                 _G[addOnName] = addOnSettings
             end
 
-            initializeDriver(setBindings(addOnSettings.Bindings, controllerButton), controllerButton)
+            bindingButton = CreateFrame("Button", "ByteTerraceGamePadBindingsButton", UIParent, "SecureActionButtonTemplate, SecureHandlerStateTemplate")
+
+            setBindings(addOnSettings.Bindings, bindingButton)
+            initializeDriver(bindingButton)
         end
+    end,
+    GAME_PAD_CONNECTED = function()
+        setBindings(_G[addOnName].Bindings, bindingButton)
     end,
     PLAYER_ENTERING_WORLD = function (isInitialLogin, isReloadingUi)
         if (isInitialLogin or isReloadingUi) then
             api.Console.SetVariables(_G[addOnName].ConsoleVariables)
+        end
+    end,
+    PLAYER_REGEN_ENABLED = function ()
+        if (isBindingUpdatePending) then
+            setBindings(_G[addOnName].Bindings, bindingButton)
         end
     end,
 })

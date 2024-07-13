@@ -1,14 +1,20 @@
 ---@generic TemplateType
 ---@alias ButtonFromTemplate Button | TemplateType
 
+GAMEPAD_GENERIC = 0
+GAMEPAD_MICROSOFT_XBOX_SERIESX = 1
+GAMEPAD_NINTENDO_SWITCH_PRO = 2
+GAMEPAD_SONY_PLAYSTATION_DUALSENSE5 = 3
+
 local api = {
     Colors = {
-        IsAwayFromKeyboard = CreateColorFromBytes(255, 255, 0, 255),
-        IsInCombat = CreateColorFromBytes(255, 0, 0, 255),
-        IsNeutral = CreateColorFromBytes(0, 255, 0, 255),
+        AwayFromKeyboard = CreateColorFromBytes(255, 255, 0, 255),
+        InCombat = CreateColorFromBytes(255, 0, 0, 255),
+        Neutral = CreateColorFromBytes(0, 255, 0, 255),
     },
     Console = {},
     Events = {},
+    GamePad = {},
     System = {},
     UserInterface = {},
 }
@@ -16,6 +22,29 @@ local eventFrame = CreateFrame("Frame", "ByteTerraceEventFrame", UIParent, "Secu
 ---@type table<string, table<function, function>>
 local eventMap = {}
 local hiddenFrame = CreateFrame("Frame", "ByteTerraceHiddenFrame", UIParent, "SecureHandlerStateTemplate")
+---@type table<integer, table<string, any>>
+local knownGamePadTypes = {
+    [GAMEPAD_GENERIC] = {
+        BindingOverrides = {},
+    },
+    [GAMEPAD_MICROSOFT_XBOX_SERIESX] = {
+        BindingOverrides = {},
+    },
+    [GAMEPAD_NINTENDO_SWITCH_PRO] = {
+        BindingOverrides = {},
+    },
+    [GAMEPAD_SONY_PLAYSTATION_DUALSENSE5] = {
+        BindingOverrides = {
+            ["PADBACK"] = "PADSOCIAL",
+        },
+    },
+}
+---@type table<integer, integer>
+local vendorIdToGamePadTypeMap = {
+    [1118] = GAMEPAD_MICROSOFT_XBOX_SERIESX,
+    [1356] = GAMEPAD_SONY_PLAYSTATION_DUALSENSE5,
+    [1406] = GAMEPAD_NINTENDO_SWITCH_PRO,
+}
 
 ---@param variableMap table<string, string|number>
 function api.Console.SetVariables(variableMap)
@@ -45,6 +74,20 @@ function api.Events.Register(eventHandlerMap)
 
         handlerMap[eventHandler] = eventHandler
     end
+end
+---@param deviceId integer
+---@return integer, table<string, any>
+function api.GamePad.GetType(deviceId)
+    local gamePadId
+    local gamePadType = knownGamePadTypes[0]
+    local rawState = C_GamePad.GetDeviceRawState(deviceId)
+
+    if (nil ~= rawState) then
+        gamePadId = vendorIdToGamePadTypeMap[rawState.vendorID]
+        gamePadType = knownGamePadTypes[gamePadId]
+    end
+
+    return gamePadId, gamePadType
 end
 function api.System.IsClassic()
     return (WOW_PROJECT_CLASSIC == WOW_PROJECT_ID)

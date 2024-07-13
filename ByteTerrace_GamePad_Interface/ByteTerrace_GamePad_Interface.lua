@@ -8,7 +8,7 @@ local jumpButton = CreateFrame("Button", "ByteTerraceGamePadJumpButton", UIParen
 local secureHeader = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
 
 local ActionButton_OverrideRangeIndicator
-local Events_OnGamePadActiveChanged
+local Events_OnGamePadConnected
 local Events_OnPlayerEnteringWorld
 local Events_OnPlayerFlagsChanged
 local Events_OnPlayerRegenDisabled
@@ -41,43 +41,31 @@ ActionButton_OverrideRangeIndicator = function(self, actionButtonType)
         hotKey:SetText(_G["RANGE_INDICATOR"])
     end
 end
-Events_OnGamePadActiveChanged = function ()
-    local addonSettings = System_GetAddOnSettings()
-    local gamePadButtons = addonSettings.GamePad.Buttons
-    local gamePadType = "Generic"
+Events_OnGamePadConnected = function ()
+    local gamePadTypeId = select(1, ByteTerrace.GamePad.GetType(1))
+    local gamePadTypeName = "Generic"
     local iconTextureMap = ByteTerrace.GamePad.IconTextureMap
     local themeBasePath = ("Interface/AddOns/" .. addOnName .. "/Assets/Themes/juliocacko_alt")
 
-    for deviceId in ipairs(C_GamePad:GetAllDeviceIDs()) do
-        local _, rawState = pcall(C_GamePad.GetDeviceRawState, deviceId)
-
-        if (nil ~= rawState) then
-            local deviceType = addonSettings.GamePad.VendorIdMap[rawState.vendorID]
-
-            if ("DualSense" == deviceType) then
-                gamePadButtons.Select.Binding = "PADSOCIAL"
-                gamePadType = "Sony PlayStation"
-            elseif ("NintendoSwitchPro" == deviceType) then
-                gamePadButtons.Select.Binding = "PADBACK"
-                gamePadType = "Nintendo Switch"
-            elseif ("XboxSeriesX" == deviceType) then
-                gamePadButtons.Select.Binding = "PADBACK"
-                gamePadType = "Microsoft Xbox"
-            end
-        end
+    if (GAMEPAD_MICROSOFT_XBOX_SERIESX == gamePadTypeId) then
+        gamePadTypeName = "Microsoft Xbox"
+    elseif (GAMEPAD_NINTENDO_SWITCH_PRO == gamePadTypeId) then
+        gamePadTypeName = "Nintendo Switch"
+    elseif (GAMEPAD_SONY_PLAYSTATION_DUALSENSE5 == gamePadTypeId) then
+        gamePadTypeName = "Sony PlayStation"
     end
 
     iconTextureMap[0] = (themeBasePath .. "/Generic/dpad_up")
     iconTextureMap[1] = (themeBasePath .. "/Generic/dpad_right")
     iconTextureMap[2] = (themeBasePath .. "/Generic/dpad_down")
     iconTextureMap[3] = (themeBasePath .. "/Generic/dpad_left")
-    iconTextureMap[4] = (themeBasePath .. "/" .. gamePadType .. "/l1")
+    iconTextureMap[4] = (themeBasePath .. "/" .. gamePadTypeName .. "/l1")
     iconTextureMap[5] = (themeBasePath .. "/Generic/l3")
-    iconTextureMap[6] = (themeBasePath .. "/" .. gamePadType .. "/bpad_up")
-    iconTextureMap[7] = (themeBasePath .. "/" .. gamePadType .. "/bpad_left")
-    iconTextureMap[8] = (themeBasePath .. "/" .. gamePadType .. "/bpad_down")
-    iconTextureMap[9] = (themeBasePath .. "/" .. gamePadType .. "/bpad_right")
-    iconTextureMap[10] = (themeBasePath .. "/" .. gamePadType .. "/r1")
+    iconTextureMap[6] = (themeBasePath .. "/" .. gamePadTypeName .. "/bpad_up")
+    iconTextureMap[7] = (themeBasePath .. "/" .. gamePadTypeName .. "/bpad_left")
+    iconTextureMap[8] = (themeBasePath .. "/" .. gamePadTypeName .. "/bpad_down")
+    iconTextureMap[9] = (themeBasePath .. "/" .. gamePadTypeName .. "/bpad_right")
+    iconTextureMap[10] = (themeBasePath .. "/" .. gamePadTypeName .. "/r1")
     iconTextureMap[11] = (themeBasePath .. "/Generic/r3")
 
     for i = 0, 11 do
@@ -258,7 +246,7 @@ GamePad_InitializeUserInterface = function (gamePadSettings, jumpButton, parentF
     end
 end
 Player_GetStatusIndicatorColor = function (colors, isAwayFromKeyboard, isInCombat)
-    return (isInCombat and colors.IsInCombat or (isAwayFromKeyboard and colors.IsAwayFromKeyboard or colors.IsNeutral))
+    return (isInCombat and colors.InCombat or (isAwayFromKeyboard and colors.AwayFromKeyboard or colors.Neutral))
 end
 System_GetAddOnSettings = function ()
     return _G[addOnName]
@@ -381,18 +369,21 @@ System_SetAddOnSettings = function (settings)
 end
 
 ByteTerrace.Events.Register({
-    ADDON_LOADED = function ()
-        local addOnSettings = System_GetAddOnSettings()
+    ADDON_LOADED = function (name)
+        if (addOnName == name) then
+            local addOnSettings = System_GetAddOnSettings()
 
-        if (nil == addOnSettings) then
-            addOnSettings = System_GetDefaultAddOnSettings()
+            if (nil == addOnSettings) then
+                addOnSettings = System_GetDefaultAddOnSettings()
 
-            System_SetAddOnSettings(addOnSettings)
+                System_SetAddOnSettings(addOnSettings)
+            end
+
+            GamePad_InitializeUserInterface(addOnSettings.GamePad, jumpButton, secureHeader)
+            Events_OnGamePadConnected()
         end
-
-        GamePad_InitializeUserInterface(addOnSettings.GamePad, jumpButton, secureHeader)
-        Events_OnGamePadActiveChanged()
     end,
+    GAME_PAD_CONNECTED = Events_OnGamePadConnected,
     PLAYER_ENTERING_WORLD = Events_OnPlayerEnteringWorld,
     PLAYER_FLAGS_CHANGED = Events_OnPlayerFlagsChanged,
     PLAYER_REGEN_DISABLED = Events_OnPlayerRegenDisabled,

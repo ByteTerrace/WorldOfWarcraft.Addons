@@ -1,11 +1,13 @@
-if (nil == ByteTerrace.GamePad) then
-    ByteTerrace.GamePad = {}
-end
-
 ---@type string
 local addOnName = select(1, ...)
-local jumpButton = CreateFrame("Button", "ByteTerraceGamePadJumpButton", UIParent, "ActionButtonTemplate, SecureActionButtonTemplate")
-local secureHeader = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
+local isInCombat = InCombatLockdown()
+local ledColors = {
+    AwayFromKeyboard = CreateColorFromBytes(255, 255, 0, 255),
+    InCombat = CreateColorFromBytes(255, 0, 0, 255),
+    Neutral = CreateColorFromBytes(0, 255, 0, 255),
+}
+local jumpButton = CreateFrame("Button", "ByteTerraceGamePadInterfaceJumpButton", UIParent, "ActionButtonTemplate, SecureActionButtonTemplate")
+local secureHeader = CreateFrame("Frame", "ByteTerraceGamePadInterfaceStateFrame", UIParent, "SecureHandlerStateTemplate")
 
 local ActionButton_OverrideRangeIndicator
 local Events_OnGamePadConnected
@@ -27,7 +29,7 @@ ActionButton_OverrideRangeIndicator = function(self, actionButtonType)
         local _, _, _, offsetX, offsetY = gamePadIcon.texture:GetPoint()
 
         if ((0 == offsetX) and (0 == offsetY)) then
-            offsetY = (System_GetAddOnSettings().GamePad.ActionBars.ButtonSize * 0.4375)
+            offsetY = (System_GetAddOnSettings().ActionBars.ButtonSize * 0.4375)
         end
 
         hotKey:ClearAllPoints()
@@ -42,9 +44,10 @@ ActionButton_OverrideRangeIndicator = function(self, actionButtonType)
     end
 end
 Events_OnGamePadConnected = function ()
+    local addOnSettings = System_GetAddOnSettings()
     local gamePadTypeId = select(1, ByteTerrace.GamePad.GetType(1))
     local gamePadTypeName = "Generic"
-    local iconTextureMap = ByteTerrace.GamePad.IconTextureMap
+    local iconTextureMap = addOnSettings.ActionBars.IconTextureMap
     local themeBasePath = ("Interface/AddOns/" .. addOnName .. "/Assets/Themes/juliocacko_alt")
 
     if (GAMEPAD_MICROSOFT_XBOX_SERIESX == gamePadTypeId) then
@@ -94,28 +97,28 @@ Events_OnPlayerEnteringWorld = function (isInitialLogin, isReloadingUi)
     Events_OnPlayerFlagsChanged()
 end
 Events_OnPlayerFlagsChanged = function (unitTarget)
-    C_GamePad.SetLedColor(Player_GetStatusIndicatorColor(ByteTerrace.Colors, IsChatAFK(), ByteTerrace.Player.IsInCombat))
+    C_GamePad.SetLedColor(Player_GetStatusIndicatorColor(ledColors, IsChatAFK(), isInCombat))
 end
 Events_OnPlayerRegenDisabled = function ()
-    ByteTerrace.Player.IsInCombat = true
+    isInCombat = true
     C_GamePad.SetVibration("High", 1.0)
     Events_OnPlayerFlagsChanged()
 end
 Events_OnPlayerRegenEnabled = function ()
-    ByteTerrace.Player.IsInCombat = false
+    isInCombat = false
     C_GamePad.SetVibration("Low", 0.5)
     Events_OnPlayerFlagsChanged()
 end
-GamePad_InitializeUserInterface = function (gamePadSettings, jumpButton, parentFrame)
+GamePad_InitializeUserInterface = function (addonSettings, jumpButton, parentFrame)
     -- Update frame strata of multi-bar frames so that the gamepad icon has the highest z-index.
     _G["MultiBarBottomLeft"]:SetFrameStrata("LOW")
     _G["MultiBarBottomRight"]:SetFrameStrata("LOW")
     _G["MultiBarLeft"]:SetFrameStrata("LOW")
     _G["MultiBarRight"]:SetFrameStrata("LOW")
 
-    parentFrame:SetPoint("BOTTOM", gamePadSettings.ActionBars.OffsetX, gamePadSettings.ActionBars.OffsetY)
+    parentFrame:SetPoint("BOTTOM", addonSettings.ActionBars.OffsetX, addonSettings.ActionBars.OffsetY)
 
-    local buttonSize = gamePadSettings.ActionBars.ButtonSize
+    local buttonSize = addonSettings.ActionBars.ButtonSize
     local buttonSizeTimes2 = (buttonSize * 2)
     local buttonSizeTimes3 = (buttonSize * 3)
     local buttonSizeTimes4 = (buttonSize * 4)
@@ -124,7 +127,7 @@ GamePad_InitializeUserInterface = function (gamePadSettings, jumpButton, parentF
 
     for i = 0, 59 do
         local actionBarName = "ActionButton"
-        local alpha = gamePadSettings.ActionBars.AlphaWhenActive
+        local alpha = addonSettings.ActionBars.AlphaWhenActive
         local iMod2 = (i % 2)
         local iMod6 = (i % 6)
         local iMod12 = (i % 12)
@@ -134,22 +137,22 @@ GamePad_InitializeUserInterface = function (gamePadSettings, jumpButton, parentF
 
         if ((i > 11) and (i < 24)) then
             actionBarName = "MultiBarBottomLeftButton"
-            alpha = gamePadSettings.ActionBars.AlphaWhenPassive
+            alpha = addonSettings.ActionBars.AlphaWhenPassive
             xOffset = (xOffset + (buttonSizeTimes2 * (isReflection and 1 or -1)))
             yOffset = (yOffset - buttonSize)
         elseif ((i > 23) and (i < 36)) then
             actionBarName = "MultiBarBottomRightButton"
-            alpha = gamePadSettings.ActionBars.AlphaWhenPassive
+            alpha = addonSettings.ActionBars.AlphaWhenPassive
             xOffset = (xOffset + (buttonSizeTimes3 * (isReflection and -1 or 1)))
             yOffset = yOffset
         elseif ((i > 35) and (i < 48)) then
             actionBarName = "MultiBarLeftButton"
-            alpha = gamePadSettings.ActionBars.AlphaWhenPassive
+            alpha = addonSettings.ActionBars.AlphaWhenPassive
             xOffset = (xOffset + (buttonSizeTimes2 * (isReflection and 1 or -1)))
             yOffset = (yOffset + buttonSizeTimes2)
         elseif ((i > 47) and (i < 60)) then
             actionBarName = "MultiBarRightButton"
-            alpha = gamePadSettings.ActionBars.AlphaWhenPassive
+            alpha = addonSettings.ActionBars.AlphaWhenPassive
             xOffset = (xOffset + (buttonSize * (isReflection and -1 or 1)))
             yOffset = (yOffset + buttonSizeTimes2)
         end
@@ -253,6 +256,14 @@ System_GetAddOnSettings = function ()
 end
 System_GetDefaultAddOnSettings = function ()
     local settings = {
+        ActionBars = {
+            AlphaWhenActive = 1.0,
+            AlphaWhenPassive = 0.65,
+            ButtonSize = 45,
+            IconTextureMap = {},
+            OffsetX = 0,
+            OffsetY = 220,
+        },
         Camera = {
             ConsoleVariables = {
                 CameraKeepCharacterCentered = false,
@@ -267,99 +278,10 @@ System_GetDefaultAddOnSettings = function ()
                 test_cameraTargetFocusInteractStrengthYaw = 1.0,
             },
         },
-        GamePad = {
-            ActionBars = {
-                AlphaWhenActive = 1.0,
-                AlphaWhenPassive = 0.65,
-                ButtonSize = 45,
-                OffsetX = 0,
-                OffsetY = 220,
-            },
-            Buttons = {
-                PadShoulderLeft = {
-                    States = {
-                        [1] = { Binding = "TARGETNEARESTENEMY", },
-                        [2] = { Binding = "TARGETNEARESTFRIEND", },
-                        [3] = { Binding = "UNBOUND", },
-                    },
-                },
-                PadShoulderRight = {
-                    States = {
-                        [1] = { Binding = "INTERACTMOUSEOVER", },
-                        [2] = { Binding = "TOGGLEAUTORUN", },
-                        [3] = { Binding = "FLIPCAMERAYAW", },
-                    },
-                },
-                Select = {
-                    Binding = "PADSOCIAL",
-                    States = {
-                        [1] = { Binding = "TOGGLEWORLDMAP", },
-                        [2] = { Binding = "OPENALLBAGS", },
-                        [3] = { Binding = "TOGGLECHARACTER0", },
-                        [4] = { Binding = "TOGGLESOCIAL", },
-                        [5] = { Binding = "TOGGLESPELLBOOK", },
-                    },
-                },
-                Start = {
-                    Binding = "PADFORWARD",
-                    States = {
-                        [1] = { Binding = "TOGGLEGAMEMENU", },
-                        [2] = { Binding = "TOGGLEGAMEMENU", },
-                        [3] = { Binding = "TOGGLEGAMEMENU", },
-                        [4] = { Binding = "TOGGLEGAMEMENU", },
-                        [5] = { Binding = "TOGGLEGAMEMENU", },
-                    },
-                },
-            },
-            ConsoleVariables = {
-                GamePadAnalogMovement = true,
-                GamePadCameraPitchSpeed = 1.5,
-                GamePadCameraYawSpeed = 2.25,
-                GamePadCursorAutoDisableJump = true,
-                GamePadCursorAutoDisableSticks = "2",
-                GamePadCursorAutoEnable = false,
-                GamePadCursorCenteredEmulation = false,
-                GamePadCursorCentering = false,
-                GamePadCursorForTargeting = false,
-                GamePadCursorLeftClick = "NONE",
-                GamePadCursorOnLogin = true,
-                GamePadCursorRightClick = "NONE",
-                GamePadEmulateAlt = "NONE",
-                GamePadEmulateCtrl = "NONE",
-                GamePadEmulateShift = "NONE",
-                GamePadEmulateTapWindowMs = 350,
-                GamePadEnable = true,
-                GamePadFaceMovementMaxAngle = 115.0,
-                GamePadFaceMovementMaxAngleCombat = 115.0,
-                GamePadFactionColor = false,
-                GamePadOverlapMouseMs = 2000,
-                GamePadRunThreshold = 0.65,
-                GamePadStickAxisButtons = false,
-                GamePadTankTurnSpeed = 0.0,
-                GamePadTouchCursorEnable = false,
-                GamePadTurnWithCamera = "2",
-                GamePadVibrationStrength = 1.0,
-                SoftTargetEnemy = "1",
-                SoftTargetEnemyArc = "1",
-                SoftTargetEnemyRange = 30.0,
-                SoftTargetFriend = "1",
-                SoftTargetFriendArc = "1",
-                SoftTargetFriendRange = 10.0,
-                SoftTargetForce = "0",
-                SoftTargetInteract = "1",
-                SoftTargetInteractArc = "1",
-                SoftTargetInteractRange = 2.5,
-            },
-            VendorIdMap = {
-                [1118] = "XboxSeriesX",          -- Official Xbox Series X Controller: Bluetooth/USBC
-                [1356] = "DualSense",            -- Official PlayStation 5 DualSense Controller: Bluetooth/USBC
-                [1406] = "NintendoSwitchPro",    -- Official Nintendo Switch Pro Controller: Bluetooth/USBC
-            },
-        },
     }
 
     if ByteTerrace.System.IsClassic() then
-        settings.GamePad.ActionBars.ButtonSize = 40
+        settings.ActionBars.ButtonSize = 40
     end
 
     return settings
@@ -379,7 +301,7 @@ ByteTerrace.Events.Register({
                 System_SetAddOnSettings(addOnSettings)
             end
 
-            GamePad_InitializeUserInterface(addOnSettings.GamePad, jumpButton, secureHeader)
+            GamePad_InitializeUserInterface(addOnSettings, jumpButton, secureHeader)
             Events_OnGamePadConnected()
         end
     end,
@@ -395,18 +317,18 @@ secureHeader:SetAttribute("_onstate-actionbar", [[
     local actionButton9 = self:GetFrameRef("ActionButton9")
     local actionButton11 = self:GetFrameRef("ActionButton11")
     local currentActionBarPage = self:GetAttribute("state-actionbar")
-    --local jumpButton = self:GetFrameRef("JumpButton")
+    local jumpButton = self:GetFrameRef("JumpButton")
 
     if (1 == currentActionBarPage) then
         actionButton5:Hide()
         actionButton9:Disable()
         actionButton9:Hide()
         actionButton11:Hide()
-        --jumpButton:Show()
+        jumpButton:Show()
     else
         actionButton9:Enable()
         actionButton9:Show()
-        --jumpButton:Hide()
+        jumpButton:Hide()
 
         if (3 == currentActionBarPage) then
             actionButton5:Show()
@@ -434,13 +356,8 @@ if (nil ~= jumpButton) then
     hooksecurefunc("JumpOrAscendStart", function () jumpButton:SetButtonState("PUSHED") end)
 end
 
-ByteTerrace.GamePad.IconTextureMap = {}
-ByteTerrace.Player = {
-    IsInCombat = InCombatLockdown(),
-}
-
-RegisterAttributeDriver(secureHeader, "state-actionbar", "[bar:1] 1;[bar:3] 3;[bar:4] 4;[bar:5] 5;[bar:6] 6;")
-
 if ByteTerrace.System.IsClassic() then
     hooksecurefunc("ActionButton_UpdateHotkeys", ActionButton_OverrideRangeIndicator)
 end
+
+RegisterAttributeDriver(secureHeader, "state-actionbar", "[bar:1] 1;[bar:3] 3;[bar:4] 4;[bar:5] 5;[bar:6] 6;")

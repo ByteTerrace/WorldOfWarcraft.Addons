@@ -7,11 +7,6 @@ GAMEPAD_NINTENDO_SWITCH_PRO = 2
 GAMEPAD_SONY_PLAYSTATION_DUALSENSE5 = 3
 
 local api = {
-    Colors = {
-        AwayFromKeyboard = CreateColorFromBytes(255, 255, 0, 255),
-        InCombat = CreateColorFromBytes(255, 0, 0, 255),
-        Neutral = CreateColorFromBytes(0, 255, 0, 255),
-    },
     Console = {},
     Events = {},
     GamePad = {},

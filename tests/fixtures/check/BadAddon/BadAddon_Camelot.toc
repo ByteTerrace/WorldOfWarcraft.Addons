@@ -1,0 +1,7 @@
+## Interface: 11507
+## Title: BadAddon
+## Dependencies: MissingAddon
+## SavedVariables: BadAddonDB
+
+Bad.lua
+Missing.lua

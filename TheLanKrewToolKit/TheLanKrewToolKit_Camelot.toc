@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: The Lan Krew ToolKit
+## Notes: Utilities for The Lan Krew.
+## Author: ByteTerrace
+## Version: 0.1.0
+## Category: ByteTerrace
+## Dependencies: ByteTerrace_Core
+## IconTexture: Interface\Icons\INV_Misc_Wrench_01
+## SavedVariables: TheLanKrewToolKitDB
+## AddonCompartmentFunc: TheLanKrewToolKit_OnAddonCompartmentClick
+
+AddOn.lua
+FuckOMeter.lua
+Sounds.lua
+Controller.lua

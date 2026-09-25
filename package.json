@@ -1,0 +1,19 @@
+{
+  "name": "byteterrace-wow-addons",
+  "private": true,
+  "type": "module",
+  "description": "ByteTerrace World of Warcraft addons: tooling (check, test, deploy, api-sync).",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "tlk": "node tools/tlk.mjs",
+    "check": "node tools/tlk.mjs check",
+    "test": "node tools/tlk.mjs test",
+    "deploy": "node tools/tlk.mjs deploy"
+  },
+  "devDependencies": {
+    "luaparse": "0.3.1",
+    "wasmoon-lua5.1": "1.18.10"
+  }
+}

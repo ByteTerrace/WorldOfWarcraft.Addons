@@ -1,0 +1,53 @@
+-- The harness's own fidelity rules. If these fail, every other test's evidence is suspect.
+
+test("secret values throw on comparison and arithmetic", function()
+    local h = Harness.new()
+    h:EnterCombat()
+    local health = h.env.UnitHealth("player")
+    truthy(h.env.issecretvalue(health), "UnitHealth is secret in combat")
+    throws(function() return health >= 1 end, "compare") -- Lua 5.1 refuses number vs table itself
+    throws(function() return health >= h.env.UnitHealthMax("player") end, "secret")
+    throws(function() return health + 1 end, "secret")
+    throws(function() return "hp: " .. health end, "secret")
+    eq(Reveal(health), 100)
+end)
+
+test("secret flags come from the API snapshot", function()
+    local h = Harness.new()
+    h:EnterCombat()
+    falsy(h.env.issecretvalue(h.env.UnitIsPlayer("player")), "UnitIsPlayer is never secret")
+    truthy(h.env.issecretvalue(h.env.UnitPower("player", 3)), "UnitPower is secret in combat")
+    h:LeaveCombat()
+    falsy(h.env.issecretvalue(h.env.UnitHealth("player")), "UnitHealth is plain out of combat")
+end)
+
+test("InCombatLockdown is false during PLAYER_REGEN_DISABLED", function()
+    local h = Harness.new()
+    local seen
+    local frame = h.env.CreateFrame("Frame")
+    frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    frame:SetScript("OnEvent", function() seen = h.env.InCombatLockdown() end)
+    h:EnterCombat()
+    eq(seen, false)
+    eq(h.env.InCombatLockdown(), true)
+end)
+
+test("only real API is allowed", function()
+    local h = Harness.new()
+    local frame = h.env.CreateFrame("Frame")
+    throws(function() frame:RegisterEvent("NOT_A_REAL_EVENT") end, "unknown event")
+    throws(function() frame:NotARealMethod() end, "no method")
+    throws(function() return h.env.NotARealGlobal end, "undefined global")
+end)
+
+test("unit events respect their unit filter", function()
+    local h = Harness.new()
+    local count = 0
+    local frame = h.env.CreateFrame("Frame")
+    frame:RegisterUnitEvent("UNIT_HEALTH", "player")
+    frame:SetScript("OnEvent", function() count = count + 1 end)
+    h:Fire("UNIT_HEALTH", "target")
+    h:Fire("UNIT_HEALTH", "player")
+    eq(count, 1)
+    eq(frame.calls.RegisterUnitEvent, 1, "widget calls are counted")
+end)

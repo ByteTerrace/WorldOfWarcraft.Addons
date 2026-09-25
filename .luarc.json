@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "Lua 5.1",
+  "workspace.ignoreDir": ["node_modules", "tests/fixtures"],
+  "diagnostics.globals": [
+    "ByteTerrace",
+    "ByteTerraceDevToolsDB",
+    "TheLanKrewToolKitDB",
+    "TheLanKrewToolKit_OnAddonCompartmentClick"
+  ]
+}

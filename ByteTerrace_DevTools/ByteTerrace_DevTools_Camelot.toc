@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: ByteTerrace DevTools
+## Notes: Development only. /btdev dump records the client's globals for `tlk api-sync`.
+## Author: ByteTerrace
+## Version: 0.1.0
+## Category: ByteTerrace
+## SavedVariables: ByteTerraceDevToolsDB
+
+DevTools.lua

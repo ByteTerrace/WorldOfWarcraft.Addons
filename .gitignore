@@ -1,3 +1,6 @@
 node_modules/
 TheLanKrewToolKit/Media/*.ogg
 TheLanKrewToolKit/Media/*.mp3
+
+# Other addons kept for reference only: never shipped, and may hold audio we can't redistribute.
+reference/

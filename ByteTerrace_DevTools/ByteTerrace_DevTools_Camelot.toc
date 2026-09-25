@@ -1,9 +1,14 @@
 ## Interface: 16001
 ## Title: ByteTerrace DevTools
-## Notes: Development only. /btdev dump records the client's globals for `tlk api-sync`.
+## Notes: Development only. /btdev dump records the client's globals for `tlk api-sync`; /btdev probe records calibration probes for `tlk probes`.
 ## Author: ByteTerrace
 ## Version: 0.1.0
 ## Category: ByteTerrace
 ## SavedVariables: ByteTerraceDevToolsDB
 
+Probes.lua
+ProbeNeeds.lua
+ProbesWorld.lua
+ProbesUnits.lua
+ProbesCombat.lua
 DevTools.lua

@@ -2,7 +2,7 @@
 -- controller buttons to commands.
 --
 -- Sources are named by position ("gamepad.south"), never by printed letter, because the letter
--- depends on the controller family. Label(source) gives the printed name for the connected
+-- depends on the controller family. Input.Label(source) gives the printed name for the connected
 -- controller: A on Xbox, Cross on PlayStation, B on Switch.
 --
 --   Bind(map, source, command)  before compile.
@@ -14,17 +14,8 @@
 -- A held command whose map is deactivated while its button is down receives "cancel".
 -- Captured input is insecure: bind commands, never protected actions.
 
-local ByteTerrace = ByteTerrace
-local Refuse = ByteTerrace.Refuse
-local C_GamePad, CreateFrame, pcall = C_GamePad, CreateFrame, pcall
-local ipairs, pairs = ipairs, pairs
-
-local Input = {}
-Input.__index = Input
-ByteTerrace.Input = Input
-
 -- { source, WoW key, label key }
-local SOURCES = {
+local Sources = {
     { "gamepad.south", "PAD1", "south" },
     { "gamepad.east", "PAD2", "east" },
     { "gamepad.west", "PAD3", "west" },
@@ -43,10 +34,11 @@ local SOURCES = {
     { "gamepad.start", "PADFORWARD", "start" },
 }
 
-local DPAD = { dpadUp = "D-pad Up", dpadDown = "D-pad Down", dpadLeft = "D-pad Left", dpadRight = "D-pad Right" }
+-- The same on every family.
+local DirectionalPadLabels = { dpadUp = "D-pad Up", dpadDown = "D-pad Down", dpadLeft = "D-pad Left", dpadRight = "D-pad Right" }
 
 -- Keyed by C_GamePad's labelStyle for the active device.
-local LABELS = {
+local Labels = {
     Letters = { south = "A", east = "B", west = "X", north = "Y", leftShoulder = "LB", rightShoulder = "RB",
         leftTrigger = "LT", rightTrigger = "RT", leftStick = "LS", rightStick = "RS", back = "View", start = "Menu" },
     Shapes = { south = "Cross", east = "Circle", west = "Square", north = "Triangle", leftShoulder = "L1", rightShoulder = "R1",
@@ -58,50 +50,71 @@ local LABELS = {
         leftStick = "Left Stick", rightStick = "Right Stick", back = "Back", start = "Start" },
 }
 
-local keyOf, labelKeyOf, sourceOf = {}, {}, {}
-for _, entry in ipairs(SOURCES) do
-    keyOf[entry[1]], labelKeyOf[entry[1]], sourceOf[entry[2]] = entry[2], entry[3], entry[1]
+-- [source] = WoW key and [source] = label key, from Sources.
+local KeyOf, LabelKeyOf = {}, {}
+for _, entry in ipairs(Sources) do
+    KeyOf[entry[1]], LabelKeyOf[entry[1]] = entry[2], entry[3]
 end
-Input.keyOf, Input.sourceOf = keyOf, sourceOf
 
--- The connected controller's label style, or "Generic" when none is connected.
+local ByteTerrace = ByteTerrace
+local Refuse = ByteTerrace.Refuse
+local C_GamePad, CreateFrame, pcall = C_GamePad, CreateFrame, pcall
+local ipairs, next, pairs = ipairs, next, pairs
+
+local Input = {}
+Input.__index = Input
+ByteTerrace.Input = Input
+
+--- The connected controller's label style (a key of Labels: "Letters", "Shapes", "Reverse"), or
+--- "Generic" when none is connected.
+---@return string
 function Input.LabelStyle()
     local ok, mapped = pcall(C_GamePad.GetDeviceMappedState, C_GamePad.GetActiveDeviceID())
     local style = ok and mapped and mapped.labelStyle
-    return LABELS[style] and style or "Generic"
+    return Labels[style] and style or "Generic"
 end
 
+--- A source's printed name for a label style (default: the connected controller's).
+---@param source string e.g. "gamepad.south"
+---@param style string?
+---@return string? label nil for an unknown source
 function Input.Label(source, style)
-    local key = labelKeyOf[source]
+    local key = LabelKeyOf[source]
     if not key then
         return nil
     end
-    return DPAD[key] or LABELS[style or Input.LabelStyle()][key]
+    return DirectionalPadLabels[key] or Labels[style or Input.LabelStyle()][key]
 end
 
+--- Creates an addon's input router, with no bindings and no capture frame yet.
+---@param addon table the owning AddOn, whose commands bindings run
 function ByteTerrace.NewInput(addon)
     return setmetatable({
-        addon = addon,
-        declared = {},     -- { map, source, command } until compile
-        compiled = false,
-        maps = {},         -- [map] = { [key] = command id }
-        active = {},       -- [key] = command id, for the active maps
-        latched = {},      -- [key] = command id its press went to
-        activeMaps = {},
+        m_addon = addon,
+        m_declared = {},     -- { map, source, command } until compile
+        m_compiled = false,
+        m_maps = {},         -- [map] = { [key] = command id }
+        m_active = {},       -- [key] = command id, for the active maps
+        m_latched = {},      -- [key] = command id its press went to
     }, Input)
 end
 
+--- Binds a source to a command in a map, before compile.
+---@param map string
+---@param source string e.g. "gamepad.south"
+---@param command string the command's full name, e.g. "Meter.toggle"
 function Input:Bind(map, source, command)
-    if self.compiled then
-        error(self.addon.name .. ": binding for " .. tostring(source) .. " declared after compile", 2)
+    if self.m_compiled then
+        error(self.m_addon.Name .. ": binding for " .. tostring(source) .. " declared after compile", 2)
     end
-    self.declared[#self.declared + 1] = { map = map, source = source, command = command }
+    self.m_declared[#self.m_declared + 1] = { map = map, source = source, command = command }
 end
 
+--- Resolves every binding, raising all problems at once. Runs after the commands compile.
 function Input:Compile()
-    local problems, commands = {}, self.addon.commands
-    for _, binding in ipairs(self.declared) do
-        local key, id = keyOf[binding.source], commands:Id(binding.command)
+    local problems, commands = {}, self.m_addon.Commands
+    for _, binding in ipairs(self.m_declared) do
+        local key, id = KeyOf[binding.source], commands.Ids[binding.command]
         if not key then
             problems[#problems + 1] = ("%s: unknown source %s"):format(binding.map, tostring(binding.source))
         end
@@ -109,75 +122,101 @@ function Input:Compile()
             problems[#problems + 1] = ("%s: unknown command %s"):format(binding.map, tostring(binding.command))
         end
         if key and id then
-            local map = self.maps[binding.map] or {}
-            self.maps[binding.map] = map
+            local map = self.m_maps[binding.map] or {}
+            self.m_maps[binding.map] = map
             if map[key] then
                 problems[#problems + 1] = ("%s: %s is bound twice"):format(binding.map, binding.source)
             end
             map[key] = id
         end
     end
-    Refuse(self.addon.name .. " input", problems)
-    self.declared = nil
-    self.compiled = true
+    Refuse(self.m_addon.Name .. " input", problems)
+    self.m_declared = nil
+    self.m_compiled = true
 end
 
+--- The capture frame, created on first use. It's parentless: hiding UIParent (Alt+Z,
+--- cinematics) must not hide capture.
 function Input:EnsureFrame()
-    if self.frame then
-        return self.frame
+    if self.m_frame then
+        return self.m_frame
     end
-    local frame = CreateFrame("Frame", nil, UIParent)
+    local frame = CreateFrame("Frame")
     frame:SetScript("OnGamePadButtonDown", function(_, key)
         return self:Down(key)
     end)
     frame:SetScript("OnGamePadButtonUp", function(_, key)
         return self:Up(key)
     end)
-    self.frame = frame
+    self.m_frame = frame
     return frame
 end
 
--- Returns true to let the button propagate (Blizzard's convention for gamepad button scripts).
+--- Handles a button press.
+---@param key string the WoW key, e.g. "PAD1"
+---@return boolean propagate true lets the button reach the game (Blizzard's convention for
+--- gamepad button scripts)
 function Input:Down(key)
-    local id = self.active[key]
+    local id = self.m_active[key]
     if not id then
         return true
     end
-    self.latched[key] = id
-    self.addon.commands:Run(id, nil, "down", "gamepad")
+    self.m_latched[key] = id
+    self.m_addon.Commands:Run(id, nil, "down", "gamepad")
     return false
 end
 
+--- Handles a button release; it goes to the command its press went to.
+---@param key string
+---@return boolean propagate
 function Input:Up(key)
-    local id = self.latched[key]
+    local id = self.m_latched[key]
     if not id then
         return true
     end
-    self.latched[key] = nil
-    self.addon.commands:Run(id, nil, "up", "gamepad")
+    self.m_latched[key] = nil
+    self.m_addon.Commands:Run(id, nil, "up", "gamepad")
     return false
 end
 
+--- Turns capture on while any binding is active. EnableGamePadButton is flagged protected, but
+--- like Show and Hide that only restricts protected (Secure) frames; the capture frame is a
+--- plain frame, so this works in combat too.
+function Input:ApplyCapture()
+    local wanted = next(self.m_active) ~= nil
+    if wanted or self.m_frame then
+        self:EnsureFrame():EnableGamePadButton(wanted)
+    end
+end
+
+--- Activates exactly these maps; later maps win a source two of them bind. A held command
+--- whose button stops routing to it gets "cancel", after the new maps are in place, so a cancel
+--- handler that switches maps again wins. An unknown map is an error.
+---@param maps string[]
 function Input:SetActiveMaps(maps)
-    local active, any = {}, false
+    local active = {}
     for _, name in ipairs(maps) do
-        local map = self.maps[name]
+        local map = self.m_maps[name]
         if not map then
-            error(self.addon.name .. ": unknown input map " .. tostring(name), 2)
+            error(self.m_addon.Name .. ": unknown input map " .. tostring(name), 2)
         end
         for key, id in pairs(map) do
             active[key] = id
-            any = true
         end
     end
-    for key, id in pairs(self.latched) do
+    self.m_active = active
+    local canceled
+    for key, id in pairs(self.m_latched) do
         if active[key] ~= id then
-            self.latched[key] = nil
-            self.addon.commands:Run(id, nil, "cancel", "gamepad")
+            canceled = canceled or {}
+            canceled[#canceled + 1] = id
+            self.m_latched[key] = nil
         end
     end
-    self.active, self.activeMaps = active, maps
-    if any or self.frame then
-        self:EnsureFrame():EnableGamePadButton(any)
+    self:ApplyCapture()
+    if canceled then
+        for _, id in ipairs(canceled) do
+            self.m_addon.Commands:Run(id, nil, "cancel", "gamepad")
+        end
     end
 end

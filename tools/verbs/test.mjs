@@ -1,140 +1,110 @@
 // Behavioral tests: tests/*.test.lua run in real Lua 5.1 against the fake client in
-// tests/harness. Each test file gets a fresh VM; each test builds its own Harness.
+// tests/harness, and tests/*.test.mjs test the tooling itself. Each test file runs in its own
+// worker thread (and Lua VM) with a timeout, so a hang fails that file instead of the run. The
+// timeout counts from when the worker finishes its setup (Lua VM, snapshot, harness, test file),
+// which has its own, generous limit (SETUP_MS), so load on the machine can't fail a quick test.
 //
-// A test file calls test(name, fn). Assertions: eq(actual, expected, message),
-// truthy(value, message), falsy(value, message), throws(fn, pattern, message).
+//   node tools/tlk.mjs test [filter] [--timeout <seconds>] [--dir <folder>]
+//
+// The filter is a substring of "<file> > <test name>"; only matching tests run, and a filter
+// that matches nothing fails the run. Besides the files, the run checks that every harness fake
+// names a global the client dump has ("harness > every fake names a real client global").
+//
+// A Lua test file calls test(name, fn). Assertions: eq(actual, expected, message),
+// truthy(value, message), falsy(value, message), throws(fn, pattern, message). A test fails when
+// a harness it created saw errors it didn't declare with h:ExpectErrors(count | patterns...).
+// pending(reason) ends a test that can't decide anything yet (a probe with no observed result):
+// it prints "PEND <file> > <name>: <reason>", counts as pending, and doesn't fail the run.
 
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { findAddons, repoRoot } from "../lib/repo.mjs";
-import { createLua } from "../lib/lua.mjs";
+import { availableParallelism } from "node:os";
+import { readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { Worker } from "node:worker_threads";
+import { repoRoot } from "../lib/repo.mjs";
 
-export const options = {};
+export const options = {
+    timeout: { type: "string", default: "30" }, // seconds per test file
+    dir: { type: "string" },                    // test folder (default tests/); the runner's own tests use a fixture
+};
 
-const PRELUDE = `
-    local tests = {}
-    function test(name, fn) tests[#tests + 1] = { name = name, fn = fn } end
-    local function show(v) if type(v) == "string" then return string.format("%q", v) end return tostring(Reveal(v)) end
-    function eq(actual, expected, message)
-        actual = Reveal(actual)
-        if actual ~= expected then
-            error((message and (message .. ": ") or "") .. "expected " .. show(expected) .. ", got " .. show(actual), 2)
-        end
-    end
-    function truthy(value, message) if not Reveal(value) then error((message or "expected truthy") .. ", got " .. show(value), 2) end end
-    function falsy(value, message) if Reveal(value) then error((message or "expected falsy") .. ", got " .. show(value), 2) end end
-    function throws(fn, pattern, message)
-        local ok, err = pcall(fn)
-        if ok then error((message or "expected an error"), 2) end
-        if pattern and not tostring(err):find(pattern) then error("error " .. show(err) .. " does not match " .. show(pattern), 2) end
-    end
-    function __run()
-        local lines = {}
-        for _, t in ipairs(tests) do
-            Harness.created = {}
-            local ok, err = pcall(t.fn)
-            if ok then
-                for _, h in ipairs(Harness.created) do
-                    if #h.errors ~= h.expectedErrors then
-                        ok, err = false, "reported errors (expected " .. h.expectedErrors .. "): " .. table.concat(h.errors, " | ")
-                    end
-                end
-            end
-            local detail = ok and "" or (tostring(err):gsub("[\\t\\n]", " "))
-            lines[#lines + 1] = (ok and "1" or "0") .. "\\t" .. t.name .. "\\t" .. detail
-        end
-        return table.concat(lines, "\\n")
-    end
-`;
+const WORKER = new URL("../lib/test-worker.mjs", import.meta.url);
+const SETUP_MS = 120000;
+export const FAKES_JOB = "harness";
 
-function loadSnapshot() {
-    // Lua sees name -> number of secret flags (0 = never secret); arrays don't cross into Lua 1-based.
-    const snapshot = JSON.parse(readFileSync(join(repoRoot, "tools", "api", "forever.json"), "utf8"));
-    const counts = (table) => Object.fromEntries(Object.entries(table).map(([name, flags]) => [name, flags.length]));
-    return {
-        functions: counts(snapshot.functions),
-        events: counts(snapshot.events),
-        methods: Object.fromEntries(Object.entries(snapshot.methods).map(([api, methods]) => [api, counts(methods)])),
-    };
-}
-
-function loadAddons() {
-    const addons = {};
-    for (const addon of findAddons()) {
-        addons[addon.name] = {
-            files: addon.files.filter((f) => f.endsWith(".lua")),
-            sources: addon.files.filter((f) => f.endsWith(".lua")).map((f) => readFileSync(join(addon.dir, f), "utf8")),
-            metadata: addon.metadata,
-            savedVariables: (addon.metadata.SavedVariables ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+function runJob(job, timeoutMs) {
+    return new Promise((resolve) => {
+        const worker = new Worker(WORKER, { workerData: job });
+        let settled = false;
+        const finish = (outcome) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            worker.terminate();
+            resolve(outcome);
         };
-    }
-    return addons;
+        let timer = setTimeout(() => finish({ error: `setup timed out after ${SETUP_MS / 1000}s` }), SETUP_MS);
+        worker.on("message", (message) => {
+            if (!message.ready) return finish(message);
+            clearTimeout(timer);
+            timer = setTimeout(() => finish({ error: `timed out after ${timeoutMs / 1000}s` }), timeoutMs);
+        });
+        worker.once("error", (error) => finish({ error: String(error?.stack ?? error) }));
+        worker.once("exit", (code) => finish({ error: `worker exited with code ${code} before reporting` }));
+    });
 }
 
-async function runFile(file, snapshot, addons) {
-    const lua = await createLua();
-    try {
-        lua.ctx.__snapshot = snapshot;
-        lua.ctx.__addons = addons;
-        for (const harnessFile of ["wow.lua", "env.lua"]) {
-            await lua.doString(readFileSync(join(repoRoot, "tests", "harness", harnessFile), "utf8"));
-        }
-        await lua.doString(PRELUDE);
-        await lua.doString(readFileSync(file, "utf8"));
-        const encoded = await lua.doString("return __run()");
-        return encoded ? encoded.split("\n").map((line) => {
-            const [ok, name, err] = line.split("\t");
-            return { ok: ok === "1", name, err };
-        }) : [];
-    } finally {
-        lua.global.close();
-    }
-}
+// A test name as printed: quoted when it holds control characters, so the output stays one line.
+const display = (name) => (/[\x00-\x1f]/.test(name) ? JSON.stringify(name) : name);
 
-// tests/*.test.mjs export `tests = [{ name, run }]` for tooling (e.g. the check gate).
-async function runModule(file) {
-    const { tests } = await import(pathToFileURL(file).href);
-    const results = [];
-    for (const test of tests) {
-        try {
-            await test.run();
-            results.push({ name: test.name, ok: true, err: "" });
-        } catch (error) {
-            results.push({ name: test.name, ok: false, err: String(error?.message ?? error) });
-        }
-    }
-    return results;
-}
-
-export async function run(_values, positionals) {
-    const filter = positionals[0];
-    const dir = join(repoRoot, "tests");
+export async function run(values, positionals) {
+    // A path to a test file (tests/harness.test.lua) filters to that file.
+    let filter = positionals[0] ?? null;
+    if (filter && /\.test\.(lua|mjs)$/.test(filter)) filter = filter.replaceAll("\\", "/").split("/").pop();
+    const timeoutMs = Number(values.timeout) * 1000;
+    const dir = values.dir ? resolve(values.dir) : join(repoRoot, "tests");
     const files = readdirSync(dir).filter((f) => f.endsWith(".test.lua") || f.endsWith(".test.mjs")).sort();
-    const snapshot = loadSnapshot();
-    const addons = loadAddons();
+    const jobs = [{ kind: "fakes", label: FAKES_JOB, filter }, ...files.map((file) => ({
+        kind: file.endsWith(".mjs") ? "mjs" : "lua", label: file, file: join(dir, file), filter,
+    }))];
+
+    const outcomes = new Array(jobs.length);
+    let next = 0;
+    const lanes = Array.from({ length: Math.min(jobs.length, Math.max(1, availableParallelism() - 1)) }, async () => {
+        while (next < jobs.length) {
+            const index = next++;
+            outcomes[index] = await runJob(jobs[index], timeoutMs);
+        }
+    });
+    await Promise.all(lanes);
+
     let passed = 0;
     let failed = 0;
-    for (const file of files) {
-        let results;
-        try {
-            results = file.endsWith(".mjs") ? await runModule(join(dir, file)) : await runFile(join(dir, file), snapshot, addons);
-        } catch (error) {
-            console.log(`FAIL ${file}: ${error}`);
+    let pending = 0;
+    let matched = 0;
+    jobs.forEach((job, i) => {
+        const outcome = outcomes[i];
+        if (outcome.error) {
             failed++;
-            continue;
+            console.log(`FAIL ${job.label}: ${outcome.error}`);
+            return;
         }
-        for (const result of results) {
-            const name = `${file} > ${result.name}`;
-            if (filter && !name.includes(filter)) continue;
-            if (result.ok) {
+        for (const result of outcome.results) {
+            matched++;
+            if (result.pending) {
+                pending++;
+                console.log(`PEND ${job.label} > ${display(result.name)}: ${result.err.replaceAll("\n", " ")}`);
+            } else if (result.ok) {
                 passed++;
             } else {
                 failed++;
-                console.log(`FAIL ${name}\n     ${result.err}`);
+                console.log(`FAIL ${job.label} > ${display(result.name)}\n     ${result.err.replaceAll("\n", "\n     ")}`);
             }
         }
+    });
+    if (filter && matched === 0) {
+        console.log(`No test matches "${filter}".`);
+        return 1;
     }
-    console.log(`${passed} passed, ${failed} failed`);
+    console.log(`${passed} passed, ${failed} failed${pending ? `, ${pending} pending` : ""}`);
     return failed ? 1 : 0;
 }

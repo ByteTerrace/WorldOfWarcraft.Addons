@@ -1,0 +1,307 @@
+-- Records: a module's keyed collection of typed records, persisted like rows.
+--
+--   addon:Module("Ledger", { records = { {
+--       name = "people",                               -- "<Module>.<name>", like a row
+--       fields = { { name = "kind", kind = "string", default = "grudge", values = { "grudge", "glory" } },
+--                  { name = "deaths", kind = "number", default = 0, min = 0, step = 1 } },
+--       limit = 300, evict = "seen",                   -- at the limit, a new key evicts the lowest "seen"
+--       keep = function(key) return ... end,           -- optional: keys eviction never picks
+--       scope = "account",                             -- or "character"
+--   } } })
+--   local people = module.Records.people
+--   people:Set("Bob-Realm", { deaths = people:Field("Bob-Realm", "deaths") + 1 })
+--
+-- Fields are declared like rows (kind, default, values, min / max / step) and every write goes
+-- through the same admission check, so a record never holds a secret, a NaN or an off-enum value.
+-- Keys are plain strings of 1 to MaxKeyLength characters. A collection is usable once its addon
+-- has loaded; earlier use is an error.
+--
+-- A collection is also a runtime number row of the same name: its version, which moves on every
+-- change. Watchers and rules read that row like any other, so a change publishes with its batch.
+--
+-- Loading validates the saved table: a record that isn't a table, has a bad key or has too many
+-- keys is dropped, and a field that no longer validates (or no longer exists) is reset. Only
+-- fields that differ from their default are stored.
+--
+-- Public members: Name (the full "<Module>.<name>") and Keep (the spec's keep function, or nil).
+
+local MaxKeyLength = 64
+local FieldPattern = "^%a[%w_]*$"
+
+local ByteTerrace = ByteTerrace
+local Refuse = ByteTerrace.Refuse
+local issecretvalue = issecretvalue
+local ipairs, next, pairs, tostring, type = ipairs, next, pairs, tostring, type
+local sort = table.sort
+
+local Records = {}
+Records.__index = Records
+ByteTerrace.Records = Records
+
+local function ValidKey(key)
+    return type(key) == "string" and not issecretvalue(key) and #key >= 1 and #key <= MaxKeyLength
+end
+
+local function Loaded(self)
+    if not self.m_store then
+        error(self.m_addon.Name .. ": records " .. self.Name .. " used before the addon loaded", 3)
+    end
+    return self.m_store
+end
+
+local function Bump(self)
+    local state = self.m_addon.State
+    local id = state:Id(self.Name)
+    state:Set(id, state.Values[id] + 1)
+end
+
+--- Validates a collection's spec and declares its version row. Called when its module is
+--- declared, so every problem is raised at once, then.
+---@param addon table the owning AddOn
+---@param name string "<Module>.<name>"
+---@param spec table see the file header
+function ByteTerrace.NewRecords(addon, name, spec)
+    local problems, fields, fieldOrder = {}, {}, {}
+    for _, field in ipairs(spec.fields or {}) do
+        local own = {}
+        for key, value in pairs(field) do
+            own[key] = value
+        end
+        local fieldName = tostring(own.name)
+        if not fieldName:find(FieldPattern) then
+            problems[#problems + 1] = name .. ": field name '" .. fieldName .. "' must be an identifier"
+        elseif fields[fieldName] then
+            problems[#problems + 1] = name .. ": duplicate field " .. fieldName
+        else
+            own.persist, own.label = false, nil -- fields have no settings control of their own
+            ByteTerrace.State.Prepare(name .. "." .. fieldName, own, problems)
+            fields[fieldName] = own
+            fieldOrder[#fieldOrder + 1] = fieldName
+        end
+    end
+    if #fieldOrder == 0 then
+        problems[#problems + 1] = name .. ": a collection needs fields"
+    end
+    local limit = spec.limit
+    if type(limit) ~= "number" or limit < 1 or limit % 1 ~= 0 then
+        problems[#problems + 1] = name .. ": limit must be a positive whole number"
+    end
+    if spec.evict ~= nil and (not fields[spec.evict] or fields[spec.evict].kind ~= "number") then
+        problems[#problems + 1] = name .. ": evict must name a number field"
+    end
+    if spec.keep ~= nil and type(spec.keep) ~= "function" then
+        problems[#problems + 1] = name .. ": keep must be a function(key)"
+    end
+    Refuse(addon.Name .. " records", problems)
+
+    local scope = spec.scope or "account"
+    addon.State:Declare(name, { kind = "number", default = 0, persist = false, records = true, scope = scope })
+    return setmetatable({
+        Name = name, Keep = spec.keep,
+        m_addon = addon, m_fields = fields, m_fieldOrder = fieldOrder,
+        m_limit = limit, m_evict = spec.evict, m_scope = scope,
+        m_store = nil, m_count = 0,
+    }, Records)
+end
+
+--- Binds the collection to its SavedVariables table (after State:Compile) and validates it. A
+--- collection over its limit (a lowered limit) evicts until it fits, kept keys too if it must.
+---@param stores table { account = table, character = table? }
+---@return integer dropped records dropped
+---@return integer reset fields reset
+function Records:Load(stores)
+    local root = stores[self.m_scope]
+    local store = root[self.Name]
+    if type(store) ~= "table" then
+        store = {}
+        root[self.Name] = store
+    end
+    local fields, admits = self.m_fields, ByteTerrace.State.Admits
+    local dropped, reset, count = 0, 0, 0
+    for key, record in pairs(store) do
+        if not ValidKey(key) or type(record) ~= "table" then
+            store[key] = nil
+            dropped = dropped + 1
+        else
+            for field, value in pairs(record) do
+                local spec = fields[field]
+                if not spec or value == spec.default or not admits(spec, value) then
+                    record[field] = nil
+                    reset = reset + 1
+                end
+            end
+            count = count + 1
+        end
+    end
+    self.m_store, self.m_count = store, count
+    -- Nothing watches yet, so the version doesn't move.
+    while self.m_count > self.m_limit do
+        store[self:EvictionCandidate() or self:EvictionCandidate(true)] = nil
+        self.m_count = self.m_count - 1
+        dropped = dropped + 1
+    end
+    return dropped, reset
+end
+
+--- Whether a record exists for key.
+---@return boolean
+function Records:Has(key)
+    return Loaded(self)[key] ~= nil
+end
+
+--- How many records there are.
+---@return integer
+function Records:Count()
+    Loaded(self)
+    return self.m_count
+end
+
+--- A field's value for key, or the field's default when the record (or field) is absent. An
+--- undeclared field is an error.
+---@param key string
+---@param field string
+function Records:Field(key, field)
+    local spec = self.m_fields[field]
+    if not spec then
+        error(self.m_addon.Name .. ": records " .. self.Name .. " has no field " .. tostring(field), 2)
+    end
+    local record = Loaded(self)[key]
+    local value = record and record[field]
+    if value == nil then
+        return spec.default
+    end
+    return value
+end
+
+--- A copy of the record with every field filled in, or nil.
+---@param key string
+---@return table?
+function Records:Get(key)
+    local record = Loaded(self)[key]
+    if not record then
+        return nil
+    end
+    local copy = {}
+    for _, field in ipairs(self.m_fieldOrder) do
+        local value = record[field]
+        if value == nil then
+            value = self.m_fields[field].default
+        end
+        copy[field] = value
+    end
+    return copy
+end
+
+--- Every key, sorted, in a fresh array.
+---@return string[]
+function Records:Keys()
+    local keys = {}
+    for key in pairs(Loaded(self)) do
+        keys[#keys + 1] = key
+    end
+    sort(keys)
+    return keys
+end
+
+--- The key with the lowest evict field (ties by key, so eviction is deterministic), skipping
+--- keys Keep protects unless includeKept.
+---@param includeKept boolean?
+---@return string? key nil when every key is kept
+function Records:EvictionCandidate(includeKept)
+    local store, evict, keep = Loaded(self), self.m_evict, not includeKept and self.Keep
+    local default = evict and self.m_fields[evict].default
+    local best, bestValue
+    for key, record in pairs(store) do
+        if not (keep and keep(key)) then
+            local value = evict and record[evict]
+            if value == nil then
+                value = default or 0
+            end
+            if not best or value < bestValue or (value == bestValue and key < best) then
+                best, bestValue = key, value
+            end
+        end
+    end
+    return best
+end
+
+--- Creates or updates the record for key, merging the given fields. Every value is validated
+--- before anything is written, so a bad write changes nothing. At the limit, a new key evicts
+--- the lowest record by the evict field; with nothing to evict, it's an error.
+---@param key string 1 to 64 characters
+---@param values table field = value
+function Records:Set(key, values)
+    local store = Loaded(self)
+    if not ValidKey(key) then
+        local message = "%s: records %s key must be a plain string of 1 to %d characters"
+        error(message:format(self.m_addon.Name, self.Name, MaxKeyLength), 2)
+    end
+    local fields, admits = self.m_fields, ByteTerrace.State.Admits
+    for field, value in pairs(values) do
+        local spec = fields[field]
+        if not spec then
+            error(self.m_addon.Name .. ": records " .. self.Name .. " has no field " .. tostring(field), 2)
+        end
+        if issecretvalue(value) then
+            error(self.m_addon.Name .. ": records " .. self.Name .. "." .. field .. " cannot hold a secret value", 2)
+        end
+        local ok, why = admits(spec, value)
+        if not ok then
+            error(self.m_addon.Name .. ": records " .. self.Name .. "." .. field .. " " .. why, 2)
+        end
+    end
+    local record = store[key]
+    local changed = false
+    if not record then
+        if self.m_count >= self.m_limit then
+            local victim = self.m_evict and self:EvictionCandidate()
+            if not victim then
+                error(self.m_addon.Name .. ": records " .. self.Name .. " is full (" .. self.m_limit .. ")", 2)
+            end
+            self:Remove(victim)
+        end
+        record = {}
+        store[key] = record
+        self.m_count = self.m_count + 1
+        changed = true
+    end
+    for field, value in pairs(values) do
+        local stored = value
+        if value == fields[field].default then
+            stored = nil
+        end
+        if record[field] ~= stored then
+            record[field] = stored
+            changed = true
+        end
+    end
+    if changed then
+        Bump(self)
+    end
+end
+
+--- Removes the record for key.
+---@return boolean removed false when there was none
+function Records:Remove(key)
+    local store = Loaded(self)
+    if key == nil or store[key] == nil then
+        return false
+    end
+    store[key] = nil
+    self.m_count = self.m_count - 1
+    Bump(self)
+    return true
+end
+
+--- Removes every record.
+function Records:Clear()
+    local store = Loaded(self)
+    if next(store) == nil then
+        return
+    end
+    for key in pairs(store) do
+        store[key] = nil
+    end
+    self.m_count = 0
+    Bump(self)
+end

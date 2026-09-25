@@ -1,0 +1,19 @@
+{
+ "source": {"docs":"fixture"},
+ "functions": {
+  "UnitHealth": {"secret":["SecretReturns"],"SecretArguments":"AllowedWhenUntainted"},
+  "C_Spell.GetSpellName": {"SecretArguments":"AllowedWhenTainted"}
+ },
+ "events": {
+  "PLAYER_LOGIN": {}
+ },
+ "methods": {
+ },
+ "enums": {
+  "PowerType": {"Mana":0,"Energy":3}
+ },
+ "globals": {
+ },
+ "members": {
+ }
+}

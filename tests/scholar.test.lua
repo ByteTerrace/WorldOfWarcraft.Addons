@@ -1,0 +1,693 @@
+-- Scholar puzzles (TheLanKrewToolKit/ScholarWords.lua, ScholarPuzzles.lua, ScholarMath.lua and
+-- ScholarReading.lua): property tests across seeds, every grade, every level and both subjects.
+--
+-- The puzzle files load on their own, not with the whole addon, so concurrent edits to other files
+-- can't break these tests. Their sources come from the runner (tools/lib/test-worker.mjs passes
+-- every TOC-listed file's source as __addons), and Harness.DefineAddOn wraps them as a test-only
+-- addon that runs in the harness's strict environment (reading an undefined global errors).
+-- A seeded LCG is the only randomness, and it rejects malformed ranges.
+
+local FILES = { "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarMath.lua", "ScholarReading.lua" }
+local SUBJECTS = { "math", "reading" }
+local KINDS = {
+    math = {
+        [0] = { "math.count", "math.add", "math.subtract", "math.compare" },
+        { "math.add", "math.subtract", "math.missing" },
+        { "math.add", "math.subtract", "math.skip", "math.coins" },
+        { "math.multiply", "math.divide", "math.groups" },
+        { "math.multiply", "math.remainder", "math.money" },
+        { "math.fraction", "math.multistep", "math.decimal" },
+        { "math.percent", "math.ratio", "math.order" },
+    },
+    reading = {
+        [0] = { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc" },
+        { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc" },
+        { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
+        { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
+        { "reading.vocab", "reading.blank", "reading.story" },
+        { "reading.vocab", "reading.blank", "reading.story" },
+        { "reading.vocab", "reading.blank", "reading.story" },
+    },
+}
+-- The largest number a grade's math may use, in its answers and calculations (copper for money).
+local BAND = { [0] = 10, 20, 100, 100, 9999, 1000, 1000 }
+local CONTEXT = { name = "Tessa", class = "MAGE", level = 12, zone = "Duskwood", copper = 4567 }
+local UNKIND = { "kill", "killed", "blood", "bloody", "dead", "death", "die", "dies", "stupid", "dumb", "idiot", "loser" }
+
+-- Loading -------------------------------------------------------------------------------------
+
+local function Sources()
+    local addon = assert(__addons.TheLanKrewToolKit, "TheLanKrewToolKit isn't an addon")
+    local sources, at = {}, {}
+    for i, name in ipairs(FILES) do
+        for j, file in ipairs(addon.files) do
+            if file == name then
+                sources[i], at[i] = addon.sources[j], j
+            end
+        end
+        assert(sources[i], name .. " isn't listed in TheLanKrewToolKit_Camelot.toc (ScholarWords.lua goes right before ScholarPuzzles.lua)")
+    end
+    return sources, at
+end
+
+local function Load()
+    Harness.DefineAddOn("ScholarOnly", { sources = (Sources()) })
+    local h = Harness.new()
+    return h:LoadFiles("ScholarOnly"), h
+end
+
+-- Park and Miller's minimal standard LCG; every product stays exact in a double.
+local function Rng(seed)
+    local state = seed % 2147483646 + 1
+    return function(m, n)
+        if type(m) ~= "number" or type(n) ~= "number" or m ~= math.floor(m) or n ~= math.floor(n) or m > n then
+            error(("random(%s, %s) is not a valid range"):format(tostring(m), tostring(n)), 2)
+        end
+        state = state * 48271 % 2147483647
+        return m + state % (n - m + 1)
+    end
+end
+
+local function Options(subject, grade, level, seed, context)
+    local mix = seed * 7919 + grade * 104729 + level * 1299709 + (subject == "math" and 0 or 15485863)
+    return { subject = subject, grade = grade, level = level, random = Rng(mix), context = context }
+end
+
+-- Calls fn(puzzle, options) for seeds 1..seeds of every subject, grade and level.
+local function Sweep(puzzles, seeds, context, fn)
+    for _, subject in ipairs(SUBJECTS) do
+        for grade = 0, 6 do
+            for level = 1, 3 do
+                for seed = 1, seeds do
+                    local options = Options(subject, grade, level, seed, context)
+                    fn(puzzles.Generate(options), options)
+                end
+            end
+        end
+    end
+end
+
+-- Checks --------------------------------------------------------------------------------------
+
+local function Fold(s)
+    return (s:gsub("^%s+", ""):gsub("%s+$", ""):lower())
+end
+
+local function Escape(s)
+    return (s:gsub("%p", "%%%0"))
+end
+
+local function HasWord(text, word)
+    return text:lower():find("%f[%w]" .. Escape(word:lower()) .. "%f[%W]") ~= nil
+end
+
+local function Where(p, options)
+    return ("%s grade %d level %d (%s): %q"):format(options.subject, options.grade, options.level, tostring(p.kind), tostring(p.prompt))
+end
+
+local function Plain(text, allowNewline, where)
+    truthy(type(text) == "string" and text ~= "", "non-empty text at " .. where)
+    for i = 1, #text do
+        local byte = text:byte(i)
+        truthy((byte >= 32 and byte <= 126) or (allowNewline and byte == 10), ("plain ASCII (byte %d) in %q at %s"):format(byte, text, where))
+    end
+    falsy(text:find("[{}|]"), "no template braces or escape codes in " .. text)
+    falsy(HasWord(text, "nil"), "no nil in " .. text)
+    for _, word in ipairs(UNKIND) do
+        falsy(HasWord(text, word), ("kind words only (%s) in %q"):format(word, text))
+    end
+end
+
+local function Contains(list, value)
+    for _, item in ipairs(list) do
+        if item == value then
+            return true
+        end
+    end
+    return false
+end
+
+-- The shape every puzzle has, whatever its kind.
+local function CheckShape(p, options)
+    local where = Where(p, options)
+    eq(p.subject, options.subject, "subject at " .. where)
+    truthy(Contains(KINDS[options.subject][options.grade], p.kind), "kind belongs to the grade at " .. where)
+    Plain(p.title, false, where)
+    truthy(#p.title <= 40, "short title at " .. where)
+    Plain(p.prompt, true, where)
+    truthy(#p.prompt <= 240, ("prompt within 240 chars (%d) at %s"):format(#p.prompt, where))
+    eq(#p.choices, 4, "four choices at " .. where)
+    falsy(p.choices[5], "exactly four choices at " .. where)
+    local seen = {}
+    for _, choice in ipairs(p.choices) do
+        Plain(choice, false, where)
+        truthy(#choice <= 40, ("choice %q within 40 chars at %s"):format(choice, where))
+        falsy(seen[Fold(choice)], ("distinct choice %q at %s"):format(choice, where))
+        seen[Fold(choice)] = true
+    end
+    truthy(type(p.answer) == "number" and p.answer >= 1 and p.answer <= 4 and p.answer % 1 == 0, "answer in 1..4 at " .. where)
+    Plain(p.hint, false, where)
+    Plain(p.explanation, false, where)
+    falsy(HasWord(p.hint, p.choices[p.answer]), ("hint %q doesn't give away %q at %s"):format(p.hint, p.choices[p.answer], where))
+    falsy(p.explanation:lower():find("wrong") or p.title:lower():find("wrong"), "encouraging words at " .. where)
+end
+
+-- An independent evaluator for expressions: numbers (with decimals), + - x / and parentheses.
+local function Evaluate(text)
+    local tokens, i = {}, 1
+    while i <= #text do
+        local c = text:sub(i, i)
+        if c == " " then
+            i = i + 1
+        elseif c:match("%d") then
+            local number = text:match("^%d+%.?%d*", i)
+            tokens[#tokens + 1], i = tonumber(number), i + #number
+        else
+            assert(c:match("[%+%-x/%(%)]"), "unexpected " .. c .. " in " .. text)
+            tokens[#tokens + 1], i = c, i + 1
+        end
+    end
+    local at, Sum = 1, nil
+    local function Atom()
+        local t = tokens[at]
+        at = at + 1
+        if t == "(" then
+            local v = Sum()
+            assert(tokens[at] == ")", "unbalanced " .. text)
+            at = at + 1
+            return v
+        end
+        assert(type(t) == "number", "number expected in " .. text)
+        return t
+    end
+    local function Product()
+        local v = Atom()
+        while tokens[at] == "x" or tokens[at] == "/" do
+            local op = tokens[at]
+            at = at + 1
+            local r = Atom()
+            v = op == "x" and v * r or v / r
+        end
+        return v
+    end
+    Sum = function()
+        local v = Product()
+        while tokens[at] == "+" or tokens[at] == "-" do
+            local op = tokens[at]
+            at = at + 1
+            local r = Product()
+            v = op == "+" and v + r or v - r
+        end
+        return v
+    end
+    local v = Sum()
+    assert(at == #tokens + 1, "trailing tokens in " .. text)
+    return v
+end
+
+local function Numbers(text)
+    local out = {}
+    for number in text:gmatch("%d+%.?%d*") do
+        out[#out + 1] = tonumber(number)
+    end
+    return out
+end
+
+-- A choice's value: copper for money, { quotient, remainder } for remainders, else its number.
+local function ChoiceValue(kind, choice)
+    if kind == "math.money" then
+        return tonumber(choice:match("(%d+) silver") or 0) * 100 + tonumber(choice:match("(%d+) copper") or 0)
+    elseif kind == "math.remainder" then
+        local q, r = choice:match("^(%d+), with (%d+) left over$")
+        return { tonumber(q), tonumber(r) }
+    end
+    return Numbers(choice)[1]
+end
+
+local function Same(a, b)
+    if type(a) == "table" then
+        return a[1] == b[1] and a[2] == b[2]
+    end
+    return a ~= nil and b ~= nil and math.abs(a - b) < 1e-9
+end
+
+-- Kinds whose prompt shows every number of the calculation.
+local SHOWN = {
+    ["math.add"] = true, ["math.subtract"] = true, ["math.missing"] = true, ["math.multiply"] = true, ["math.divide"] = true,
+    ["math.groups"] = true, ["math.fraction"] = true, ["math.multistep"] = true, ["math.ratio"] = true, ["math.order"] = true,
+    ["math.coins"] = true, ["math.decimal"] = true,
+}
+
+local function CheckMath(p, options)
+    local where, band = Where(p, options), BAND[options.grade]
+    truthy(type(p.value) == "number", "numeric value at " .. where)
+    local expected = p.kind == "math.remainder" and { p.value, p.remainder } or p.value
+    local correct = ChoiceValue(p.kind, p.choices[p.answer])
+    truthy(Same(correct, expected), ("the correct choice %q is the value %s at %s"):format(p.choices[p.answer], tostring(p.value), where))
+    for i, choice in ipairs(p.choices) do
+        local value = ChoiceValue(p.kind, choice)
+        truthy(value ~= nil and (type(value) ~= "table" or value[1]), ("choice %q has a number at %s"):format(choice, where))
+        if i ~= p.answer then
+            falsy(Same(value, expected), ("distractor %q isn't also correct at %s"):format(choice, where))
+        end
+        if p.value > 0 then
+            truthy((type(value) == "table" and value[1] or value) > 0, ("distractor %q is positive at %s"):format(choice, where))
+        end
+    end
+    truthy(p.value >= 0 and p.value <= band, ("value %s within grade band %d at %s"):format(tostring(p.value), band, where))
+    if p.expression then
+        truthy(Same(Evaluate(p.expression), p.value), ("%s = %s at %s"):format(p.expression, tostring(p.value), where))
+        for _, n in ipairs(Numbers(p.expression)) do
+            truthy(n <= band, ("%s stays within grade band %d at %s"):format(p.expression, band, where))
+            if SHOWN[p.kind] then
+                truthy(p.prompt:find("%f[%d]" .. Escape(tostring(n)) .. "%f[%D]"), ("the prompt shows %s at %s"):format(tostring(n), where))
+            end
+        end
+    elseif p.kind == "math.count" then
+        local row = p.prompt:match("\n([^\n]+)\n")
+        eq(select(2, row:gsub("[^ ]", "")), p.value, "counted symbols at " .. where)
+    elseif p.kind == "math.remainder" then
+        local n, d = p.terms[1], p.terms[2]
+        eq(p.value, math.floor(n / d), "quotient at " .. where)
+        eq(p.remainder, n % d, "remainder at " .. where)
+        truthy(p.remainder >= 1 and n <= 200 and d <= 9, "a small remainder at " .. where)
+    else
+        truthy(p.kind == "math.compare" or p.kind == "math.decimal", "only comparisons lack an expression at " .. where)
+        local best = p.terms[1]
+        for _, n in ipairs(p.terms) do
+            best = p.prompt:find("biggest") and math.max(best, n) or math.min(best, n)
+        end
+        eq(p.value, best, "the extreme of the four at " .. where)
+        for _, n in ipairs(p.terms) do
+            truthy(n <= band, "compared numbers within band at " .. where)
+        end
+    end
+end
+
+-- Kind-specific checks for the grade bands that the shape can't see.
+local function CheckBand(p, options)
+    local where, e = Where(p, options), p.expression
+    if options.grade == 3 and (p.kind == "math.multiply" or p.kind == "math.groups") then
+        local a, b = e:match("^(%d+) x (%d+)$")
+        truthy(tonumber(a) <= 10 and tonumber(b) <= 10, "facts to 10 x 10 at " .. where)
+    elseif options.grade == 3 and p.kind == "math.divide" then
+        local _, b = e:match("^(%d+) / (%d+)$")
+        truthy(tonumber(b) <= 10 and p.value <= 10, "division facts at " .. where)
+    elseif options.grade == 4 and p.kind == "math.multiply" then
+        local a, b = e:match("^(%d+) x (%d+)$")
+        truthy(tonumber(a) >= 10 and tonumber(a) <= 99 and tonumber(b) >= 2 and tonumber(b) <= 9, "2-digit x 1-digit at " .. where)
+    elseif p.kind == "math.decimal" then
+        truthy(math.abs(p.value * 10 - math.floor(p.value * 10 + 0.5)) < 1e-9, "tenths at " .. where)
+    end
+end
+
+local function Sorted(word)
+    local letters = {}
+    for letter in word:gmatch("%a") do
+        letters[#letters + 1] = letter
+    end
+    table.sort(letters)
+    return table.concat(letters)
+end
+
+local function CheckReading(p, options)
+    local where, correct = Where(p, options), p.choices[p.answer]
+    if p.kind == "reading.rhyme" then
+        local target = p.prompt:match("rhymes with \"(%a+)\"")
+        truthy(correct ~= target and correct:sub(-2) == target:sub(-2), "the answer rhymes at " .. where)
+        for i, choice in ipairs(p.choices) do
+            truthy(i == p.answer or choice:sub(-2) ~= target:sub(-2), ("distractor %q doesn't look like a rhyme at %s"):format(choice, where))
+        end
+    elseif p.kind == "reading.sound" then
+        local target = p.prompt:match("same sound as \"(%a+)\"")
+        for i, choice in ipairs(p.choices) do
+            eq(choice:sub(1, 1) == target:sub(1, 1), i == p.answer, ("first sound of %q at %s"):format(choice, where))
+        end
+    elseif p.kind == "reading.cvc" then
+        local sounds = p.prompt:match("\n(%a %- %a %- %a)\n")
+        local was, from, now = p.prompt:match("Change the \"(%a)\" in \"(%a+)\" to \"(%a)\"")
+        local expected = sounds and sounds:gsub(" %- ", "") or (from and from:gsub(was, now))
+        eq(correct, expected, "the built word at " .. where)
+    elseif p.kind == "reading.unscramble" then
+        local letters = p.prompt:match("\n([A-Z][A-Z ]+)")
+        falsy(letters:gsub(" ", "") == correct, "the letters are scrambled at " .. where)
+        for i, choice in ipairs(p.choices) do
+            eq(Sorted(choice) == Sorted(letters), i == p.answer, ("anagram check for %q at %s"):format(choice, where))
+        end
+    end
+end
+
+local function CheckAll(p, options)
+    CheckShape(p, options)
+    if p.subject == "math" then
+        CheckMath(p, options)
+        CheckBand(p, options)
+    else
+        CheckReading(p, options)
+    end
+end
+
+local function Serialize(p)
+    return table.concat({ p.subject, p.kind, p.title, p.prompt, table.concat(p.choices, "|"), p.answer, p.hint,
+        p.explanation, tostring(p.value), tostring(p.expression), tostring(p.remainder) }, "\n")
+end
+
+-- Loading and the contract -------------------------------------------------------------------
+
+test("the TOC lists ScholarWords.lua right before ScholarPuzzles.lua, and the generators after it", function()
+    local _, at = Sources()
+    eq(at[2], at[1] + 1, "ScholarWords.lua loads right before ScholarPuzzles.lua")
+    truthy(at[3] > at[2] and at[4] > at[2], "ScholarMath.lua and ScholarReading.lua load after ScholarPuzzles.lua")
+end)
+
+test("loads standalone and defines ns.Puzzles, ns.ScholarWords and no globals", function()
+    Harness.DefineAddOn("ScholarOnly", { sources = (Sources()) })
+    local h = Harness.new()
+    local before = {}
+    for key in pairs(h.env) do
+        before[key] = true
+    end
+    local ns = h:LoadFiles("ScholarOnly")
+    for key in pairs(h.env) do
+        truthy(before[key], "no new global " .. tostring(key))
+    end
+    eq(type(ns.Puzzles.Generate), "function")
+    eq(type(ns.ScholarWords), "table")
+    local keys = {}
+    for key in pairs(ns.Puzzles) do
+        keys[#keys + 1] = key
+    end
+    table.sort(keys)
+    eq(table.concat(keys, ","), "Generate,Grades,Kit", "exactly the contract's fields")
+end)
+
+test("Grades runs from Kindergarten to Grade 6 in order", function()
+    local puzzles = Load().Puzzles
+    eq(#puzzles.Grades, 7)
+    eq(puzzles.Grades[1].id, 0)
+    eq(puzzles.Grades[1].label, "Kindergarten")
+    for i = 2, 7 do
+        eq(puzzles.Grades[i].id, i - 1)
+        eq(puzzles.Grades[i].label, "Grade " .. (i - 1))
+    end
+end)
+
+test("randomness comes only from options.random", function()
+    for _, source in ipairs((Sources())) do
+        for _, banned in ipairs({ "math.random", "os%.", "time%(", "GetTime", "date%(", "random%(" }) do
+            falsy(source:find(banned), "the source doesn't use " .. banned)
+        end
+    end
+end)
+
+test("bad options fail loudly instead of guessing", function()
+    local puzzles = Load().Puzzles
+    throws(function() puzzles.Generate({ subject = "math", grade = 1, level = 1 }) end, "random")
+    throws(function() puzzles.Generate({ subject = "art", grade = 1, level = 1, random = Rng(1) }) end, "subject")
+    local p = puzzles.Generate({ subject = "math", grade = "3", level = "9", random = Rng(5) })
+    truthy(Contains(KINDS.math[3], p.kind), "grade and level strings are read and clamped")
+    CheckShape(p, { subject = "math", grade = 3, level = 3 })
+end)
+
+-- Properties ------------------------------------------------------------------------------------
+
+test("every puzzle is well formed and correct, without context", function()
+    Sweep(Load().Puzzles, 150, nil, CheckAll)
+end)
+
+test("every puzzle is well formed and correct, with a full context", function()
+    Sweep(Load().Puzzles, 100, CONTEXT, CheckAll)
+end)
+
+test("the same options and random sequence give the same puzzle", function()
+    local puzzles = Load().Puzzles
+    for _, context in ipairs({ false, CONTEXT }) do
+        for _, subject in ipairs(SUBJECTS) do
+            for grade = 0, 6 do
+                for level = 1, 3 do
+                    for seed = 1, 3 do
+                        local first = Serialize(puzzles.Generate(Options(subject, grade, level, seed, context or nil)))
+                        eq(Serialize(puzzles.Generate(Options(subject, grade, level, seed, context or nil))), first)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+test("every kind appears across seeds, and the answer lands in every position", function()
+    local seen, positions, total = { math = {}, reading = {} }, { 0, 0, 0, 0 }, 0
+    Sweep(Load().Puzzles, 60, nil, function(p, options)
+        seen[options.subject][options.grade .. p.kind] = true
+        positions[p.answer], total = positions[p.answer] + 1, total + 1
+    end)
+    for _, subject in ipairs(SUBJECTS) do
+        for grade = 0, 6 do
+            for _, kind in ipairs(KINDS[subject][grade]) do
+                truthy(seen[subject][grade .. kind], ("%s appears in grade %d"):format(kind, grade))
+            end
+        end
+    end
+    for i = 1, 4 do
+        truthy(positions[i] > total * 0.18, ("answer position %d is used often enough (%d of %d)"):format(i, positions[i], total))
+    end
+end)
+
+test("each variant of a kind turns up", function()
+    local found = {}
+    local variants = {
+        "Count back by", "Which number is the biggest", "Which number is the smallest", "left over", "Change the",
+        "Say each sound", "Clue:", "gears in inches", "100 copper", "in all%?", "%)", "%% off",
+    }
+    Sweep(Load().Puzzles, 60, nil, function(p)
+        for _, pattern in ipairs(variants) do
+            found[pattern] = found[pattern] or (p.prompt:find(pattern) ~= nil)
+        end
+    end)
+    for _, pattern in ipairs(variants) do
+        truthy(found[pattern], "some prompt matches " .. pattern)
+    end
+end)
+
+-- Personalization ---------------------------------------------------------------------------------
+
+test("context personalizes some puzzles, never all, and only where it fits the grade", function()
+    local counts, total = {}, 0
+    local function Seen(label, yes)
+        counts[label] = (counts[label] or 0) + (yes and 1 or 0)
+    end
+    Sweep(Load().Puzzles, 80, CONTEXT, function(p, options)
+        total = total + 1
+        local text = p.prompt
+        Seen("name", text:find("Tessa"))
+        Seen("class", text:find("Tessa the mage"))
+        Seen("zone", text:find("Duskwood"))
+        Seen("class item", text:find("magic muffin"))
+        Seen("level", options.grade == 1 and text:find("You are level 12!"))
+        Seen("silver", options.grade == 4 and text:find("You have 45 silver 67 copper right now!"))
+        Seen("reading name", options.subject == "reading" and text:find("Tessa"))
+        falsy(options.grade ~= 4 and text:find("45 silver 67 copper"), "their purse only in grade 4 silver math")
+        falsy(options.grade == 0 and text:find("magic muffin"), "kindergarten keeps to simple items")
+    end)
+    for _, label in ipairs({ "name", "class", "zone", "class item", "level", "silver", "reading name" }) do
+        truthy(counts[label] > 0, label .. " appears sometimes")
+    end
+    truthy(counts.name < total / 2, "the name appears only sometimes")
+end)
+
+test("small purses, far levels and gold personalize the grades they suit", function()
+    local puzzles = Load().Puzzles
+    local function Any(grade, context, pattern)
+        for seed = 1, 60 do
+            for level = 1, 3 do
+                if puzzles.Generate(Options("math", grade, level, seed, context)).prompt:find(pattern) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    truthy(Any(2, { copper = 45 }, "You have 45 copper right now!"), "grade 2 uses a purse under 90 copper")
+    falsy(Any(2, { copper = 150 }, "You have 150 copper"), "grade 2 skips a purse over 100 copper")
+    truthy(Any(2, { level = 12 }, "until you reach level 60%?"), "grade 2 counts levels to 60")
+    falsy(Any(1, { level = 25 }, "You are level"), "grade 1 skips levels past 20")
+    truthy(Any(6, { copper = 400000 }, "You have 40 gold!"), "grade 6 uses gold for percents")
+    falsy(Any(4, { copper = 123456 }, "right now"), "grade 4 skips a purse of 100 silver or more")
+end)
+
+test("a missing or odd context falls back gracefully", function()
+    local puzzles = Load().Puzzles
+    local odd = {
+        false, {}, { name = "" }, { name = "Tessa-Stormrage" }, { name = "Maximilianusz" }, { name = "|cffff0000Red" },
+        { name = 42, zone = {}, class = "NOTACLASS", level = 0.5, copper = -5 }, { zone = string.rep("x", 100), copper = 1e15 },
+        { class = "mage", level = 99, copper = 0 }, "not a table",
+    }
+    for _, context in ipairs(odd) do
+        for _, subject in ipairs(SUBJECTS) do
+            for grade = 0, 6 do
+                for level = 1, 3 do
+                    for seed = 1, 8 do
+                        local options = Options(subject, grade, level, seed, context or nil)
+                        local p = puzzles.Generate(options)
+                        CheckAll(p, options)
+                        falsy(p.prompt:find("Stormrage") or p.prompt:find("Maximilianusz") or p.prompt:find("xxxx"), "odd context text stays out")
+                    end
+                end
+            end
+        end
+    end
+end)
+
+test("no context never mentions the player", function()
+    Sweep(Load().Puzzles, 40, nil, function(p, options)
+        falsy(p.prompt:find("You have") or p.prompt:find("You are level"), "no personal money or level at " .. Where(p, options))
+    end)
+end)
+
+-- Content -----------------------------------------------------------------------------------------
+
+local function Words()
+    return Load().ScholarWords
+end
+
+test("banks hold distinct, plain, short options", function()
+    local W = Words()
+    local banks = { { W.sight, 3, 5 }, { W.spelling, 3, 5 }, { W.vocab, 3, 6 }, { W.blanks, 2, 5 } }
+    for _, bank in ipairs(banks) do
+        for _, entry in ipairs(bank[1]) do
+            local seen = {}
+            for i = bank[2], bank[3] do
+                local option = entry[i]
+                Plain(option, false, "bank entry " .. entry[1])
+                truthy(#option <= 40, option .. " fits a choice")
+                falsy(seen[Fold(option)], "distinct option " .. option)
+                seen[Fold(option)] = true
+            end
+        end
+    end
+    for _, story in ipairs(W.stories) do
+        for q = 2, #story do
+            local seen = {}
+            for i = 2, 5 do
+                falsy(seen[Fold(story[q][i])], "distinct story answer " .. story[q][i])
+                seen[Fold(story[q][i])] = true
+                truthy(#story[q][i] <= 40, story[q][i] .. " fits a choice")
+            end
+        end
+    end
+end)
+
+test("the story bank has at least 15 short stories of 2 to 4 sentences with 1 to 3 questions", function()
+    local W = Words()
+    truthy(#W.stories >= 15, "at least 15 stories")
+    for _, story in ipairs(W.stories) do
+        local text = story[1]:gsub("{hero}", story.hero or "Pip"):gsub("{place}", story.place or "Goldshire")
+        local sentences = select(2, (text .. " "):gsub("[%.!%?]\"? ", ""))
+        truthy(sentences >= 2 and sentences <= 4, ("2 to 4 sentences (%d): %s"):format(sentences, text))
+        truthy(#story >= 2 and #story <= 4, "1 to 3 questions: " .. text)
+        for q = 2, #story do
+            local prompt = text .. "\n" .. story[q][1]:gsub("{hero}", story.hero or "Pip")
+            truthy(#prompt <= 240, ("fits the prompt limit (%d): %s"):format(#prompt, prompt))
+        end
+    end
+end)
+
+test("misspellings are never real words, and word banks don't overlap in meaning", function()
+    local W = Words()
+    local real = {}
+    local function Add(word)
+        real[word:lower()] = true
+    end
+    for _, family in ipairs(W.rhymes) do
+        for _, word in ipairs(family) do
+            Add(word)
+        end
+    end
+    for _, group in ipairs(W.sounds) do
+        for i = 2, #group do
+            Add(group[i])
+        end
+    end
+    for _, word in ipairs(W.cvc) do
+        Add(word)
+    end
+    for _, entry in ipairs(W.synonyms) do
+        for _, word in ipairs(entry) do
+            Add(word)
+        end
+    end
+    for _, bank in ipairs({ W.sight, W.spelling }) do
+        for _, entry in ipairs(bank) do
+            Add(entry[1])
+        end
+    end
+    for _, bank in ipairs({ W.sight, W.spelling }) do
+        for _, entry in ipairs(bank) do
+            for i = 3, 5 do
+                falsy(real[entry[i]], entry[i] .. " is not a real word")
+            end
+            truthy(entry[2]:find("___"), "a blank in " .. entry[2])
+        end
+    end
+    local owner = {}
+    for _, entry in ipairs(W.synonyms) do
+        for _, word in ipairs(entry) do
+            falsy(owner[word], word .. " belongs to one synonym entry only")
+            owner[word] = true
+        end
+    end
+    local family = {}
+    for i, words in ipairs(W.rhymes) do
+        for _, word in ipairs(words) do
+            falsy(family[word], word .. " belongs to one rhyme family only")
+            family[word] = i
+        end
+    end
+    for _, word in ipairs(W.cvc) do
+        eq(#word, 3, word .. " is three letters")
+        falsy(word:match("(%a).*%1"), word .. " has no repeated letter")
+    end
+end)
+
+test("pictures always match the math, and only small numbers in the early grades get one", function()
+    local puzzles = Load().Puzzles
+    local seen = {}
+    Sweep(puzzles, 30, CONTEXT, function(p, options)
+        local picture = p.picture
+        if not picture then
+            return
+        end
+        local where = ("%s grade %d: %s"):format(p.kind, options.grade, p.prompt)
+        truthy(options.grade <= 3, "no pictures above grade 3 at " .. where)
+        seen[picture.kind] = true
+        if picture.kind == "groups" then
+            eq(picture.groups * picture.each, p.value, where)
+            truthy(picture.groups * picture.each <= 30, where)
+        elseif picture.kind == "join" then
+            eq(picture.a + picture.b, p.value, where)
+            truthy(picture.a + picture.b <= 20, where)
+        elseif picture.kind == "take" then
+            eq(picture.a - picture.b, p.value, where)
+            truthy(picture.a <= 20, where)
+        elseif picture.kind == "count" then
+            eq(picture.n, p.value, where)
+            truthy(p.prompt:find(picture.row, 1, true), "the row the picture replaces is in the prompt at " .. where)
+        else
+            error("unknown picture kind " .. tostring(picture.kind))
+        end
+    end)
+    truthy(seen.groups and seen.join and seen.take and seen.count, "every picture kind shows up")
+end)
+
+test("unscramble riddles carry their letters as tiles, in the prompt's order", function()
+    local puzzles = Load().Puzzles
+    local found = 0
+    Sweep(puzzles, 10, CONTEXT, function(p)
+        if p.kind == "reading.unscramble" then
+            found = found + 1
+            eq(table.concat(p.tiles, " "), p.prompt:match("\n([A-Z][A-Z ]+)"))
+            truthy(p.prompt:match("%?$"), "ends with its question")
+        end
+    end)
+    truthy(found > 0)
+end)

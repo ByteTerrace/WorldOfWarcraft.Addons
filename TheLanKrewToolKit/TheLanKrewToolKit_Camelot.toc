@@ -7,9 +7,30 @@
 ## Dependencies: ByteTerrace_Core
 ## IconTexture: Interface\Icons\INV_Misc_Wrench_01
 ## SavedVariables: TheLanKrewToolKitDB
+## SavedVariablesPerCharacter: TheLanKrewToolKitCharDB
 ## AddonCompartmentFunc: TheLanKrewToolKit_OnAddonCompartmentClick
 
 AddOn.lua
+ScholarWords.lua
+ScholarPuzzles.lua
+ScholarMath.lua
+ScholarReading.lua
+ScholarFacts.lua
+Cards.lua
 FuckOMeter.lua
 Sounds.lua
+Kombat.lua
 Controller.lua
+Journal.lua
+Krew.lua
+Honor.lua
+WarbandUtil.lua
+Warband.lua
+WarbandDeaths.lua
+WarbandMenus.lua
+WarbandBadges.lua
+WarbandRadar.lua
+Streaks.lua
+ScholarPictures.lua
+ScholarView.lua
+Scholar.lua

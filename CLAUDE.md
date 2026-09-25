@@ -13,11 +13,12 @@ ByteTerrace World of Warcraft addons for **WoW: Forever** (TOC `_Camelot.toc`, M
    - A bug fix gets a test that failed before the fix.
    - Performance is proven with load-independent counts (widget calls per event, registered events), never wall-clock time.
    - What the harness can't model (the real client, rendering, protected actions) is verified by running in game. Say plainly when something hasn't been.
-5. **The harness stays honest.** A fake models a real API: its name must exist in the snapshot, and its behavior must match Blizzard's docs. Never loosen a fidelity rule to make a test pass.
-6. **Supergreen.** Nothing has shipped. Rename, reshape and delete freely, and update every caller in the same change. No compat shims or migration code: the state loader drops undeclared or invalid saved values by design.
+5. **The harness stays honest.** A fake models a real API: its name must exist in the snapshot, and its behavior must match Blizzard's docs. Never loosen a fidelity rule to make a test pass. Observed probe results (`tools/api/probes.json`) outrank guesses: where the harness and the client disagree, the harness changes.
+6. **Supergreen.** Nothing has shipped. Rename, reshape and delete freely, and update every caller in the same change. No compat shims or migration code. The one exception is data safety: the state loader resets invalid saved values but never deletes keys it doesn't recognize, because a module that failed to load must not lose its settings.
 7. **Automation is CLI verbs.** Add a verb to `tools/tlk.mjs`; never add a loose script. Pin dependency versions.
 8. **Docs state current behavior in the present tense.** No dates, build numbers or commit SHAs in docs; evidence belongs in commit messages. Update every doc, comment and test that describes a change, in the same change.
-9. **LF everywhere** (`.gitattributes`, `.editorconfig`). Never investigate or work around line endings.
+9. **Puck's conventions, in Lua.** Naming, layout and comments follow [the conventions](docs/Conventions.md): PascalCase constants, functions and public members, camelCase locals, `m_` private fields, a contract header per file, `---` doc comments on public API, and no banner, debt or history comments. `check`'s NAMING and COMMENT rules enforce the mechanical part.
+10. **LF everywhere** (`.gitattributes`, `.editorconfig`). Never investigate or work around line endings.
 
 ## Reporting
 

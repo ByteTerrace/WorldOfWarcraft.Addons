@@ -1,0 +1,199 @@
+local addonName, ns = ...
+
+-- Calibration probes about units: identity and health (secret or plain, idle and in combat),
+-- health percent, classification, combo points, nameplate frames, and the UNIT_COMBAT payloads
+-- DevTools.lua collects. Probes.lua's header is the contract; ProbeNeeds.lua defines the needs.
+
+-- UnitClassification's documented answers (warcraft.wiki.gg API_UnitClassification).
+local Classifications = {
+    worldboss = true, rareelite = true, elite = true, rare = true, normal = true, trivial = true, minus = true,
+}
+
+local Probes = ns.Probes
+local Value, Shape, Joined = Probes.Value, Probes.Shape, Probes.Joined
+local NamePlateToken = Probes.NamePlateToken
+local UnitCombat, Kills = Probes.UnitCombat, Probes.Kills
+
+-- A unit's identity: UnitName, UnitClass and UnitGUID, as shapes. withRealm adds UnitName's realm,
+-- for units whose realm is always the player's (an NPC's is nil).
+local function Identity(unit, withRealm)
+    local name, realm = UnitName(unit) -- secret: recorded by Shape as a marker
+    local className, classFile, classID = UnitClass(unit) -- secret: recorded by Shape as a marker
+    local guid = UnitGUID(unit) -- secret: recorded by Shape as a marker
+    return {
+        name = Shape(name), realm = withRealm and Shape(realm) or nil, className = Shape(className),
+        classFile = Shape(classFile), classID = Shape(classID), guid = Shape(guid),
+    }
+end
+
+local function Health(unit)
+    local health = UnitHealth(unit) -- secret: recorded by Shape as a marker
+    local healthMax = UnitHealthMax(unit) -- secret: recorded by Shape as a marker
+    return { health = Shape(health), healthMax = Shape(healthMax) }
+end
+
+-- UnitHealthPercent and UnitHealthMissing, with and without predicted healing, as shapes.
+local function HealthSignals(unit)
+    local percent = UnitHealthPercent(unit) -- secret: recorded by Shape as a marker
+    local percentUnpredicted = UnitHealthPercent(unit, false) -- secret: recorded by Shape as a marker
+    local missing = UnitHealthMissing(unit) -- secret: recorded by Shape as a marker
+    local missingUnpredicted = UnitHealthMissing(unit, false) -- secret: recorded by Shape as a marker
+    return {
+        percent = Shape(percent), percentUnpredicted = Shape(percentUnpredicted), missing = Shape(missing),
+        missingUnpredicted = Shape(missingUnpredicted),
+    }
+end
+
+-- A unit's UnitClassification and UnitLevel, as shapes; isSkull is a plain level of -1.
+local function Classification(unit)
+    local classification, level = UnitClassification(unit), UnitLevel(unit)
+    local plainClassification = not issecretvalue(classification) and type(classification) == "string"
+    local plainLevel = not issecretvalue(level) and type(level) == "number"
+    return {
+        classification = Shape(classification), level = Shape(level), isSkull = plainLevel and level == -1,
+        isDocumented = plainClassification and Classifications[classification] == true,
+    }
+end
+
+-- The player's combo points, as shapes: UnitPower and UnitPowerMax of the power type, and
+-- GetComboPoints on the target.
+local function ComboPoints()
+    local comboPoints = Enum.PowerType.ComboPoints
+    local current = UnitPower("player", comboPoints) -- secret: recorded by Shape as a marker
+    local max = UnitPowerMax("player", comboPoints) -- secret: recorded by Shape as a marker
+    local onTarget = GetComboPoints("player", "target") -- secret: recorded by Shape as a marker
+    return { comboPoints = Shape(current), comboPointsMax = Shape(max), onTarget = Shape(onTarget) }
+end
+
+-- The nameplate frame of a non-player unit (enemy or friendly, NamePlateToken), as shapes.
+local function NamePlateShape(enemy)
+    local plate = C_NamePlate.GetNamePlateForUnit(NamePlateToken(enemy))
+    if plate == nil then
+        return { plate = "nil" }
+    end
+    return {
+        plate = Shape(plate),
+        forbidden = Value(plate:IsForbidden()), -- secret: recorded by Value as a marker
+        objectType = Value(plate:GetObjectType()), -- secret: recorded by Value as a marker
+        hasUnitFrame = rawget(plate, "UnitFrame") ~= nil, -- Blizzard_NamePlateBase assigns it as a plain field
+    }
+end
+
+Probes.Define({
+    {
+        name = "unitIdentity.npcTarget",
+        needs = { "idle", "npcTarget" },
+        run = function() return Identity("target", true) end,
+    },
+    {
+        name = "unitIdentity.npcTargetInCombat",
+        needs = { "combat", "npcTarget" },
+        run = function() return Identity("target", true) end,
+    },
+    {
+        name = "unitIdentity.enemyPlayer",
+        needs = { "idle", "enemyPlayer" },
+        run = function() return Identity("target", false) end,
+    },
+    {
+        name = "unitIdentity.partyMember",
+        needs = { "idle", "party" },
+        run = function() return Identity("party1", false) end,
+    },
+    {
+        name = "unitHealth.npcTarget",
+        needs = { "idle", "npcTarget" },
+        run = function() return Health("target") end,
+    },
+    {
+        name = "unitHealth.npcTargetInCombat",
+        needs = { "combat", "npcTarget" },
+        run = function() return Health("target") end,
+    },
+    {
+        name = "unitHealth.player",
+        needs = { "idle" },
+        run = function() return Health("player") end,
+    },
+    {
+        name = "unitHealth.playerInCombat",
+        needs = { "combat" },
+        run = function() return Health("player") end,
+    },
+    {
+        name = "unitHealth.enemyPlayer",
+        needs = { "idle", "enemyPlayer" },
+        run = function() return Health("target") end,
+    },
+    {
+        name = "unitHealthPercent.player",
+        needs = { "idle" },
+        harness = "the harness doesn't fake UnitHealthPercent or UnitHealthMissing",
+        run = function() return HealthSignals("player") end,
+    },
+    {
+        name = "unitHealthPercent.playerInCombat",
+        needs = { "combat" },
+        harness = "the harness doesn't fake UnitHealthPercent or UnitHealthMissing",
+        run = function() return HealthSignals("player") end,
+    },
+    {
+        name = "unitClassification.npcTarget",
+        needs = { "idle", "npcTarget" },
+        run = function() return Classification("target") end,
+    },
+    {
+        name = "unitClassification.npcTargetInCombat",
+        needs = { "combat", "npcTarget" },
+        run = function() return Classification("target") end,
+    },
+    {
+        name = "power.comboPoints",
+        needs = { "comboPoints", "idle", "npcTarget" },
+        run = ComboPoints,
+    },
+    {
+        name = "power.comboPointsInCombat",
+        needs = { "comboPoints", "combat", "npcTarget" },
+        run = ComboPoints,
+    },
+    {
+        name = "namePlate.friendlyNPC",
+        needs = { "friendlyNamePlate" },
+        run = function() return NamePlateShape(false) end,
+    },
+    {
+        name = "namePlate.enemyNPC",
+        needs = { "enemyNamePlate" },
+        run = function() return NamePlateShape(true) end,
+    },
+    {
+        name = "unitCombat.seen",
+        needs = { "unitCombat" },
+        run = function()
+            local function Copy(tbl)
+                local out = {}
+                for key, value in pairs(tbl) do
+                    out[key] = value
+                end
+                return out
+            end
+            local units = UnitCombat.units
+            return {
+                player = Copy(units.player), target = Copy(units.target), actions = Joined(UnitCombat.actions),
+                flagTexts = Joined(UnitCombat.flagTexts),
+                amountInCombat = UnitCombat.amountInCombat,
+            }
+        end,
+    },
+    {
+        -- PARTY_KILL is how killing-blow addons read kills since the combat log closed: whose blow
+        -- (you, your pet, someone else) and the victim's kind. UNIT_DIED and PLAYER_TARGET_DIED
+        -- are new in the same client.
+        name = "kills.seen",
+        needs = { "killedMob" },
+        run = function()
+            return { partyKill = Kills.partyKill, unitDied = Kills.unitDied, targetDied = Kills.targetDied }
+        end,
+    },
+})

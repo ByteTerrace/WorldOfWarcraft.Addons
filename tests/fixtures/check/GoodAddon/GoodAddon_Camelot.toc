@@ -1,0 +1,9 @@
+## Interface: 11507, 16001
+## Title: GoodAddon
+##  RequiredDeps: BadAddon
+## SavedVariables: GoodAddonDB
+## X-Globals: GoodAddonAPI
+
+Good.lua
+GoodLayout.lua
+GoodStyle.lua

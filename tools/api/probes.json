@@ -1,0 +1,445 @@
+{
+  "build": "1.60.1 (70009)",
+  "probes": {
+    "bags.firstItem": {
+      "result": {
+        "fields": "hasLoot,hasNoValue,hyperlink,iconFileID,isBound,isFiltered,isLocked,isReadable,itemID,itemName,quality,stackCount",
+        "hyperlink": "text",
+        "iconFileID": "number",
+        "itemID": "number",
+        "itemInfoReturns": 18,
+        "itemName": "text",
+        "itemStackCount": "number",
+        "maxStackSize": "number",
+        "sellPrice": "number",
+        "stackCount": "number"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "chat.lockdownIdle": {
+      "result": { "inChatMessagingLockdown": false },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "chatTypeInfo.raidWarning": {
+      "result": { "b": 0, "g": 72, "hasMetatable": true, "r": 255, "sticky": 0 },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "classColors": {
+      "result": {
+        "classes": "DRUID,HUNTER,MAGE,PALADIN,PRIEST,ROGUE,SHAMAN,WARLOCK,WARRIOR",
+        "colorStr": {
+          "DRUID": "ffff7c0a",
+          "HUNTER": "ffaad372",
+          "MAGE": "ff3fc7eb",
+          "PALADIN": "fff48cba",
+          "PRIEST": "ffffffff",
+          "ROGUE": "fffff468",
+          "SHAMAN": "ff0070dd",
+          "WARLOCK": "ff8788ee",
+          "WARRIOR": "ffc69b6d"
+        }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "damageMeter.afterFight": {
+      "result": {
+        "damageTaken": {
+          "combatSources": "table",
+          "durationSeconds": "number",
+          "hasSources": true,
+          "maxAmount": "number",
+          "totalAmount": "number"
+        },
+        "enemyDamageTaken": {
+          "combatSources": "table",
+          "durationSeconds": "number",
+          "hasSources": true,
+          "maxAmount": "number",
+          "totalAmount": "number"
+        }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "damageMeter.available": {
+      "result": { "failureReason": "", "isAvailable": true },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "damageMeter.currentInCombat": {
+      "result": {
+        "combatSources": "table",
+        "durationSeconds": { "secret": true, "type": "number" },
+        "hasSources": true,
+        "maxAmount": { "secret": true, "type": "number" },
+        "totalAmount": { "secret": true, "type": "number" }
+      },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
+    "damageMeter.death": {
+      "result": {
+        "deathRecapID": "number",
+        "deathTimeSeconds": "number",
+        "fields": "amountPerSecond,classFilename,classification,deathRecapID,deathTimeSeconds,isLocalPlayer,name,sourceDisplayType,sourceGUID,specIconID,totalAmount",
+        "hasRecapID": true,
+        "localPlayer": true
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "damageMeter.enemySource": {
+      "result": {
+        "classification": "text",
+        "factionGroup": "nil",
+        "fields": "amountPerSecond,classFilename,classification,deathRecapID,deathTimeSeconds,isLocalPlayer,name,sourceCreatureID,sourceDisplayType,totalAmount",
+        "hasSources": true,
+        "isLocalPlayer": false,
+        "name": "text",
+        "sourceCreatureID": "number",
+        "sourceDisplayType": 0,
+        "sourceGUID": "nil"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "damageMeter.playerDamageTaken": {
+      "result": {
+        "combatSpells": "table",
+        "fields": "combatSpells,maxAmount,totalAmount",
+        "hasSpells": true,
+        "spell": {
+          "classification": "text",
+          "creatureName": "empty",
+          "details": "amount,classification,isMob,isPet,unitClassFilename,unitName",
+          "fields": "amountPerSecond,combatSpellDetails,creatureName,isAvoidable,isDeadly,overkillAmount,spellID,totalAmount",
+          "isAvoidable": "boolean",
+          "isDeadly": "boolean",
+          "isMob": "boolean",
+          "overkillAmount": "number",
+          "spellID": "number",
+          "unitName": "text"
+        },
+        "totalAmount": "number"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "damageMeter.sessions": {
+      "result": {
+        "durationSeconds": "number",
+        "fields": "durationSeconds,name,sessionID",
+        "name": "text",
+        "oldestFirst": true,
+        "sessionID": "number"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "damageMeter.typesIdle": {
+      "result": {
+        "current": {
+          "combatSources": "table",
+          "durationSeconds": "number",
+          "hasSources": true,
+          "maxAmount": "number",
+          "session": "latest",
+          "totalAmount": "number"
+        },
+        "expired": {
+          "combatSources": "table",
+          "durationSeconds": "nil",
+          "hasSources": false,
+          "maxAmount": "number",
+          "session": "none",
+          "totalAmount": "number"
+        }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "deathRecap.events": {
+      "result": {
+        "events": "table",
+        "fields": "amount,avoidable,critical,crushing,currentHP,deadly,destFlags,destGUID,destName,destRaidFlags,event,glancing,hideCaster,isOffHand,overkill,school,sourceFlags,sourceGUID,sourceName,sourceRaidFlags,spellId,spellName,spellSchool,timestamp",
+        "hasRecapEvents": true,
+        "killingBlow": {
+          "amount": "number",
+          "critical": "boolean",
+          "crushing": "boolean",
+          "currentHP": "number",
+          "destFlags": "number",
+          "destGUID": "string",
+          "destName": "string",
+          "destRaidFlags": "number",
+          "event": "string",
+          "glancing": "boolean",
+          "hideCaster": "boolean",
+          "isOffHand": "boolean",
+          "overkill": "number",
+          "school": "number",
+          "sourceFlags": "number",
+          "sourceGUID": "string",
+          "sourceName": "string",
+          "sourceRaidFlags": "number",
+          "timestamp": "number"
+        },
+        "maxHealth": "number",
+        "recapID": "number",
+        "sourceName": "text"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "faction.player": {
+      "result": { "group": "string", "isAllianceOrHorde": true, "localized": "string", "localizedIsGlobalString": true },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "fonts.scholar": {
+      "result": { "Game18Font": "Font", "Game24Font": "Font", "Game30Font": "Font" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "globalStrings.honor": {
+      "result": {
+        "COMBATLOG_HONORAWARD": "You have been awarded %d Honor.",
+        "COMBATLOG_HONORGAIN": "%s dies (Honorable Kill: %s). You gain %d Honor.",
+        "COMBATLOG_HONORGAIN_NO_RANK": "%s dies (Honorable Kill). You gain %d Honor."
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "map.player": {
+      "result": {
+        "hasGetXY": true,
+        "inUnitSquare": true,
+        "instanceType": "none",
+        "mapID": "number",
+        "position": "table"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "merchant.firstItem": {
+      "result": {
+        "fields": "hasExtendedCost,isPurchasable,isQuestStartItem,isUsable,name,numAvailable,price,stackCount,texture",
+        "hasExtendedCost": "boolean",
+        "info": "table",
+        "isPurchasable": "boolean",
+        "name": "text",
+        "numAvailable": "number",
+        "numItems": "number",
+        "price": "number",
+        "stackCount": "number",
+        "texture": "number"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "namePlate.enemyNPC": {
+      "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "namePlate.friendlyNPC": {
+      "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "quest.offer": {
+      "result": { "objectiveText": "text", "questText": "text", "title": "text" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "quest.offerIdentity": {
+      "result": { "hasQuestID": true, "npcName": "string", "questID": "number", "questNpcName": "string" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "quest.turnIn": {
+      "result": { "rewardText": "text", "title": "text" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "quest.turnInIdentity": {
+      "result": { "hasQuestID": true, "questID": "number", "questNpcName": "string" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "questLog.entry": {
+      "result": {
+        "hasHeader": true,
+        "info": "difficultyLevel,frequency,hasLocalPOI,isAbandonOnDisable,isAutoComplete,isBounty,isCollapsed,isHeader,isHidden,isInternalOnly,isOnMap,isScaling,isStory,isTask,level,overridesSortOrder,questClassification,questID,questLogIndex,readyForTranslation,sortAsNormalQuest,startEvent,suggestedGroup,title,useMinimalHeader",
+        "isHeader": "boolean",
+        "level": "number",
+        "numQuests": "number",
+        "numShownEntries": "number",
+        "questID": "number",
+        "title": "text"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "questLog.objectives": {
+      "result": {
+        "fields": "finished,numFulfilled,numRequired,objectiveType,text,type",
+        "finished": "boolean",
+        "hasObjectives": true,
+        "numFulfilled": "number",
+        "numRequired": "number",
+        "objectiveType": "number",
+        "text": "text",
+        "type": "text",
+        "types": "item,monster,object"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "questLog.text": {
+      "result": { "description": "text", "objectives": "text", "selectedQuest": "number", "titleForQuestID": "text" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "realm.normalized": {
+      "result": {
+        "hasSpaceOrHyphen": false,
+        "isRealmWithoutSpacesOrHyphens": true,
+        "normalized": "string",
+        "realm": "string"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "resting.player": {
+      "result": { "isResting": "boolean" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "textures.used": {
+      "result": {
+        "Interface\\Buttons\\WHITE8X8": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\ByteTerrace\\NoSuchTexture": { "fileID": "nil", "filePath": "nil", "hasFileID": false, "set": true },
+        "Interface\\CharacterFrame\\TempPortraitAlphaMask": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Common\\VoiceChat-Speaker": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Ability_Hunter_MarkedForDeath": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Ability_Hunter_Pet_Owl": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Ability_Hunter_SniperShot": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Ability_Rogue_Eviscerate": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Ability_Warrior_BattleShout": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Ability_Warrior_Rampage": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Achievement_PVP_H_01": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Ammo_Arrow_02": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Misc_Book_09": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Misc_Fish_02": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Misc_Food_19": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Misc_Gear_01": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Misc_Gem_Ruby_01": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Mushroom_11": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Potion_51": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\INV_Scroll_03": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Icons\\Spell_Holy_SurgeOfLight": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\RAIDFRAME\\ReadyCheck-NotReady": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\RAIDFRAME\\ReadyCheck-Ready": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-RaidTargetingIcon_2": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-RaidTargetingIcon_3": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-RaidTargetingIcon_4": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-RaidTargetingIcon_5": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-RaidTargetingIcon_6": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-RaidTargetingIcon_7": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-RaidTargetingIcon_8": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\TargetingFrame\\UI-StatusBar": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
+        "Interface\\Tooltips\\UI-Tooltip-Border": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "tts.voices": {
+      "result": {
+        "fields": "name,voiceID",
+        "hasVoices": true,
+        "voiceID": "number",
+        "voiceName": "string",
+        "voices": "table"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitClassification.npcTarget": {
+      "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitClassification.npcTargetInCombat": {
+      "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
+    "unitCombat.seen": {
+      "result": {
+        "actions": "WOUND",
+        "flagTexts": "GLANCING",
+        "player": { "WOUND": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" } },
+        "target": { "WOUND": { "action": "text", "amount": "number", "flagText": "text", "schoolMask": "number" } }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitHealth.enemyPlayer": {
+      "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitHealth.npcTarget": {
+      "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitHealth.npcTargetInCombat": {
+      "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
+    "unitHealth.player": {
+      "result": { "health": { "secret": true, "type": "number" }, "healthMax": "number" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitHealth.playerInCombat": {
+      "result": { "health": { "secret": true, "type": "number" }, "healthMax": "number" },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
+    "unitHealthPercent.player": {
+      "result": {
+        "missing": { "secret": true, "type": "number" },
+        "missingUnpredicted": { "secret": true, "type": "number" },
+        "percent": { "secret": true, "type": "number" },
+        "percentUnpredicted": { "secret": true, "type": "number" }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitHealthPercent.playerInCombat": {
+      "result": {
+        "missing": { "secret": true, "type": "number" },
+        "missingUnpredicted": { "secret": true, "type": "number" },
+        "percent": { "secret": true, "type": "number" },
+        "percentUnpredicted": { "secret": true, "type": "number" }
+      },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
+    "unitIdentity.enemyPlayer": {
+      "result": {
+        "classFile": "string",
+        "classID": "number",
+        "className": "string",
+        "guid": "string",
+        "name": "string"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitIdentity.npcTarget": {
+      "result": {
+        "classFile": "string",
+        "classID": "number",
+        "className": "string",
+        "guid": "string",
+        "name": "string",
+        "realm": "nil"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "unitIdentity.npcTargetInCombat": {
+      "result": {
+        "classFile": "string",
+        "classID": "number",
+        "className": "string",
+        "guid": "string",
+        "name": "string",
+        "realm": "nil"
+      },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
+    "unitIdentity.partyMember": {
+      "result": {
+        "classFile": "string",
+        "classID": "number",
+        "className": "string",
+        "guid": "string",
+        "name": "string"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "xp.player": {
+      "result": { "exhaustion": "number or nil", "xp": "number", "xpMax": "number" },
+      "context": { "combat": false, "restrictions": "none" }
+    }
+  }
+}

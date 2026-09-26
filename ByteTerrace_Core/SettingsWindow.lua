@@ -1,8 +1,13 @@
--- SettingsWindow: the addon's own settings window, drawn from ByteTerrace.SettingsPages
--- (Settings.lua): the page list on the left, the chosen page's sections and controls on the
--- right. The bare slash command toggles it. It's an ordinary insecure frame, so it opens in
--- combat too, and it never touches Blizzard's settings panel, whose close an addon's taint turns
--- into a client freeze for controller players (see Settings.lua).
+-- SettingsWindow: the addon's settings, drawn from ByteTerrace.SettingsPages (Settings.lua) as
+-- one view: the page list on the left, the chosen page's sections and controls on the right. The
+-- view has two hosts, and moves to whichever shows it:
+--   * Blizzard's settings panel, as the addon's canvas page (Esc > Options > AddOns). The canvas
+--     is marked ignored for the controller UI's SmartNavigation (smartNavigationIgnored, which
+--     covers every child), so controller focus never lands on an addon control there: on Forever
+--     that taints what the controller UI remembers, and closing the panel then freezes the client
+--     (tools/api/forbidden.json). With the controller UI on, the page is for the mouse.
+--   * The addon's own window, which the bare slash command toggles. It's an ordinary insecure
+--     frame, so it opens in combat too, and addon code never has to open Blizzard's panel.
 --
 -- Controls are plain buttons, textures and font strings:
 --   boolean  a box that holds a check while on; a click flips it.
@@ -10,18 +15,19 @@
 --            click to the previous one.
 --   number   "-" and "+" step by the row's step, within its min and max.
 -- Every change goes through State:Set as one batch, so a locked row is refused with a message
--- and keeps its value. A change made anywhere refreshes that row's control while the window
--- shows; a hidden window does no widget work. Hovering a setting shows its description.
+-- and keeps its value. A change made anywhere refreshes that row's control while the view shows;
+-- a hidden view does no widget work. Hovering a setting shows its description.
 --
--- The frame is built the first time the window opens, and sized to the page it shows. Drag the
--- title to move it; the close button or the command hides it.
+-- The view is built the first time a host shows it. The window is sized to the page it shows;
+-- drag it to move it, and the close button or the command hides it.
 --
---   ByteTerrace.NewSettingsWindow(addon, pages)  the window for SettingsPages' pages
---   window:Toggle(), window:Show(page?), window:Hide(), window:IsShown()
---   window:Page()                                 the index of the page it shows
--- Public members: Frame (nil until first shown), Pages, and Controls ([row id] = the row's
--- control button: its Label is the value shown, Check the boolean's check, Minus and Plus the
--- number's steppers).
+--   ByteTerrace.NewSettingsWindow(addon, pages)  the settings for SettingsPages' pages
+--   window:Register()                             registers the canvas page with Blizzard's panel
+--   window:Toggle(), window:Show(page?), window:Hide(), window:IsShown()   the standalone window
+--   window:Page()                                 the index of the page the view shows
+-- Public members: Frame (the window, nil until first shown), Canvas (the settings-panel page),
+-- View (nil until first shown), Pages, and Controls ([row id] = the row's control button: its
+-- Label is the value shown, Check the boolean's check, Minus and Plus the number's steppers).
 
 local Width = 620
 local NavWidth = 160
@@ -33,9 +39,10 @@ local NavButtonHeight = 26
 local ControlWidth = 170
 local Solid = "Interface\\Buttons\\WHITE8X8"
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
+local CanvasInset = 16
 
 local ByteTerrace = ByteTerrace
-local CreateFrame, GameTooltip, UIParent = CreateFrame, GameTooltip, UIParent
+local CreateFrame, GameTooltip, Settings, UIParent = CreateFrame, GameTooltip, Settings, UIParent
 local ipairs, tostring = ipairs, tostring
 local floor = math.floor
 
@@ -96,10 +103,11 @@ end
 ---@param pages table[] ByteTerrace.SettingsPages(addon)
 ---@return table window
 local function NewSettingsWindow(addon, pages)
-    return setmetatable({
+    local window = setmetatable({
         Pages = pages, Controls = {}, m_addon = addon, m_page = 1, m_refreshers = {}, m_containers = {},
         m_navButtons = {}, m_heights = {},
     }, SettingsWindow)
+    return window
 end
 
 -- Writes a row from the window: one batch, refused with a message while the row is locked.
@@ -216,7 +224,7 @@ local function BuildPage(window, content, page)
                 watched[2] = entry.spec.lockId
             end
             window.m_addon.State:Watch(watched, function()
-                if window.Frame:IsShown() then
+                if window.View:IsVisible() then
                     refresh()
                 end
             end, true)
@@ -236,14 +244,32 @@ local function ShowPage(window, index)
         window.m_navButtons[i]:SetBackdropBorderColor(i == index and 1 or 0.42, i == index and 0.82 or 0.4,
             i == index and 0 or 0.5, 1)
     end
-    local navHeight = #window.Pages * NavButtonHeight
-    local height = window.m_heights[index] > navHeight and window.m_heights[index] or navHeight
-    window.Frame:SetHeight(TitleHeight + height + Pad)
+    if window.m_host == window.Frame then
+        local navHeight = #window.Pages * NavButtonHeight
+        local height = window.m_heights[index] > navHeight and window.m_heights[index] or navHeight
+        window.Frame:SetHeight(TitleHeight + height + Pad)
+    end
 end
 
--- Builds the frame: the backdrop, the title bar (dragging moves the window), the close button,
--- the page list and every page.
-local function Build(window)
+-- Builds the view: the page list and every page, on a frame either host can hold.
+local function BuildView(window)
+    local view = CreateFrame("Frame", nil, UIParent)
+    window.View = view
+    view:Hide()
+    local content = CreateFrame("Frame", nil, view)
+    content:SetPoint("TOPLEFT", NavWidth + Pad, 0)
+    content:SetPoint("BOTTOMRIGHT")
+    for i, page in ipairs(window.Pages) do
+        local nav = NewButton(view, NavWidth, page.name)
+        nav:SetPoint("TOPLEFT", 0, -((i - 1) * NavButtonHeight))
+        nav:SetScript("OnClick", function() ShowPage(window, i) end)
+        window.m_navButtons[i] = nav
+        window.m_containers[i], window.m_heights[i] = BuildPage(window, content, page)
+    end
+end
+
+-- Builds the window: the backdrop, the title (dragging moves the window) and the close button.
+local function BuildFrame(window)
     local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     window.Frame = frame
     frame:SetFrameStrata("DIALOG")
@@ -264,28 +290,52 @@ local function Build(window)
     frame.Close = NewButton(frame, 60, "Close")
     frame.Close:SetPoint("TOPRIGHT", -Pad + 4, -Pad + 4)
     frame.Close:SetScript("OnClick", function() window:Hide() end)
-    local content = CreateFrame("Frame", nil, frame)
-    content:SetPoint("TOPLEFT", Pad + NavWidth + Pad, -TitleHeight)
-    content:SetPoint("BOTTOMRIGHT", -Pad, Pad)
-    for i, page in ipairs(window.Pages) do
-        local nav = NewButton(frame, NavWidth, page.name)
-        nav:SetPoint("TOPLEFT", Pad, -(TitleHeight + (i - 1) * NavButtonHeight))
-        nav:SetScript("OnClick", function() ShowPage(window, i) end)
-        window.m_navButtons[i] = nav
-        window.m_containers[i], window.m_heights[i] = BuildPage(window, content, page)
+end
+
+-- Moves the view into a host (the window or the canvas), refreshes it and shows its page.
+local function Present(window, host, page)
+    if not window.View then
+        BuildView(window)
     end
+    local view = window.View
+    if window.m_host ~= host then
+        window.m_host = host
+        view:SetParent(host)
+        view:ClearAllPoints()
+        if host == window.Frame then
+            view:SetPoint("TOPLEFT", Pad, -TitleHeight)
+            view:SetPoint("BOTTOMRIGHT", -Pad, Pad)
+        else
+            view:SetPoint("TOPLEFT", CanvasInset, -CanvasInset)
+            view:SetPoint("BOTTOMRIGHT", -CanvasInset, CanvasInset)
+        end
+    end
+    for _, refresh in ipairs(window.m_refreshers) do
+        refresh()
+    end
+    ShowPage(window, page or window.m_page)
+    view:Show()
+end
+
+--- Registers the view's canvas page with Blizzard's settings panel, where it shows under
+--- Esc > Options > AddOns. Controller focus is kept out of it (see the header).
+function SettingsWindow:Register()
+    local canvas = CreateFrame("Frame", nil, UIParent)
+    self.Canvas = canvas
+    canvas:Hide()
+    canvas.smartNavigationIgnored = true -- SmartNavigation_IsFrameIgnored: the canvas and its children
+    canvas:SetScript("OnShow", function() Present(self, canvas) end)
+    local category = Settings.RegisterCanvasLayoutCategory(canvas, self.m_addon.Title)
+    Settings.RegisterAddOnCategory(category)
 end
 
 --- Shows the window on a page (the last one shown, else the main page).
 ---@param page integer? the page's index in Pages
 function SettingsWindow:Show(page)
     if not self.Frame then
-        Build(self)
+        BuildFrame(self)
     end
-    for _, refresh in ipairs(self.m_refreshers) do
-        refresh()
-    end
-    ShowPage(self, page or self.m_page)
+    Present(self, self.Frame, page)
     self.Frame:Show()
 end
 
@@ -311,7 +361,7 @@ function SettingsWindow:Toggle()
     end
 end
 
---- The index of the page the window shows (or last showed).
+--- The index of the page the view shows (or last showed).
 ---@return integer
 function SettingsWindow:Page()
     return self.m_page

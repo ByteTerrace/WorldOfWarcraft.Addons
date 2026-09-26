@@ -4,7 +4,7 @@
 --   Declare(name, spec)  before compile. spec: kind ("boolean" | "number" | "string"), default,
 --                        values (string enum), valueLabels (enum display), min / max / step
 --                        (number), persist (default true), scope ("account" default, or
---                        "character"), label / description / section (settings panel), lockedBy
+--                        "character"), label / description / section (settings window), lockedBy
 --                        (a boolean row's name: while that row is true, writes to this row are
 --                        refused, e.g. settings a parent locked). The spec is copied; the
 --                        caller's table is never changed.
@@ -12,6 +12,7 @@
 --                        sorts names to dense ids and validates every declaration, reporting all
 --                        problems at once. stores = { account = table, character = table? }: the
 --                        SavedVariables tables persisted rows load from and write to, by scope.
+--                        A labeled persisted row needs a fitting control in the settings window.
 --                        modules = { [name] = true } for every module that finished declaring. A
 --                        value that no longer validates is dropped, and so is a key under one of
 --                        those modules that no row declares (a renamed row). Keys under any other

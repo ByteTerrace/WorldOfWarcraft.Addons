@@ -123,8 +123,15 @@ test("a parent's PIN locks the settings until unlocked", function()
     eq(addon.State:Get("Scholar.grade"), "2", "locked")
     h:Slash("/tlk toggle Scholar.enabled")
     eq(addon.State:Get("Scholar.enabled"), true, "can't be switched off")
-    h.settings["TheLanKrewToolKit_Scholar.mode"]:SetValue("gentle")
-    eq(addon.State:Get("Scholar.mode"), "gate", "the panel can't change it either")
+    local window = addon.SettingsWindow
+    for i, page in ipairs(window.Pages) do
+        if page.name == "Scholar's challenge" then window:Show(i) end
+    end
+    local button = window.Controls[addon.State:Id("Scholar.mode")]
+    local label = button.Label:GetText()
+    button:Click()
+    eq(addon.State:Get("Scholar.mode"), "gate", "the window can't change it either")
+    eq(button.Label:GetText(), label, "the locked value stays visible")
     h:Slash("/tlk unlock 1111")
     eq(addon.State:Get("Scholar.locked"), true, "wrong PIN")
     h:Slash("/tlk unlock 2468")

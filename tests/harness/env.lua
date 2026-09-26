@@ -577,6 +577,15 @@ function Harness:BuildSettings(env)
         RegisterVerticalLayoutCategory = function(name)
             return RegisterCategory(name, nil)
         end,
+        -- A canvas page: the addon's own frame shown as the category's content (Blizzard shows it
+        -- when the player chooses the category; tests show it directly).
+        RegisterCanvasLayoutCategory = function(frame, name)
+            local category = RegisterCategory(name, nil)
+            category.canvas = frame
+            layouts[category] = nil
+            h.settingsPages[#h.settingsPages].canvas = frame
+            return category, { frame = frame }
+        end,
         RegisterVerticalLayoutSubcategory = function(parentCategory, name)
             assert(layouts[parentCategory], "RegisterVerticalLayoutSubcategory: unknown parent category")
             return RegisterCategory(name, parentCategory)

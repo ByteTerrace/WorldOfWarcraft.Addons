@@ -357,7 +357,7 @@ export function checkLua(file, text, context, report) {
                 report(file, line(node), "PROTECTED", `${forbiddenName} is forbidden to addon code at any time (${forbiddenReason}); `
                     + "no combat guard helps, so don't call it");
             }
-            const protectedReason = forbiddenReason ? null : protectedCall(name, method, base);
+            const protectedReason = forbiddenReason ? null : protectedCall(name, method, base, args);
             if (protectedReason && !annotated("protected", line(node)) && !facts.factsAt(node).has(NOT_LOCKDOWN)) {
                 report(file, line(node), "PROTECTED", `${name ?? `:${method}()`} can be blocked during combat lockdown (${protectedReason}); `
                     + "guard it with an InCombatLockdown() test that returns early (or a `not InCombatLockdown()` branch), or annotate \"-- protected: <why>\"");
@@ -480,9 +480,17 @@ export function checkLua(file, text, context, report) {
         return "unknown";
     }
 
-    function protectedCall(name, method, base) {
+    // A `.` call is a method call only when it passes its receiver first (frame.Show(frame));
+    // Probes.Show(value) is a plain function that happens to share a method's name.
+    function isMethodCall(base, args) {
+        if (base.indexer === ":") return true;
+        const receiver = base.base, first = args[0];
+        return Boolean(first) && receiver?.type === "Identifier" && first.type === "Identifier" && first.name === receiver.name;
+    }
+
+    function protectedCall(name, method, base, args) {
         if (name && api.protectedFunctions.has(name)) return api.protectedFunctions.get(name);
-        if (!method) return null;
+        if (!method || !isMethodCall(base, args)) return null;
         if (api.restrictedMethods.has(method)) return "HasRestrictions";
         if (!api.protectedMethods.has(method)) return null;
         const kind = frameKind(base.base);

@@ -26,43 +26,50 @@ local function Registered(addon, event)
     return addon.Events.Frame:IsEventRegistered(event)
 end
 
--- Each settings page as one line: "Name < Parent: [Header] Module.row ...".
-local function Pages(h)
+-- Each settings page as one line: "Name: [Header] Module.row ...".
+local function Pages(pages)
     local lines = {}
-    for _, page in ipairs(h.settingsPages) do
+    for _, page in ipairs(pages) do
         local parts = {}
         for _, entry in ipairs(page.entries) do
-            parts[#parts + 1] = entry.header and ("[" .. entry.header .. "]") or entry.variable:gsub("^TheLanKrewToolKit_", "")
+            parts[#parts + 1] = entry.header and ("[" .. entry.header .. "]") or entry.name
         end
-        lines[#lines + 1] = page.name .. (page.parent and (" < " .. page.parent) or "") .. ": " .. table.concat(parts, " ")
+        lines[#lines + 1] = page.name .. ": " .. table.concat(parts, " ")
     end
     return lines
 end
 
-test("loads cleanly and builds its settings panel, organized into pages and sections", function()
-    local h = Load()
+test("loads cleanly and builds its settings window, organized into pages and sections", function()
+    local h, addon = Load()
     local main = "The Lan Krew ToolKit"
     local expected = {
         main .. ": [Fuck-o-meter] FuckOMeter.enabled"
             .. " [Session journal] Journal.enabled Journal.welcome Journal.ding [Advanced] addon.debug",
-        "Sounds < " .. main .. ": Sounds.enabled Sounds.channel Sounds.combatStart Sounds.stopOnCombatEnd"
+        "Sounds: Sounds.enabled Sounds.channel Sounds.combatStart Sounds.stopOnCombatEnd"
             .. " [Mortal Kombat] Kombat.chooseYourDestiny Kombat.testYourMight Kombat.finishHim Kombat.comboPoints"
             .. " Kombat.flawlessVictory Kombat.fatality Kombat.superbVictory Kombat.deathTaunt"
             .. " [Kill streaks] Streaks.enabled Streaks.firstBlood Streaks.multiKills Streaks.sprees Streaks.share",
-        "Controller < " .. main .. ": [Controller light bar] LightBar.enabled [Controller rumble] Rumble.enabled",
-        "Krew < " .. main .. ": [Krew messages] Krew.enabled Krew.hello Krew.shareDings Krew.shareFlawless Krew.shareScholar",
-        "Warband < " .. main .. ": [Warband (world PvP)] Warband.enabled Warband.alerts Warband.shareSightings"
+        "Controller: [Controller light bar] LightBar.enabled [Controller rumble] Rumble.enabled",
+        "Krew: [Krew messages] Krew.enabled Krew.hello Krew.shareDings Krew.shareFlawless Krew.shareScholar",
+        "Warband: [Warband (world PvP)] Warband.enabled Warband.alerts Warband.shareSightings"
             .. " Warband.deathPrompt Warband.rallyWaypoint Warband.intel"
             .. " [Nameplate badges] Badges.enabled [Nearby enemies window] Radar.enabled Radar.share",
-        "Scholar's challenge < " .. main .. ": Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading"
+        "Scholar's challenge: Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading"
             .. " [When] Scholar.interval Scholar.onLevelUp Scholar.mode",
     }
-    local pages = Pages(h)
+    local window = addon.SettingsWindow
+    local pages = Pages(window.Pages)
+    local schema = Pages(h.env.ByteTerrace.SettingsPages(addon))
     for i = 1, math.max(#pages, #expected) do
         eq(pages[i], expected[i], "page " .. i)
+        eq(schema[i], expected[i], "schema page " .. i)
     end
-    eq(h.category.name, main, "only the main page is registered as the addon's category")
-    eq(h.settings["TheLanKrewToolKit_Sounds.channel"].options[2].label, "Sound effects", "friendly channel names")
+    window:Show(2)
+    local channel = window.Controls[addon.State:Id("Sounds.channel")]
+    eq(channel.Label:GetText(), "Master")
+    channel:Click()
+    eq(addon.State:Get("Sounds.channel"), "SFX")
+    eq(channel.Label:GetText(), "Sound effects", "friendly channel names")
 end)
 
 test("fuck-o-meter shows for energy users and passes secret energy straight to the widgets", function()

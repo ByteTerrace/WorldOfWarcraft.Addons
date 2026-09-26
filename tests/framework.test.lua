@@ -354,7 +354,7 @@ test("bindings to unknown sources or commands are refused at compile", function(
 end)
 
 
-test("the settings panel is generated from labeled persisted rows, in declaration order", function()
+test("the settings window is generated from labeled persisted rows, in declaration order", function()
     local h, addon = NewAddOn()
     addon:Module("M", { label = "Module M", state = {
         { name = "mode", kind = "string", default = "a", values = { "a", "b" }, label = "Mode" },
@@ -362,26 +362,38 @@ test("the settings panel is generated from labeled persisted rows, in declaratio
         { name = "runtime", kind = "boolean", default = false, label = "Runtime", persist = false },
     } })
     Start(h)
-    eq(table.concat(h.settingsOrder, ","), "TestApp_M.enabled,TestApp_M.mode,TestApp_addon.debug")
-    eq(h.settings["TestApp_M.mode"].control, "dropdown")
-    h.settings["TestApp_M.mode"]:SetValue("b")
-    eq(addon.State:Get("M.mode"), "b", "panel writes go through state")
+    local window, state, names = addon.SettingsWindow, addon.State, {}
+    window:Show()
+    for _, entry in ipairs(window.Pages[1].entries) do
+        if entry.name then
+            names[#names + 1] = entry.name
+            truthy(window.Controls[entry.id], "each setting has a control")
+        end
+    end
+    eq(table.concat(names, ","), "M.enabled,M.mode,addon.debug")
+    eq(window.Controls[state:Id("M.hidden")], nil)
+    eq(window.Controls[state:Id("M.runtime")], nil)
+    local button = window.Controls[state:Id("M.mode")]
+    eq(button.Label:GetText(), "a")
+    button:Click()
+    eq(state:Get("M.mode"), "b", "window writes go through state")
+    eq(button.Label:GetText(), "b")
 end)
 
--- The settings pages, " | " between them: "Name < Parent: [Header] Module.row ...".
-local function Pages(h)
+-- The settings pages, " | " between them: "Name: [Header] Module.row ...".
+local function Pages(pages)
     local lines = {}
-    for _, page in ipairs(h.settingsPages) do
+    for _, page in ipairs(pages) do
         local parts = {}
         for _, entry in ipairs(page.entries) do
-            parts[#parts + 1] = entry.header and ("[" .. entry.header .. "]") or entry.variable:gsub("^TestApp_", "")
+            parts[#parts + 1] = entry.header and ("[" .. entry.header .. "]") or entry.name
         end
-        lines[#lines + 1] = page.name .. (page.parent and (" < " .. page.parent) or "") .. ": " .. table.concat(parts, " ")
+        lines[#lines + 1] = page.name .. ": " .. table.concat(parts, " ")
     end
     return table.concat(lines, " | ")
 end
 
-test("module pages and sections organize the panel; debug closes the main page", function()
+test("module pages and sections organize the window; debug closes the main page", function()
     local h, addon = NewAddOn()
     addon:Module("Alpha", { label = "Alpha", state = {
         { name = "size", kind = "string", default = "a", values = { "a", "b" }, label = "Size" },
@@ -396,14 +408,16 @@ test("module pages and sections organize the panel; debug closes the main page",
     addon:Module("Echo", { label = "Test AddOn" })
     addon:Module("Quiet", { toggle = false, state = { { name = "on", kind = "boolean", default = true, label = "On" } } })
     Start(h)
-    eq(Pages(h), table.concat({
+    local window = addon.SettingsWindow
+    eq(Pages(h.env.ByteTerrace.SettingsPages(addon)), table.concat({
         "Test AddOn: [Alpha] Alpha.enabled Alpha.size [Noise] Alpha.loud Echo.enabled Quiet.on [Advanced] addon.debug",
-        "Extras < Test AddOn: [Beta] Beta.enabled Delta.enabled",
-        "Other < Test AddOn: [Gamma things] Gamma.n",
+        "Extras: [Beta] Beta.enabled Delta.enabled",
+        "Other: [Gamma things] Gamma.n",
     }, " | "), "a header that repeats its page's name is left out, and a module with no label has none")
-    eq(h.category.name, "Test AddOn", "only the main page is the addon's category")
-    h.settings["TestApp_Gamma.n"]:SetValue(2)
-    eq(addon.State:Get("Gamma.n"), 2, "a control on a subcategory writes through state too")
+    eq(Pages(window.Pages), Pages(h.env.ByteTerrace.SettingsPages(addon)), "the window draws the schema's pages")
+    window:Show(3)
+    window.Controls[addon.State:Id("Gamma.n")].Plus:Click()
+    eq(addon.State:Get("Gamma.n"), 2, "a control on a subpage writes through state too")
 end)
 
 test("page and section must be strings", function()
@@ -414,11 +428,17 @@ test("page and section must be strings", function()
     truthy(StartRefused(h, addon):find("R.x: section must be a string", 1, true))
 end)
 
-test("labeled bounded numbers get sliders; a labeled number without bounds is refused", function()
+test("labeled bounded numbers get steppers; a labeled number without bounds is refused", function()
     local h, addon = NewAddOn()
     addon:Module("M", { toggle = false, state = { { name = "n", kind = "number", default = 5, min = 1, max = 10, step = 1, label = "N" } } })
     Start(h)
-    eq(h.settings["TestApp_M.n"].control, "slider")
+    addon.SettingsWindow:Show()
+    local control = addon.SettingsWindow.Controls[addon.State:Id("M.n")]
+    control.Plus:Click()
+    eq(addon.State:Get("M.n"), 6)
+    control.Minus:Click()
+    eq(addon.State:Get("M.n"), 5)
+    eq(control.Label:GetText(), "5")
     local h2, addon2 = NewAddOn()
     addon2:Module("M", { toggle = false, state = { { name = "n", kind = "number", default = 1, label = "N" } } })
     local err = StartRefused(h2, addon2)
@@ -429,8 +449,11 @@ test("a control refreshes when its row changes elsewhere", function()
     local h, addon = NewAddOn()
     addon:Module("M", { label = "M" })
     Start(h)
+    addon.SettingsWindow:Show()
+    local box = addon.SettingsWindow.Controls[addon.State:Id("M.enabled")]
+    truthy(box.Check:IsShown())
     h:Slash("/test toggle M.enabled")
-    eq(h.notified["TestApp_M.enabled"], 1)
+    falsy(box.Check:IsShown())
 end)
 
 test("a handler removed mid-dispatch doesn't receive the rest of that dispatch", function()
@@ -724,16 +747,6 @@ test("a renamed row's stale key is dropped; a failed module's keys are kept", fu
     Start(h)
     eq(h.env.TestDB["M.old"], nil, "stale key under a declared module")
     eq(h.env.TestDB["Gone.row"], 2, "module that didn't load keeps its key")
-end)
-
-test("a panel write doesn't notify the panel back; other writes do", function()
-    local h, addon = NewAddOn()
-    addon:Module("M", { label = "M" })
-    Start(h)
-    h.settings["TestApp_M.enabled"]:SetValue(false)
-    eq(h.notified["TestApp_M.enabled"], nil)
-    h:Slash("/test toggle M.enabled")
-    eq(h.notified["TestApp_M.enabled"], 1)
 end)
 
 test("a stopped module's runtime rows return to their defaults", function()

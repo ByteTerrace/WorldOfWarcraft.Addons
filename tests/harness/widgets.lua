@@ -254,6 +254,12 @@ function Behaviors.SetShown(s, w, shown) s.harness:SetWidgetShown(w, shown) end
 function Behaviors.IsShown(s) return s.shown end
 function Behaviors.IsVisible(s, w) return s.harness:IsVisibleWidget(w) end
 function Behaviors.IsProtected(s, w) return s.harness:IsProtectedWidget(w), s.protected end
+-- Attributes, as secure templates read them.
+function Behaviors.SetAttribute(s, _, name, value)
+    s.attributes = s.attributes or {}
+    s.attributes[name] = value
+end
+function Behaviors.GetAttribute(s, _, name) return (s.attributes or {})[name] end
 -- [G] No harness widget is forbidden: addon frames never are, and forbidden nameplates aren't modeled (units.lua).
 function Behaviors.IsForbidden() return false end
 function Behaviors.SetScript(s, _, script, fn) s.scripts[script] = fn end

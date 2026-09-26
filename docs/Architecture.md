@@ -8,7 +8,7 @@ WoW events ──► Events ──► adapters (the only code that calls the WoW
                               ▼
 slash / keys / ──► Commands ──► State rows ──► one publish per event ──► watchers & rules ──► effects
 controller (Input)               (typed, validated, versioned)                              (widgets, sounds, LEDs)
-settings panel ────────────────────┘
+settings window ───────────────────┘
 ```
 
 ## State
@@ -28,12 +28,11 @@ State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", d
   - An unbalanced `EndBatch` is an error.
 - **Rules.** `Rule{ reads, when, changed, initial }` is a verdict over rows. `changed(active, state)` runs when the verdict flips (edge semantics); with `initial` it also runs once with the first verdict.
   - A rule registered inside a batch (a module starting, say) takes its first verdict when that batch publishes, so what modules do while starting doesn't depend on the order they were declared in.
-- **Settings.** The options panel is generated from labeled persisted rows, in declaration order: a checkbox for booleans, a dropdown for enums, and a slider for bounded numbers. Compile refuses a labeled row with no fitting control.
-  - **Pages.** The addon's category, named by its title, is the main page. A module with `page = "<name>"` puts its settings on a subcategory of that name; subcategories appear in the order their first settings are declared. Only the main category is registered as the addon's category, and the client lists the subcategories under it.
+- **Settings.** The settings window is generated from labeled persisted rows, in declaration order: a checkbox for booleans, a button that cycles an enum's values, and `-`/`+` steppers for a bounded number. Compile refuses a labeled row with no fitting control.
+  - **Pages.** The main page is named by the addon's title. A module with `page = "<name>"` puts its settings on a page of that name; pages appear in the order their first settings are declared, listed down the window's left side.
   - **Sections.** On its page, a module's settings sit under a header: the module's `section`, or else its `label`. A row with `section = "<text>"` starts a new header before that row. A header that would repeat its page's name is left out. `addon.debug` is declared last, under an "Advanced" header, so it closes the main page.
-  - Controls are proxy settings, so a panel change goes through `State:Set` like any other write.
-  - A change made elsewhere refreshes the control.
-  - **Window.** The bare slash command toggles the addon's own settings window, drawn from the same pages: the page list on the left, sections and controls on the right (a checkbox, a button that cycles an enum's values, `-`/`+` steppers for a number). Every change goes through `State:Set`, a locked row is refused with a message, a change made elsewhere refreshes the open window, and a hidden window does no widget work. It's an ordinary frame, so it opens in combat too. The same pages stay registered with Blizzard's panel, under Esc > Options > AddOns.
+  - **Hosts.** One view draws the pages, and it moves to whichever host shows it. In Blizzard's settings panel (Esc > Options > AddOns) it's the addon's canvas page. The bare slash command toggles the addon's own window, an ordinary frame, so it opens in combat too and addon code never opens Blizzard's panel. Every change goes through `State:Set`, a locked row is refused with a message, a change made elsewhere refreshes the view, and a hidden view does no widget work.
+  - **Controller-safe.** The canvas is marked ignored for the controller UI's navigation (`smartNavigationIgnored`, which covers every child), and the addon registers no Blizzard setting controls. On Forever, controller focus on an addon's control taints what the controller UI remembers, and closing the panel then freezes the client. With the controller UI on, the canvas page is for the mouse, and the window is the way in.
 
 ## Records
 
@@ -77,7 +76,7 @@ Controller sources are named by position (`gamepad.south`), never by printed let
 
 ## Modules and facts
 
-`addon:Module(name, spec)` declares a module. A module with a `label` gets an `<Module>.enabled` row, and its checkbox appears in the settings panel. Its `page` and `section` place its settings (see Settings above).
+`addon:Module(name, spec)` declares a module. A module with a `label` gets an `<Module>.enabled` row, and its checkbox appears in the settings window. Its `page` and `section` place its settings (see Settings above).
 
 - **Switch options.** `default` sets the enabled row's default (true unless given). `scope` and `lockedBy` apply to it like any row, so `scope = "character"` makes a module per character, and a lock can keep it on.
 - **Atomic declarations.** Rows, records, commands, bindings and comms are prepared before anything is registered. A declaration that raises leaves no partial module or ownership of saved keys behind, and can be retried with a corrected spec. Startup validates commands and bindings before normalizing saved rows and records.
@@ -133,8 +132,8 @@ Forever runs the Midnight (12.x) API, where combat values such as health and pri
 
 - **Display:** a secret value goes straight to a widget (`StatusBar:SetValue`, `FontString:SetText`) and never enters state.
 - **Logic:** logic reads facts that adapters derive from APIs that aren't secret. Where an API can return a secret, the adapter checks `issecretvalue` and keeps the last known value.
-- **Blocked actions freeze controller players.** On Forever with the controller UI on, hiding a "blocked from an action" popup makes the controller code call a protected function again; if the addon's taint still reaches it, that call is blocked too, and the popups loop until the client freezes. So an addon must never cause a blocked action (the harness fails any test with an unexpected one).
-- **Settings panel:** addon code never opens Blizzard's settings panel. Opening it taints the panel, so its close runs `ToggleGameMenu` tainted and its protected calls are blocked, which starts that loop. The bare slash command opens the addon's own settings window instead; the player reaches Blizzard's page through Esc > Options, which stays untainted.
+- **Blocked actions freeze controller players.** On Forever with the controller UI on, hiding a "blocked from an action" popup makes the controller UI run the same protected call again; if the addon's taint still reaches it, that call is blocked too, and the popups loop until the client freezes. So an addon must never cause a blocked action (the harness fails any test with an unexpected one).
+- **Blizzard's settings panel is off limits.** The controller UI remembers the control its focus is on. If that control belongs to an addon (the addon registered it) or the panel was opened by addon code, its taint is in what the controller UI remembers; closing the panel reads it, `SetPreferredGamepadInteractTarget` is blocked, and the loop above starts. So addon code never opens the panel, and the settings view sits in it only as a canvas the controller UI ignores.
 - **Enforcement:** the check gate and the test harness enforce these rules (see [Development](../README.md#development)).
 
 ## Performance

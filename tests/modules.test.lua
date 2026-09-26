@@ -67,7 +67,7 @@ test("character scope needs a per-character SavedVariable", function()
     truthy(StartRefused(h, addon):find("savedVariablePerCharacter", 1, true))
 end)
 
-test("a row locked by another row refuses writes from code, slash and the panel", function()
+test("a row locked by another row refuses writes from code, slash and the window", function()
     local h, addon = NewAddOn()
     local m = addon:Module("M", { toggle = false, state = {
         { name = "locked", kind = "boolean", default = false, persist = false },
@@ -78,11 +78,16 @@ test("a row locked by another row refuses writes from code, slash and the panel"
     throws(function() m:Set("mode", "b") end, "is locked")
     h:Slash("/test set M.mode b")
     truthy(h.printed[#h.printed]:find("is locked", 1, true))
-    h.settings["TestApp_M.mode"]:SetValue("b")
+    addon.SettingsWindow:Show()
+    local button = addon.SettingsWindow.Controls[addon.State:Id("M.mode")]
+    button:Click()
+    truthy(h.printed[#h.printed]:find("Mode is locked", 1, true))
     eq(m:Get("mode"), "a")
+    eq(button.Label:GetText(), "a")
     m:Set("locked", false)
     m:Set("mode", "b")
     eq(m:Get("mode"), "b")
+    eq(button.Label:GetText(), "b")
 end)
 
 test("lockedBy must name a boolean row", function()

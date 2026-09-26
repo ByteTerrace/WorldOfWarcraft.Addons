@@ -137,3 +137,12 @@ local function Sink(bar)
     return cur
 end
 print(Sink)
+-- In a file that creates Secure frames, a plain function sharing a method name is not a frame call.
+local function MakeSecure()
+    if InCombatLockdown() then
+        return
+    end
+    return CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+end
+local Shapes = { Show = function(value) return value end }
+print(MakeSecure, Shapes.Show(1))

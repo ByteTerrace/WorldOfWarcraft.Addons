@@ -1,6 +1,7 @@
--- The addon's own settings window (ByteTerrace_Core/SettingsWindow.lua): what the bare slash
--- command opens instead of Blizzard's settings panel, which froze the Forever client when an
--- addon opened it (tools/api/forbidden.json).
+-- The addon's settings view (ByteTerrace_Core/SettingsWindow.lua): its two hosts, page layout,
+-- controls, state changes and bare slash commands. Blizzard's panel gets one canvas page that the
+-- controller UI ignores and no setting controls, whose focus freezes the client on close
+-- (tools/api/forbidden.json).
 
 local function NewAddOn()
     local h = Harness.New()
@@ -35,17 +36,40 @@ test("the bare command toggles the window, in combat too, and never opens Blizza
     eq(#h.opened, 0, "Blizzard's settings panel is never opened")
 end)
 
-test("the window's pages are the settings panel's pages, main page first", function()
+test("Blizzard's panel gets one canvas page, kept out of controller focus, and no controls of its own", function()
     local h, addon = NewAddOn()
-    local names, panel = {}, {}
-    for i, page in ipairs(addon.SettingsWindow.Pages) do
-        names[i] = page.name
-    end
-    for i, page in ipairs(h.settingsPages) do
-        panel[i] = page.name
-    end
-    eq(table.concat(names, ","), "Test App,Riddles")
-    eq(table.concat(names, ","), table.concat(panel, ","))
+    local window = addon.SettingsWindow
+    eq(h.category.name, "Test App")
+    eq(h.category.canvas, window.Canvas, "the page is the view's canvas")
+    truthy(window.Canvas.smartNavigationIgnored, "SmartNavigation ignores the canvas and every child")
+    eq(next(h.settings), nil, "no Blizzard setting controls, whose focus froze controller players")
+    eq(#h.settingsPages, 1, "one page; the view draws its own subpages")
+end)
+
+test("the view moves to whichever host shows it, and works in both", function()
+    local h, addon = NewAddOn()
+    local window, state = addon.SettingsWindow, addon.State
+    window.Canvas:Show()
+    local box = window.Controls[state:Id("Meter.enabled")]
+    truthy(box:IsVisible(), "the canvas shows the view")
+    box:Click()
+    falsy(state:Get("Meter.enabled"))
+    window.Canvas:Hide()
+    window:Show()
+    truthy(box:IsVisible(), "the window shows the same view")
+    falsy(box.Check:IsShown(), "and the change made on the canvas")
+    window:Hide()
+    window.Canvas:Show()
+    truthy(box:IsVisible(), "back on the canvas")
+    eq(h:CountCalls("SetParent") > 0, true)
+end)
+
+test("the toolkit registers its canvas page and no Blizzard setting controls", function()
+    local h = Harness.New()
+    local addon = h:LoadAddon("TheLanKrewToolKit").Addon
+    eq(h.category.name, addon.Title)
+    truthy(addon.SettingsWindow.Canvas.smartNavigationIgnored)
+    eq(next(h.settings), nil)
 end)
 
 test("a checkbox flips its row, and a change made elsewhere shows while the window is open", function()
@@ -59,6 +83,20 @@ test("a checkbox flips its row, and a change made elsewhere shows while the wind
     falsy(box.Check:IsShown())
     h:Slash("/test toggle Meter.enabled")
     truthy(box.Check:IsShown(), "a slash change refreshes the open window")
+end)
+
+test("window and external writes each refresh the changed control once", function()
+    local h, addon = NewAddOn()
+    local window, state = addon.SettingsWindow, addon.State
+    window:Show()
+    local box = window.Controls[state:Id("Meter.enabled")]
+    local calls = Harness.State(box.Check).calls.SetShown
+    box:Click()
+    eq(Harness.State(box.Check).calls.SetShown, calls + 1)
+    falsy(box.Check:IsShown())
+    h:Slash("/test toggle Meter.enabled")
+    eq(Harness.State(box.Check).calls.SetShown, calls + 2)
+    truthy(box.Check:IsShown())
 end)
 
 test("an enum button steps forward on a left click and back on a right click, wrapping", function()

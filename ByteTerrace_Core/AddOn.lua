@@ -5,7 +5,7 @@
 --                                        slash = { "/my" }, facts = { "combat" } })
 --   addon:Module("Meter", {
 --       label = "Meter", description = "...",   -- the module's enabled checkbox
---       page = "Display",                       -- optional: a settings subcategory for its settings
+--       page = "Display",                       -- optional: a subpage in the settings window
 --       section = "Energy meter",               -- optional: its header on the page (default: label)
 --       state = { { name = "size", kind = "string", default = "wide", values = { "wide", "wider" }, label = "Size",
 --                   section = "Look" } },        -- a row's section starts a new header before it
@@ -286,7 +286,7 @@ function AddOn:ResolveUses()
     return usesOf
 end
 
---- Compiles every declaration, loads SavedVariables, builds settings and slash commands, then
+--- Compiles every declaration, loads SavedVariables, creates the settings window and slash commands, then
 --- starts the modules in one batch. ADDON_LOADED calls it; a refused declaration raises before
 --- anything starts.
 function AddOn:Start()
@@ -320,8 +320,8 @@ function AddOn:Start()
     end
     self.m_debugId = self.State:Id("addon.debug")
     local pages = ByteTerrace.SettingsPages(self)
-    ByteTerrace.BuildSettings(self, pages)
     self.SettingsWindow = ByteTerrace.NewSettingsWindow(self, pages)
+    self.SettingsWindow:Register()
     self:RegisterSlash()
     self.Started = true
     self.State:BeginBatch()

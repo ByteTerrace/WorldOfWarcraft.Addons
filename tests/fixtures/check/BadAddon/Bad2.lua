@@ -92,3 +92,4 @@ local function Low()
 end
 print(Low)
 Chat:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED") -- !
+SettingsPanel:OpenToCategory(1) -- !

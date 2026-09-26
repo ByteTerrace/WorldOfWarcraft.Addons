@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-// Functions the Forever client refused to addon code when tried in game, though the docs don't mark
-// them IsProtectedFunction: { [name]: evidence }. The harness forbids them and the PROTECTED rule
-// reports every call.
+// Functions addon code must never call, though the docs don't mark them IsProtectedFunction, each
+// with its in-game evidence (the client refused it, or calling it froze the client):
+// { [name]: evidence }. The harness forbids them and the PROTECTED rule reports every call.
 export const FORBIDDEN_PATH = join(repoRoot, "tools", "api", "forbidden.json");
 
 export function readForbidden(path = FORBIDDEN_PATH) {

@@ -33,7 +33,7 @@ State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", d
   - **Sections.** On its page, a module's settings sit under a header: the module's `section`, or else its `label`. A row with `section = "<text>"` starts a new header before that row. A header that would repeat its page's name is left out. `addon.debug` is declared last, under an "Advanced" header, so it closes the main page.
   - Controls are proxy settings, so a panel change goes through `State:Set` like any other write.
   - A change made elsewhere refreshes the control.
-  - The panel opens after combat if asked for during lockdown.
+  - **Window.** The bare slash command toggles the addon's own settings window, drawn from the same pages: the page list on the left, sections and controls on the right (a checkbox, a button that cycles an enum's values, `-`/`+` steppers for a number). Every change goes through `State:Set`, a locked row is refused with a message, a change made elsewhere refreshes the open window, and a hidden window does no widget work. It's an ordinary frame, so it opens in combat too. The same pages stay registered with Blizzard's panel, under Esc > Options > AddOns.
 
 ## Records
 
@@ -70,7 +70,7 @@ A command is a named intent, `{ name, label, run(arg, phase, source), slash?, he
 Controller sources are named by position (`gamepad.south`), never by printed letter. `Input.Label(source)` gives the connected family's printed name: A on Xbox, Cross on PlayStation, B on Switch.
 
 - **Maps.** A binding is `{ map, source, command }`. `SetActiveMaps` activates maps: several maps form an overlay, one map is modal.
-- **Capture.** While any bound button is active, a capture frame takes those buttons and every other button propagates to the game.
+- **Capture.** While any bound button is active, a capture frame takes every controller button: bound ones run their commands, and the rest do nothing. The client ignores a gamepad script's return value, so capture can't pass a button on to the game (seen in game under Scholar's riddle), and an active map is modal for the controller.
   - The frame is parentless, so hiding the UI doesn't stop capture.
   - `EnableGamePadButton` is flagged protected, but like `Show` and `Hide` that only restricts Secure frames, so capture works in combat.
 - **Latching.** A release always goes to the command its press went to. A held command whose map is deactivated while its button is down gets `"cancel"`.
@@ -133,7 +133,8 @@ Forever runs the Midnight (12.x) API, where combat values such as health and pri
 
 - **Display:** a secret value goes straight to a widget (`StatusBar:SetValue`, `FontString:SetText`) and never enters state.
 - **Logic:** logic reads facts that adapters derive from APIs that aren't secret. Where an API can return a secret, the adapter checks `issecretvalue` and keeps the last known value.
-- **Restricted calls:** opening the settings panel is restricted in combat, so it's deferred until combat ends.
+- **Blocked actions freeze controller players.** On Forever with the controller UI on, hiding a "blocked from an action" popup makes the controller code call a protected function again; if the addon's taint still reaches it, that call is blocked too, and the popups loop until the client freezes. So an addon must never cause a blocked action (the harness fails any test with an unexpected one).
+- **Settings panel:** addon code never opens Blizzard's settings panel. Opening it taints the panel, so its close runs `ToggleGameMenu` tainted and its protected calls are blocked, which starts that loop. The bare slash command opens the addon's own settings window instead; the player reaches Blizzard's page through Esc > Options, which stays untainted.
 - **Enforcement:** the check gate and the test harness enforce these rules (see [Development](../README.md#development)).
 
 ## Performance

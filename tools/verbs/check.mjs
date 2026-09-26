@@ -32,8 +32,8 @@
 //             passed as a function literal to On / RegisterEvent / SetScript("OnEvent"), a
 //             parameter carrying a non-unit field of a secret-flagged event's payload can't be
 //             compared, computed with, indexed, called or branched on without such a guard.
-//   PROTECTED a call to a protected or restricted function (IsProtectedFunction / HasRestrictions,
-//             and Blizzard Lua wrappers of them such as Settings.OpenToCategory), a HasRestrictions
+//   PROTECTED a function forbidden to addon code (IsProtectedFunction, tools/api/forbidden.json) is
+//             never called. A call to a restricted function (HasRestrictions), a HasRestrictions
 //             method on any receiver, or a protected method on a frame from a Secure template
 //             (followed through locals, aliases and fields; in a file that creates a Secure frame,
 //             any receiver not proven non-Secure) is dominated by an InCombatLockdown() test whose
@@ -79,7 +79,6 @@ export const options = {
 
 const MAX_LINES = 800;
 // Blizzard Lua functions that call a restricted C function (Blizzard_Settings.lua).
-const RESTRICTED_WRAPPERS = { "Settings.OpenToCategory": "C_SettingsUtil.OpenSettingsPanel" };
 
 export function loadApi(path = join(repoRoot, "tools", "api", "forever.json")) {
     const snapshot = JSON.parse(readFileSync(path, "utf8"));
@@ -145,8 +144,7 @@ export function loadApi(path = join(repoRoot, "tools", "api", "forever.json")) {
         if (entry.IsProtectedFunction) forbiddenFunctions.set(name, "IsProtectedFunction");
         else if (entry.HasRestrictions) protectedFunctions.set(name, "HasRestrictions");
     }
-    for (const name of Object.keys(readForbidden())) forbiddenFunctions.set(name, "refused to addon code in game, tools/api/forbidden.json");
-    for (const [wrapper, target] of Object.entries(RESTRICTED_WRAPPERS)) protectedFunctions.set(wrapper, `calls ${target}`);
+    for (const name of Object.keys(readForbidden())) forbiddenFunctions.set(name, "in-game evidence in tools/api/forbidden.json");
     return {
         hasDump, globals, members, functions: snapshot.functions, events: new Set(Object.keys(snapshot.events)),
         eventEntries: snapshot.events, methodSecrets, aspectSetters, protectedMethods, restrictedMethods, protectedFunctions,

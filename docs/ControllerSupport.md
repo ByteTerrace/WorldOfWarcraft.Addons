@@ -106,7 +106,9 @@ footer:Finalize(); footer:ShowAndActivateBindings()
 
 ## Restrictions
 
-- The action and targeting buttons are secure. **Safe:** read state, `hooksecurefunc` the mixin methods, reskin textures. **Taints and breaks in combat:** replacing methods, or calling `SetID`/`SetAttribute`/`Show`/`Hide`/`SetParent` on Blizzard's gamepad buttons and bars.
+- The action and targeting buttons are secure. **Safe:** read state, reskin textures. **Taints and breaks in combat:** replacing methods, or calling `SetID`/`SetAttribute`/`Show`/`Hide`/`SetParent` on Blizzard's gamepad buttons and bars.
+- **Don't hook the controller UI's managers.** `hooksecurefunc` on `GamepadMode.FrameControlsManager` or `SmartNavigation` methods broke Blizzard's own calls to them: Lua errors "attempt to call a nil value" at `FrameControlsManager.lua:226` (`self:FrameHidden`) and `PromptedBindingFooter.lua:397` (`SmartNavigation:UnregisterCallback`).
+- **A blocked action freezes controller players.** Hiding a "blocked from an action" popup makes the controller UI call the protected `SetPreferredGamepadInteractTarget`; if an addon's taint reaches it, that call is blocked too and the popups loop until the client freezes. Opening Blizzard's settings panel from addon code is one way in (see [Architecture](Architecture.md#secret-values)).
 - `SimulateMouseClick/Down/Up/Wheel` and `SetCursorPosition` work from addon code **once per gamepad hardware event**.
 - `C_GamePad.SetConfig`, `ApplyConfigs`, `DeleteConfig` and `AddSDLMapping` are restricted.
 - Secret values still apply. Your own primary power (energy, mana) is secret, in combat and out; its maximum is not. Combo points are documented as never secret; the `power.comboPoints` probes check that in game.

@@ -470,6 +470,16 @@ function Harness:BuildEnvironment()
     end
 
     fakes.UIParent = h:CreateWidget("Frame", "UIParent")
+    -- Blizzard's settings frame carries SettingsPanelMixin (Blizzard_SettingsPanel.lua). Addon code
+    -- that opened it froze the client when it closed, so Open and OpenToCategory are forbidden
+    -- (tools/api/forbidden.json); the player opens it from Esc > Options.
+    fakes.SettingsPanel = h:CreateWidget("Frame", "SettingsPanel", fakes.UIParent)
+    fakes.SettingsPanel.Open = function()
+        h:BlockAction("ADDON_ACTION_FORBIDDEN", "SettingsPanel:Open")
+    end
+    fakes.SettingsPanel.OpenToCategory = function()
+        h:BlockAction("ADDON_ACTION_FORBIDDEN", "SettingsPanel:OpenToCategory")
+    end
     -- units.lua, world.lua, ui.lua, meter.lua and speech.lua; a name defined twice is a harness bug.
     local sources = {
         h:UnitFakes(), h:WorldFakes(fakes.UIParent), h:InterfaceFakes(fakes.UIParent), h:MeterFakes(), h:SpeechFakes(),
@@ -515,8 +525,9 @@ end
 -- - CreateSettingsListSectionHeaderInitializer (a global) wraps Settings.CreateElementInitializer
 --   with "SettingsListSectionHeaderTemplate".
 -- - RegisterAddOnSetting stores into the variable table like SettingsInbound.CreateAddOnSetting.
--- - OpenToCategory calls C_SettingsUtil.OpenSettingsPanel, as Blizzard_Settings.lua does, so it's
---   blocked during combat lockdown (HasRestrictions).
+-- - OpenToCategory calls C_SettingsUtil.OpenSettingsPanel, as Blizzard_Settings.lua does, which
+--   addon code must never call (tools/api/forbidden.json).
+-- - The SettingsPanel global (a frame, see the env) refuses addon code's Open and OpenToCategory.
 -- What tests read: h.settings[variable] (with control, options and tooltip once a control is made),
 -- h.settingsOrder (proxy settings in registration order), h.category (the RegisterAddOnCategory
 -- argument) and h.settingsPages, each { name, parent (the parent page's name, or nil),

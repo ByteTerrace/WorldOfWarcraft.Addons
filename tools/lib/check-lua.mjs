@@ -349,9 +349,12 @@ export function checkLua(file, text, context, report) {
             }
 
             // Protected calls: a forbidden function fails at any time; the rest need a combat guard.
-            const forbiddenReason = name ? api.forbiddenFunctions?.get(name) : null;
+            // A forbidden method is recorded as "Global:Method" (SettingsPanel:OpenToCategory).
+            const methodPath = method && base.indexer === ":" && path(base.base) ? `${path(base.base)}:${method}` : null;
+            const forbiddenName = api.forbiddenFunctions?.has(name) ? name : api.forbiddenFunctions?.has(methodPath) ? methodPath : null;
+            const forbiddenReason = forbiddenName ? api.forbiddenFunctions.get(forbiddenName) : null;
             if (forbiddenReason && !annotated("protected", line(node))) {
-                report(file, line(node), "PROTECTED", `${name} is forbidden to addon code at any time (${forbiddenReason}); `
+                report(file, line(node), "PROTECTED", `${forbiddenName} is forbidden to addon code at any time (${forbiddenReason}); `
                     + "no combat guard helps, so don't call it");
             }
             const protectedReason = forbiddenReason ? null : protectedCall(name, method, base);

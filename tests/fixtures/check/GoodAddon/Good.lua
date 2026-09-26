@@ -41,11 +41,11 @@ local function OpenSettings()
     if InCombatLockdown() then
         return
     end
-    Settings.OpenToCategory(1)
+    C_AuctionHouse.PlaceBid(1, 1)
 end
 
 local function OpenAnyway()
-    Settings.OpenToCategory(1) -- protected: fixture shows the annotation is honored
+    C_AuctionHouse.PlaceBid(1, 1) -- protected: fixture shows the annotation is honored
 end
 
 if C_Spell.GetSpellName then

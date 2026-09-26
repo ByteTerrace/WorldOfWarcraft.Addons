@@ -33,11 +33,12 @@
 -- Settings pages (Settings.lua): modules without a page share the main page, in declaration
 -- order, and addon.debug closes it under an "Advanced" header.
 --
--- Built-in commands: bare slash (settings), help, version, debug [status | events | rows | trace |
--- cpu | reset] (Diagnostics.lua), set <row> <value>, toggle <row>.
+-- Built-in commands: bare slash (the settings window, SettingsWindow.lua), help, version,
+-- debug [status | events | rows | trace | cpu | reset] (Diagnostics.lua), set <row> <value>,
+-- toggle <row>.
 --
--- Public members: Name, Title, Version, Slash, State, Events, Commands, Input, Modules ([name] =
--- Module, Module.lua) and Started.
+-- Public members: Name, Title, Version, Slash, State, Events, Commands, Input, SettingsWindow,
+-- Modules ([name] = Module, Module.lua) and Started.
 
 -- Module and row names are identifiers: "." separates a module from its row, so it can't appear in either.
 local NamePattern = "^%a[%w_]*$"
@@ -318,7 +319,9 @@ function AddOn:Start()
         end
     end
     self.m_debugId = self.State:Id("addon.debug")
-    self.m_settingsCategoryID = ByteTerrace.BuildSettings(self)
+    local pages = ByteTerrace.SettingsPages(self)
+    ByteTerrace.BuildSettings(self, pages)
+    self.SettingsWindow = ByteTerrace.NewSettingsWindow(self, pages)
     self:RegisterSlash()
     self.Started = true
     self.State:BeginBatch()
@@ -389,21 +392,10 @@ function AddOn:Debug(...)
     end
 end
 
---- Opens the addon's settings. The panel can't open during combat lockdown; it opens as soon as
---- combat ends instead.
-function AddOn:OpenSettings()
-    if InCombatLockdown() then
-        if not self.m_pendingSettings then
-            self:Print("Settings will open when combat ends.")
-            self.m_pendingSettings = self.Events:On("PLAYER_REGEN_ENABLED", function()
-                self.Events:Off(self.m_pendingSettings)
-                self.m_pendingSettings = nil
-                self:OpenSettings()
-            end)
-        end
-        return
-    end
-    Settings.OpenToCategory(self.m_settingsCategoryID) -- protected: guarded by InCombatLockdown above
+--- Shows the addon's settings window, or hides it when it shows (SettingsWindow.lua). It's the
+--- addon's own frame, so it opens in combat too.
+function AddOn:ToggleSettings()
+    self.SettingsWindow:Toggle()
 end
 
 --- The `set <setting> <value>` command: only settings (labeled, persisted rows) are reachable.
@@ -465,8 +457,8 @@ end
 function AddOn:DefineBuiltinCommands()
     local commands = self.Commands
     commands:Define({
-        name = "addon.settings", slash = "", label = "Open settings",
-        run = function() self:OpenSettings() end,
+        name = "addon.settings", slash = "", label = "Show or hide settings",
+        run = function() self:ToggleSettings() end,
     })
     commands:Define({
         name = "addon.help", slash = "help", label = "List commands",

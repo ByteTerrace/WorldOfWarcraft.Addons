@@ -7,8 +7,11 @@
 --
 --   Bind(map, source, command)  before compile.
 --   SetActiveMaps(maps)         activates a set of maps (several = overlay, one = modal). While any
---                               bound button is active, the capture frame takes those buttons;
---                               every other button propagates to the game untouched.
+--                               bound button is active, the capture frame takes every controller
+--                               button: bound ones run their commands, the rest do nothing. The
+--                               client ignores a gamepad script's return value, so capture can't
+--                               pass a button on (seen in game: the d-pad never reached the game
+--                               under Scholar's riddle). An active map is modal for the controller.
 --
 -- A release always goes to the command its press went to, even if the maps changed in between.
 -- A held command whose map is deactivated while its button is down receives "cancel".
@@ -154,40 +157,35 @@ function Input:EnsureFrame()
     end
     local frame = CreateFrame("Frame")
     frame:SetScript("OnGamePadButtonDown", function(_, key)
-        return self:Down(key)
+        self:Down(key)
     end)
     frame:SetScript("OnGamePadButtonUp", function(_, key)
-        return self:Up(key)
+        self:Up(key)
     end)
     self.m_frame = frame
     return frame
 end
 
---- Handles a button press.
+--- Handles a button press: a bound button runs its command; any other does nothing.
 ---@param key string the WoW key, e.g. "PAD1"
----@return boolean propagate true lets the button reach the game (Blizzard's convention for
---- gamepad button scripts)
 function Input:Down(key)
     local id = self.m_active[key]
     if not id then
-        return true
+        return
     end
     self.m_latched[key] = id
     self.m_addon.Commands:Run(id, nil, "down", "gamepad")
-    return false
 end
 
 --- Handles a button release; it goes to the command its press went to.
 ---@param key string
----@return boolean propagate
 function Input:Up(key)
     local id = self.m_latched[key]
     if not id then
-        return true
+        return
     end
     self.m_latched[key] = nil
     self.m_addon.Commands:Run(id, nil, "up", "gamepad")
-    return false
 end
 
 --- Turns capture on while any binding is active. EnableGamePadButton is flagged protected, but

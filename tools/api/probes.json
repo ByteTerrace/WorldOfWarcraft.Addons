@@ -150,8 +150,55 @@
       },
       "context": { "combat": false, "restrictions": "none" }
     },
+    "deathRecap.events": {
+      "result": {
+        "commonFields": "amount,critical,crushing,currentHP,destFlags,destGUID,destName,destRaidFlags,event,glancing,hideCaster,isOffHand,overkill,school,sourceFlags,sourceGUID,sourceName,sourceRaidFlags,timestamp",
+        "events": "table",
+        "hasRecapEvents": true,
+        "killingBlow": {
+          "amount": "number",
+          "critical": "boolean",
+          "crushing": "boolean",
+          "currentHP": "number",
+          "destFlags": "number",
+          "destGUID": "string",
+          "destName": "string",
+          "destRaidFlags": "number",
+          "event": "string",
+          "glancing": "boolean",
+          "hideCaster": "boolean",
+          "isOffHand": "boolean",
+          "overkill": "number",
+          "school": "number",
+          "sourceFlags": "number",
+          "sourceGUID": "string",
+          "sourceName": "string",
+          "sourceRaidFlags": "number",
+          "timestamp": "number"
+        },
+        "maxHealth": "number",
+        "recapID": "number",
+        "sourceName": "text"
+      },
+      "context": { "combat": false, "restrictions": "none" },
+      "version": 2
+    },
     "deathRecap.latest": {
       "result": { "hasLatest": true, "latest": "table", "sameAsMeter": true },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "deathRecap.spellFields": {
+      "result": {
+        "avoidable": "boolean",
+        "deadly": "boolean",
+        "spellId": "number",
+        "spellName": "string",
+        "spellSchool": "number"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "deathRecap.swingFields": {
+      "result": { "avoidable": "nil", "deadly": "nil", "spellId": "nil", "spellName": "nil", "spellSchool": "nil" },
       "context": { "combat": false, "restrictions": "none" }
     },
     "faction.player": {
@@ -254,6 +301,14 @@
       "result": { "unitFullNameIsRealm": false, "unitNameIsRealm": false },
       "context": { "combat": false, "restrictions": "none" }
     },
+    "power.comboPoints": {
+      "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "power.comboPointsInCombat": {
+      "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
     "power.npcTarget": {
       "result": {
         "current": { "secret": true, "type": "number" },
@@ -329,7 +384,7 @@
         "objectiveType": "number",
         "text": "text",
         "type": "text",
-        "types": "event,item,monster"
+        "types": "item"
       },
       "context": { "combat": false, "restrictions": "none" }
     },
@@ -443,9 +498,9 @@
     },
     "unitCombat.seen": {
       "result": {
-        "actions": "DODGE,HEAL,MISS,WOUND",
+        "actions": "DODGE,HEAL,MISS,PARRY,WOUND",
         "amountInCombat": "number",
-        "flagTexts": "CRITICAL,GLANCING",
+        "flagTexts": "BLOCK_REDUCED,CRITICAL",
         "player": {
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "HEAL": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
@@ -455,6 +510,7 @@
         "target": {
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "MISS": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
+          "PARRY": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "WOUND": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" }
         }
       },

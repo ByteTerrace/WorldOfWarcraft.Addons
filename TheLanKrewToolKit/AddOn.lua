@@ -17,5 +17,5 @@ ns.Addon = ByteTerrace.NewAddOn({
 
 --- Opens the toolkit's settings; the TOC's AddonCompartmentFunc.
 function TheLanKrewToolKit_OnAddonCompartmentClick()
-    ns.Addon:OpenSettings()
+    ns.Addon:ToggleSettings()
 end

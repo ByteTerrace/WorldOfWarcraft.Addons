@@ -231,7 +231,7 @@ function Harness.New(player)
     h.led = nil               -- current light bar color {r,g,b}, nil when cleared
     h.vibrations = {}         -- { type, intensity }
     h.vibrationsStopped = 0   -- C_GamePad.StopVibration calls
-    h.opened = {}             -- Settings.OpenToCategory ids
+    h.opened = {}             -- settings panel openings (C_SettingsUtil.OpenSettingsPanel ids)
     h.settings = {}           -- [variable] = setting
     h.settingsPages = {}      -- the Settings fake's pages and their entries (env.lua)
     h.spellNames = { [5308] = "Execute" }
@@ -704,16 +704,19 @@ function Harness:Relog(serverSecondsLater, whileAway)
     end)
 end
 
--- Presses (down = true) or releases a gamepad key like "PAD1". Visible frames (every ancestor
--- shown) with gamepad buttons enabled get it newest first until one consumes it (its script
--- doesn't return true).
+-- Presses (down = true) or releases a gamepad key like "PAD1". The newest visible frame (every
+-- ancestor shown) with gamepad buttons enabled and a script for it takes the key, whatever the
+-- script returns [E]: while Scholar's riddle had its buttons enabled, the d-pad, which the riddle
+-- doesn't bind and whose script returned true, never reached the game (client 1.60.1 (70009)).
+-- Only a key no such frame takes lands in h.propagated.
 function Harness:Gamepad(key, down)
     local script = down and "OnGamePadButtonDown" or "OnGamePadButtonUp"
     for i = #self.frames, 1, -1 do
         local frame = self.frames[i]
         local state = Harness.State(frame)
         local handler = state.scripts[script]
-        if state.gamepadButtons and self:IsVisibleWidget(frame) and handler and handler(frame, key) ~= true then
+        if state.gamepadButtons and self:IsVisibleWidget(frame) and handler then
+            handler(frame, key)
             return
         end
     end

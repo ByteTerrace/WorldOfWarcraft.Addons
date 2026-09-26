@@ -1,3 +1,7 @@
 {
-  "SetRaidTarget": "/run SetRaidTarget(\"target\", 8) out of combat in a party was blocked (client 1.60.1 (70009))"
+  "SetRaidTarget": "/run SetRaidTarget(\"target\", 8) out of combat in a party was blocked (client 1.60.1 (70009))",
+  "C_SettingsUtil.OpenSettingsPanel": "addon code that opens Blizzard's settings panel taints it, so the panel's close runs ToggleGameMenu tainted and its protected calls are blocked (taint.log: SpellStopCasting, SpellStopTargeting); with the controller UI on, each blocked-action popup's hide re-runs SetPreferredGamepadInteractTarget tainted, which is blocked again: an endless popup loop that freezes the client (taint.log: 2010 blocks in 5 s; /btdev watch: FrameControlsManager:FrameHidden 250 times in one frame; client 1.60.1 (70009))",
+  "Settings.OpenToCategory": "calls C_SettingsUtil.OpenSettingsPanel (Blizzard_Settings.lua); see it",
+  "SettingsPanel:OpenToCategory": "opens the panel from addon code; see C_SettingsUtil.OpenSettingsPanel",
+  "SettingsPanel:Open": "opens the panel from addon code; see C_SettingsUtil.OpenSettingsPanel"
 }

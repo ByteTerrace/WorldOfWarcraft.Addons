@@ -98,9 +98,12 @@
 --                        handler only shows a message; the caller keeps running).
 --     IsProtectedFunction  a global is forbidden to addon code: ADDON_ACTION_FORBIDDEN, always.
 --     Verified in game     Harness.FORBIDDEN_IN_GAME (tools/api/forbidden.json, which the PROTECTED
---                        rule reads too) lists functions the docs don't mark protected but the
---                        Forever client refused to addon code when tried (each with its
---                        evidence); they're forbidden like IsProtectedFunction globals. Which of
+--                        rule reads too) lists functions the docs don't mark protected that addon
+--                        code must never call: the Forever client refused them, or calling one
+--                        led to a freeze (C_SettingsUtil.OpenSettingsPanel), each with its
+--                        evidence. A
+--                        freeze can't be modeled, so the harness forbids them like
+--                        IsProtectedFunction globals, which fails any test that calls one. Which of
 --                        the two events the client fired wasn't captured; FORBIDDEN is a guess.
 --                        A method on a protected widget (a Secure template, or a parent of
 --                        one) is blocked during combat lockdown: ADDON_ACTION_BLOCKED.

@@ -73,7 +73,7 @@ const EXPECTED = [
     `${B}:44: MEMBER C_Macro.SetMacroExecuteLineCallback is not in the API snapshot`,
     `${B}:45: MEMBER string.dump is not in the API snapshot`,
     `${B}:47: EVENT unknown event NOT_REAL_EITHER`,
-    `${B}:48: ${BLOCKED("Settings.OpenToCategory", "calls C_SettingsUtil.OpenSettingsPanel")}`,
+    `${B}:48: PROTECTED Settings.OpenToCategory is forbidden to addon code at any time (in-game evidence in tools/api/forbidden.json); no combat guard helps, so don't call it`,
     `${B}:49: ${BLOCKED("C_AuctionHouse.PlaceBid", "HasRestrictions")}`,
     `${B}:51: ${BLOCKED(":SetPoint()", "protected method on a Secure frame")}`,
     `${B}:53: ${INTO("string.Helper")}`,
@@ -107,11 +107,12 @@ const EXPECTED = [
     `${B2}:80: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // stored
     `${B2}:81: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // tabled
     `${B2}:82: SECRET ${HP}`, // \`_\` only discards what nothing reads
-    `${B2}:85: PROTECTED SetRaidTarget is forbidden to addon code at any time (refused to addon code in game, tools/api/forbidden.json); no combat guard helps, so don't call it`,
+    `${B2}:85: PROTECTED SetRaidTarget is forbidden to addon code at any time (in-game evidence in tools/api/forbidden.json); no combat guard helps, so don't call it`,
     `${B2}:87: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // a table key
     `${B2}:88: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // out of an and/or
     `${B2}:91: SECRET cur holds UnitPower's result; the annotation on line 90 covers the call, not this use, which errors on a secret: check issecretvalue before it, or annotate "-- secret: <why>"`,
     `${B2}:94: EVENT COMBAT_LOG_EVENT_UNFILTERED is restricted to Blizzard's code; registering it is refused (ADDON_ACTION_FORBIDDEN)`,
+    `${B2}:95: PROTECTED SettingsPanel:OpenToCategory is forbidden to addon code at any time (in-game evidence in tools/api/forbidden.json); no combat guard helps, so don't call it`,
     // Naming and comments (GoodAddon/GoodStyle.lua holds the allowed constructs).
     `${BS}:3: NAMING constant 'MAX_ITEMS' should be PascalCase (MaxItems)`,
     `${BS}:4: NAMING file-level local 'itemCount' should be PascalCase (ItemCount)`,

@@ -214,15 +214,14 @@ test("protected methods on protected frames are blocked during lockdown: the cal
     falsy(child:IsVisible(), "hidden with its parent")
 end)
 
-test("Settings.OpenToCategory is blocked during lockdown (C_SettingsUtil.OpenSettingsPanel has restrictions)", function()
+test("opening Blizzard's settings panel from addon code is forbidden: it froze the client on close", function()
     local h = Harness.New()
-    h:ExpectBlocked(1) -- the calls under test
+    h:ExpectBlocked(3) -- the calls under test
     h.env.Settings.OpenToCategory(7)
-    eq(h.opened[1], 7)
-    h:EnterCombat()
-    h.env.Settings.OpenToCategory(7)
-    eq(#h.opened, 1, "blocked")
-    eq(h.blocked[1], "C_SettingsUtil.OpenSettingsPanel")
+    h.env.SettingsPanel:OpenToCategory(7)
+    h.env.SettingsPanel:Open()
+    eq(#h.opened, 0, "nothing opened")
+    eq(table.concat(h.forbidden, ","), "C_SettingsUtil.OpenSettingsPanel,SettingsPanel:OpenToCategory,SettingsPanel:Open")
 end)
 
 test("Settings layouts: controls join their own category's layout, headers go where they're added", function()

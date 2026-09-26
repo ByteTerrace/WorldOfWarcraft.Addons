@@ -6,7 +6,7 @@ AddOns for **World of Warcraft: Forever**, held to the same correctness and perf
 | --- | --- |
 | [ByteTerrace_Core](ByteTerrace_Core) | The shared framework (Lua global `ByteTerrace`): state, commands, input, events, modules. See [architecture](docs/Architecture.md). |
 | [TheLanKrewToolKit](TheLanKrewToolKit) | Utilities for The Lan Krew. |
-| [ByteTerrace_DevTools](ByteTerrace_DevTools) | Development only: `/btdev dump` records the client's globals for `tlk api-sync`, and `/btdev probe` records the client's answers to calibration probes for `tlk probes`. Never shipped. |
+| [ByteTerrace_DevTools](ByteTerrace_DevTools) | Development only (`## X-DevOnly`): `/btdev dump` records the client's globals for `tlk api-sync`, and `/btdev probe` records the client's answers to calibration probes for `tlk probes`. Never shipped. |
 
 ## WoW: Forever target
 
@@ -28,7 +28,10 @@ npm install                        # once
 node tools/tlk.mjs check           # static gates
 node tools/tlk.mjs test            # behavioral tests in real Lua 5.1
 node tools/tlk.mjs deploy          # check and test, then junction-link every addon (--no-test skips tests)
+node tools/tlk.mjs package         # check and test, then zip the committed addons for players, in dist/
 ```
+
+`package` ships every addon without `## X-DevOnly` (DevTools has it) as committed at HEAD, so it refuses uncommitted changes in a shipped folder, and players' own sounds, which git ignores, never ship. The zip is named after the addon nothing else depends on, with its `## Version`, and extracts straight into `Interface\AddOns`. Its players' guide is [TheLanKrewToolKit/README.txt](TheLanKrewToolKit/README.txt).
 
 `deploy --addon <name>` includes the full dependency chain regardless of directory order. `deploy --unlink --addon <name>` removes only the explicitly selected addon's link.
 

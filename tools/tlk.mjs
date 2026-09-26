@@ -4,6 +4,7 @@
 //   node tools/tlk.mjs check [--quiet] [--wow-root <path>]           static gates over every addon
 //   node tools/tlk.mjs test [filter | files...] [--timeout <s>] [--dir <folder>] behavioral tests in real Lua 5.1
 //   node tools/tlk.mjs deploy [--unlink] [--no-test] [--addon <name>]... [--wow-root <path>] [--flavor <_folder_>]
+//   node tools/tlk.mjs package [--addon <name>]... [--no-test]            the zip players install, in dist/
 //   node tools/tlk.mjs api-sync [--docs <Blizzard_APIDocumentationGenerated dir>] [--globals <dump>]
 //   node tools/tlk.mjs probes [--import [<SavedVariables file>]] [--check] [--wow-root <path>] [--flavor <_folder_>]
 
@@ -13,6 +14,7 @@ const verbs = {
     "api-sync": () => import("./verbs/api-sync.mjs"),
     check: () => import("./verbs/check.mjs"),
     deploy: () => import("./verbs/deploy.mjs"),
+    package: () => import("./verbs/package.mjs"),
     probes: () => import("./verbs/probes.mjs"),
     test: () => import("./verbs/test.mjs"),
 };

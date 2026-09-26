@@ -1,4 +1,5 @@
 node_modules/
+dist/
 TheLanKrewToolKit/Media/*.ogg
 TheLanKrewToolKit/Media/*.mp3
 

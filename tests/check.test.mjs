@@ -1,7 +1,7 @@
 // The tooling's own tests. The check gate runs over fixture addons (tests/fixtures/check): BadAddon
 // has one violation per marked line, GoodAddon exercises every allowed construct, LegacyAddon has
 // no _Camelot TOC, and FrameworkAddon (built on a stub ByteTerrace_Core) reaches past the framework. The findings must be exactly EXPECTED, so a rule that stops firing (or starts
-// misfiring) fails. api-sync, the test runner, deploy's link handling and the probes verb are
+// misfiring) fails. api-sync, the test runner, deploy's link handling, package's plan and the probes verb are
 // tested here too.
 
 import { spawnSync } from "node:child_process";
@@ -12,6 +12,7 @@ import { repoRoot } from "../tools/lib/repo.mjs";
 import { loadApi, runChecks } from "../tools/verbs/check.mjs";
 import { MIN_GLOBALS, readGlobals, serialize } from "../tools/verbs/api-sync.mjs";
 import { compareTargets, normalizeTarget, selectAddons } from "../tools/verbs/deploy.mjs";
+import { planPackage } from "../tools/verbs/package.mjs";
 import { PROBES_PATH, luaLiteral, readRecords, serializeProbes } from "../tools/lib/probes.mjs";
 
 const FIXTURES = join(repoRoot, "tests", "fixtures");
@@ -278,6 +279,28 @@ export const tests = [
             assert(names(selectAddons(all, ["Toolkit"], false)) === "Toolkit", "unlink doesn't remove shared dependencies");
             all[0].dependencies.push("Toolkit");
             assert(names(selectAddons(all, ["Toolkit"])) === "Foundation,Shared,Toolkit", "cycles terminate");
+        },
+    },
+    {
+        name: "package ships the committed, non-dev addons, named after the one nothing depends on",
+        run() {
+            const addon = (name, dependencies = [], metadata = {}) =>
+                ({ name, dependencies, files: ["Main.lua"], metadata: { Version: "1.2.0", ...metadata } });
+            const all = [addon("Core"), addon("Kit", ["Core"]), addon("Dev", [], { "X-DevOnly": "true" })];
+            const tracked = ["Core/Core_Camelot.toc", "Core/Main.lua", "Kit/Kit_Camelot.toc", "Kit/Main.lua", "Dev/Dev_Camelot.toc", "Dev/Main.lua"];
+            const names = (plan) => plan.addons.map((a) => a.name).sort().join(",");
+            const plan = planPackage(all, undefined, tracked, []);
+            assert(plan.errors.length === 0, plan.errors.join("; "));
+            assert(names(plan) === "Core,Kit" && plan.name === "Kit" && plan.version === "1.2.0", `${names(plan)} ${plan.name} ${plan.version}`);
+            assert(names(planPackage(all, ["Kit"], tracked, [])) === "Core,Kit", "--addon brings its dependencies");
+            const errors = (names, tracked, dirty) => planPackage(all, names, tracked, dirty).errors.join(" | ");
+            assert(errors(["Dev"], tracked, []).includes("Dev is ## X-DevOnly"), "a dev-only addon never ships");
+            assert(errors(["Nope"], tracked, []).includes("Unknown addon(s): Nope"), "unknown names");
+            assert(errors(undefined, tracked.filter((f) => f !== "Kit/Main.lua"), []).includes("Kit/Main.lua is listed in the TOC but not committed"), "uncommitted TOC file");
+            assert(errors(undefined, tracked, ["Core/Main.lua"]).includes("Core/Main.lua has uncommitted changes"), "dirty shipped folder");
+            assert(errors(undefined, tracked, ["Dev/Main.lua"]) === "", "a dirty dev folder doesn't matter");
+            all.push(addon("Other"));
+            assert(errors(undefined, tracked.concat("Other/Other_Camelot.toc", "Other/Main.lua"), []).includes("one addon nothing else in it depends on"), "two tops can't name it");
         },
     },
     {

@@ -135,7 +135,8 @@ function ByteTerrace.NewAddOn(options)
     return addon
 end
 
---- Declares a module before the addon starts. See the file header for the spec.
+--- Declares a module before the addon starts. Preparations that fail register nothing and claim
+--- no saved data; see the file header for the spec.
 ---@param name string an identifier, unique in the addon
 ---@param spec table
 ---@return table module
@@ -146,8 +147,8 @@ function AddOn:Module(name, spec)
     if self.Modules[name] then
         error(self.Name .. ": duplicate module " .. name, 2)
     end
-    if not name:find(NamePattern) then
-        error(self.Name .. ": module name '" .. name .. "' must be an identifier", 2)
+    if type(name) ~= "string" or not name:find(NamePattern) then
+        error(self.Name .. ": module name '" .. tostring(name) .. "' must be an identifier", 2)
     end
     if name == "addon" or (ByteTerrace.Facts[name] and ByteTerrace.Facts[name] ~= spec) then
         error(self.Name .. ": module name '" .. name .. "' is reserved", 2)
@@ -168,53 +169,75 @@ function AddOn:Module(name, spec)
         error(self.Name .. ": module " .. name .. ": a demand module has toggle = false and no active rule", 2)
     end
     local module = ByteTerrace.NewModule(self, name, spec)
+    local rows, commands, collections, rowNames, commandNames = {}, {}, {}, {}, {}
+    local function AddRow(rowName, row)
+        if type(rowName) ~= "string" or not rowName:find(NamePattern) then
+            error(self.Name .. ": row name '" .. tostring(rowName) .. "' in module " .. name .. " must be an identifier", 2)
+        end
+        local full = name .. "." .. rowName
+        self.State:CheckDeclaration(full)
+        if rowNames[full] then
+            error(self.Name .. ": duplicate state row " .. full, 2)
+        end
+        rowNames[full] = true
+        rows[#rows + 1] = { name = full, spec = row }
+    end
     if spec.toggle ~= false then
-        self.State:Declare(name .. ".enabled", {
+        AddRow("enabled", {
             kind = "boolean", default = spec.default ~= false, label = spec.label, description = spec.description,
             scope = spec.scope, lockedBy = spec.lockedBy,
         })
     end
     for _, row in ipairs(spec.state or {}) do
-        if not tostring(row.name):find(NamePattern) then
-            error(self.Name .. ": row name '" .. tostring(row.name) .. "' in module " .. name .. " must be an identifier", 2)
-        end
-        self.State:Declare(name .. "." .. row.name, row)
+        AddRow(row.name, row)
     end
     for _, collection in ipairs(spec.records or {}) do
-        if not tostring(collection.name):find(NamePattern) then
+        if type(collection.name) ~= "string" or not collection.name:find(NamePattern) then
             local message = "%s: records name '%s' in module %s must be an identifier"
             error(message:format(self.Name, tostring(collection.name), name), 2)
         end
         local records = ByteTerrace.NewRecords(self, name .. "." .. collection.name, collection)
         module.Records[collection.name] = records
-        self.m_collections[#self.m_collections + 1] = records
+        collections[#collections + 1] = records
+        AddRow(collection.name, { kind = "number", default = 0, persist = false, records = true, scope = collection.scope })
     end
     for _, command in ipairs(spec.commands or {}) do
-        -- A copy: a spec shared by several addons (like ByteTerrace.Facts) must stay unprefixed.
-        -- A module's command runs only while the module runs, unless it's marked `always` (a
-        -- command that turns its own module on, or works without it).
-        local run = command.run
-        if not command.always then
-            run = function(arg, phase, source)
-                if module.Enabled then
-                    return command.run(arg, phase, source)
-                end
-                if phase == "down" then
-                    local slash = self.Slash and self.Slash[1] or ""
-                    self:Print(("%s is turned off. Turn it on in settings (%s)."):format(spec.label or name, slash))
-                end
-            end
+        -- Commands owns the activation check, so validation still sees the actual callback.
+        if type(command.name) ~= "string" or not command.name:find(NamePattern) then
+            error(self.Name .. ": command name in module " .. name .. " must be an identifier", 2)
         end
-        self.Commands:Define({
-            name = name .. "." .. command.name, label = command.label, run = run,
-            slash = command.slash, held = command.held,
-        })
+        local full = name .. "." .. command.name
+        self.Commands:CheckDeclaration(full)
+        if commandNames[full] then
+            error(self.Name .. ": duplicate command " .. full, 2)
+        end
+        commandNames[full] = true
+        commands[#commands + 1] = {
+            name = full, label = command.label, run = command.run,
+            slash = command.slash, held = command.held, module = module, always = command.always,
+        }
+    end
+    if spec.comms ~= nil then
+        module.Comms = ByteTerrace.NewComms(module, spec.comms)
+    end
+    for _, binding in ipairs(spec.bindings or {}) do
+        if type(binding) ~= "table" then
+            error(self.Name .. ": a binding must be a table", 2)
+        end
+        self.Input:CheckDeclaration(binding.map, binding.source, binding.command)
+    end
+    -- No registration or SavedVariables ownership escapes a failed declaration.
+    for _, row in ipairs(rows) do
+        self.State:Declare(row.name, row.spec)
+    end
+    for _, command in ipairs(commands) do
+        self.Commands:Define(command)
     end
     for _, binding in ipairs(spec.bindings or {}) do
         self.Input:Bind(binding.map, binding.source, binding.command)
     end
-    if spec.comms ~= nil then
-        module.Comms = ByteTerrace.NewComms(module, spec.comms)
+    for _, records in ipairs(collections) do
+        self.m_collections[#self.m_collections + 1] = records
     end
     self.Modules[name] = module
     self.m_moduleOrder[#self.m_moduleOrder + 1] = module
@@ -284,6 +307,9 @@ function AddOn:Start()
     for name in pairs(self.Modules) do
         declared[name] = true
     end
+    -- Refuse commands and bindings before state or record loading can normalize saved data.
+    self.Commands:Compile()
+    self.Input:Compile()
     local dropped, unclaimed = self.State:Compile(stores, declared)
     for _, records in ipairs(self.m_collections) do
         local droppedRecords, resetFields = records:Load(stores)
@@ -292,8 +318,6 @@ function AddOn:Start()
         end
     end
     self.m_debugId = self.State:Id("addon.debug")
-    self.Commands:Compile()
-    self.Input:Compile()
     self.m_settingsCategoryID = ByteTerrace.BuildSettings(self)
     self:RegisterSlash()
     self.Started = true

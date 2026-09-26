@@ -131,3 +131,9 @@ Events:On("UNIT_AURA", function(unit) return unit == "player" end)
 Events:On("PLAYER_ENTERING_WORLD", function(isLogin) return isLogin and 1 end)
 
 print(AtFullHealth, AwayFlag, Warrior, NameOr, Accessible, Otherwise, Inline, GuardedBid)
+local function Sink(bar)
+    local cur = UnitPower("player", 3) -- secret: widget sink
+    bar:SetValue(cur)
+    return cur
+end
+print(Sink)

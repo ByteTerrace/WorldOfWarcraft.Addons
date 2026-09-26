@@ -452,13 +452,13 @@ local function Layout(hasStory, puzzle)
     Overlay.Band:ClearAllPoints()
     Overlay.Band:SetPoint("TOPLEFT", Pad, -y)
     Overlay.Band:SetPoint("TOPRIGHT", -Pad, -y)
-    Overlay.Band:SetHeight(questionHeight + 30)
+    Overlay.Band:SetHeight(questionHeight + 30) -- secret: plain, as above
     Overlay.Stripe:ClearAllPoints()
     Overlay.Stripe:SetPoint("TOPLEFT", Overlay.Band, "TOPLEFT")
     Overlay.Stripe:SetPoint("BOTTOMLEFT", Overlay.Band, "BOTTOMLEFT")
     Overlay.Question:ClearAllPoints()
     Overlay.Question:SetPoint("TOPLEFT", Pad + 22, -(y + 15))
-    y = y + questionHeight + 30 + 20
+    y = y + questionHeight + 30 + 20 -- secret: plain, as above
     for i, button in ipairs(Overlay.Buttons) do
         local column, row = (i - 1) % 2, i > 2 and 1 or 0
         button:ClearAllPoints()

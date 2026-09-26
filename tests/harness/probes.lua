@@ -23,7 +23,9 @@ function Harness.RunProbe(name)
     local h = Harness.New()
     local Probes = h:LoadFiles("ByteTerrace_DevTools").Probes
     local probe = assert(Probes.ByName[name], "no probe named " .. tostring(name))
-    local run = { probe = probe, Probes = Probes, h = h, observed = Harness.OBSERVED_PROBES.probes[name] }
+    local observed = Harness.OBSERVED_PROBES.probes[name]
+    -- A record from another version of the probe answered another question: no observation.
+    local run = { probe = probe, Probes = Probes, h = h, observed = Probes.IsCurrent(probe, observed) and observed or nil }
     run.gap = Probes.HarnessGap(probe)
     if run.gap then
         return run

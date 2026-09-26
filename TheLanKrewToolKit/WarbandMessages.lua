@@ -66,148 +66,140 @@ local function Sync()
     end
 end
 
---- Starts forgetting who heard your marks and wars whenever you leave the group; Warband.lua
---- calls it from OnEnable.
+--- Owns the Warband message subscriptions and forgets group sync on leaving. Called by OnEnable.
 function Warband.EnableMessages()
     WarbandModule:On("GROUP_LEFT", function()
         wipe(Synced)
     end)
+    WarbandModule:Listen(Krew, "GRUDGE", function(sender, fields)
+        local info = InfoFrom(fields)
+        if not info then
+            return
+        end
+        local key = info.key
+        Remember(key, info)
+        SetKind(key, "grudge")
+        if fields[5] == "1" then
+            CountDeath(key)
+            ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_Rampage", sound = SOUNDKIT.RAID_WARNING,
+                title = key .. " killed " .. sender .. "!", body = "The Krew remembers. " .. Score(key) })
+        end
+    end)
+
+    WarbandModule:Listen(Krew, "MARK", function(sender, fields)
+        local info = InfoFrom(fields)
+        if not info then
+            return
+        end
+        local known = Status(info.key) == "mark"
+        Remember(info.key, info)
+        if known or not SetKind(info.key, "mark", sender) then
+            return -- a mark synced again when someone joins, or a full ledger
+        end
+        ShowCard({ icon = "Interface\\Icons\\Ability_Hunter_MarkedForDeath", sound = SOUNDKIT.RAID_WARNING,
+            title = "Marked for death", body = sender .. " marked " .. Describe(info.key) .. ". Hunt them down." })
+    end)
+
+    WarbandModule:Listen(Krew, "UNMARK", function(_, fields)
+        local key = ValidKey(fields[1]) and fields[1]
+        if key and Status(key) == "mark" then
+            Ledger:Set(key, { kind = "grudge" })
+        end
+    end)
+
+    WarbandModule:Listen(Krew, "GLORY", function(sender, fields)
+        local info = InfoFrom(fields)
+        if not info then
+            return
+        end
+        Remember(info.key, info)
+        if SetKind(info.key, "glory", sender) then
+            ShowCard({ icon = "Interface\\Icons\\Achievement_PVP_H_01", sound = SOUNDKIT.LFG_REWARDS,
+                title = "A champion of the Krew", body = sender .. " granted glory to " .. Describe(info.key) .. ". Aid them when you see them." })
+        end
+    end)
+
+    WarbandModule:Listen(Krew, "WAR", function(sender, fields)
+        local guild = ValidGuildKey(fields[1]) and fields[1]
+        if not guild or Wars:Has(guild) then
+            return
+        end
+        Wars:Set(guild, { by = sender, since = GetServerTime() })
+        ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
+            title = "War!", body = sender .. " declared war on <" .. GuildName(guild) .. ">. Every member is an enemy of the Krew." })
+    end)
+
+    WarbandModule:Listen(Krew, "PEACE", function(_, fields)
+        local guild = ValidGuildKey(fields[1]) and fields[1]
+        if guild then
+            Wars:Remove(guild)
+        end
+    end)
+
+    WarbandModule:Listen(Krew, "SIGHT", function(sender, fields)
+        local key = ValidKey(fields[1]) and fields[1]
+        local status = key and Status(key)
+        if not status then
+            return
+        end
+        HeardSighting(key)
+        if not WarbandModule:Get("alerts") then
+            return
+        end
+        local where = Where(CleanText(fields[2]), CleanText(fields[3]))
+        if status == "glory" then
+            Alert(sender .. ": champion " .. key .. " needs aid at " .. where .. "!", SOUNDKIT.READY_CHECK)
+        else
+            Alert(sender .. " spotted " .. Describe(key) .. " at " .. where .. "!", SOUNDKIT.RAID_WARNING)
+        end
+    end)
+
+    WarbandModule:Listen(Krew, "KILL", function(sender, fields)
+        local key = ValidKey(fields[1]) and fields[1]
+        if key then
+            Avenge(key, sender)
+        end
+    end)
+
+    WarbandModule:Listen(Krew, "RALLY", function(sender, fields)
+        local where = Where(CleanText(fields[4]), CleanText(fields[5]))
+        Alert("|cffff2020RALLY!|r " .. sender .. " needs the Krew at " .. where .. "!", SOUNDKIT.READY_CHECK)
+        if WarbandModule:Get("rallyWaypoint") and SetWaypoint(fields[1], fields[2], fields[3]) then
+            Addon:Print("Waypoint set to " .. sender .. "'s rally.")
+        end
+    end)
+
+    -- A gathering the Krew already reported (or you did) in the last IntelCooldown shows no card, and
+    -- you don't report it again (Warband.FreshGathering).
+    WarbandModule:Listen(Krew, "INTEL", function(sender, fields)
+        local count = CleanCount(fields[1], MaxIntel)
+        if not count then
+            return
+        end
+        local zone, subZone = CleanText(fields[6]), CleanText(fields[7])
+        if not FreshGathering(zone, subZone) then
+            return
+        end
+        local faction, mapID, x, y = CleanFaction(fields[2]), fields[3], fields[4], fields[5]
+        ShowCard({ icon = "Interface\\Icons\\Ability_Hunter_SniperShot", sound = SOUNDKIT.RAID_WARNING,
+            title = "Enemy gathering",
+            body = sender .. " sees " .. count .. " " .. (faction ~= "" and faction or "enemy") .. " players at " .. Where(zone, subZone) .. ". Click for a waypoint.",
+            onClick = WarbandModule:Callback(SetWaypoint, mapID, x, y) })
+    end)
+
+    WarbandModule:Listen(Krew, "HELLO", function(sender)
+        if Synced[sender] then
+            return
+        end
+        Synced[sender] = true
+        if not SyncTimer then
+            SyncTimer = WarbandModule:After(SyncDelay, Sync)
+        end
+    end)
 end
 
---- Forgets who heard your marks and wars, and the pending sync; Warband.lua calls it from
---- OnDisable.
+--- Forgets group sync and the pending timer; OnDisable calls it after subscriptions are removed.
 function Warband.DisableMessages()
     SyncTimer = nil -- the module's timers stop with it
     wipe(Synced)
 end
-
-Krew:Listen("GRUDGE", function(sender, fields)
-    local info = WarbandModule.Enabled and InfoFrom(fields)
-    if not info then
-        return
-    end
-    local key = info.key
-    Remember(key, info)
-    SetKind(key, "grudge")
-    if fields[5] == "1" then
-        CountDeath(key)
-        ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_Rampage", sound = SOUNDKIT.RAID_WARNING,
-            title = key .. " killed " .. sender .. "!", body = "The Krew remembers. " .. Score(key) })
-    end
-end)
-
-Krew:Listen("MARK", function(sender, fields)
-    local info = WarbandModule.Enabled and InfoFrom(fields)
-    if not info then
-        return
-    end
-    local known = Status(info.key) == "mark"
-    Remember(info.key, info)
-    if known or not SetKind(info.key, "mark", sender) then
-        return -- a mark synced again when someone joins, or a full ledger
-    end
-    ShowCard({ icon = "Interface\\Icons\\Ability_Hunter_MarkedForDeath", sound = SOUNDKIT.RAID_WARNING,
-        title = "Marked for death", body = sender .. " marked " .. Describe(info.key) .. ". Hunt them down." })
-end)
-
-Krew:Listen("UNMARK", function(_, fields)
-    local key = WarbandModule.Enabled and ValidKey(fields[1]) and fields[1]
-    if key and Status(key) == "mark" then
-        Ledger:Set(key, { kind = "grudge" })
-    end
-end)
-
-Krew:Listen("GLORY", function(sender, fields)
-    local info = WarbandModule.Enabled and InfoFrom(fields)
-    if not info then
-        return
-    end
-    Remember(info.key, info)
-    if SetKind(info.key, "glory", sender) then
-        ShowCard({ icon = "Interface\\Icons\\Achievement_PVP_H_01", sound = SOUNDKIT.LFG_REWARDS,
-            title = "A champion of the Krew", body = sender .. " granted glory to " .. Describe(info.key) .. ". Aid them when you see them." })
-    end
-end)
-
-Krew:Listen("WAR", function(sender, fields)
-    local guild = WarbandModule.Enabled and ValidGuildKey(fields[1]) and fields[1]
-    if not guild or Wars:Has(guild) then
-        return
-    end
-    Wars:Set(guild, { by = sender, since = GetServerTime() })
-    ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
-        title = "War!", body = sender .. " declared war on <" .. GuildName(guild) .. ">. Every member is an enemy of the Krew." })
-end)
-
-Krew:Listen("PEACE", function(_, fields)
-    local guild = WarbandModule.Enabled and ValidGuildKey(fields[1]) and fields[1]
-    if guild then
-        Wars:Remove(guild)
-    end
-end)
-
-Krew:Listen("SIGHT", function(sender, fields)
-    local key = WarbandModule.Enabled and ValidKey(fields[1]) and fields[1]
-    local status = key and Status(key)
-    if not status then
-        return
-    end
-    HeardSighting(key)
-    if not WarbandModule:Get("alerts") then
-        return
-    end
-    local where = Where(CleanText(fields[2]), CleanText(fields[3]))
-    if status == "glory" then
-        Alert(sender .. ": champion " .. key .. " needs aid at " .. where .. "!", SOUNDKIT.READY_CHECK)
-    else
-        Alert(sender .. " spotted " .. Describe(key) .. " at " .. where .. "!", SOUNDKIT.RAID_WARNING)
-    end
-end)
-
-Krew:Listen("KILL", function(sender, fields)
-    local key = WarbandModule.Enabled and ValidKey(fields[1]) and fields[1]
-    if key then
-        Avenge(key, sender)
-    end
-end)
-
-Krew:Listen("RALLY", function(sender, fields)
-    if not WarbandModule.Enabled then
-        return
-    end
-    local where = Where(CleanText(fields[4]), CleanText(fields[5]))
-    Alert("|cffff2020RALLY!|r " .. sender .. " needs the Krew at " .. where .. "!", SOUNDKIT.READY_CHECK)
-    if WarbandModule:Get("rallyWaypoint") and SetWaypoint(fields[1], fields[2], fields[3]) then
-        Addon:Print("Waypoint set to " .. sender .. "'s rally.")
-    end
-end)
-
--- A gathering the Krew already reported (or you did) in the last IntelCooldown shows no card, and
--- you don't report it again (Warband.FreshGathering).
-Krew:Listen("INTEL", function(sender, fields)
-    local count = WarbandModule.Enabled and CleanCount(fields[1], MaxIntel)
-    if not count then
-        return
-    end
-    local zone, subZone = CleanText(fields[6]), CleanText(fields[7])
-    if not FreshGathering(zone, subZone) then
-        return
-    end
-    local faction, mapID, x, y = CleanFaction(fields[2]), fields[3], fields[4], fields[5]
-    ShowCard({ icon = "Interface\\Icons\\Ability_Hunter_SniperShot", sound = SOUNDKIT.RAID_WARNING,
-        title = "Enemy gathering",
-        body = sender .. " sees " .. count .. " " .. (faction ~= "" and faction or "enemy") .. " players at " .. Where(zone, subZone) .. ". Click for a waypoint.",
-        onClick = function()
-            SetWaypoint(mapID, x, y)
-        end })
-end)
-
-Krew:Listen("HELLO", function(sender)
-    if not WarbandModule.Enabled or Synced[sender] then
-        return
-    end
-    Synced[sender] = true
-    if not SyncTimer then
-        SyncTimer = WarbandModule:After(SyncDelay, Sync)
-    end
-end)

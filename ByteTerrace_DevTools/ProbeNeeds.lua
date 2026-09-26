@@ -33,6 +33,17 @@ local function FirstBagItem()
     return nil
 end
 
+-- Event-kind probes wait for an actual sample; no spell in a recap isn't spell-field evidence.
+local function HasRecapEvent(kind)
+    for _, event in ipairs(C_DeathRecap.GetRecapEvents()) do
+        local eventKind = event.event
+        if not issecretvalue(eventKind) and eventKind == kind then
+            return true
+        end
+    end
+    return false
+end
+
 local Needs = {
     idle = {
         label = "idle",
@@ -251,6 +262,20 @@ local Needs = {
                 },
             })
         end,
+    },
+    recapSwingDamage = {
+        label = "melee in recap",
+        text = "a melee swing in your death recap (let the mob hit you before it kills you)",
+        step = 5,
+        check = function() return HasRecapEvent("SWING_DAMAGE") end,
+        setup = function() end, -- diedToMob scripts both swing and spell damage.
+    },
+    recapSpellDamage = {
+        label = "spell in recap",
+        text = "a direct damage spell in your death recap (let a mob use a spell before it kills you)",
+        step = 5,
+        check = function() return HasRecapEvent("SPELL_DAMAGE") end,
+        setup = function() end, -- diedToMob scripts both swing and spell damage.
     },
     enemyPlayer = {
         label = "enemy player target",

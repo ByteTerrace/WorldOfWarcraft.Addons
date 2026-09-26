@@ -69,7 +69,7 @@ import { checkStyleRules } from "../lib/check-style.mjs";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { checkLua } from "../lib/check-lua.mjs";
-import { findAddons, findMisnamedAddons, repoRoot, splitList, toPosix } from "../lib/repo.mjs";
+import { findAddons, findMisnamedAddons, readForbidden, repoRoot, splitList, toPosix } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, findForeverInstall } from "../lib/wow.mjs";
 
 export const options = {
@@ -138,14 +138,19 @@ export function loadApi(path = join(repoRoot, "tools", "api", "forever.json")) {
         }
     }
     const protectedFunctions = new Map();
+    // Refused to addon code at any time, so no combat guard helps: IsProtectedFunction globals and
+    // what the client refused in game (tools/api/forbidden.json).
+    const forbiddenFunctions = new Map();
     for (const [name, entry] of Object.entries(snapshot.functions)) {
-        if (entry.IsProtectedFunction) protectedFunctions.set(name, "IsProtectedFunction");
+        if (entry.IsProtectedFunction) forbiddenFunctions.set(name, "IsProtectedFunction");
         else if (entry.HasRestrictions) protectedFunctions.set(name, "HasRestrictions");
     }
+    for (const name of Object.keys(readForbidden())) forbiddenFunctions.set(name, "refused to addon code in game, tools/api/forbidden.json");
     for (const [wrapper, target] of Object.entries(RESTRICTED_WRAPPERS)) protectedFunctions.set(wrapper, `calls ${target}`);
     return {
         hasDump, globals, members, functions: snapshot.functions, events: new Set(Object.keys(snapshot.events)),
         eventEntries: snapshot.events, methodSecrets, aspectSetters, protectedMethods, restrictedMethods, protectedFunctions,
+        forbiddenFunctions,
     };
 }
 

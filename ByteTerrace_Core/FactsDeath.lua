@@ -15,9 +15,13 @@
 --   death.killerDamage   the killing blow's damage; 0 when unknown.
 --
 -- Who killed you comes from Blizzard's death recap: the damage meter's Deaths lists (the current
--- session, else the overall one) hold your death with its recap ID (readable even in combat), and
--- the recap's newest event is the killing blow, a plain combat log event (probed in game). An
--- attacker the recap hides (hideCaster, which Blizzard's recap window honors) is unknown. The
+-- session, else the overall one) hold your death with its recap ID (readable even in combat).
+-- This adapter uses events[1] as the killing blow, following Gethe/wow-ui-source's forever branch:
+-- Interface/AddOns/Blizzard_DeathRecap/Mainline/Blizzard_DeathRecap.lua,
+-- DeathRecapMixin:BuildDataProvider iterates C_DeathRecap.GetRecapEvents with ipairs and sets
+-- elementData.causedDeath = i == 1. Its TOC gates it with [AllowLoadGameType mainline], which
+-- covers camelot: Forever's TOCs add [ExcludeLoadGameType camelot] wherever mainline shouldn't.
+-- An attacker the recap hides (hideCaster, which Blizzard's recap window honors) is unknown. The
 -- recap may land a moment after PLAYER_DEAD, so the fact looks again on the meter's updates and at
 -- RecapRetries, at most RecapWait seconds; a recap that comes later (within LateWait) is set aside,
 -- so the next death doesn't take it for its own.

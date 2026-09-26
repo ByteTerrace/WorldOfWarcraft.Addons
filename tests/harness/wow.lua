@@ -255,6 +255,7 @@ function Harness.New(player)
     h.errors = {}             -- messages passed to the error handler; a test fails if any are unexpected
     h.notified = {}           -- [settings variable] = Settings.NotifyUpdate calls
     h.expectedErrors = 0      -- a count, or a list of patterns (see ExpectErrors)
+    h.expectedBlocked = 0     -- a count, or a list of patterns (see ExpectBlocked)
     h.propagated = {}         -- gamepad buttons no frame consumed
     h.propagatedKeys = {}     -- keys no frame consumed (h:Key)
     h.group = { kind = nil, members = {} } -- see group.lua
@@ -309,17 +310,27 @@ function Harness:ExpectErrors(first, ...)
     end
 end
 
--- Returns nil when the reported errors are what the test expected, else a description.
-function Harness:UnexpectedErrors()
-    local expected = self.expectedErrors
+-- Declares the protected calls this test deliberately has blocked or forbidden (h.blocked): a
+-- count or Lua patterns, like ExpectErrors. Any other blocked call fails the test, as the client
+-- would show the player its "blocked from an action" message.
+function Harness:ExpectBlocked(first, ...)
+    if type(first) == "number" then
+        self.expectedBlocked = first
+    else
+        self.expectedBlocked = { first, ... }
+    end
+end
+
+-- Nil when the entries are what `expected` (a count or patterns) allows, else a description.
+local function Unexpected(kind, entries, expected)
     if type(expected) == "number" then
-        if #self.errors ~= expected then
-            return ("reported errors (expected %d): %s"):format(expected, table.concat(self.errors, " | "))
+        if #entries ~= expected then
+            return ("%s (expected %d): %s"):format(kind, expected, table.concat(entries, " | "))
         end
         return nil
     end
     local unmatched = {}
-    for _, message in ipairs(self.errors) do
+    for _, message in ipairs(entries) do
         unmatched[#unmatched + 1] = message
     end
     for _, pattern in ipairs(expected) do
@@ -331,14 +342,21 @@ function Harness:UnexpectedErrors()
             end
         end
         if not found then
-            return ("no reported error matches %q (reported: %s)"):format(pattern, table.concat(self.errors, " | "))
+            return ("no %s matches %q (%s: %s)"):format(kind, pattern, kind, table.concat(entries, " | "))
         end
         table.remove(unmatched, found)
     end
     if #unmatched > 0 then
-        return "unexpected reported errors: " .. table.concat(unmatched, " | ")
+        return ("unexpected %s: %s"):format(kind, table.concat(unmatched, " | "))
     end
     return nil
+end
+
+-- Returns nil when the reported errors and the blocked protected calls are what the test
+-- expected, else a description.
+function Harness:UnexpectedErrors()
+    return Unexpected("reported errors", self.errors, self.expectedErrors)
+        or Unexpected("blocked calls", self.blocked, self.expectedBlocked)
 end
 
 function Harness:ReportError(message)
@@ -614,6 +632,11 @@ local function Serialize(value, path)
     path[value] = true
     local copy = {}
     for k, v in pairs(value) do
+        if IsSecret(k) then
+            -- The client refuses a secret table key when it's set (secrets.rawOperations: tableKey);
+            -- Lua 5.1 can't intercept that, so the write to SavedVariables is where it surfaces.
+            error("a secret table key reached SavedVariables", 0)
+        end
         if type(k) == "string" or (type(k) == "number" and Finite(k)) then
             local saved = Serialize(v, path)
             if saved ~= nil then

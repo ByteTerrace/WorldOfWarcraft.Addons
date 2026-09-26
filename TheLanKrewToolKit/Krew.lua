@@ -92,11 +92,14 @@ local function ShowRollCall()
     end
 end
 
+local function SendHello()
+    LastHello = GetTime()
+    Messages:Send("HELLO", Addon.Version or "?")
+end
+
 local function SayHello()
-    local now = GetTime()
-    if now - LastHello >= HelloCooldown then
-        LastHello = now
-        Messages:Send("HELLO", Addon.Version or "?")
+    if GetTime() - LastHello >= HelloCooldown then
+        SendHello()
     end
 end
 
@@ -122,6 +125,41 @@ local function Prune()
     end
 end
 
+local function Listen(module)
+    module:Listen(Messages, "HELLO", function(sender)
+        if Members[sender] then
+            return
+        end
+        Members[sender] = true
+        if Krew:Get("hello") then
+            Krew:Cancel(RollCallTimer)
+            RollCallTimer = Krew:After(RollCallDelay, ShowRollCall)
+        end
+        SendHello() -- new senders learn about us; Members prevents ping-pong
+    end)
+
+    module:Listen(Messages, "DING", function(sender, fields)
+        local level = CleanCount(fields[1], MaxLevel)
+        if level then
+            ShowCard({ icon = "Interface\\Icons\\Spell_Holy_SurgeOfLight", sound = SOUNDKIT.LFG_REWARDS,
+                title = sender .. " hit level " .. level .. "!", body = "Cheer them on! The Krew levels up together." })
+        end
+    end)
+
+    module:Listen(Messages, "FLAWLESS", function(sender)
+        ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
+            title = "Flawless victory!", body = sender .. " won a fight without taking a single hit." })
+    end)
+
+    module:Listen(Messages, "SCHOLAR", function(sender, fields)
+        local stars = CleanCount(fields[1], MaxStars)
+        if stars then
+            ShowCard({ icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.IG_QUEST_LIST_COMPLETE,
+                title = sender .. " solved a riddle!", body = "That's " .. stars .. (stars == 1 and " star" or " stars") .. " of wisdom. Brilliant!" })
+        end
+    end)
+end
+
 Krew = Addon:Module("Krew", {
     label = "Krew messages",
     page = "Krew",
@@ -144,6 +182,7 @@ Krew = Addon:Module("Krew", {
         end },
     },
     OnEnable = function(module)
+        Listen(module)
         module:On("GROUP_JOINED", SayHello)
         module:On("GROUP_ROSTER_UPDATE", function()
             if IsInGroup() then
@@ -182,36 +221,3 @@ Krew = Addon:Module("Krew", {
 Messages = Krew.Comms
 ns.Krew = Messages
 ns.KrewFields = { CleanText = CleanText, CleanCount = CleanCount }
-
-Messages:Listen("HELLO", function(sender)
-    if Members[sender] then
-        return
-    end
-    Members[sender] = true
-    if Krew:Get("hello") then
-        Krew:Cancel(RollCallTimer)
-        RollCallTimer = Krew:After(RollCallDelay, ShowRollCall)
-    end
-    SayHello() -- so they learn about us too (the cooldown stops ping-pong)
-end)
-
-Messages:Listen("DING", function(sender, fields)
-    local level = CleanCount(fields[1], MaxLevel)
-    if level then
-        ShowCard({ icon = "Interface\\Icons\\Spell_Holy_SurgeOfLight", sound = SOUNDKIT.LFG_REWARDS,
-            title = sender .. " hit level " .. level .. "!", body = "Cheer them on! The Krew levels up together." })
-    end
-end)
-
-Messages:Listen("FLAWLESS", function(sender)
-    ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
-        title = "Flawless victory!", body = sender .. " won a fight without taking a single hit." })
-end)
-
-Messages:Listen("SCHOLAR", function(sender, fields)
-    local stars = CleanCount(fields[1], MaxStars)
-    if stars then
-        ShowCard({ icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.IG_QUEST_LIST_COMPLETE,
-            title = sender .. " solved a riddle!", body = "That's " .. stars .. (stars == 1 and " star" or " stars") .. " of wisdom. Brilliant!" })
-    end
-end)

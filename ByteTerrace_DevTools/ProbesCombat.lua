@@ -2,8 +2,17 @@ local addonName, ns = ...
 
 -- Calibration probes about Blizzard's damage meter (C_DamageMeter) and death recaps
 -- (C_DeathRecap): what a session holds idle, in combat and right after a fight, the local
--- player's damage taken, the enemies' sources, and a death. Probes.lua's header is the contract;
--- ProbeNeeds.lua defines the needs.
+-- player's damage taken, the enemies' sources, and a death. Recaps record common fields and
+-- the killing blow's common shape; separate swing/spell probes require that event kind before
+-- recording its spell fields. Probes.lua's header is the contract; ProbeNeeds.lua defines needs.
+
+-- Spell and environmental payloads depend on the event kind; mitigation is optional in
+-- Blizzard_DeathRecap's damage tooltip. Neither belongs in the common event shape.
+local ConditionalRecapFields = {
+    spellId = true, spellName = true, spellSchool = true, avoidable = true, deadly = true,
+    environmentalType = true, absorbed = true, resisted = true, blocked = true,
+}
+local RecapSpellFields = { "spellId", "spellName", "spellSchool", "avoidable", "deadly" }
 
 local Probes = ns.Probes
 local Marker, Value, Shape, Text = Probes.Marker, Probes.Value, Probes.Shape, Probes.Text
@@ -70,6 +79,32 @@ local function LocalDeath()
         end
     end
     return nil
+end
+
+local function CommonRecapShape(event)
+    local shapes = FieldShapes(event)
+    for field in pairs(ConditionalRecapFields) do
+        shapes[field] = nil
+    end
+    return shapes
+end
+
+-- Every sample of the requested kind must agree on its field shapes, including nil. The need
+-- guarantees at least one sample, so a missing kind never becomes a successful observation.
+local function RecapSpellShapes(kind)
+    local result = {}
+    for _, event in ipairs(C_DeathRecap.GetRecapEvents()) do
+        local eventKind = event.event
+        if not issecretvalue(eventKind) and eventKind == kind then
+            for _, field in ipairs(RecapSpellFields) do
+                local shape = Shape(event[field])
+                assert(result[field] == nil or #Probes.Diff(result[field], shape) == 0,
+                    kind .. "." .. field .. " varies between recap events")
+                result[field] = shape
+            end
+        end
+    end
+    return result
 end
 
 Probes.Define({
@@ -179,6 +214,7 @@ Probes.Define({
     },
     {
         name = "deathRecap.events",
+        version = 2, -- version 1 recorded the union of every event's fields, which depends on how you died
         needs = { "diedToMob" },
         run = function()
             local death = LocalDeath()
@@ -187,20 +223,34 @@ Probes.Define({
                 return { recapID = Shape(recapID) }
             end
             local events = C_DeathRecap.GetRecapEvents(recapID)
-            local fields, killingBlow = {}, First(events)
+            local killingBlow = First(events)
+            local fields = killingBlow and CommonRecapShape(killingBlow) or {}
             for _, event in ipairs(killingBlow and events or {}) do
-                for key in pairs(event) do
-                    fields[key] = true
+                for key in pairs(fields) do
+                    local value = event[key]
+                    if not issecretvalue(value) and value == nil then
+                        fields[key] = nil
+                    end
                 end
             end
             return {
                 recapID = "number", hasRecapEvents = Value(C_DeathRecap.HasRecapEvents(recapID)),
-                events = Shape(events), fields = Joined(fields),
-                killingBlow = killingBlow and FieldShapes(killingBlow) or nil,
+                events = Shape(events), commonFields = Joined(fields),
+                killingBlow = killingBlow and CommonRecapShape(killingBlow) or nil,
                 sourceName = killingBlow and Text(killingBlow.sourceName) or nil,
                 maxHealth = Shape(C_DeathRecap.GetRecapMaxHealth(recapID)),
             }
         end,
+    },
+    {
+        name = "deathRecap.swingFields",
+        needs = { "diedToMob", "recapSwingDamage" },
+        run = function() return RecapSpellShapes("SWING_DAMAGE") end,
+    },
+    {
+        name = "deathRecap.spellFields",
+        needs = { "diedToMob", "recapSpellDamage" },
+        run = function() return RecapSpellShapes("SPELL_DAMAGE") end,
     },
     {
         -- Blizzard's death popup asks for the recap with no ID (GameDialogDefs.lua): your latest.

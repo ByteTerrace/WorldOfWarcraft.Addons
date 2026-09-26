@@ -40,38 +40,34 @@ local function MenuSubject(contextData)
 end
 
 --- Adds the Krew's choices for a player to a menu: mark, grudge, glory, forgive, and war or peace
---- with their guild, leaving out what the ledger already says. Each choice runs in one state batch.
+--- with their guild, leaving out what the ledger already says. Each choice runs in one state
+--- batch and expires when Warband stops, even if it starts again before the menu closes.
 ---@param root table a menu description
 ---@param info table the player (Warband.Identify)
 function Warband.MenuEntries(root, info)
     local key = info.key
     local kind = Warband.Ledger:Has(key) and Warband.Ledger:Field(key, "kind")
-    local function Batched(fn, ...)
-        local args = { ... }
-        return function()
-            Addon:Batch(fn, unpack(args))
-        end
-    end
+    local module = Warband.Module
     root:CreateTitle("The Lan Krew")
     if kind ~= "mark" then
-        root:CreateButton("Mark for death", Batched(Warband.Mark, info))
+        root:CreateButton("Mark for death", module:Callback(Warband.Mark, info))
     end
     if kind ~= "grudge" and kind ~= "mark" then
-        root:CreateButton("Hold a grudge", Batched(Warband.HoldGrudge, info, false))
+        root:CreateButton("Hold a grudge", module:Callback(Warband.HoldGrudge, info, false))
     end
     if kind ~= "glory" then
-        root:CreateButton("Grant glory", Batched(Warband.Glory, info))
+        root:CreateButton("Grant glory", module:Callback(Warband.Glory, info))
     end
     if kind then
-        root:CreateButton("Forgive", Batched(Warband.Forgive, key))
+        root:CreateButton("Forgive", module:Callback(Warband.Forgive, key))
     end
     local guild = info.guild or ""
     if guild ~= "" then
         local name = Warband.GuildName(guild)
         if Warband.Wars:Has(guild) then
-            root:CreateButton("Make peace with <" .. name .. ">", Batched(Warband.MakePeace, guild))
+            root:CreateButton("Make peace with <" .. name .. ">", module:Callback(Warband.MakePeace, guild))
         else
-            root:CreateButton("War on <" .. name .. ">", Batched(Warband.DeclareWar, guild))
+            root:CreateButton("War on <" .. name .. ">", module:Callback(Warband.DeclareWar, guild))
         end
     end
 end

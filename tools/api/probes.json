@@ -150,36 +150,8 @@
       },
       "context": { "combat": false, "restrictions": "none" }
     },
-    "deathRecap.events": {
-      "result": {
-        "events": "table",
-        "fields": "amount,avoidable,critical,crushing,currentHP,deadly,destFlags,destGUID,destName,destRaidFlags,event,glancing,hideCaster,isOffHand,overkill,school,sourceFlags,sourceGUID,sourceName,sourceRaidFlags,spellId,spellName,spellSchool,timestamp",
-        "hasRecapEvents": true,
-        "killingBlow": {
-          "amount": "number",
-          "critical": "boolean",
-          "crushing": "boolean",
-          "currentHP": "number",
-          "destFlags": "number",
-          "destGUID": "string",
-          "destName": "string",
-          "destRaidFlags": "number",
-          "event": "string",
-          "glancing": "boolean",
-          "hideCaster": "boolean",
-          "isOffHand": "boolean",
-          "overkill": "number",
-          "school": "number",
-          "sourceFlags": "number",
-          "sourceGUID": "string",
-          "sourceName": "string",
-          "sourceRaidFlags": "number",
-          "timestamp": "number"
-        },
-        "maxHealth": "number",
-        "recapID": "number",
-        "sourceName": "text"
-      },
+    "deathRecap.latest": {
+      "result": { "hasLatest": true, "latest": "table", "sameAsMeter": true },
       "context": { "combat": false, "restrictions": "none" }
     },
     "faction.player": {
@@ -190,11 +162,33 @@
       "result": { "Game18Font": "Font", "Game24Font": "Font", "Game30Font": "Font" },
       "context": { "combat": false, "restrictions": "none" }
     },
+    "gamePad.device": {
+      "result": {
+        "deviceID": "number",
+        "fields": "axes,axisCount,buttonCount,buttons,labelStyle,name,stickCount,sticks",
+        "isKnownLabelStyle": true,
+        "labelStyle": "text",
+        "state": "table"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "gamePad.settings": {
+      "result": { "enabled": "boolean", "freelook": "boolean" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
     "globalStrings.honor": {
       "result": {
         "COMBATLOG_HONORAWARD": "You have been awarded %d Honor.",
         "COMBATLOG_HONORGAIN": "%s dies (Honorable Kill: %s). You gain %d Honor.",
         "COMBATLOG_HONORGAIN_NO_RANK": "%s dies (Honorable Kill). You gain %d Honor."
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "kills.seen": {
+      "result": {
+        "partyKill": { "attacker": "you", "attackerKind": "Player", "target": "Creature" },
+        "targetDied": true,
+        "unitDied": { "unit": "Creature" }
       },
       "context": { "combat": false, "restrictions": "none" }
     },
@@ -256,6 +250,46 @@
       },
       "context": { "combat": false, "restrictions": "none" }
     },
+    "names.secondPart": {
+      "result": { "unitFullNameIsRealm": false, "unitNameIsRealm": false },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "power.npcTarget": {
+      "result": {
+        "current": { "secret": true, "type": "number" },
+        "max": { "secret": true, "type": "number" },
+        "powerType": "number",
+        "token": "string"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "power.npcTargetInCombat": {
+      "result": {
+        "current": { "secret": true, "type": "number" },
+        "max": { "secret": true, "type": "number" },
+        "powerType": "number",
+        "token": "string"
+      },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
+    "power.player": {
+      "result": {
+        "current": { "secret": true, "type": "number" },
+        "max": "number",
+        "powerType": "number",
+        "token": "string"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "power.playerInCombat": {
+      "result": {
+        "current": { "secret": true, "type": "number" },
+        "max": "number",
+        "powerType": "number",
+        "token": "string"
+      },
+      "context": { "combat": true, "restrictions": "Combat" }
+    },
     "quest.offer": {
       "result": { "objectiveText": "text", "questText": "text", "title": "text" },
       "context": { "combat": false, "restrictions": "none" }
@@ -295,7 +329,7 @@
         "objectiveType": "number",
         "text": "text",
         "type": "text",
-        "types": "item,monster,object"
+        "types": "event,item,monster"
       },
       "context": { "combat": false, "restrictions": "none" }
     },
@@ -314,6 +348,25 @@
     },
     "resting.player": {
       "result": { "isResting": "boolean" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "secrets.operations": {
+      "result": {
+        "arithmetic": false,
+        "concat": true,
+        "concatResult": { "secret": true, "type": "string" },
+        "format": true,
+        "formatResult": { "secret": true, "type": "string" },
+        "formatString": true,
+        "isSecret": true,
+        "tableValue": true,
+        "tostring": true,
+        "truthTest": true
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "secrets.rawOperations": {
+      "result": { "compare": false, "tableKey": false },
       "context": { "combat": false, "restrictions": "none" }
     },
     "sound.knownFile": {
@@ -361,17 +414,12 @@
     },
     "trainer.services": {
       "result": {
-        "categories": "",
         "count": "number",
-        "first1": "string",
-        "first2": "string",
-        "first3": "number",
-        "first4": "number",
-        "first5": "string",
-        "first6": "string",
-        "firstReturns": 6,
         "greeting": "text",
-        "isTradeskill": "boolean"
+        "hasAvailable": false,
+        "isTradeskill": "boolean",
+        "serviceTypes": "unavailable",
+        "trainerType": "number"
       },
       "context": { "combat": false, "restrictions": "none" }
     },
@@ -395,10 +443,20 @@
     },
     "unitCombat.seen": {
       "result": {
-        "actions": "WOUND",
-        "flagTexts": "GLANCING",
-        "player": { "WOUND": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" } },
-        "target": { "WOUND": { "action": "text", "amount": "number", "flagText": "text", "schoolMask": "number" } }
+        "actions": "DODGE,HEAL,MISS,WOUND",
+        "amountInCombat": "number",
+        "flagTexts": "CRITICAL,GLANCING",
+        "player": {
+          "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
+          "HEAL": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
+          "MISS": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
+          "WOUND": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" }
+        },
+        "target": {
+          "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
+          "MISS": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
+          "WOUND": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" }
+        }
       },
       "context": { "combat": false, "restrictions": "none" }
     },

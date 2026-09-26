@@ -59,7 +59,7 @@ end
 local ByteTerrace = ByteTerrace
 local Refuse = ByteTerrace.Refuse
 local C_GamePad, CreateFrame, pcall = C_GamePad, CreateFrame, pcall
-local ipairs, next, pairs = ipairs, next, pairs
+local ipairs, next, pairs, tostring, type = ipairs, next, pairs, tostring, type
 
 local Input = {}
 Input.__index = Input
@@ -99,14 +99,25 @@ function ByteTerrace.NewInput(addon)
     }, Input)
 end
 
---- Binds a source to a command in a map, before compile.
+--- Validates a binding declaration without registering it, so modules can commit atomically.
 ---@param map string
 ---@param source string e.g. "gamepad.south"
 ---@param command string the command's full name, e.g. "Meter.toggle"
-function Input:Bind(map, source, command)
+function Input:CheckDeclaration(map, source, command)
     if self.m_compiled then
         error(self.m_addon.Name .. ": binding for " .. tostring(source) .. " declared after compile", 2)
     end
+    if type(map) ~= "string" or map == "" or type(source) ~= "string" or type(command) ~= "string" then
+        error(self.m_addon.Name .. ": a binding needs a map, source and command name", 2)
+    end
+end
+
+--- Binds a source to a command in a map, before compile.
+---@param map string
+---@param source string
+---@param command string
+function Input:Bind(map, source, command)
+    self:CheckDeclaration(map, source, command)
     self.m_declared[#self.m_declared + 1] = { map = map, source = source, command = command }
 end
 

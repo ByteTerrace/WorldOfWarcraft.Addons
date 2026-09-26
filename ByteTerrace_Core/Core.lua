@@ -14,7 +14,8 @@
 --                           that route buttons to commands.
 --
 -- Records (Records.lua) are keyed collections of typed records that persist like rows. Modules
--- (Module.lua) own their handlers, watchers, rules and timers, and can depend on demand modules.
+-- (Module.lua) own handlers, watchers, rules, message listeners, timers and deferred actions,
+-- and can depend on demand modules.
 -- Names (Names.lua) reads players' names as Forever gives them (first and surname, no realm),
 -- Comms (Comms.lua) are a module's group messages, SoundBank (SoundBank.lua) plays player-supplied
 -- sounds, Facts (Facts*.lua) publish shared game state, and Diagnostics (Diagnostics.lua) is the

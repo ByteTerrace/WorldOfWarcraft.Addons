@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createLua } from "./lua.mjs";
 import { PROBES_PATH, luaLiteral, readProbes } from "./probes.mjs";
+import { readForbidden } from "./repo.mjs";
 import { findAddons, repoRoot, splitList } from "./repo.mjs";
 
 const HARNESS_FILES = [
@@ -71,6 +72,8 @@ export async function withHarness(snapshot, fn, probesPath = PROBES_PATH) {
         lua.ctx.__addons = loadAddons();
         // The observed probe records (tools/api/probes.json) as a Lua table constructor; wow.lua loads it.
         lua.ctx.__probes = luaLiteral(readProbes(probesPath));
+        // Functions refused in game (tools/api/forbidden.json); secrets.lua loads it.
+        lua.ctx.__forbidden = luaLiteral(readForbidden());
         for (const file of HARNESS_FILES) {
             await lua.doString(readFileSync(join(repoRoot, "tests", "harness", file), "utf8"));
         }

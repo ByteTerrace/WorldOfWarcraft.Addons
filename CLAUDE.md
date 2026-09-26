@@ -4,7 +4,7 @@ ByteTerrace World of Warcraft addons for **WoW: Forever** (TOC `_Camelot.toc`, M
 
 ## Rules
 
-1. **Build on the framework.** Features are modules on an addon built with `ByteTerrace.NewAddOn` (from `ByteTerrace_Core`). State lives in declared rows, intents are commands, controller input goes through `Input` maps, and events go through `module:On`. A feature that hand-wires frames, SavedVariables, slash parsing or settings duplicates the framework, and that's a defect.
+1. **Build on the framework.** Features are modules on an addon built with `ByteTerrace.NewAddOn` (from `ByteTerrace_Core`). State lives in declared rows, intents are commands, controller input goes through `Input` maps, and events go through `module:On`. Register shared-message subscriptions with `module:Listen` in `OnEnable`, and bind deferred menu or card actions with `module:Callback` so they expire when the module stops. A feature that hand-wires frames, SavedVariables, slash parsing or settings duplicates the framework, and that's a defect.
 2. **Find it before building it.** Forever is new: verify behavior against Blizzard's Forever UI source (the `forever` branch of Gethe/wow-ui-source) and `tools/api/forever.json`, never against Classic Era memory. A second implementation of something the framework or Blizzard already provides is a defect.
 3. **Secret values.** A value from an API with secret flags goes straight to a widget, or is checked with `issecretvalue`. It never enters state, and code never compares it, computes with it or branches on it. Annotate widget sinks with `-- secret: <why>`. Only adapters (event handlers) call the WoW API; rules read rows.
 4. **Gates prove observable behavior.**

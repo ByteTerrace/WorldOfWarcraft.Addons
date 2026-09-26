@@ -2,7 +2,8 @@
 -- spec and declares its rows, records, messages and commands.
 --
 -- A module owns what it creates through its methods: handlers (On), watchers (Watch, OnIncrease),
--- rules (Rule) and timers (After, Every). Stopping removes all of them in one pass, runs OnDisable,
+-- rules (Rule), message listeners (Listen) and timers (After, Every). Callback binds deferred UI
+-- actions to one activation. Stopping removes subscriptions, expires actions, runs OnDisable,
 -- and returns its runtime rows to their defaults, so a stopped module registers no events, runs
 -- no code and leaves no stale facts.
 --
@@ -12,8 +13,8 @@
 -- Dependencies: a module with demand = true runs only while a running module names it in its
 -- uses list. A user's dependencies start before its OnEnable, so their rows hold real values
 -- when its rules take their first reading and their handlers for an event run before its own.
--- They stop after the last user stops. That's how shared facts cost nothing while no feature
--- reads them.
+-- They stop after the last user stops. A failed start tears down its resources and releases the
+-- dependencies it acquired; a failed dependency prevents its user from starting.
 --
 -- Public members: Name, Addon, Spec (the declaration, never changed), Enabled, Records ([name] =
 -- collection), Comms (its messages, when spec.comms declares them) and Users (how many running
@@ -22,11 +23,29 @@
 local ByteTerrace = ByteTerrace
 local SafeCall = ByteTerrace.SafeCall
 local C_Timer = C_Timer
-local ipairs, pairs, type = ipairs, pairs, type
+local ipairs, pairs, select, type, unpack = ipairs, pairs, select, type, unpack
+local remove = table.remove
 
 local Module = {}
 Module.__index = Module
 ByteTerrace.Module = Module
+
+local function Enable(module)
+    for _, dependency in ipairs(module.m_uses) do
+        module.m_acquired = module.m_acquired + 1
+        if not dependency:Acquire() then
+            return false
+        end
+    end
+    if module.Comms then
+        module.Comms:Open()
+    end
+    if module.Spec.OnEnable then
+        module.Spec.OnEnable(module)
+    end
+    return module.Enabled
+end
+
 
 --- Creates a module object; AddOn:Module declares everything else.
 ---@param addon table the owning AddOn
@@ -37,6 +56,7 @@ function ByteTerrace.NewModule(addon, name, spec)
     return setmetatable({
         Addon = addon, Spec = spec, Enabled = false, Records = {}, Users = 0,
         Name = name, m_handles = {}, m_watchers = {}, m_timers = {}, m_ids = {}, m_runtime = {}, m_uses = {},
+        m_listeners = {}, m_acquired = 0, m_generation = 0,
         m_stopping = false,
     }, Module)
 end
@@ -85,10 +105,16 @@ function Module:Toggle(row)
     self.Addon.State:Toggle(self:Id(row), 2)
 end
 
+--- Whether the module can accept work; OnDisable and dependency teardown are already stopped.
+---@return boolean
+function Module:IsRunning()
+    return self.Enabled and not self.m_stopping
+end
+
 --- Raises when the module is stopped or stopping (in OnDisable): what it would create then would
 --- outlive it.
 function Module:CheckRunning()
-    if not self.Enabled or self.m_stopping then
+    if not self:IsRunning() then
         error(self.Addon.Name .. ": module " .. self.Name .. " is stopped", 3)
     end
 end
@@ -105,10 +131,17 @@ function Module:On(event, fn, unit)
     return handle
 end
 
---- Removes a handler early; the module's teardown skips handles that are already removed.
+--- Removes a handler early and releases its ownership entry, so repeated subscriptions don't
+--- grow the module's teardown work or retain dead callbacks.
 ---@param handle table from On
 function Module:Off(handle)
     self.Addon.Events:Off(handle)
+    for i = #self.m_handles, 1, -1 do
+        if self.m_handles[i] == handle then
+            remove(self.m_handles, i)
+            break
+        end
+    end
 end
 
 --- Resolves a list of rows to ids.
@@ -129,8 +162,12 @@ end
 ---@return table watcher
 function Module:Watch(rows, fn, skipInitial)
     self:CheckRunning()
-    local watcher = self.Addon.State:Watch(self:ResolveRows(rows), fn, skipInitial)
+    local state = self.Addon.State
+    local watcher = state:Watch(self:ResolveRows(rows), fn, true)
     self.m_watchers[#self.m_watchers + 1] = watcher
+    if not skipInitial then
+        SafeCall(fn, state) -- ownership precedes a callback that may stop this module
+    end
     return watcher
 end
 
@@ -157,11 +194,46 @@ end
 ---@return table watcher
 function Module:Rule(spec)
     self:CheckRunning()
-    local watcher = self.Addon.State:Rule({
-        reads = self:ResolveRows(spec.reads), when = spec.when, changed = spec.changed, initial = spec.initial,
+    local state, reads = self.Addon.State, self:ResolveRows(spec.reads)
+    state:BeginBatch()
+    local watcher = state:Rule({
+        reads = reads, when = spec.when, changed = spec.changed, initial = spec.initial,
     })
     self.m_watchers[#self.m_watchers + 1] = watcher
+    state:EndBatch()
     return watcher
+end
+
+--- Listens to a shared transport while this module runs. Stopping removes the listener, even
+--- during a delivery; enabling again registers a fresh listener from OnEnable.
+---@param comms table a module's Comms
+---@param kind string uppercase message kind
+---@param fn fun(sender: string, fields: string[])
+function Module:Listen(comms, kind, fn)
+    self:CheckRunning()
+    local handle = comms:Listen(kind, fn)
+    self.m_listeners[#self.m_listeners + 1] = { comms = comms, handle = handle }
+    return handle
+end
+
+--- Binds an action and its arguments to this activation of the module. The returned callback
+--- runs in one state batch and ignores invocation arguments (such as a menu's context). After
+--- the module stops it does nothing, even if the module starts again: old UI stays inert.
+--- Returns no value: Blizzard_Menu's Pick treats a truthy return as a response override.
+---@param fn function
+---@return function
+function Module:Callback(fn, ...)
+    self:CheckRunning()
+    if type(fn) ~= "function" then
+        error("Callback needs a function", 2)
+    end
+    local generation, args, count = self.m_generation, { ... }, select("#", ...)
+    return function()
+        if not self:IsRunning() or self.m_generation ~= generation then
+            return
+        end
+        self.Addon:Batch(fn, unpack(args, 1, count))
+    end
 end
 
 --- Calls fn() once after seconds, as one state batch, unless the module stops (or Cancel) first.
@@ -229,6 +301,7 @@ function Module:Acquire()
     if self.Users == 1 then
         self:SetEnabled(true)
     end
+    return self.Enabled
 end
 
 --- Releases one user of a demand module; the last one stops it.
@@ -242,27 +315,24 @@ function Module:Release()
     end
 end
 
---- Starts or stops the module now. Starting starts its dependencies first. Stopping removes
---- everything it owns in one pass (every handler goes dead at once, even mid-dispatch, and each
---- affected event re-registers once), runs OnDisable, cancels its timers, returns its runtime
---- rows to their defaults so no reader sees stale facts, then releases its dependencies.
+--- Starts or stops the module as one state batch. A failed start tears down its resources and
+--- releases the dependencies it acquired. Stopping removes subscriptions, runs OnDisable,
+--- cancels timers, resets runtime rows, and releases dependencies.
 ---@param enabled boolean
 function Module:SetEnabled(enabled)
     if enabled == self.Enabled or self.m_stopping then
         return -- a stop in progress finishes first; a nested start or stop is ignored
     end
     local addon, spec = self.Addon, self.Spec
+    addon.State:BeginBatch()
     if enabled then
         self.Enabled = true
-        for _, dependency in ipairs(self.m_uses) do
-            dependency:Acquire()
+        self.m_generation = self.m_generation + 1
+        local ok, started = SafeCall(Enable, self)
+        if not ok or not started then
+            self:SetEnabled(false)
         end
-        if self.Comms then
-            self.Comms:Open()
-        end
-        if spec.OnEnable then
-            SafeCall(spec.OnEnable, self)
-        end
+        addon.State:EndBatch()
         return
     end
     self.m_stopping = true
@@ -272,6 +342,10 @@ function Module:SetEnabled(enabled)
         addon.State:Unwatch(watchers[i])
     end
     addon.Events:OffAll(handles)
+    for _, listener in ipairs(self.m_listeners) do
+        listener.comms:Unlisten(listener.handle)
+    end
+    self.m_listeners = {}
     if self.Comms then
         self.Comms:Close()
     end
@@ -283,10 +357,13 @@ function Module:SetEnabled(enabled)
         timer:Cancel()
     end
     addon:Batch(ResetRuntime, self)
-    self.Enabled, self.m_stopping = false, false
-    for i = #self.m_uses, 1, -1 do
+    self.Enabled = false
+    for i = self.m_acquired, 1, -1 do
         self.m_uses[i]:Release()
     end
+    self.m_acquired = 0
+    self.m_stopping = false
+    addon.State:EndBatch()
 end
 
 --- Resolves what the module needs to start and stop: its dependencies and its runtime rows.

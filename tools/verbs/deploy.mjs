@@ -53,6 +53,19 @@ function linkTarget(path) {
     }
 }
 
+// Linking includes dependencies; unlinking selects only the addons explicitly requested.
+export function selectAddons(all, names, includeDependencies = true) {
+    const wanted = new Set(names ?? all.map((addon) => addon.name));
+    if (names && includeDependencies) {
+        const byName = new Map(all.map((addon) => [addon.name, addon]));
+        // Set iteration visits newly added entries too; already visited names cannot cycle.
+        for (const name of wanted) {
+            for (const dependency of byName.get(name)?.dependencies ?? []) wanted.add(dependency);
+        }
+    }
+    return all.filter((addon) => wanted.has(addon.name));
+}
+
 export async function run(values) {
     const all = findAddons();
     const unknown = (values.addon ?? []).filter((name) => !all.some((addon) => addon.name === name));
@@ -71,13 +84,7 @@ export async function run(values) {
         console.error(`No AddOns folder at ${addOnsDir}; start the game once so it creates it.`);
         return 1;
     }
-    const wanted = new Set(values.addon ?? all.map((addon) => addon.name));
-    for (const addon of all) {
-        if (wanted.has(addon.name) && values.addon && !values.unlink) {
-            for (const dependency of addon.dependencies) wanted.add(dependency);
-        }
-    }
-    const addons = all.filter((addon) => wanted.has(addon.name));
+    const addons = selectAddons(all, values.addon, !values.unlink);
 
     if (!values.unlink && (await runChecks({ quiet: true, wowRoot: values["wow-root"] })).length > 0) {
         console.error("Checks failed; not deploying. Run `tlk check` for details.");

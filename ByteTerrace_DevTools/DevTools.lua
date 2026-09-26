@@ -157,6 +157,9 @@ local function RunProbes()
                 Say(("probe %s failed: %s"):format(probe.name, problem))
             else
                 local previous = db.probes[probe.name]
+                if not Probes.IsCurrent(probe, previous) then
+                    previous = nil -- an older version's record answered another question
+                end
                 local differences = previous and Probes.Diff(previous, record) or {}
                 if not previous then
                     added = added + 1
@@ -186,7 +189,7 @@ local function ListProbes()
     local build, missing, count = Probes.Build(), {}, 0
     for _, probe in ipairs(Probes.List) do
         local record = probes[probe.name]
-        if not record or record.build ~= build then
+        if not Probes.IsCurrent(probe, record) or record.build ~= build then
             count = count + 1
             AddToGroup(missing, probe, Probes.NeedsText(probe))
         end

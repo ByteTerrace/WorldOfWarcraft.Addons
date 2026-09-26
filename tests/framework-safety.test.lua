@@ -17,6 +17,45 @@ local function Start(h)
     h:Fire("ADDON_LOADED", "TestApp")
 end
 
+test("mixed unit filters check secret tokens regardless of registration order and keep publishing", function()
+    for _, unfilteredFirst in ipairs({ true, false }) do
+        local h, addon = NewAddOn()
+        local general = addon:Module("General", { toggle = false, state = {
+            { name = "count", kind = "number", default = 0, persist = false },
+        } })
+        local player = addon:Module("Player", { toggle = false })
+        Start(h)
+        local published, filtered, secretChecks = 0, 0, 0
+        general:Watch({ "count" }, function() published = published + 1 end, true)
+        local function General()
+            secretChecks = h:CountApiCalls("issecretvalue")
+            general:Set("count", general:Get("count") + 1)
+        end
+        local function Player()
+            filtered = filtered + 1
+        end
+        if unfilteredFirst then
+            general:On("UNIT_AURA", General)
+            player:On("UNIT_AURA", Player, "player")
+        else
+            player:On("UNIT_AURA", Player, "player")
+            general:On("UNIT_AURA", General)
+        end
+        h.apiCalls = {}
+        h:Fire("UNIT_AURA", Secret("player"))
+        eq(#h.errors, 0)
+        eq(filtered, 0, "a filtered handler cannot claim a secret unit")
+        eq(published, 1, "the unfiltered handler's write publishes")
+        general:Set("count", 2)
+        eq(published, 2, "the event batch closes, so subsequent writes still publish")
+        -- Lua 5.1 cannot trap secret == string; the API count proves dispatch checks the token.
+        eq(secretChecks, 1, "a later unit filter still requires a secrecy check")
+        h:Fire("UNIT_AURA", "player")
+        eq(filtered, 1, "a plain matching token still reaches the filtered handler")
+        eq(published, 3)
+    end
+end)
+
 test("a module whose declaration fails partway keeps its saved rows and records", function()
     local h, addon = NewAddOn({ ["Ledger.note"] = "kept", ["Ledger.people"] = { Bob = { deaths = 3 } } })
     local ok = pcall(addon.Module, addon, "Ledger", {

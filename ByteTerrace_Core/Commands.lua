@@ -9,7 +9,7 @@
 --                 ref is an id (hot path) or a name. phase defaults to "down"; a command that
 --                 isn't held ignores other phases. Each run is one state batch, so a command that
 --                 writes several rows publishes once. Returns false for an unknown command or a
---                 run that errored (the error reaches the error handler; the caller continues).
+--                 stopped module or run that errored (the error reaches the error handler).
 --
 -- After compile, Ids maps each name to its id (Input.lua resolves bindings through it).
 --
@@ -17,8 +17,8 @@
 -- (casting, targeting), which WoW only allows from secure templates and bindings.
 
 local ByteTerrace = ByteTerrace
-local Refuse, SafeCall, SortedKeys = ByteTerrace.Refuse, ByteTerrace.SafeCall, ByteTerrace.SortedKeys
-local ipairs, print, strtrim, tostring, type = ipairs, print, strtrim, tostring, type
+local Refuse, SortedKeys = ByteTerrace.Refuse, ByteTerrace.SortedKeys
+local ipairs, pairs, print, strtrim, tostring, type = ipairs, pairs, print, strtrim, tostring, type
 
 local Commands = {}
 Commands.__index = Commands
@@ -30,16 +30,29 @@ function ByteTerrace.NewCommands(addon)
     return setmetatable({ m_addon = addon, m_declared = {}, m_compiled = false }, Commands)
 end
 
---- Declares a command before compile. The spec isn't copied; don't change it afterwards.
+--- Checks a command name before a module commits its declarations.
+---@param name string
+function Commands:CheckDeclaration(name)
+    if type(name) ~= "string" or name == "" then
+        error(self.m_addon.Name .. ": command needs a name", 2)
+    end
+    if self.m_compiled then
+        error(self.m_addon.Name .. ": command " .. name .. " defined after compile", 2)
+    end
+    if self.m_declared[name] then
+        error(self.m_addon.Name .. ": duplicate command " .. name, 2)
+    end
+end
+
+--- Declares a command before compile. The spec is copied.
 ---@param spec table see the file header
 function Commands:Define(spec)
-    if self.m_compiled then
-        error(self.m_addon.Name .. ": command " .. tostring(spec.name) .. " defined after compile", 2)
+    self:CheckDeclaration(spec.name)
+    local own = {}
+    for key, value in pairs(spec) do
+        own[key] = value
     end
-    if self.m_declared[spec.name] then
-        error(self.m_addon.Name .. ": duplicate command " .. tostring(spec.name), 2)
-    end
-    self.m_declared[spec.name] = spec
+    self.m_declared[spec.name] = own
 end
 
 --- Assigns ids and validates every command, raising all problems at once.
@@ -53,17 +66,18 @@ function Commands:Compile()
         if type(spec.run) ~= "function" then
             problems[#problems + 1] = name .. ": run must be a function"
         end
-        if not spec.label then
+        if type(spec.label) ~= "string" or spec.label == "" then
             problems[#problems + 1] = name .. ": needs a label"
         end
         local word = spec.slash
-        if word then
-            if word ~= word:lower() or word:find("%s") then
-                problems[#problems + 1] = name .. ": slash word '" .. word .. "' must be lowercase with no spaces"
+        if word ~= nil then
+            if type(word) ~= "string" or word ~= word:lower() or word:find("%s") then
+                problems[#problems + 1] = name .. ": slash word '" .. tostring(word) .. "' must be lowercase with no spaces"
             elseif bySlash[word] then
                 problems[#problems + 1] = name .. ": slash word '" .. word .. "' is taken by " .. names[bySlash[word]]
+            else
+                bySlash[word] = id
             end
-            bySlash[word] = id
         end
     end
     Refuse(self.m_addon.Name .. " commands", problems)
@@ -88,7 +102,7 @@ end
 ---@param arg string? the slash text after the command's word
 ---@param phase string? "down" (default), "up" or "cancel"; only held commands get the last two
 ---@param source string? what ran it, e.g. "slash" or "gamepad"
----@return boolean ok false for an unknown command or a run that errored
+---@return boolean ok false for an unknown command, stopped module or a run that errored
 function Commands:Run(ref, arg, phase, source)
     local id = type(ref) == "number" and ref or self.Ids[ref]
     local spec = id and self.m_specs[id]
@@ -99,11 +113,15 @@ function Commands:Run(ref, arg, phase, source)
     if phase ~= "down" and not spec.held then
         return true
     end
-    local state = self.m_addon.State
-    state:BeginBatch()
-    local ok = SafeCall(spec.run, arg, phase, source)
-    state:EndBatch()
-    return ok
+    local addon, module = self.m_addon, spec.module
+    if module and not spec.always and not module:IsRunning() then
+        if phase == "down" then
+            local slash = addon.Slash and addon.Slash[1] or ""
+            addon:Print(("%s is turned off. Turn it on in settings (%s)."):format(module.Spec.label or module.Name, slash))
+        end
+        return false
+    end
+    return addon:Batch(spec.run, arg, phase, source)
 end
 
 --- The slash driver: "<word> <rest>" runs the command whose slash word matches, with rest as arg.

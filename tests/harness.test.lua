@@ -6,7 +6,7 @@ local function Enemy(fields)
     return unit
 end
 
-test("secret values are opaque userdata that refuse every use", function()
+test("secret values are opaque userdata that refuse every computation", function()
     local h = Harness.New()
     h:EnterCombat()
     local env = h.env
@@ -18,17 +18,35 @@ test("secret values are opaque userdata that refuse every use", function()
     throws(function() return health == env.UnitHealth("player") end, "secret")
     throws(function() return health + 1 end, "secret")
     throws(function() return -health end, "secret")
-    throws(function() return "hp: " .. health end, "secret")
     throws(function() return #health end, "secret")
     throws(function() return health.x end, "secret")
     throws(function() health.x = 1 end, "secret")
     throws(function() return pairs(health) end)
-    throws(function() return env.tostring(health) end, "secret")
     throws(function() return env.tonumber(health) end, "secret")
-    throws(function() return env.string.format("%d", health) end, "secret")
-    throws(function() return env.format("%s", health) end, "secret")
     throws(function() env.print("hp", health) end, "secret")
     eq(Reveal(health), 100)
+end)
+
+-- secrets.operations: the client lets addon code concatenate, tostring and format a secret, and
+-- each result is a secret string.
+test("concatenation, tostring and format turn a secret into a secret string", function()
+    local h = Harness.New()
+    local env = h.env
+    local health = env.UnitHealth("player")
+    local results = {
+        concat = "hp: " .. health, concatRight = health .. " hp", tostring = env.tostring(health),
+        format = env.string.format("%d", health), formatGlobal = env.format("%s", health),
+        method = ("%d hp"):format(health),
+    }
+    for name, result in pairs(results) do
+        truthy(env.issecretvalue(result), name .. " is secret")
+        eq(env.type(result), "string", name .. " is a string")
+    end
+    eq(Reveal(results.concat), "hp: 100")
+    eq(Reveal(results.method), "100 hp")
+    eq(("%d"):format(7), "7", "plain formatting is untouched")
+    throws(function() return health .. {} end, "concatenate")
+    throws(function() return ("%.1s"):format(health) end, "precision")
 end)
 
 test("issecretvalue is exact: NaN and plain values aren't secret", function()
@@ -171,6 +189,7 @@ end
 
 test("protected methods on protected frames are blocked during lockdown: the call does nothing, the caller continues", function()
     local h = Harness.New()
+    h:ExpectBlocked(2) -- the calls under test
     local seen = WatchBlocked(h)
     local secure = h.env.CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
     local holder = h.env.CreateFrame("Frame")
@@ -197,6 +216,7 @@ end)
 
 test("Settings.OpenToCategory is blocked during lockdown (C_SettingsUtil.OpenSettingsPanel has restrictions)", function()
     local h = Harness.New()
+    h:ExpectBlocked(1) -- the calls under test
     h.env.Settings.OpenToCategory(7)
     eq(h.opened[1], 7)
     h:EnterCombat()
@@ -235,6 +255,7 @@ end)
 
 test("a protected global is forbidden to addon code at any time", function()
     local h = Harness.New()
+    h:ExpectBlocked(1) -- the calls under test
     local seen = WatchBlocked(h)
     local ran = false
     local compare = h:WrapFunction("C_TooltipComparison.CompareItem", function() ran = true end)
@@ -246,6 +267,7 @@ end)
 
 test("HasRestrictions: a specific marker replaces the lockdown rule, otherwise lockdown blocks", function()
     local h = Harness.New()
+    h:ExpectBlocked(1) -- the calls under test
     local calls = 0
     local send = h:WrapFunction("C_ChatInfo.SendChatMessage", function() calls = calls + 1 end)
     local propagate = h.env.CreateFrame("Frame")
@@ -349,10 +371,30 @@ Harness.DefineAddOn("SecretSaver", { savedVariables = { "LeakDB" }, sources = { 
     frame:SetScript("OnEvent", function() LeakDB = { health = UnitHealth("player") } end)
 ]] } })
 
+Harness.DefineAddOn("SecretKeySaver", { savedVariables = { "KeyDB" }, sources = { [[
+    local frame = CreateFrame("Frame")
+    frame:RegisterEvent("PLAYER_LOGOUT")
+    frame:SetScript("OnEvent", function() KeyDB = { [UnitHealth("player")] = true } end)
+]] } })
+
 test("a secret that reaches SavedVariables is an error, not a silent drop", function()
     local h = Harness.New()
     h:LoadAddon("SecretSaver")
     throws(function() h:Reload() end, "a secret value reached SavedVariables")
+end)
+
+test("a secret table key that reaches SavedVariables is an error, not a silent drop", function()
+    local h = Harness.New()
+    h:LoadAddon("SecretKeySaver")
+    throws(function() h:Reload() end, "a secret table key reached SavedVariables")
+end)
+
+test("a protected call the test didn't expect to be blocked fails it, as the client would show the player", function()
+    local h = Harness.New()
+    h.env.SetRaidTarget("target", 8)
+    truthy((h:UnexpectedErrors() or ""):find("blocked calls (expected 0): SetRaidTarget", 1, true), h:UnexpectedErrors())
+    h:ExpectBlocked("SetRaidTarget")
+    eq(h:UnexpectedErrors(), nil)
 end)
 
 test("Relog ends combat, lockdown and restrictions; Reload keeps them", function()

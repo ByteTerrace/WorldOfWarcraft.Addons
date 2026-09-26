@@ -22,6 +22,9 @@ local addonName, ns = ...
 --     run compares with any other's. The exceptions list what a session happened to show, which
 --     is their point: unitCombat.seen's actions and flags, questLog.objectives' types.
 --   * harness (optional) is the reason the harness can't run this probe at all.
+--   * version (optional, 1 when absent) goes up whenever the result's shape changes: a record
+--     made by another version answered a different question, so it's no evidence for this one.
+--     Probes.IsCurrent tells them apart; /btdev probe list, the import and the tests ignore it.
 -- A probe only reads. It never calls a protected or restricted function, never changes game
 -- state, and never compares, computes with or stores a secret: a secret becomes the marker
 -- { secret = true, type = <its type> } (Value, Shape, Text), checked with issecretvalue first.
@@ -33,7 +36,8 @@ local addonName, ns = ...
 -- The kill events (PARTY_KILL, PLAYER_TARGET_DIED, UNIT_DIED) go to Probes.NoteKill the same
 -- way, for kills.seen, and chat events' senders to Probes.NoteSender, for names.chatSenders.
 --
--- A record is { build = "1.60.1 (70009)", context = { combat, restrictions }, result }: the build,
+-- A record is { build = "1.60.1 (70009)", context = { combat, restrictions }, result, version? }:
+-- the version of the probe that made it (absent for version 1), the build,
 -- whether combat lockdown held and which addon restrictions were active ("none", or their
 -- Enum.AddOnRestrictionType names sorted and joined by commas), and the result. It holds no
 -- time, so running a probe twice in the same situation gives the same record.
@@ -266,6 +270,9 @@ function Probes.Define(probes)
         for _, key in ipairs(probe.needs) do
             assert(Needs[key], ("probe %s: unknown need %s"):format(probe.name, key))
         end
+        local version = probe.version
+        assert(version == nil or (type(version) == "number" and version >= 2 and version % 1 == 0),
+            ("probe %s: version must be a whole number from 2 (leave it out for 1)"):format(probe.name))
         List[#List + 1] = probe
         ByName[probe.name] = probe
     end
@@ -424,9 +431,20 @@ function Probes.Setup(probe, h)
     end
 end
 
+--- The probe's version: probe.version, or 1.
+function Probes.Version(probe)
+    return probe.version or 1
+end
+
+--- Whether a record was made by the probe's current version, so it answers the probe's question.
+---@param record table? a record, or nil
+function Probes.IsCurrent(probe, record)
+    return type(record) == "table" and (record.version or 1) == Probes.Version(probe)
+end
+
 --- Runs the probe and returns its record, or nil and why it failed (an error or a result that
 --- can't be saved).
----@return table? record { build, context, result }
+---@return table? record { build, context, result, version? }
 ---@return string? problem
 function Probes.Record(probe)
     local context = Probes.Context()
@@ -438,7 +456,8 @@ function Probes.Record(probe)
     if problem then
         return nil, problem
     end
-    return { build = Probes.Build(), context = context, result = result }, nil
+    local version = probe.version -- absent for version 1, like the records made before versions
+    return { build = Probes.Build(), context = context, result = result, version = version }, nil
 end
 
 --- Where two records (or any values of the kind a record holds) differ: a list of

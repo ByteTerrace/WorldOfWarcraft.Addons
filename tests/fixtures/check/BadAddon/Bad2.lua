@@ -82,3 +82,13 @@ Events:On("CHAT_MSG_AFK", function(text) return { text } end) -- !
 local function Discard() local _ = UnitHealth("target") return _ + 1 end -- !
 print(Discard)
 print(Annotated, Unannotated, BlockCommented, Reassigned, Late, Store, Discarded, Recomputed, NoExit, BarValue, GetBarValue, ViaGetglobal, Leak, Ignored, NoReturn, Later, Param)
+local function Mark() if InCombatLockdown() then return end SetRaidTarget("target", 8) end -- !
+print(Mark)
+Events:On("CHAT_MSG_AFK", function(text) Events[text] = true end) -- !
+Events:On("CHAT_MSG_AFK", function(text) local kept = Events.on and text or nil return kept end) -- !
+local function Low()
+    local cur = UnitPower("player", 3) -- secret: widget sink
+    if cur == 0 then return true end -- !
+end
+print(Low)
+Chat:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED") -- !

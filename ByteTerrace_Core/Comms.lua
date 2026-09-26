@@ -5,7 +5,8 @@
 --   Ready()                     whether a message sent now would go out.
 --   Listen(kind, fn)            fn(sender, fields) for each valid message of kind; sender is the
 --                               sender's full name ("First Last", Names.lua) and fields an array
---                               of strings. Listen any time, from any file.
+--                               of strings. Returns a handle for Unlisten; feature code uses
+--                               module:Listen(comms, kind, fn) in OnEnable for automatic teardown.
 --
 -- Nothing is sent or received while the module is stopped: its handler and pending send go with
 -- it, and the queue empties.
@@ -28,14 +29,22 @@ local MaxMessage = 255 -- bytes: the client's limit for one addon message
 local MaxPrefix = 16   -- bytes: the client's limit for a prefix
 local Separator = "\t"
 local GroupChannels = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
+local ChatRestrictions = {
+    [Enum.AddOnRestrictionType.Encounter] = true,
+    [Enum.AddOnRestrictionType.ChallengeMode] = true,
+    [Enum.AddOnRestrictionType.PvPMatch] = true,
+    [Enum.AddOnRestrictionType.Map] = true,
+    [Enum.AddOnRestrictionType.Chat] = true,
+}
 
 local ByteTerrace = ByteTerrace
 local SafeCall = ByteTerrace.SafeCall
 local Names = ByteTerrace.Names
 local C_ChatInfo, Enum, GetTime = C_ChatInfo, Enum, GetTime
 local IsInGroup, IsInRaid, LE_PARTY_CATEGORY_INSTANCE = IsInGroup, IsInRaid, LE_PARTY_CATEGORY_INSTANCE
-local issecretvalue, tostring, type, wipe = issecretvalue, tostring, type, wipe
+local issecretvalue, pairs, tostring, type, wipe = issecretvalue, pairs, tostring, type, wipe
 local concat, insert, remove = table.concat, table.insert, table.remove
+local huge = math.huge
 
 local Comms = {}
 Comms.__index = Comms
@@ -58,6 +67,9 @@ end
 
 -- Parses "KIND" (no fields) or "KIND:field<tab>field...". Anything else is nil.
 local function Parse(text)
+    if type(text) ~= "string" or #text > MaxMessage or text:find("[%z\r\n]") then
+        return nil
+    end
     local kind, rest = text:match("^(%u+):(.*)$")
     local fields = {}
     if not kind then
@@ -70,6 +82,35 @@ local function Parse(text)
     return kind, fields
 end
 
+local function ValidKind(kind)
+    return not issecretvalue(kind) and type(kind) == "string" and kind:find("^%u+$") ~= nil
+end
+
+-- Both scalar and array fields use this path before any concatenation or string conversion.
+local function EncodeField(value)
+    if issecretvalue(value) then
+        error("message field cannot hold a secret value", 3)
+    end
+    local kind = type(value)
+    if kind ~= "string" and kind ~= "number" and kind ~= "boolean" then
+        error("message field must be a string, number or boolean", 3)
+    end
+    if kind == "number" and (value ~= value or value == huge or value == -huge) then
+        error("message field must be finite", 3)
+    end
+    local text = tostring(value)
+    if text:find("[%z\t\r\n]") then
+        error("message field holds a NUL, tab or line break", 3)
+    end
+    return text
+end
+
+local function DropQueue(self)
+    self.m_module:Cancel(self.m_timer)
+    self.m_timer = nil
+    wipe(self.m_queue)
+end
+
 local function Pump(self)
     self.m_timer = nil
     local message = self.m_queue[1]
@@ -78,7 +119,7 @@ local function Pump(self)
     end
     local channel = Channel()
     if not channel or C_ChatInfo.InChatMessagingLockdown() then
-        wipe(self.m_queue)
+        DropQueue(self)
         return
     end
     local wait = self.m_lastSent + self.m_interval - GetTime()
@@ -103,10 +144,10 @@ end
 function ByteTerrace.NewComms(module, spec)
     local addon, problems = module.Addon, {}
     local prefix, interval, queue = spec.prefix, spec.interval or 1, spec.queue or 8
-    if type(prefix) ~= "string" or #prefix < 1 or #prefix > MaxPrefix then
+    if type(prefix) ~= "string" or #prefix < 1 or #prefix > MaxPrefix or prefix:find("[%z\t\r\n]") then
         problems[#problems + 1] = ("prefix must be a string of 1 to %d bytes"):format(MaxPrefix)
     end
-    if type(interval) ~= "number" or interval <= 0 then
+    if type(interval) ~= "number" or interval ~= interval or interval <= 0 or interval == huge then
         problems[#problems + 1] = "interval must be a positive number of seconds"
     end
     if type(queue) ~= "number" or queue < 1 or queue % 1 ~= 0 then
@@ -115,7 +156,7 @@ function ByteTerrace.NewComms(module, spec)
     ByteTerrace.Refuse(addon.Name .. " comms for " .. module.Name, problems)
     local self = setmetatable({
         m_module = module, m_prefix = prefix, m_interval = interval, m_limit = queue,
-        m_queue = {}, m_listeners = {}, m_lastSent = -interval, m_open = false,
+        m_queue = {}, m_listeners = {}, m_lastSent = -interval, m_open = false, m_session = 0,
     }, Comms)
     self.m_pump = function() Pump(self) end
     return self
@@ -128,12 +169,17 @@ function Comms:Open()
     local me = Names.Mine() -- nil while secret; looked up again then
     local prefix, listeners = self.m_prefix, self.m_listeners
     self.m_open = true
+    self.m_session = self.m_session + 1
+    local session = self.m_session
     self.m_module:On("CHAT_MSG_ADDON", function(received, text, channel, sender)
         -- Every addon's messages arrive here; the prefix test comes first, so theirs cost one check.
         if issecretvalue(received) or received ~= prefix then
             return
         end
         if issecretvalue(text) or issecretvalue(channel) or issecretvalue(sender) or not GroupChannels[channel] then
+            return
+        end
+        if not self:Ready() or type(sender) ~= "string" or sender == "" or sender:find("[|%c]") then
             return
         end
         local name = Names.Plain(sender)
@@ -145,12 +191,24 @@ function Comms:Open()
         local list = kind and listeners[kind]
         if list then
             for i = 1, #list do
-                SafeCall(list[i], name, fields)
+                if not self.m_open or self.m_session ~= session then
+                    break
+                end
+                local handle = list[i]
+                if not handle.dead then
+                    SafeCall(handle.fn, name, fields)
+                end
             end
         end
     end)
     self.m_module:On("GROUP_LEFT", function()
-        wipe(self.m_queue)
+        DropQueue(self)
+    end)
+    self.m_module:On("ADDON_RESTRICTION_STATE_CHANGED", function(restriction, state)
+        -- Activating arrives before InChatMessagingLockdown reflects the restriction.
+        if ChatRestrictions[restriction] and state ~= Enum.AddOnRestrictionState.Inactive then
+            DropQueue(self)
+        end
     end)
 end
 
@@ -158,35 +216,51 @@ end
 --- handler and the pending send.
 function Comms:Close()
     self.m_open = false
-    self.m_timer = nil
-    wipe(self.m_queue)
+    DropQueue(self)
 end
 
 --- Queues a message for the group. Dropped while the module is stopped, when you're not in a
---- group, or when the queue is full.
+--- group, during chat lockdown, or when the queue is full.
 ---@param kind string uppercase letters only
----@param fields any? a value or an array of values, joined with tabs
+---@param fields any? a plain string, finite number, boolean, or a dense array of these
 ---@param urgent boolean? goes to the front of the queue
 function Comms:Send(kind, fields, urgent)
     local addonName = self.m_module.Addon.Name
-    if type(kind) ~= "string" or not kind:find("^%u+$") then
-        error(("%s: message kind %s must be uppercase letters"):format(addonName, tostring(kind)), 2)
+    if not ValidKind(kind) then
+        error(addonName .. ": message kind must be plain uppercase letters", 2)
     end
     local text = kind
+    if issecretvalue(fields) then
+        error(addonName .. ": message field cannot hold a secret value", 2)
+    end
     if type(fields) == "table" then
-        text = kind .. ":" .. concat(fields, Separator)
-        for i = 1, #fields do
-            if tostring(fields[i]):find("[\t\r\n]") then
-                error(("%s: message %s field %d holds a tab or line break"):format(addonName, kind, i), 2)
+        local encoded, count = {}, 0
+        for key in pairs(fields) do
+            if type(key) ~= "number" or key < 1 or key % 1 ~= 0 or key > #fields then
+                error(addonName .. ": message fields must be a dense array", 2)
             end
+            count = count + 1
+        end
+        if count ~= #fields then
+            error(addonName .. ": message fields must be a dense array", 2)
+        end
+        for i = 1, #fields do
+            encoded[i] = EncodeField(fields[i])
+        end
+        if count > 0 then
+            text = kind .. ":" .. concat(encoded, Separator)
         end
     elseif fields ~= nil then
-        text = kind .. ":" .. tostring(fields)
+        text = kind .. ":" .. EncodeField(fields)
     end
     if #text > MaxMessage then
         error(("%s: message %s is longer than %d bytes"):format(addonName, kind, MaxMessage), 2)
     end
-    if not self.m_open or not Channel() or #self.m_queue >= self.m_limit then
+    if not self:Ready() then
+        DropQueue(self)
+        return
+    end
+    if #self.m_queue >= self.m_limit then
         return
     end
     if urgent then
@@ -207,16 +281,40 @@ function Comms:Ready()
 end
 
 --- Calls fn(sender, fields) for each valid message of kind while the module runs. Each listener
---- is isolated: an error in one doesn't stop the others.
+--- is isolated: an error in one doesn't stop the others. Feature modules use Module:Listen to
+--- own the subscription. New listeners begin with the next delivery.
 ---@param kind string
 ---@param fn fun(sender: string, fields: string[])
+---@return table handle for Unlisten
 function Comms:Listen(kind, fn)
-    local list = self.m_listeners[kind]
-    if not list then
-        list = {}
-        self.m_listeners[kind] = list
+    if not ValidKind(kind) or type(fn) ~= "function" then
+        error("Listen needs an uppercase message kind and a function", 2)
     end
-    list[#list + 1] = fn
+    local list = self.m_listeners[kind]
+    local copy = {}
+    for i = 1, #(list or {}) do
+        copy[i] = list[i]
+    end
+    local handle = { kind = kind, fn = fn }
+    copy[#copy + 1] = handle
+    self.m_listeners[kind] = copy
+    return handle
+end
+
+--- Removes a listener immediately, including from a delivery already in progress.
+---@param handle table from Listen
+function Comms:Unlisten(handle)
+    if handle.dead then
+        return
+    end
+    handle.dead = true
+    local list, copy = self.m_listeners[handle.kind], {}
+    for i = 1, #(list or {}) do
+        if not list[i].dead then
+            copy[#copy + 1] = list[i]
+        end
+    end
+    self.m_listeners[handle.kind] = #copy > 0 and copy or nil
 end
 
 --- How many messages wait to be sent.

@@ -30,22 +30,26 @@ local function Wanted(list)
     if not list then
         return nil
     end
-    local unit1, unit2, filtered
+    local unit1, unit2, filtered, all
     for i = 1, #list do
         local unit = list[i].unit
         if not unit then
-            return "all", nil, nil, filtered or false
-        end
-        filtered = true
-        if unit ~= unit1 and unit ~= unit2 then
-            if not unit1 then
-                unit1 = unit
-            elseif not unit2 then
-                unit2 = unit
-            else
-                return "all", nil, nil, true
+            all = true
+        else
+            filtered = true
+            if unit ~= unit1 and unit ~= unit2 then
+                if not unit1 then
+                    unit1 = unit
+                elseif not unit2 then
+                    unit2 = unit
+                else
+                    all = true
+                end
             end
         end
+    end
+    if all then
+        return "all", nil, nil, filtered or false
     end
     if unit2 and unit2 < unit1 then
         unit1, unit2 = unit2, unit1

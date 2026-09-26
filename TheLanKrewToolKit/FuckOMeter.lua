@@ -3,8 +3,9 @@ local addonName, ns = ...
 -- FuckOMeter: a comically oversized energy bar across the middle of the screen, shown while the
 -- player's power type is energy. /tlk fom turns the module off and on again.
 --
--- Energy is a secret value in combat, so it never enters state: UnitPower/UnitPowerMax results
--- go straight to the bar and text (both accept secrets) and are never compared or computed with.
+-- The player's primary power is secret in combat and out (probed: power.player), so energy never
+-- enters state: UnitPower/UnitPowerMax results go straight to the bar and text (both accept
+-- secrets) and are never compared or computed with.
 -- Power events are registered only while the meter is visible.
 --
 -- The meter frame is the global TheLanKrewToolKitFuckOMeter; its Bar and Value regions hold the

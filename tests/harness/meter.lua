@@ -72,7 +72,9 @@
 --       add environmentalType (what Blizzard_DeathRecap.lua reads), and absorbed, resisted and
 --       blocked may appear. A death without scripted events gets one per DamageTaken spell: the
 --       Auto Attack spell (6603) is a SWING_DAMAGE with no spell fields, any other a
---       SPELL_DAMAGE; [G] school 1 unless the spell gives one, critical, glancing, crushing and
+--       SPELL_DAMAGE. Scripted SWING_DAMAGE also omits spell fields: Blizzard_DeathRecap's
+--       GetEventInfo supplies the swing's display spell itself. [G] school 1 unless the spell
+--       gives one, critical, glancing, crushing and
 --       isOffHand false, raid flags 0, flags 0xA48 for a hostile mob, 0x548 for a hostile player,
 --       0x1148 for a hostile player's pet and 0x511 for the player dying, and currentHP the health left after the hit (0
 --       for the killing blow). An unknown ID returns no events, max health 0 and link "".
@@ -95,7 +97,8 @@
 --       specIconID, unit (a unit table: the recap's attacker is that unit, GUID and all) } }, ... } },
 --     death = { time, maxHealth, events = { oldest first, each { event, amount, sourceName, ... } } } }
 -- A type with spells but no amount gets the spells' sum. A death without events gets one event
--- per DamageTaken spell ("SPELL_DAMAGE", in the given order, the last the killing blow).
+-- per DamageTaken spell (SWING_DAMAGE for Auto Attack, SPELL_DAMAGE otherwise, in the given
+-- order, the last the killing blow).
 
 local Snapshot = __snapshot
 local Types = Snapshot.enums.DamageMeterType
@@ -117,6 +120,7 @@ local RecapFields = {
     "overkill", "school", "resisted", "blocked", "absorbed", "critical", "glancing", "crushing", "isOffHand",
     "currentHP", "avoidable", "deadly",
 }
+local RecapSpellFields = { spellId = true, spellName = true, spellSchool = true, avoidable = true, deadly = true }
 local AutoAttack = 6603
 -- Combat log object flags (COMBATLOG_OBJECT_*): a hostile outsider NPC, player and player's pet,
 -- and you.
@@ -249,7 +253,9 @@ local function RecapEvents(h, session, record, death, time, victim)
         for _, given in ipairs(death.events) do
             local event = {}
             for _, field in ipairs(RecapFields) do
-                event[field] = given[field]
+                if given.event ~= "SWING_DAMAGE" or not RecapSpellFields[field] then
+                    event[field] = given[field]
+                end
             end
             event.timestamp = event.timestamp or session.startServer + (given.time or time)
             table.insert(events, 1, event)

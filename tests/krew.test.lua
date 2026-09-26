@@ -2,8 +2,8 @@
 
 local Prefix = "TLKKrew1"
 
-local function Load()
-    local h = Harness.New()
+local function Load(player)
+    local h = Harness.New(player)
     local ns = h:LoadAddon("TheLanKrewToolKit")
     return h, ns.Addon
 end
@@ -33,13 +33,72 @@ test("nothing is sent outside a group", function()
     eq(#h.addonMessages, 0)
 end)
 
-test("joining a group says hello once, on the party channel", function()
+test("roster hellos have a cooldown; a new sender gets one rate-limited reply", function()
     local h = Load()
     h:JoinGroup("party", { "Bob" })
     eq(Sent(h, "HELLO"), 1)
     eq(h.addonMessages[1].chatType, "PARTY")
     h:AddMember("Cara")
-    eq(Sent(h, "HELLO"), 1, "the hello cooldown stops repeats")
+    eq(Sent(h, "HELLO"), 1, "the hello cooldown stops roster repeats")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0", "PARTY", "Cara")
+    eq(Sent(h, "HELLO"), 1, "the reply waits for the transport interval")
+    h:Advance(1)
+    eq(Sent(h, "HELLO"), 2, "a new sender gets a reply within the cooldown")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0", "PARTY", "Cara")
+    h:Advance(2)
+    eq(Sent(h, "HELLO"), 2, "a known sender cannot cause ping-pong")
+end)
+
+test("a late joiner learns the existing Krew and syncs their own marks and wars", function()
+    local alice, aliceAddon = Load({ name = "Alice" })
+    local cara, caraAddon = Load({ name = "Cara" })
+    local dana = Load({ name = "Dana" })
+    dana:Slash("/tlk mark Enemy Doe")
+    dana:Slash("/tlk war Red Dawn")
+    alice:JoinGroup("party", { "Cara" })
+    cara:JoinGroup("party", { "Alice" })
+    local clients, delivered = { alice, cara }, { 0, 0, 0 }
+    local function Relay()
+        for i, sender in ipairs(clients) do
+            while delivered[i] < #sender.addonMessages do
+                delivered[i] = delivered[i] + 1
+                local message = sender.addonMessages[delivered[i]]
+                for j, receiver in ipairs(clients) do
+                    if i ~= j then
+                        receiver:ReceiveAddonMessage(message.prefix, message.message, message.chatType,
+                            sender:FullName(sender.player))
+                    end
+                end
+            end
+        end
+    end
+    Relay()
+    for _ = 1, 10 do
+        alice:Advance(1)
+        cara:Advance(1)
+        dana:Advance(1)
+        Relay()
+    end
+    alice:AddMember("Dana")
+    cara:AddMember("Dana")
+    dana:JoinGroup("party", { "Alice", "Cara" })
+    clients[3] = dana
+    Relay()
+    for _ = 1, 5 do
+        for _, client in ipairs(clients) do
+            client:Advance(1)
+        end
+        Relay()
+    end
+    truthy((CardText(dana) or ""):find("Alice Doe, Cara Doe are running the toolkit too", 1, true))
+    dana:Slash("/tlk krew")
+    eq(dana.printed[#dana.printed]:match("The Krew: .*$"), "The Krew: Alice Doe, Cara Doe")
+    eq(Sent(dana, "MARK"), 1, "the returning hello triggers one mark sync")
+    eq(Sent(dana, "WAR"), 1, "the burst of replies triggers one war sync")
+    for _, addon in ipairs({ aliceAddon, caraAddon }) do
+        eq(addon.Modules.Warband.Records.ledger:Field("Enemy Doe", "kind"), "mark")
+        truthy(addon.Modules.Warband.Records.wars:Has("Red Dawn-" .. dana.env.GetNormalizedRealmName()))
+    end
 end)
 
 test("a Krew member's hello shows who's here, merged into one card", function()

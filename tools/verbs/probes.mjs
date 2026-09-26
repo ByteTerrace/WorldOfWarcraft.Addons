@@ -11,18 +11,19 @@
 //                                                 ByteTerrace_DevTools.lua when one account has it.
 //   node tools/tlk.mjs probes --check             exits 1 when the snapshot is stale: a record from
 //                                                 another client build than the API snapshot's
-//                                                 (tools/api/forever.json), or for a probe
-//                                                 ByteTerrace_DevTools no longer defines.
+//                                                 (tools/api/forever.json), for a probe
+//                                                 ByteTerrace_DevTools no longer defines, or made
+//                                                 by another version of its probe.
 //
 // An import replaces each imported probe's record, keeps the others, and drops records of probes
-// that no longer exist. A record that isn't { build, context = { combat, restrictions }, result }
+// that no longer exist or were made by another version of their probe (Probes.lua's header). A record that isn't { build, context = { combat, restrictions }, result }
 // is refused.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadSnapshot, withHarness } from "../lib/harness.mjs";
 import {
-    ENCODE_JSON, PROBES_PATH, buildNumber, buildOf, readDefinitions, readProbes, readRecords, serializeProbes, stableJson,
+    ENCODE_JSON, PROBES_PATH, buildNumber, buildOf, isCurrent, readDefinitions, readProbes, readRecords, serializeProbes, stableJson,
 } from "../lib/probes.mjs";
 import { repoRoot } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, findForeverInstall } from "../lib/wow.mjs";
@@ -59,6 +60,7 @@ function recordProblem(record) {
     const context = record.context;
     if (!context || typeof context.combat !== "boolean" || typeof context.restrictions !== "string") return "has no context";
     if (!record.result || typeof record.result !== "object") return "has no result";
+    if (record.version !== undefined && !(Number.isInteger(record.version) && record.version >= 2)) return "has a bad version";
     return null;
 }
 
@@ -74,7 +76,7 @@ function apiBuild(apiPath) {
 function printToDo(definitions, probes) {
     const groups = new Map();
     for (const definition of definitions) {
-        if (probes[definition.name]) continue;
+        if (isCurrent(definition, probes[definition.name])) continue;
         groups.set(definition.labels, [...(groups.get(definition.labels) ?? []), definition.name]);
     }
     const pending = [...groups.values()].reduce((sum, names) => sum + names.length, 0);
@@ -125,7 +127,7 @@ async function report(values, definitions) {
     const { probes } = readProbes(values.out);
     const answers = await harnessAnswers(definitions, values.out);
     const rows = definitions.map((definition) => {
-        const observed = probes[definition.name];
+        const observed = isCurrent(definition, probes[definition.name]) ? probes[definition.name] : undefined;
         const answer = answers[definition.name];
         const client = observed && { context: observed.context, result: observed.result };
         const harness = answer.result && { context: answer.context, result: answer.result };
@@ -162,8 +164,9 @@ async function report(values, definitions) {
 async function importRecords(values, positionals, definitions) {
     const file = positionals[0] ?? defaultRecordsFile(values);
     const imported = await readRecords(file);
-    const defined = new Set(definitions.map((definition) => definition.name));
+    const defined = new Map(definitions.map((definition) => [definition.name, definition]));
     const snapshot = readProbes(values.out);
+    const versionNote = (name, record) => `made by version ${record.version ?? 1} of the probe, which is now version ${defined.get(name).version}`;
     const counts = { new: 0, changed: 0, unchanged: 0 };
     for (const [name, record] of Object.entries(imported)) {
         if (!defined.has(name)) {
@@ -175,7 +178,12 @@ async function importRecords(values, positionals, definitions) {
             console.error(`Refused ${name}: the record ${problem}`);
             continue;
         }
+        if (!isCurrent(defined.get(name), record)) {
+            console.log(`Skipped ${name}: the record was ${versionNote(name, record)}; re-run it in game`);
+            continue;
+        }
         const clean = { build: record.build, context: { combat: record.context.combat, restrictions: record.context.restrictions }, result: record.result };
+        if (record.version !== undefined) clean.version = record.version;
         const previous = snapshot.probes[name];
         if (previous && buildNumber(previous.build) > buildNumber(record.build)) {
             console.log(`Kept ${name}: the file's record is from ${record.build}, older than ${previous.build}`);
@@ -187,6 +195,9 @@ async function importRecords(values, positionals, definitions) {
     for (const name of Object.keys(snapshot.probes)) {
         if (!defined.has(name)) {
             console.log(`Dropped ${name}: ByteTerrace_DevTools no longer defines it`);
+            delete snapshot.probes[name];
+        } else if (!isCurrent(defined.get(name), snapshot.probes[name])) {
+            console.log(`Dropped ${name}: the record was ${versionNote(name, snapshot.probes[name])}`);
             delete snapshot.probes[name];
         }
     }
@@ -203,11 +214,12 @@ async function importRecords(values, positionals, definitions) {
 
 function checkRecords(values, definitions) {
     const { probes } = readProbes(values.out);
-    const defined = new Set(definitions.map((definition) => definition.name));
+    const defined = new Map(definitions.map((definition) => [definition.name, definition]));
     const build = apiBuild(values.api);
     const stale = [];
     for (const [name, record] of Object.entries(probes)) {
         if (!defined.has(name)) stale.push(`${name}: ByteTerrace_DevTools no longer defines it`);
+        else if (!isCurrent(defined.get(name), record)) stale.push(`${name}: made by version ${record.version ?? 1}, the probe is version ${defined.get(name).version}`);
         else if (build && record.build !== build) stale.push(`${name}: recorded on ${record.build}, the API snapshot is ${build}`);
     }
     if (!build) console.warn("probes: warning: the API snapshot names no client build; builds weren't compared");

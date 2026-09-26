@@ -310,6 +310,7 @@ end)
 
 test("addon code can't set raid icons: SetRaidTarget is forbidden, as the client refused it", function()
     local h = Harness.New()
+    h:ExpectBlocked(1) -- the calls under test
     local env = h.env
     local seen = Watch(h, "ADDON_ACTION_FORBIDDEN", "RAID_TARGET_UPDATE")
     h:SetTarget(EnemyPlayer())

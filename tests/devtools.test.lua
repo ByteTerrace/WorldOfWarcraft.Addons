@@ -16,6 +16,152 @@ local function Records(h)
     return h.env.ByteTerraceDevToolsDB.probes
 end
 
+local function DieToDamage(h, spells)
+    h:MeterFight({ duration = 12, sources = {
+        { unit = "player", spells = { DamageTaken = spells }, death = { maxHealth = 55 } },
+    } })
+    h:Slash("/btdev probe")
+    return Records(h)["deathRecap.events"].result
+end
+
+local function Hit(spellID, name)
+    return {
+        spellID = spellID, name = name, totalAmount = 60, overkillAmount = 5, isDeadly = true,
+        details = { unitName = "Kobold Vermin", classification = "normal", isMob = true },
+    }
+end
+
+test("the controller probe sees the documented mapped state with independent typed arrays", function()
+    local h = Load()
+    local gamePad = h.env.C_GamePad
+    eq(gamePad.GetDeviceMappedState(gamePad.GetActiveDeviceID()), nil, "no connected controller")
+    h.labelStyle = "Letters"
+    h:Slash("/btdev probe")
+    local result = Records(h)["gamePad.device"].result
+    eq(result.fields, "axes,axisCount,buttonCount,buttons,labelStyle,name,stickCount,sticks")
+    truthy(result.isKnownLabelStyle)
+    local state = gamePad.GetDeviceMappedState(gamePad.GetActiveDeviceID())
+    eq(state.name, "Test Controller")
+    eq(state.labelStyle, "Letters")
+    eq(state.buttonCount, #state.buttons)
+    eq(state.axisCount, #state.axes)
+    eq(state.stickCount, #state.sticks)
+    truthy(state.buttonCount > 0 and state.axisCount > 0 and state.stickCount > 0)
+    for _, button in ipairs(state.buttons) do eq(type(button), "boolean") end
+    for _, axis in ipairs(state.axes) do eq(type(axis), "number") end
+    for _, stick in ipairs(state.sticks) do
+        eq(type(stick.x), "number")
+        eq(type(stick.y), "number")
+        eq(type(stick.len), "number")
+    end
+    state.buttons[1], state.axes[1], state.sticks[1].x = true, 1, 1
+    local again = gamePad.GetDeviceMappedState(1)
+    eq(again.buttons[1], false)
+    eq(again.axes[1], 0)
+    eq(again.sticks[1].x, 0)
+    eq(again.sticks[2].x, 0)
+    eq(gamePad.GetDeviceMappedState(999), nil)
+end)
+
+test("death recap common shapes are stable for melee, spell and mixed deaths in either order", function()
+    local baseline
+    for _, spells in ipairs({
+        { Hit(6603) }, { Hit(11976, "Strike") },
+        { Hit(11976, "Strike"), Hit(6603) }, { Hit(6603), Hit(11976, "Strike") },
+    }) do
+        local h = Load()
+        local result = DieToDamage(h, spells)
+        truthy(result.commonFields, "the result describes common fields, never the event union")
+        eq(result.fields, nil)
+        eq(result.killingBlow.amount, "number")
+        eq(result.killingBlow.sourceName, "string")
+        eq(result.killingBlow.spellId, nil, "spell fields have their own event-kind probe")
+        if baseline then eq(#h.ns.Probes.Diff(baseline, result), 0) end
+        baseline = result
+    end
+end)
+
+test("death recap spell-field probes require the event kind and keep false booleans", function()
+    local h = Load()
+    DieToDamage(h, { Hit(6603) })
+    eq(Records(h)["deathRecap.spellFields"], nil, "no spell event means no spell evidence")
+    local swing = Records(h)["deathRecap.swingFields"].result
+    for _, field in ipairs({ "spellId", "spellName", "spellSchool", "avoidable", "deadly" }) do
+        eq(swing[field], "nil", field)
+    end
+    local spellHarness = Load()
+    DieToDamage(spellHarness, { Hit(11976, "Strike") })
+    eq(Records(spellHarness)["deathRecap.swingFields"], nil, "no swing event means no swing evidence")
+    local spell = Records(spellHarness)["deathRecap.spellFields"].result
+    eq(spell.spellId, "number")
+    eq(spell.spellName, "string")
+    eq(spell.spellSchool, "number")
+    eq(spell.avoidable, "boolean")
+    eq(spell.deadly, "boolean")
+    local events = spellHarness.env.C_DeathRecap.GetRecapEvents()
+    eq(events[1].avoidable, false)
+    eq(events[1].deadly, true)
+    local mixed = Load()
+    DieToDamage(mixed, { Hit(11976, "Strike"), Hit(6603) })
+    eq(#mixed.ns.Probes.Diff(Records(mixed)["deathRecap.spellFields"].result, spell), 0)
+    eq(#mixed.ns.Probes.Diff(Records(mixed)["deathRecap.swingFields"].result, swing), 0)
+end)
+
+test("scripted swing recaps carry no spell fields even when the damage fixture supplies them", function()
+    local h = Load()
+    h:MeterFight({ duration = 1, sources = { { unit = "player", death = { events = {
+        { event = "SWING_DAMAGE", amount = 60, spellId = 6603, spellName = "Attack", spellSchool = 1,
+            avoidable = false, deadly = true },
+    } } } } })
+    local event = h.env.C_DeathRecap.GetRecapEvents()[1]
+    eq(event.event, "SWING_DAMAGE")
+    eq(event.amount, 60)
+    for _, field in ipairs({ "spellId", "spellName", "spellSchool", "avoidable", "deadly" }) do
+        eq(event[field], nil, field)
+    end
+    h:Slash("/btdev probe")
+    eq(Records(h)["deathRecap.swingFields"].result.spellId, "nil")
+end)
+
+test("common recap fields exclude optional mitigation and require presence in every event", function()
+    local h = Load()
+    local baseline = DieToDamage(h, { Hit(11976, "Strike"), Hit(6603) })
+    local events = h.env.C_DeathRecap.GetRecapEvents()
+    events[1].absorbed, events[1].blocked, events[2].resisted = 1, 2, 3
+    local function Record()
+        h:MeterFight({ duration = 1, sources = { { unit = "player", death = {
+            maxHealth = 55, events = { events[2], events[1] },
+        } } } })
+        h:Slash("/btdev probe")
+        return Records(h)["deathRecap.events"].result
+    end
+    eq(#h.ns.Probes.Diff(baseline, Record()), 0, "optional mitigation doesn't alter common shapes")
+    events[2].amount = nil
+    local result = Record()
+    falsy(("," .. result.commonFields .. ","):find(",amount,", 1, true), "one event lacks amount")
+    eq(result.killingBlow.amount, "number", "the killing blow retains its own shape")
+end)
+
+test("spell-field probes reject inconsistent events and preserve secret markers", function()
+    local h = Load()
+    h:MeterFight({ duration = 1, sources = { { unit = "player", death = { events = {
+        { event = "SPELL_DAMAGE", spellId = 11976, spellName = "Strike", spellSchool = 1 },
+        { event = "SPELL_DAMAGE", spellId = 11976, spellSchool = 1 },
+    } } } } })
+    h:Slash("/btdev probe")
+    eq(Records(h)["deathRecap.spellFields"], nil, "inconsistent samples don't become calibrated evidence")
+    truthy(Printed(h):find("SPELL_DAMAGE.spellName varies between recap events", 1, true), Printed(h))
+    local secretHarness = Load()
+    secretHarness:MeterFight({ duration = 1, sources = { { unit = "player", death = { events = {
+        { event = "SPELL_DAMAGE", spellId = Secret(11976), amount = Secret(60) },
+    } } } } })
+    secretHarness:Slash("/btdev probe")
+    local result = Records(secretHarness)["deathRecap.spellFields"].result
+    eq(result.spellId.secret, true)
+    eq(result.spellId.type, "number")
+    eq(Records(secretHarness)["deathRecap.events"].result.killingBlow.amount.secret, true)
+end)
+
 test("/btdev probe records the probes whose needs are met, with build and context", function()
     local h = Load()
     h:Slash("/btdev probe")
@@ -51,14 +197,15 @@ test("running again merges: new probes are added, unchanged ones stay, changes a
     local from = #h.printed + 1
     h:Slash("/btdev probe")
     local text = Printed(h, from)
-    truthy(text:find("(3 new, 1 changed)", 1, true), text)
+    truthy(text:find("(4 new, 1 changed)", 1, true), text)
     truthy(text:find("probe chatTypeInfo.raidWarning changed at result.g: was 1, now 72", 1, true), text)
     truthy(Records(h)["unitIdentity.npcTarget"], "now recorded")
     truthy(Records(h)["unitClassification.npcTarget"], "now recorded")
+    truthy(Records(h)["power.npcTarget"], "now recorded")
     eq(Records(h)["chatTypeInfo.raidWarning"].result.g, 72)
     local after = 0
     for _ in pairs(Records(h)) do after = after + 1 end
-    eq(after, before + 3)
+    eq(after, before + 4)
 end)
 
 test("probes survive a reload, and a dump already saved is kept", function()
@@ -151,6 +298,21 @@ test("a record from another build counts as missing", function()
     local h = Load({ ByteTerraceDevToolsDB = { probes = { classColors = { build = "1.60.0 (69000)", context = {}, result = {} } } } })
     h:Slash("/btdev probe list")
     truthy(Printed(h):find("nothing: chatTypeInfo.raidWarning, classColors", 1, true), Printed(h))
+end)
+
+test("a record from another version of its probe counts as missing, and a new run replaces it", function()
+    local old = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = { fields = "amount" } }
+    local h = Load({ ByteTerraceDevToolsDB = { probes = { ["deathRecap.events"] = old } } })
+    h:Slash("/btdev probe list")
+    truthy(Printed(h):find("deathRecap.events", 1, true), Printed(h))
+    local from = #h.printed + 1
+    DieToDamage(h, { Hit(133, "Fireball") })
+    local text = Printed(h, from)
+    falsy(text:find("probe deathRecap.events changed", 1, true), "an old version's record isn't compared: " .. text)
+    local record = Records(h)["deathRecap.events"]
+    eq(record.version, 2)
+    eq(record.result.fields, nil, "version 2 records common fields")
+    truthy(h.ns.Probes.IsCurrent(h.ns.Probes.ByName["deathRecap.events"], record))
 end)
 
 test("/btdev alone prints the commands", function()

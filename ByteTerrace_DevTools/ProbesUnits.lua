@@ -1,7 +1,7 @@
 local addonName, ns = ...
 
 -- Calibration probes about units: identity and health (secret or plain, idle and in combat),
--- health percent, classification, combo points, nameplate frames, and the UNIT_COMBAT payloads
+-- health percent, classification, primary power, combo points, nameplate frames, and the UNIT_COMBAT payloads
 -- DevTools.lua collects. Probes.lua's header is the contract; ProbeNeeds.lua defines the needs.
 
 -- UnitClassification's documented answers (warcraft.wiki.gg API_UnitClassification).
@@ -65,6 +65,15 @@ local function ComboPoints()
     return { comboPoints = Shape(current), comboPointsMax = Shape(max), onTarget = Shape(onTarget) }
 end
 
+-- A unit's primary power, as shapes: UnitPowerType's number and token, UnitPower and UnitPowerMax
+-- of that type (no PowerType argument). Any class answers: mana, rage and energy are all primary.
+local function PrimaryPower(unit)
+    local powerType, token = UnitPowerType(unit)
+    local current = UnitPower(unit) -- secret: recorded by Shape as a marker
+    local max = UnitPowerMax(unit) -- secret: recorded by Shape as a marker
+    return { powerType = Shape(powerType), token = Shape(token), current = Shape(current), max = Shape(max) }
+end
+
 -- The nameplate frame of a non-player unit (enemy or friendly, NamePlateToken), as shapes.
 local function NamePlateShape(enemy)
     local plate = C_NamePlate.GetNamePlateForUnit(NamePlateToken(enemy))
@@ -82,7 +91,9 @@ end
 Probes.Define({
     {
         -- What addon code may do with a secret (UnitHealth("player") is always one, probed): each
-        -- operation is tried in pcall, so a refusal is recorded instead of raised.
+        -- operation is tried in pcall, so a refusal is recorded instead of raised. The *Result
+        -- fields give what an allowed operation returned (a secret's marker, or its type), or
+        -- "refused".
         name = "secrets.operations",
         needs = {},
         run = function()
@@ -90,13 +101,38 @@ Probes.Define({
             local function Try(fn)
                 return (pcall(fn))
             end
+            local function Result(fn)
+                local ok, result = pcall(fn)
+                return ok and Shape(result) or "refused"
+            end
             return {
                 isSecret = issecretvalue(health),
                 tostring = Try(function() return tostring(health) end), -- secret: the operation under test
                 concat = Try(function() return "hp " .. health end), -- secret: the operation under test
+                concatResult = Result(function() return "hp " .. health end), -- secret: the operation under test
                 format = Try(function() return ("%d"):format(health) end), -- secret: the operation under test
-                compare = Try(function() return health == health end), -- secret: the operation under test
+                formatString = Try(function() return ("%s"):format(health) end), -- secret: the operation under test
+                formatResult = Result(function() return ("%s"):format(health) end), -- secret: the operation under test
+                truthTest = Try(function() return health and true end), -- secret: the operation under test
+                tableValue = Try(function() return { value = health } end), -- secret: the operation under test
                 arithmetic = Try(function() return health + 1 end), -- secret: the operation under test
+            }
+        end,
+    },
+    {
+        -- Two uses of a secret the client refuses and Lua 5.1 can't intercept: comparing a value with
+        -- itself (raw equality holds before __eq is consulted) and using it as a table key (no
+        -- metamethod runs). The static SECRET rule covers both in addon code.
+        name = "secrets.rawOperations",
+        needs = {},
+        harness = "Lua 5.1 compares a value with itself and keys a table without consulting a metamethod",
+        run = function()
+            local health = UnitHealth("player") -- secret: only handed to the operations under test
+            local function Try(fn)
+                return (pcall(fn))
+            end
+            return {
+                compare = Try(function() return health == health end), -- secret: the operation under test
                 tableKey = Try(function() return ({ [health] = true }) end), -- secret: the operation under test
             }
         end,
@@ -167,6 +203,33 @@ Probes.Define({
         name = "unitClassification.npcTargetInCombat",
         needs = { "combat", "npcTarget" },
         run = function() return Classification("target") end,
+    },
+    {
+        name = "power.player",
+        needs = { "idle" },
+        run = function() return PrimaryPower("player") end,
+    },
+    {
+        name = "power.playerInCombat",
+        needs = { "combat" },
+        run = function() return PrimaryPower("player") end,
+    },
+    {
+        name = "power.npcTarget",
+        needs = { "idle", "npcTarget" },
+        run = function() return PrimaryPower("target") end,
+    },
+    {
+        name = "power.npcTargetInCombat",
+        needs = { "combat", "npcTarget" },
+        run = function() return PrimaryPower("target") end,
+    },
+    {
+        -- The docs keep UnitPowerMax plain for player-controlled units, as they did UnitHealthMax,
+        -- which the client made secret for an enemy player (unitHealth.enemyPlayer).
+        name = "power.enemyPlayer",
+        needs = { "idle", "enemyPlayer" },
+        run = function() return PrimaryPower("target") end,
     },
     {
         name = "power.comboPoints",

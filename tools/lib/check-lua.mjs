@@ -5,6 +5,7 @@ import { NOT_LOCKDOWN, flow } from "./lua-flow.mjs";
 import { analyze, globalPath, parse, staticPath, stringValue, walk } from "./lua-scope.mjs";
 
 const EVENT_METHODS = new Set(["On", "RegisterEvent", "RegisterUnitEvent", "UnregisterEvent", "Fire", "IsEventRegistered"]);
+const REGISTERING_METHODS = new Set(["On", "RegisterEvent", "RegisterUnitEvent"]);
 // Client tables that exist for addons to add entries to.
 const REGISTRIES = new Set(["SlashCmdList", "StaticPopupDialogs"]);
 // Functions that compile or re-scope code the gate can't follow.
@@ -124,8 +125,10 @@ export function checkLua(file, text, context, report) {
         if (binding && binding.kind === "local" && scope.fileLevel(binding) && !binding.reassigned) return stringValue(binding.init);
         return null;
     };
+    const parents = new Map(); // node -> the node it's a child of
     walk(ast.body, (node, ancestors) => {
         const parent = ancestors[ancestors.length - 1];
+        parents.set(node, parent);
         const base = callBase(node);
         if (base) {
             const args = callArgs(node);
@@ -299,6 +302,8 @@ export function checkLua(file, text, context, report) {
                 const event = eventName(args[0]);
                 if (event && /^[A-Z][A-Z0-9_]+$/.test(event) && !api.events.has(event)) {
                     report(file, line(node), "EVENT", `unknown event ${event}`);
+                } else if (event && REGISTERING_METHODS.has(base.identifier.name) && api.eventEntries[event]?.HasRestrictions) {
+                    report(file, line(node), "EVENT", `${event} is restricted to Blizzard's code; registering it is refused (ADDON_ACTION_FORBIDDEN)`);
                 }
                 if (framework && FRAMEWORK_EVENTS[event]) {
                     report(file, line(node), "FRAMEWORK", `${event} belongs to the framework; use ${FRAMEWORK_EVENTS[event]}`);
@@ -335,14 +340,21 @@ export function checkLua(file, text, context, report) {
             const reasons = flags?.length ? null : methodReasons(method);
             if (flags?.length || reasons) {
                 secretCalls.add(base);
+                const label = flags?.length ? name : `:${method}()`;
                 if (!secretGuarded(node, parent)) {
-                    const label = flags?.length ? name : `:${method}()`;
                     report(file, line(node), "SECRET", `${label} can return a secret (${(flags?.length ? flags : reasons).join(", ")}); ${SECRET_CALL}`);
+                } else if (annotated("secret", line(node))) {
+                    annotatedMisuse(node, parent, label);
                 }
             }
 
-            // Protected calls.
-            const protectedReason = protectedCall(name, method, base);
+            // Protected calls: a forbidden function fails at any time; the rest need a combat guard.
+            const forbiddenReason = name ? api.forbiddenFunctions?.get(name) : null;
+            if (forbiddenReason && !annotated("protected", line(node))) {
+                report(file, line(node), "PROTECTED", `${name} is forbidden to addon code at any time (${forbiddenReason}); `
+                    + "no combat guard helps, so don't call it");
+            }
+            const protectedReason = forbiddenReason ? null : protectedCall(name, method, base);
             if (protectedReason && !annotated("protected", line(node)) && !facts.factsAt(node).has(NOT_LOCKDOWN)) {
                 report(file, line(node), "PROTECTED", `${name ?? `:${method}()`} can be blocked during combat lockdown (${protectedReason}); `
                     + "guard it with an InCombatLockdown() test that returns early (or a `not InCombatLockdown()` branch), or annotate \"-- protected: <why>\"");
@@ -385,16 +397,56 @@ export function checkLua(file, text, context, report) {
         return stringValue(node)?.startsWith("SLASH_") ?? false;
     }
 
+    // An annotated secret call (`-- secret: <why>`) assigned to locals: the annotation vouches for
+    // the call, not for every later use. A use that compares or computes with the value, tests it,
+    // or keys a table with it is reported unless a guard dominates it or it carries its own
+    // annotation. Passing it on, storing it and indexing it (a structure's fields) are left to the
+    // harness, whose secrets throw on indexing.
+    function annotatedMisuse(call, parent, label) {
+        if (parent?.type !== "LocalStatement") return;
+        const index = parent.init.indexOf(call);
+        if (index < 0) return;
+        const targets = index === parent.init.length - 1 ? parent.variables.slice(index) : [parent.variables[index]];
+        for (const target of targets) {
+            const binding = target && scope.bindingOf(target);
+            if (!binding) continue;
+            for (const ref of scope.references(binding)) {
+                const refParent = parents.get(ref);
+                const passed = refParent && callBase(refParent) && callBase(refParent) !== ref && callArgs(refParent).includes(ref);
+                if (passed || guardArguments.has(ref) || facts.factsAt(ref).has(binding) || annotated("secret", line(ref))) continue;
+                if (operates(ref, refParent)) {
+                    report(file, line(ref), "SECRET", `${ref.name} holds ${label}'s result; the annotation on line ${line(call)} covers the call, `
+                        + "not this use, which errors on a secret: check issecretvalue before it, or annotate \"-- secret: <why>\"");
+                }
+            }
+        }
+    }
+
+    // Whether a use operates on the value itself: compared or computed with (not `..`, which the
+    // client allows), tested, or used as a table key.
+    function operates(node, parent) {
+        if (!parent) return false;
+        if (parent.type === "BinaryExpression") return parent.operator !== "..";
+        if (parent.type === "UnaryExpression") return true;
+        if (parent.type === "LogicalExpression") return parent.left === node || operates(parent, parents.get(parent));
+        if (parent.type === "IfClause" || parent.type === "ElseifClause" || parent.type === "WhileStatement" || parent.type === "RepeatStatement") {
+            return parent.condition === node;
+        }
+        if (parent.type === "TableKey") return parent.key === node;
+        return parent.type === "IndexExpression" && parent.index === node;
+    }
+
     // Whether an identifier's value decides something: compared, computed with, tested, indexed or
-    // called; or is kept where later code could do those unchecked: assigned (to a local, a field or
-    // a global) or put in a table.
+    // called, or used as a key; or is kept where later code could do those unchecked: assigned (to a
+    // local, a field or a global), put in a table, or carried out of an and/or into one of those.
     function decides(node, parent) {
         if (!parent) return false;
         if (parent.type === "AssignmentStatement" || parent.type === "LocalStatement") return parent.init.includes(node);
         if (parent.type === "TableValue" || parent.type === "TableKeyString") return parent.value === node;
         if (parent.type === "TableKey") return parent.value === node || parent.key === node;
+        if (parent.type === "IndexExpression" && parent.index === node) return true;
         if (parent.type === "BinaryExpression" || parent.type === "UnaryExpression") return true;
-        if (parent.type === "LogicalExpression") return parent.left === node;
+        if (parent.type === "LogicalExpression") return parent.left === node || decides(parent, parents.get(parent));
         if (parent.type === "IfClause" || parent.type === "ElseifClause" || parent.type === "WhileStatement" || parent.type === "RepeatStatement") {
             return parent.condition === node;
         }

@@ -267,13 +267,7 @@ function Behaviors.SetText(s, _, text) s.text = text end
 function Behaviors.GetText(s) return s.text end
 -- The client formats secrets into a secret string (the method takes them when tainted).
 function Behaviors.SetFormattedText(s, _, fmt, ...)
-    local args, n, secret = { ... }, select("#", ...), IsSecret(fmt)
-    for i = 1, n do
-        secret = secret or IsSecret(args[i])
-        args[i] = Reveal(args[i])
-    end
-    local text = Reveal(fmt):format(unpack(args, 1, n))
-    s.text = secret and Secret(text) or text
+    s.text = SecretFormat(fmt, ...)
 end
 function Behaviors.GetStringWidth(s)
     local bound = s.wordWrap ~= false and (Anchored(s, Axes.x, 0) or s.width) or nil
@@ -372,12 +366,28 @@ function Behaviors.CreateAnimationGroup(s, w, name)
     State(group).animations = {}
     return group
 end
+-- An event with HasRestrictions is Blizzard's alone: registering it is refused with
+-- ADDON_ACTION_FORBIDDEN and nothing is registered. warcraft.wiki.gg (COMBAT_LOG_EVENT) documents
+-- that for the combat log events; the harness applies it to every restricted event [C].
+local function RefusedEvent(s, method, event)
+    if not Snapshot.events[event].HasRestrictions then
+        return false
+    end
+    s.harness:BlockAction("ADDON_ACTION_FORBIDDEN", ("Frame:%s(%s)"):format(method, event))
+    return true
+end
 function Behaviors.RegisterEvent(s, _, event)
     assert(Snapshot.events[event], "RegisterEvent: unknown event " .. tostring(event))
+    if RefusedEvent(s, "RegisterEvent", event) then
+        return
+    end
     s.events[event] = true
 end
 function Behaviors.RegisterUnitEvent(s, _, event, unit1, unit2)
     assert(Snapshot.events[event], "RegisterUnitEvent: unknown event " .. tostring(event))
+    if RefusedEvent(s, "RegisterUnitEvent", event) then
+        return
+    end
     s.events[event] = { [unit1] = true, [unit2 or unit1] = true }
 end
 function Behaviors.UnregisterEvent(s, _, event) s.events[event] = nil end

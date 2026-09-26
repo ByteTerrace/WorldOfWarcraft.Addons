@@ -150,8 +150,8 @@ local function SavePosition()
     Addon:Batch(function()
         Radar:Set("point", point)
         Radar:Set("relativePoint", relativePoint)
-        Radar:Set("x", floor(x + 0.5))
-        Radar:Set("y", floor(y + 0.5))
+        Radar:Set("x", floor(x + 0.5)) -- secret: plain, as above
+        Radar:Set("y", floor(y + 0.5)) -- secret: plain, as above
     end)
 end
 
@@ -277,6 +277,15 @@ function Render()
     end
 end
 
+local function OnMessage(sender, fields)
+    for i = 1, #fields do
+        local key, class, level = fields[i]:match("^([^;]+);([^;]*);([^;]*)$")
+        if key and Warband.ValidKey(key) then
+            Note({ key = key, class = Warband.CleanClass(class), level = Warband.CleanLevel(level), faction = "", guild = "" }, sender)
+        end
+    end
+end
+
 Radar = Addon:Module("Radar", {
     label = "Nearby enemies window",
     page = "Warband",
@@ -290,7 +299,8 @@ Radar = Addon:Module("Radar", {
         { name = "x", kind = "number", default = -60, min = -10000, max = 10000 },
         { name = "y", kind = "number", default = 120, min = -10000, max = 10000 },
     },
-    OnEnable = function()
+    OnEnable = function(module)
+        module:Listen(Krew, "NEARBY", OnMessage)
         Warband.OnNearby = OnNearby
     end,
     OnDisable = function()
@@ -304,15 +314,3 @@ Radar = Addon:Module("Radar", {
         end
     end,
 })
-
-Krew:Listen("NEARBY", function(sender, fields)
-    if not Radar.Enabled then
-        return
-    end
-    for i = 1, #fields do
-        local key, class, level = fields[i]:match("^([^;]+);([^;]*);([^;]*)$")
-        if key and Warband.ValidKey(key) then
-            Note({ key = key, class = Warband.CleanClass(class), level = Warband.CleanLevel(level), faction = "", guild = "" }, sender)
-        end
-    end
-end)

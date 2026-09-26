@@ -18,6 +18,7 @@
 --
 -- A collection is also a runtime number row of the same name: its version, which moves on every
 -- change. Watchers and rules read that row like any other, so a change publishes with its batch.
+-- Eviction and replacement publish together, never exposing a temporary vacancy to a watcher.
 --
 -- Loading validates the saved table: a record that isn't a table or has a bad key is dropped, a
 -- field that no longer validates (or no longer exists) is reset, and a collection over its limit
@@ -60,8 +61,8 @@ local function Bump(self)
     state:Set(id, state.Values[id] + 1)
 end
 
---- Validates a collection's spec and declares its version row. Called when its module is
---- declared, so every problem is raised at once, then.
+--- Validates a collection's spec without registering it. AddOn:Module declares its version row
+--- only after all of that module's declarations pass.
 ---@param addon table the owning AddOn
 ---@param name string "<Module>.<name>"
 ---@param spec table see the file header
@@ -100,7 +101,6 @@ function ByteTerrace.NewRecords(addon, name, spec)
     Refuse(addon.Name .. " records", problems)
 
     local scope = spec.scope or "account"
-    addon.State:Declare(name, { kind = "number", default = 0, persist = false, records = true, scope = scope })
     return setmetatable({
         Name = name, Limit = limit, Keep = spec.keep,
         m_addon = addon, m_fields = fields, m_fieldOrder = fieldOrder,
@@ -277,9 +277,6 @@ function Records:Set(key, values)
         if not spec then
             error(self.m_addon.Name .. ": records " .. self.Name .. " has no field " .. tostring(field), 2)
         end
-        if issecretvalue(value) then
-            error(self.m_addon.Name .. ": records " .. self.Name .. "." .. field .. " cannot hold a secret value", 2)
-        end
         local ok, why = admits(spec, value)
         if not ok then
             error(self.m_addon.Name .. ": records " .. self.Name .. "." .. field .. " " .. why, 2)
@@ -293,7 +290,10 @@ function Records:Set(key, values)
             if not victim then
                 error(self.m_addon.Name .. ": records " .. self.Name .. " is full (" .. self.Limit .. ")", 2)
             end
-            self:Remove(victim)
+            -- Publish only after the replacement is complete. Publishing the removal here lets
+            -- a watcher fill the vacancy before this write resumes and exceed the limit.
+            store[victim] = nil
+            self.m_count = self.m_count - 1
         end
         record = {}
         store[key] = record

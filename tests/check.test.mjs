@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { repoRoot } from "../tools/lib/repo.mjs";
 import { loadApi, runChecks } from "../tools/verbs/check.mjs";
 import { MIN_GLOBALS, readGlobals, serialize } from "../tools/verbs/api-sync.mjs";
-import { compareTargets, normalizeTarget } from "../tools/verbs/deploy.mjs";
+import { compareTargets, normalizeTarget, selectAddons } from "../tools/verbs/deploy.mjs";
 import { PROBES_PATH, luaLiteral, readRecords, serializeProbes } from "../tools/lib/probes.mjs";
 
 const FIXTURES = join(repoRoot, "tests", "fixtures");
@@ -107,6 +107,11 @@ const EXPECTED = [
     `${B2}:80: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // stored
     `${B2}:81: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // tabled
     `${B2}:82: SECRET ${HP}`, // \`_\` only discards what nothing reads
+    `${B2}:85: PROTECTED SetRaidTarget is forbidden to addon code at any time (refused to addon code in game, tools/api/forbidden.json); no combat guard helps, so don't call it`,
+    `${B2}:87: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // a table key
+    `${B2}:88: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // out of an and/or
+    `${B2}:91: SECRET cur holds UnitPower's result; the annotation on line 90 covers the call, not this use, which errors on a secret: check issecretvalue before it, or annotate "-- secret: <why>"`,
+    `${B2}:94: EVENT COMBAT_LOG_EVENT_UNFILTERED is restricted to Blizzard's code; registering it is refused (ADDON_ACTION_FORBIDDEN)`,
     // Naming and comments (GoodAddon/GoodStyle.lua holds the allowed constructs).
     `${BS}:3: NAMING constant 'MAX_ITEMS' should be PascalCase (MaxItems)`,
     `${BS}:4: NAMING file-level local 'itemCount' should be PascalCase (ItemCount)`,
@@ -259,6 +264,22 @@ export const tests = [
         },
     },
     {
+        name: "deploy selects transitive dependencies regardless of directory order, but unlink stays exact",
+        run() {
+            const all = [
+                { name: "Foundation", dependencies: [] },
+                { name: "Shared", dependencies: ["Foundation"] },
+                { name: "Toolkit", dependencies: ["Shared"] },
+                { name: "Unrelated", dependencies: [] },
+            ];
+            const names = (addons) => addons.map((addon) => addon.name).sort().join(",");
+            assert(names(selectAddons(all, ["Toolkit"])) === "Foundation,Shared,Toolkit", "the full dependency chain");
+            assert(names(selectAddons(all, ["Toolkit"], false)) === "Toolkit", "unlink doesn't remove shared dependencies");
+            all[0].dependencies.push("Toolkit");
+            assert(names(selectAddons(all, ["Toolkit"])) === "Foundation,Shared,Toolkit", "cycles terminate");
+        },
+    },
+    {
         name: "deploy normalizes link targets before comparing them",
         run: async () => {
             const link = join(repoRoot, "links", "Addon");
@@ -359,6 +380,43 @@ export const tests = [
             assert(records["tts.voices"].build === "1.60.1 (70009)", "readRecords returns every record as saved");
             const literal = luaLiteral({ b: "x\ty", a: { c: true, d: 1.5 } });
             assert(literal === '{["a"]={["c"]=true,["d"]=1.5},["b"]="x\\9y"}', literal);
+        }),
+    },
+    {
+        name: "probes --import skips and drops records made by another version of their probe",
+        run: async () => withTemp(async (dir) => {
+            const out = join(dir, "probes.json");
+            const context = { combat: false, restrictions: "none" };
+            const recap = { hasRecapEvents: true };
+            // deathRecap.events is version 2: a record without a version is version 1's.
+            writeFileSync(out, serializeProbes({ build: "1.60.1 (70009)", probes: {
+                "deathRecap.events": { context, result: recap },
+            } }));
+            const saved = join(dir, "versions.lua");
+            writeFileSync(saved, [
+                "ByteTerraceDevToolsDB = { probes = {",
+                '    ["deathRecap.events"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = {} },',
+                "} }",
+            ].join("\n"));
+            const api = join(dir, "api.json");
+            writeFileSync(api, JSON.stringify({ source: { globals: "ByteTerrace_DevTools dump, client 1.60.1 (70009)" } }));
+            const check = tlk(["probes", "--check", "--out", out, "--api", api]);
+            assert(check.status === 1 && check.stderr.includes("deathRecap.events: made by version 1, the probe is version 2"),
+                `${check.status} ${check.stderr}`);
+            const run = tlk(["probes", "--import", saved, "--out", out]);
+            assert(run.status === 0, `import exits 0 (got ${run.status}): ${run.stdout}${run.stderr}`);
+            assert(run.stdout.includes("Skipped deathRecap.events: the record was made by version 1 of the probe, which is now version 2"), run.stdout);
+            assert(run.stdout.includes("Dropped deathRecap.events"), run.stdout);
+            assert(!("deathRecap.events" in JSON.parse(readFileSync(out, "utf8")).probes), "the old version's record is gone");
+            writeFileSync(saved, [
+                "ByteTerraceDevToolsDB = { probes = {",
+                '    ["deathRecap.events"] = { build = "1.60.1 (70009)", version = 2, context = { combat = false, restrictions = "none" }, result = {} },',
+                "} }",
+            ].join("\n"));
+            const current = tlk(["probes", "--import", saved, "--out", out]);
+            assert(current.stdout.includes("1 new"), current.stdout);
+            const text = readFileSync(out, "utf8");
+            assert(JSON.parse(text).probes["deathRecap.events"].version === 2 && serializeProbes(JSON.parse(text)) === text, text);
         }),
     },
     {

@@ -60,6 +60,9 @@ local function IsWhole(x)
 end
 
 local function Admits(spec, value)
+    if issecretvalue(value) then
+        return false, "cannot hold a secret value"
+    end
     if type(value) ~= spec.kind then
         return false, "expects " .. spec.kind .. ", got " .. type(value)
     end
@@ -94,8 +97,26 @@ local function Validate(name, spec, problems)
     if spec.values and spec.kind ~= "string" then
         AddProblem("values only apply to string rows")
     end
+    local validBounds = true
     if (spec.min or spec.max or spec.step) and spec.kind ~= "number" then
         AddProblem("min / max / step only apply to number rows")
+        validBounds = false
+    end
+    for _, key in ipairs({ "min", "max", "step" }) do
+        local value = spec[key]
+        if value ~= nil then
+            if issecretvalue(value) or type(value) ~= "number" or value ~= value or value == huge or value == -huge then
+                AddProblem(key .. " must be a finite number")
+                validBounds = false
+            elseif key == "step" and value <= 0 then
+                AddProblem("step must be positive")
+                validBounds = false
+            end
+        end
+    end
+    if validBounds and spec.min and spec.max and spec.min > spec.max then
+        AddProblem("min must not exceed max")
+        validBounds = false
     end
     if spec.values then
         spec.valueSet = {}
@@ -110,9 +131,11 @@ local function Validate(name, spec, problems)
     if spec.scope ~= "account" and spec.scope ~= "character" then
         AddProblem("unknown scope " .. tostring(spec.scope))
     end
-    local ok, why = Admits(spec, spec.default)
-    if not ok then
-        AddProblem("default " .. why)
+    if validBounds then
+        local ok, why = Admits(spec, spec.default)
+        if not ok then
+            AddProblem("default " .. why)
+        end
     end
     if spec.lockedBy ~= nil and type(spec.lockedBy) ~= "string" then
         AddProblem("lockedBy must be a row name")
@@ -257,6 +280,15 @@ local function Publish(self)
         end
     end
 
+    local deferred = self.m_deferred
+    if #deferred > 0 then
+        for i = #deferred, 1, -1 do
+            self:Unwatch(deferred[i])
+            deferred[i] = nil
+        end
+        Report(("%s: state did not settle after %d publish rounds; rules keep registering initial callbacks")
+            :format(self.m_addon.Name, MaxPublishRounds))
+    end
     local baselined = self.m_baselined
     for i = 1, #baselined do
         baselined[i].baseline = nil
@@ -305,8 +337,8 @@ local function RemoveFrom(list, item)
     end
 end
 
---- Whether value passes spec's admission check (kind, finiteness, enum, bounds, step). Doesn't
---- check secrecy; callers refuse secrets first.
+--- Whether value passes spec's admission check (secrecy, kind, finiteness, enum, bounds, step).
+--- Defaults, saved values and live writes use the same boundary.
 ---@param spec table a validated row or field spec
 ---@return boolean ok
 ---@return string? why the reason when refused
@@ -343,16 +375,26 @@ function ByteTerrace.NewState(addon)
     }, State)
 end
 
---- Declares a row before compile. The spec is copied.
+--- Checks whether a row can be declared without changing state. Module declarations preflight
+--- every row before committing any of them.
 ---@param name string "<Module>.<row>"
----@param spec table see the file header
-function State:Declare(name, spec)
+function State:CheckDeclaration(name)
+    if type(name) ~= "string" or name == "" then
+        error(self.m_addon.Name .. ": state row needs a name", 2)
+    end
     if self.m_compiled then
         error(self.m_addon.Name .. ": state row " .. name .. " declared after compile", 2)
     end
     if self.m_declared[name] then
         error(self.m_addon.Name .. ": duplicate state row " .. name, 2)
     end
+end
+
+--- Declares a row before compile. The spec is copied.
+---@param name string "<Module>.<row>"
+---@param spec table see the file header
+function State:Declare(name, spec)
+    self:CheckDeclaration(name)
     local own = {}
     for key, value in pairs(spec) do
         own[key] = value

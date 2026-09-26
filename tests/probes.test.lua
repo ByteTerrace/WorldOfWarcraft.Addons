@@ -40,13 +40,15 @@ for _, definition in ipairs(Definitions.List) do
     end)
 end
 
-test("every observed result belongs to a probe", function()
+test("every observed result belongs to the current version of a probe", function()
     local orphans = {}
-    for name in pairs(Observed) do
-        if not Definitions.ByName[name] then
+    for name, record in pairs(Observed) do
+        local probe = Definitions.ByName[name]
+        if not probe or not Definitions.IsCurrent(probe, record) then
             orphans[#orphans + 1] = name
         end
     end
     table.sort(orphans)
-    eq(table.concat(orphans, ", "), "", "observations for probes ByteTerrace_DevTools no longer defines (re-run tlk probes --import)")
+    eq(table.concat(orphans, ", "), "", "observations for probes ByteTerrace_DevTools no longer defines, or made by "
+        .. "another version of their probe (re-run tlk probes --import)")
 end)

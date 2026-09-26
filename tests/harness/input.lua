@@ -1,4 +1,4 @@
--- Keyboard, mouse coverage and random numbers of the fake client (see wow.lua for the rest).
+-- Keyboard, controller state, mouse coverage and random numbers of the fake client (see wow.lua).
 --
 --   * h:Key(key, down) dispatches OnKeyDown/OnKeyUp to visible, keyboard-enabled frames, topmost
 --     first (strata, then level, then newest). A frame that doesn't propagate keyboard input
@@ -6,6 +6,25 @@
 --   * h:WorldClickBlocked() is true while a visible, mouse-enabled frame covers the screen.
 --   * h:Drag(frame, dx, dy [, button]) drags a frame with the mouse (see Harness:Drag).
 --   * h:SeedRandom(n) makes the env's math.random (and random) deterministic.
+--   * h:GamePadMappedState(id) supplies the C_GamePad fake's connected controller state.
+
+--- The connected controller's mapped state, or nil for an unavailable device.
+function Harness:GamePadMappedState(id)
+    if id ~= 1 or not self.labelStyle then
+        return nil
+    end
+    -- [E] gamePad.device's fields; [D] GamePadMappedState and GamePadStick in
+    -- GamePadDocumentation.lua (forever). [G] A neutral pad with six axes and sixteen buttons.
+    local buttons, axes, sticks = {}, {}, {}
+    for i = 1, 16 do buttons[i] = false end
+    for i = 1, 6 do axes[i] = 0 end
+    for i = 1, 2 do sticks[i] = { x = 0, y = 0, len = 0 } end
+    return {
+        name = "Test Controller", labelStyle = self.labelStyle,
+        buttonCount = #buttons, axisCount = #axes, stickCount = #sticks,
+        buttons = buttons, axes = axes, sticks = sticks,
+    }
+end
 
 -- Presses (down = true) or releases a keyboard key like "W", "1", "ESCAPE" or "ENTER". Visible
 -- frames (every ancestor shown) with the keyboard enabled get it topmost first: higher frame

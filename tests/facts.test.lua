@@ -116,6 +116,18 @@ test("killing blows count yours and your pet's on players; a death resets the st
     eq(addon.State:Get("death.count"), 1)
 end)
 
+test("a killing blow whose GUIDs are secret (a PvP match hides identities) isn't counted", function()
+    local h, addon = NewAddOn()
+    Start(h)
+    local me = h.env.UnitGUID("player")
+    h:SetRestriction("PvPMatch", true)
+    h:Fire("PARTY_KILL", me, h:GUID({ name = "Bob", isPlayer = true }))
+    eq(addon.State:Get("kills.blows"), 0)
+    h:SetRestriction("PvPMatch", false)
+    h:Fire("PARTY_KILL", me, h:GUID({ name = "Bob", isPlayer = true }))
+    eq(addon.State:Get("kills.blows"), 1, "counted again outside the match")
+end)
+
 test("the death fact's recap retries stop when no module uses it any more", function()
     local h, addon = NewAddOn()
     Start(h)

@@ -72,8 +72,9 @@ function pretty(value, indent, forceOpen = false, keys = null) {
 export function serializeProbes(snapshot) {
     const build = snapshot.build ?? "";
     const records = Object.keys(snapshot.probes).sort().map((name) => {
-        const { result, context, build: own } = snapshot.probes[name];
+        const { result, context, build: own, version } = snapshot.probes[name];
         const record = own && own !== build ? { result, context, build: own } : { result, context };
+        if (version !== undefined) record.version = version;
         return `    ${JSON.stringify(name)}: ${pretty(record, "    ", true, Object.keys(record))}`;
     });
     const probes = records.length ? "{\n" + records.join(",\n") + "\n  }" : "{}";
@@ -161,7 +162,7 @@ export async function readRecords(file) {
 }
 
 // The probe definitions, in run order: [{ name, needs (the needs' texts joined with " + "), labels
-// (their short labels, or "anywhere"), harnessGap (why the harness can't run it, or "") }].
+// (their short labels, or "anywhere"), harnessGap (why the harness can't run it, or ""), version }].
 // The probe files run in plain Lua: at load they only define data and functions.
 export async function readDefinitions(files = probeFiles()) {
     const lua = await createLua();
@@ -177,18 +178,22 @@ export async function readDefinitions(files = probeFiles()) {
             local lines = {}
             for i, probe in ipairs(ns.Probes.List) do
                 lines[i] = table.concat({ probe.name, ns.Probes.NeedsText(probe), ns.Probes.NeedsLabel(probe),
-                    ns.Probes.HarnessGap(probe) or "" }, "\\t")
+                    ns.Probes.HarnessGap(probe) or "", ns.Probes.Version(probe) }, "\\t")
             end
             return table.concat(lines, "\\n")
         `);
         return encoded.split("\n").filter(Boolean).map((line) => {
-            const [name, needs, labels, harnessGap] = line.split("\t");
-            return { name, needs, labels, harnessGap };
+            const [name, needs, labels, harnessGap, version] = line.split("\t");
+            return { name, needs, labels, harnessGap, version: Number(version) };
         });
     } finally {
         lua.global.close();
     }
 }
+
+// Whether a record was made by the definition's current version of the probe (Probes.IsCurrent):
+// a record without a version is version 1's.
+export const isCurrent = (definition, record) => Boolean(record) && (record.version ?? 1) === definition.version;
 
 // The build a source string or record names, "1.60.1 (70009)", or null.
 export const buildOf = (text) => /\d+\.\d+\.\d+ \(\d+\)/.exec(text ?? "")?.[0] ?? null;

@@ -170,10 +170,7 @@ function Harness:BuildEnvironment()
         type = function(value)
             return type(Reveal(value))
         end,
-        tostring = function(value, ...)
-            Refuse("tostring", value)
-            return tostring(value, ...)
-        end,
+        tostring = SecretToString,
         tonumber = function(value, base)
             Refuse("tonumber", value)
             return tonumber(value, base)
@@ -310,13 +307,13 @@ function Harness:BuildEnvironment()
         IsResting = function() return h.player.resting end,
         GetMoney = function() return h.player.money end,
         UnitPowerType = function(u)
-            local powerType = Field(u, "powerType", 0)
+            local powerType = Field(u, "powerType", 0) or 0 -- every unit has a primary power type
             return powerType, PowerTokens[powerType] or "MANA"
         end,
         UnitPower = function(u, powerType)
             local unit = Unit(u)
             if not unit then return 0 end
-            return unit.power[powerType or unit.powerType] or 0
+            return (unit.power or {})[powerType or unit.powerType or 0] or 0 -- a unit without power has none
         end,
         GetComboPoints = function(u, target)
             local unit = u == "player" and Unit(target)
@@ -325,7 +322,7 @@ function Harness:BuildEnvironment()
         UnitPowerMax = function(u, powerType)
             local unit = Unit(u)
             if not unit then return 0 end
-            return unit.powerMax[powerType or unit.powerType] or 0
+            return (unit.powerMax or {})[powerType or unit.powerType or 0] or 0
         end,
 
         -- Zones.
@@ -404,11 +401,7 @@ function Harness:BuildEnvironment()
             SetVibration = function(kind, intensity) h.vibrations[#h.vibrations + 1] = { kind, intensity } end,
             StopVibration = function() h.vibrationsStopped = h.vibrationsStopped + 1 end,
             GetActiveDeviceID = function() return h.labelStyle and 1 or 0 end,
-            GetDeviceMappedState = function(id)
-                if id == 1 and h.labelStyle then
-                    return { name = "Test Controller", labelStyle = h.labelStyle }
-                end
-            end,
+            GetDeviceMappedState = function(id) return h:GamePadMappedState(id) end,
         },
 
         -- Addon metadata.
@@ -460,12 +453,11 @@ function Harness:BuildEnvironment()
         rawset(fakes.SOUNDKIT, key, value)
     end
     fakes.string.trim, fakes.string.split, fakes.string.join = Strtrim, Strsplit, fakes.strjoin
-    local format = fakes.string.format
-    fakes.string.format = function(fmt, ...)
-        Refuse("string.format", fmt, ...)
-        return format(fmt, ...)
-    end
-    fakes.format = fakes.string.format
+    fakes.string.format = SecretFormat
+    fakes.format = SecretFormat
+    -- ("%d"):format(x) reaches format through the string metatable, not the env: route it too.
+    local stringMethods = setmetatable({ format = SecretFormat }, { __index = string })
+    getmetatable("").__index = stringMethods
 
     -- Enum, from the documented enumerations.
     fakes.Enum = {}

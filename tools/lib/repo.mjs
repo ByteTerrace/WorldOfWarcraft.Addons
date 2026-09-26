@@ -4,6 +4,15 @@ import { fileURLToPath } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+// Functions the Forever client refused to addon code when tried in game, though the docs don't mark
+// them IsProtectedFunction: { [name]: evidence }. The harness forbids them and the PROTECTED rule
+// reports every call.
+export const FORBIDDEN_PATH = join(repoRoot, "tools", "api", "forbidden.json");
+
+export function readForbidden(path = FORBIDDEN_PATH) {
+    return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+}
+
 const TOC_SUFFIX = "_Camelot.toc";
 
 // An addon is a top-level folder holding <Name>_Camelot.toc.

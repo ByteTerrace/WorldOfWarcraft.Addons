@@ -109,4 +109,4 @@ footer:Finalize(); footer:ShowAndActivateBindings()
 - The action and targeting buttons are secure. **Safe:** read state, `hooksecurefunc` the mixin methods, reskin textures. **Taints and breaks in combat:** replacing methods, or calling `SetID`/`SetAttribute`/`Show`/`Hide`/`SetParent` on Blizzard's gamepad buttons and bars.
 - `SimulateMouseClick/Down/Up/Wheel` and `SetCursorPosition` work from addon code **once per gamepad hardware event**.
 - `C_GamePad.SetConfig`, `ApplyConfigs`, `DeleteConfig` and `AddSDLMapping` are restricted.
-- Secret values still apply. Your own primary power (energy, mana) is secret in combat; secondary resources such as combo points are not.
+- Secret values still apply. Your own primary power (energy, mana) is secret, in combat and out; its maximum is not. Combo points are documented as never secret; the `power.comboPoints` probes check that in game.

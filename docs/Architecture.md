@@ -15,8 +15,8 @@ settings panel ────────────────────┘
 
 State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", default, values?, valueLabels?, min?, max?, step?, persist?, scope?, lockedBy?, label?, description?, section? }`. A module's rows are named `<Module>.<name>`; both parts are identifiers. Specs are copied when declared, so the caller's tables are never changed and one spec can be shared by several addons.
 
-- **Compile once.** When the addon loads, rows are sorted by name and given dense integer ids, so the ids don't depend on declaration order. Every declaration is validated, and all problems are reported together. Declaring after compile is an error.
-- **One admission path.** Every write goes through `State:Set`, which checks kind, enum, bounds and finiteness, and refuses secret values because rules compute over rows. Writing the value a row already holds returns before any validation, the common case in handlers.
+- **Compile once.** When the addon loads, rows are sorted by name and given dense integer ids, so the ids don't depend on declaration order. Every declaration is validated, and all problems are reported together. Numeric bounds must be finite and ordered, and a step must be finite and positive. Declaring after compile is an error.
+- **One admission path.** Every write goes through `State:Set`, which checks kind, enum, bounds and finiteness, and refuses secret values because rules compute over rows. Defaults and saved values use the same secret-safe admission check, including record fields. Writing the plain value a row already holds returns before schema validation, the common case in handlers.
 - **Persistence.** Persisted rows load from the addon's SavedVariables (`scope = "account"`, the default) or its per-character SavedVariables (`scope = "character"`, which needs `savedVariablePerCharacter`).
   - A saved value that no longer validates is reset to the default, and so is a key under a declared module that no row declares (a renamed row).
   - A key under a module this load didn't declare is kept, so a module whose file failed to load keeps its settings.
@@ -24,7 +24,7 @@ State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", d
 - **Locks.** `lockedBy = "<Module>.<row>"` names a boolean row. While it's true, `State:Set` refuses the locked row, `/set` and `/toggle` print that it's locked, and its settings control reverts. `State:IsLocked(ref)` tells callers ahead of time. Compile refuses a `lockedBy` that doesn't name a boolean row.
 - **Change and publication.** A row changes only if its value at publish differs from its baseline. The baseline is the row's value when the batch first touched it, or, for a watcher registered later in the same batch, its value when that watcher registered. So a watcher never reacts to a write made before it existed.
   - Each event dispatch, each command run and each `addon:Batch(fn)` is one batch. After the batch, one publication pass runs every watcher whose rows changed, once each, in registration order.
-  - Writes made by watchers publish in a further round. A batch still scheduling watchers after 8 rounds is reported instead of looping; its writes still count.
+  - Writes made by watchers publish in a further round. A batch still scheduling watchers after 8 rounds is reported instead of looping; its writes still count. Rules that recursively register initial callbacks are bounded too; excess pending rules are removed and reported rather than leaking into the next batch.
   - An unbalanced `EndBatch` is an error.
 - **Rules.** `Rule{ reads, when, changed, initial }` is a verdict over rows. `changed(active, state)` runs when the verdict flips (edge semantics); with `initial` it also runs once with the first verdict.
   - A rule registered inside a batch (a module starting, say) takes its first verdict when that batch publishes, so what modules do while starting doesn't depend on the order they were declared in.
@@ -41,7 +41,7 @@ A module's `records = { { name, fields, limit, evict?, scope? } }` declares a ke
 
 - **Fields** are declared like rows (`kind`, `default`, `values`, `min` / `max` / `step`), and every write goes through the same admission check, secrets included. `Set(key, fields)` validates everything before writing anything and merges into the record. `Field(key, name)` reads one value, defaulting for an absent record. `Get`, `Has`, `Keys`, `Count`, `Remove` and `Clear` do the rest. Keys are plain strings of 1 to 64 characters.
 - **Limit.** At `limit`, a new key evicts the record with the lowest `evict` field (a last-seen time, say), skipping keys the optional `keep(key)` protects. Without `evict`, or when every key is kept, a full collection refuses new keys.
-- **Version row.** The collection is also a runtime number row of the same name that moves on every change, so watchers and rules react to it and it publishes with its batch.
+- **Version row.** The collection is also a runtime number row of the same name that moves on every change, so watchers and rules react to it and it publishes with its batch. Evicting and inserting a replacement is one change: watchers see the complete collection, never a temporary vacancy.
 - **Persistence.** The collection lives under its name in the addon's SavedVariables (by `scope`), storing only fields that differ from their defaults. Loading drops records that aren't tables or have bad keys, and resets fields that no longer validate.
 
 ## Events
@@ -49,7 +49,7 @@ A module's `records = { { name, fields, limit, evict?, scope? } }` declares a ke
 There is one dispatcher frame per addon, and handlers are registered through `module:On(event, fn, unit)`.
 
 - An event is registered with the client only while some handler wants it, and the registration is touched only when what's wanted changes. A stopped module therefore costs nothing.
-- Unit filters compile to `RegisterUnitEvent` when at most two units are wanted. A payload unit token that is itself secret is never compared; filtered handlers just don't receive it.
+- Unit filters compile to `RegisterUnitEvent` when at most two units are wanted and every handler filters. A payload unit token that is itself secret is never compared; filtered handlers don't receive it, while unfiltered handlers still do.
 - Handler lists are copy-on-write: registering allocates, dispatching never does. `Off` takes effect immediately, including for the rest of a dispatch in progress.
 - Each handler is isolated with `ByteTerrace.SafeCall`, WoW's argument-passing `xpcall`. An error reaches the client's error handler with its own stack, and the other handlers still run.
 
@@ -57,7 +57,7 @@ There is one dispatcher frame per addon, and handlers are registered through `mo
 
 A command is a named intent, `{ name, label, run(arg, phase, source), slash?, held? }`. Slash text, key bindings, controller buttons and settings all run the same definition.
 
-- **Compile.** Commands are sorted into ids. Duplicate names, duplicate slash words, and slash words that aren't lowercase single words are refused.
+- **Compile.** Command specs are copied at declaration and sorted into ids. Missing callbacks or labels, duplicate names, duplicate slash words, and slash words that aren't lowercase single words are refused. Validation sees the actual callback; activation checks happen in the command dispatcher.
 - **Batches.** Each run is one state batch, so a command that writes several rows publishes once.
 - **Phases.** Every command gets `"down"`. Held commands also get `"up"` and `"cancel"`.
 - **Module commands** run only while their module runs; otherwise the player is told it's turned off. A command marked `always` runs regardless, e.g. one that turns its own module on.
@@ -80,13 +80,15 @@ Controller sources are named by position (`gamepad.south`), never by printed let
 `addon:Module(name, spec)` declares a module. A module with a `label` gets an `<Module>.enabled` row, and its checkbox appears in the settings panel. Its `page` and `section` place its settings (see Settings above).
 
 - **Switch options.** `default` sets the enabled row's default (true unless given). `scope` and `lockedBy` apply to it like any row, so `scope = "character"` makes a module per character, and a lock can keep it on.
+- **Atomic declarations.** Rows, records, commands, bindings and comms are prepared before anything is registered. A declaration that raises leaves no partial module or ownership of saved keys behind, and can be retried with a corrected spec. Startup validates commands and bindings before normalizing saved rows and records.
 - **Activation.** A module runs while its enabled row is true and its optional `active = { reads, when }` rule holds. That's how a module depends on other rows: a sound's module runs only while the Sounds master switch and that sound's toggle are on.
-- **Ownership.** Everything a module creates through `module:On`, `:Watch`, `:OnIncrease`, `:Rule`, `:After` and `:Every` belongs to it and is torn down in one pass when it stops.
+- **Ownership.** Everything a module creates through `module:On`, `:Watch`, `:OnIncrease`, `:Rule`, `:Listen`, `:After` and `:Every` belongs to it and is torn down when it stops. Ownership is established before an initial watcher or rule callback can stop the module. `module:Off(handle)` releases the dead callback immediately, keeping teardown work proportional to live registrations.
+- **Deferred UI actions.** Use `module:Callback(fn, ...)` for menu choices and card actions created while the module runs. It binds the given arguments, preserves nil arguments, ignores the UI's invocation arguments, and runs the action as one isolated state batch. It returns no value, preserving Blizzard's default menu response. The callback expires when this activation stops and stays inert after a restart. `module:IsRunning()` excludes teardown too.
 - **Timers.** `module:After(seconds, fn)` and `module:Every(seconds, fn)` run `fn` as one state batch, isolated like a handler, and never after the module stops, so a retry scheduled by a feature the player just switched off doesn't fire. `module:Cancel(timer)` cancels one early. Scheduling on a stopped module is an error.
 - **Rising counts.** `module:OnIncrease(row, fn)` runs `fn(state, count, previous)` when a count row goes up: how a feature reacts to something that happened (a kill, a death) rather than to a value. A count that falls (a stopped module resetting its rows) is only remembered.
 - **Demand dependencies.** A module with `demand = true` (and `toggle = false`, no `active` rule) runs only while a running module names it in `uses = { ... }`. A user's dependencies start before its `OnEnable`, so their rows hold real values for its first reading and their handlers for an event run before its own; they stop after the last user stops. Start refuses a `uses` that names an unknown or non-demand module, or forms a cycle.
 - **Runtime rows reset.** When a module stops, its runtime (`persist = false`) rows return to their defaults, so no reader ever sees stale facts.
-- **Isolated starts.** A module that fails to start is reported and the rest still start.
+- **Isolated starts.** A module that fails to start is reported, tears down its resources, resets runtime rows, and releases acquired dependencies; unrelated modules still start. A failed dependency prevents its user's `OnEnable` from running. Starting and stopping each form one state batch. A stop remains in progress through dependency teardown, so cleanup cannot restart its owner midway through.
 - **Reserved names:** `addon` and the fact names.
 - **Stopping through the row.** Switching a module off through its row takes effect when that batch publishes, like any write; `module:SetEnabled(false)` stops it immediately.
 
@@ -95,19 +97,19 @@ Controller sources are named by position (`gamepad.south`), never by printed let
 - `combat` and `afk` always run: `combat.active`, `afk.active`.
 - `target`, `kills` and `death` are demand facts, running only while a module that uses them runs:
   - `target`: what your target is (`target.serial`, `enemyPlayer`, `formidable`, `alive`, `died`, `duelEnded`). A health event only re-reads whether it lives (one API call); attackability and rank re-read on the events that change them.
-  - `kills`: honorable kills and their victim (`kills.honorable`, `kills.victim`), your killing blows on players from `PARTY_KILL` (`kills.blows`) and those since you last died (`kills.streak`).
+  - `kills`: honorable kills and their victim (`kills.honorable`, `kills.victim`), your world PvP killing blows from `PARTY_KILL` (`kills.blows`) and those since you last died (`kills.streak`). Killing blows with secret GUIDs in instances do not count.
   - `death`: your deaths (`death.count`) and your killer from Blizzard's death recap (`death.killer`, `killerKind`, `killerClass`, `killerFaction`, `killerSpell`, `killerDamage`), published with `death.attributed`, which rises once per death even when the killer stays unknown.
 
 ## Group messages
 
-A module's `comms = { prefix, interval?, queue? }` gives it `module.Comms`: `Send(kind, fields, urgent)`, `Ready()` and `Listen(kind, fn)`, where `fn(sender, fields)` gets each valid message of that kind. Every feature that talks to the group plays by Blizzard's addon message rules the same way:
+A module's `comms = { prefix, interval?, queue? }` gives it `module.Comms`: `Send(kind, fields, urgent)` and `Ready()`. Subscribe in the receiving feature's `OnEnable` with `module:Listen(comms, kind, fn)`, where `fn(sender, fields)` gets each valid message of that kind. The transport can belong to another module (the toolkit shares `ns.Krew`). Subscriptions are removed automatically when the receiving feature stops. The lower-level `comms:Listen` returns a handle for `comms:Unlisten` when manual ownership is needed. Every feature that talks to the group plays by Blizzard's addon message rules the same way:
 
 - Your own group only (party, raid, instance chat); received messages must arrive on a group channel.
 - At most one message per `interval` (default 1 second) from a bounded queue (default 8); beyond it messages are dropped. A client throttle keeps the message queued for the next turn.
-- Nothing during chat messaging lockdown, and the queue drops then and when you leave your group.
+- Nothing during chat messaging lockdown. An activating or active Encounter, ChallengeMode, PvPMatch, Map or Chat restriction, or leaving the group, immediately clears the queue and cancels its pending send, even if lockdown ends before the next send deadline. Combat alone and inactive restriction events leave the queue intact. Sending rechecks lockdown.
 - Secret payloads (lockdown) are ignored, and so are your own messages the client echoes. The prefix is tested first, so other addons' messages cost one check.
-- Messages are parsed strictly: an uppercase kind, then tab-separated fields. One longer than 255 bytes is a caller bug and raises.
-- Nothing is sent or received while the module is stopped.
+- Messages are parsed strictly: an uppercase kind, then tab-separated fields. Scalar fields and dense arrays use one encoder: plain strings, finite numbers and booleans only, without NUL, tab or line break characters inside a field. An empty array sends a bare kind. Secrets, malformed arrays and messages longer than 255 bytes are caller bugs and raise before sending.
+- Nothing is sent or received while the transport is stopped. Listener removal takes effect during the current delivery; additions wait until the next delivery. Stopping or restarting the transport inside a listener ends the old delivery.
 
 ## Sounds
 
@@ -176,3 +178,5 @@ To finish a new module:
 1. List the file in the TOC.
 2. Add behavioral tests to `tests/`.
 3. Run `node tools/tlk.mjs check` and `node tools/tlk.mjs test`.
+
+Register shared messages with `module:Listen` inside `OnEnable`, and bind deferred menu or card actions with `module:Callback`. These methods provide lifetime checks and batching at the boundary, so feature handlers only implement their behavior. For example, a running module can create a menu choice with `root:CreateButton("Mark", module:Callback(Mark, info))`; stopping it expires that choice automatically.

@@ -37,9 +37,7 @@ local function Ask(info, title, body, counted)
     ShowCard({
         icon = "Interface\\Icons\\Ability_Warrior_Rampage", sound = SOUNDKIT.RAID_WARNING, title = title,
         body = body .. "Click to hold a grudge; the Krew will remember. Right-click to let it go.",
-        onClick = function()
-            Warband.HoldGrudge(info, true, counted)
-        end,
+        onClick = Warband.Module:Callback(Warband.HoldGrudge, info, true, counted),
     })
 end
 

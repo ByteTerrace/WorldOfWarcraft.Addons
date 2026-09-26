@@ -1,12 +1,16 @@
 -- Secret values and the addon restriction model of the fake client (see wow.lua for the rest).
 --
 -- A secret is a userdata proxy (newproxy), as opaque as the client's: indexing it, taking its
--- length, comparing it with another secret, arithmetic, concatenation and calling it all throw,
--- and pairs/ipairs/string.format/tonumber/tostring/print refuse it (the env wraps the last four).
--- The env's type() reports the underlying type, like the client. Two misuses Lua 5.1 can't route
--- through a metamethod aren't caught here, so the static SECRET rule covers them: a boolean test
--- (`if secret then`, always true) and `secret == nonSecret` (mixed types compare false without
--- consulting __eq).
+-- length, comparing it with another secret, arithmetic and calling it all throw, and
+-- pairs/ipairs/tonumber/print refuse it (the env wraps the last two). As in the client
+-- (secrets.operations), concatenation, tostring and string.format (the env's, and the string
+-- methods') accept secrets and return secret strings. The env's type() reports the underlying
+-- type, like the client. Four misuses the client refuses but Lua 5.1 can't route through a
+-- metamethod aren't caught here, so the static SECRET rule covers them: a boolean test (`if
+-- secret then`, always true; the client refuses it only for a secret boolean), `secret ==
+-- nonSecret` (mixed types compare false without consulting __eq), a secret compared with itself
+-- (`x == x` is true without __eq; the client refuses it, secrets.rawOperations: compare) and a
+-- secret as a table key (the client refuses it, secrets.rawOperations: tableKey).
 --
 -- Restrictions (h.restrictions) mirror Enum.AddOnRestrictionType: Combat, Encounter,
 -- ChallengeMode, PvPMatch, Map, Chat. Whether a flagged API returns secrets is decided per call
@@ -28,7 +32,9 @@
 --                                         "communication-restricted map"), plus Chat [C]
 --   SecretWhenUnitIdentityRestricted  [D] the unit isn't player-controlled or in the group
 --                                         (compound tokens aren't modeled). A WOWGUID argument
---                                         (UnitTokenFromGUID) names the unit that has that GUID.
+--                                         (UnitTokenFromGUID) names the unit that has that GUID;
+--                                         with several (PARTY_KILL), any restricted one counts,
+--                                         and a GUID of no known unit is restricted [C].
 --                                         [E] and only under an instance restriction (Encounter,
 --                                         ChallengeMode or PvPMatch): probes of an NPC target's
 --                                         name, class and GUID came back plain in the open world,
@@ -91,8 +97,9 @@
 --                        and function names, and is recorded in h.blocked (Blizzard_Game's
 --                        handler only shows a message; the caller keeps running).
 --     IsProtectedFunction  a global is forbidden to addon code: ADDON_ACTION_FORBIDDEN, always.
---     Verified in game     Harness.FORBIDDEN_IN_GAME lists functions the docs don't mark protected
---                        but the Forever client refused to addon code when tried (each with its
+--     Verified in game     Harness.FORBIDDEN_IN_GAME (tools/api/forbidden.json, which the PROTECTED
+--                        rule reads too) lists functions the docs don't mark protected but the
+--                        Forever client refused to addon code when tried (each with its
 --                        evidence); they're forbidden like IsProtectedFunction globals. Which of
 --                        the two events the client fired wasn't captured; FORBIDDEN is a guess.
 --                        A method on a protected widget (a Secure template, or a parent of
@@ -120,7 +127,6 @@ SecretMeta.__eq, SecretMeta.__lt, SecretMeta.__le = Refuse("compare"), Refuse("c
 SecretMeta.__add, SecretMeta.__sub, SecretMeta.__mul = Refuse("compute with"), Refuse("compute with"), Refuse("compute with")
 SecretMeta.__div, SecretMeta.__mod, SecretMeta.__pow = Refuse("compute with"), Refuse("compute with"), Refuse("compute with")
 SecretMeta.__unm = Refuse("compute with")
-SecretMeta.__concat = Refuse("concatenate")
 SecretMeta.__call = Refuse("call")
 SecretMeta.__tostring = function() return "<secret>" end -- harness diagnostics; the env's tostring refuses
 SecretMeta.__metatable = false
@@ -144,6 +150,52 @@ function Reveal(value)
         return Boxes[value].value
     end
     return value
+end
+
+-- Concatenation with a secret yields a secret string [E] (secrets.operations: concat). Lua's own
+-- rules still apply: only strings and numbers concatenate.
+SecretMeta.__concat = function(left, right)
+    local a, b = Reveal(left), Reveal(right)
+    for _, value in ipairs({ a, b }) do
+        local kind = type(value)
+        if kind ~= "string" and kind ~= "number" then
+            error("attempt to concatenate a " .. kind .. " value", 2)
+        end
+    end
+    return Secret(a .. b)
+end
+
+-- string.format that takes secrets, as the client's does: a secret format or argument makes the
+-- result a secret string [E] (secrets.operations: format, formatString). A precision on %s with a
+-- secret input is refused [C]: the client closed it in 12.0.1 (warcraft.wiki.gg Patch_12.0.1/
+-- API_changes), and no probe covers it yet.
+local RawFormat = string.format
+
+function SecretFormat(fmt, ...)
+    local n, secret = select("#", ...), IsSecret(fmt)
+    local args = { ... }
+    for i = 1, n do
+        if IsSecret(args[i]) then
+            secret = true
+            args[i] = Reveal(args[i])
+        end
+    end
+    if not secret then
+        return RawFormat(fmt, ...)
+    end
+    local plainFormat = Reveal(fmt)
+    if type(plainFormat) == "string" and plainFormat:find("%%[-+ #0]*%d*%.%d*s") then
+        error("attempt to format a secret value with a precision", 2)
+    end
+    return Secret(RawFormat(plainFormat, unpack(args, 1, n)))
+end
+
+-- tostring of a secret is a secret string [E] (secrets.operations: tostring).
+function SecretToString(value, ...)
+    if IsSecret(value) then
+        return Secret(tostring(Reveal(value)))
+    end
+    return tostring(value, ...)
 end
 
 Harness.RESTRICTIONS = { "Combat", "Encounter", "ChallengeMode", "PvPMatch", "Map", "Chat" }
@@ -204,7 +256,21 @@ local Predicates = {
     SecretOnRestrictedMaps = function(h) return h.restrictions.Map end,
     SecretInChatMessagingLockdown = function(h) return AnyOf(h, Chat) end,
     SecretWhenUnitIdentityRestricted = function(h, ctx)
-        return AnyOf(h, Instance) and not IdentityAccessible(h, ContextUnit(h, ctx))
+        if not AnyOf(h, Instance) then
+            return false
+        end
+        if ctx.unit == nil and ctx.guids then
+            -- Every GUID counts (PARTY_KILL carries two). A GUID names someone even when the
+            -- harness has no unit for them, so an unknown one is restricted [C].
+            for _, guid in ipairs(ctx.guids) do
+                local token = h:UnitTokenForGUID(guid)
+                if token == nil or not IdentityAccessible(h, token) then
+                    return true
+                end
+            end
+            return false
+        end
+        return not IdentityAccessible(h, ContextUnit(h, ctx))
     end,
     SecretWhenUnitNameIdentityRestricted = function(h, ctx)
         if not AnyOf(h, Instance) then
@@ -343,6 +409,8 @@ function Harness.CallContext(entry, key, args, widgetState)
             end
         elseif kind == "WOWGUID" and type(args[i]) == "string" then
             ctx.guid = ctx.guid or args[i]
+            ctx.guids = ctx.guids or {}
+            ctx.guids[#ctx.guids + 1] = args[i]
         elseif kind == "PowerType" then
             ctx.powerType = args[i]
         end
@@ -376,7 +444,7 @@ end
 Harness.LUA_FAKES = {
     assert = true, error = true, ipairs = true, next = true, pairs = true, pcall = true, select = true,
     setmetatable = true, getmetatable = true, rawget = true, rawset = true, rawequal = true, unpack = true,
-    xpcall = true, type = true, tostring = true, tonumber = true, print = true, tinsert = true, tremove = true,
+    xpcall = true, type = true, tostring = true, format = true, tonumber = true, print = true, tinsert = true, tremove = true,
     wipe = true, CreateColor = true, GetMoneyString = true, SecondsToTime = true, random = true,
     CreateVector2D = true, RaidNotice_AddMessage = true,
 }
@@ -397,10 +465,8 @@ local function HasSpecificRestriction(entry)
 end
 
 -- Functions the Forever client refused to addon code when tried in game, though the docs don't
--- mark them IsProtectedFunction (see the header).
-Harness.FORBIDDEN_IN_GAME = {
-    SetRaidTarget = "/run SetRaidTarget(\"target\", 8) out of combat in a party was blocked (client 1.60.1 (70009))",
-}
+-- mark them IsProtectedFunction (see the header): tools/api/forbidden.json.
+Harness.FORBIDDEN_IN_GAME = type(__forbidden) == "string" and assert(loadstring("return " .. __forbidden))() or {}
 
 -- The event a call fires instead of running (nil = it runs): addon code is always tainted.
 function Harness:BlockedBy(entry, isMethod, widget, name)

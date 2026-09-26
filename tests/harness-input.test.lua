@@ -58,6 +58,7 @@ end)
 
 test("EnableKeyboard is blocked in combat only on protected frames; SetPropagateKeyboardInput on any", function()
     local h = Harness.New()
+    h:ExpectBlocked(2) -- the calls under test
     local env = h.env
     local plain = env.CreateFrame("Frame")
     local secure = env.CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
@@ -78,6 +79,7 @@ end)
 
 test("frame strata and levels: set, inherited, validated", function()
     local h = Harness.New()
+    h:ExpectBlocked(1) -- the calls under test
     local env = h.env
     local parent = env.CreateFrame("Frame", nil, env.UIParent)
     local child = env.CreateFrame("Frame", nil, parent)

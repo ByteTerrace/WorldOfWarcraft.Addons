@@ -109,35 +109,9 @@ local function OnDeath()
     Streak, Multi, LastKillAt = 0, 0, nil
 end
 
-StreaksModule = Addon:Module("Streaks", {
-    label = "Kill streaks",
-    page = "Sounds",
-    description = "Unreal Tournament's announcer for your killing blows on players: first blood, multi kills and killing sprees.",
-    state = {
-        SoundBank:Row("firstBlood", "First blood", "Your first killing blow on a player this session, unless a Krew member drew it first.", { "firstBlood" }),
-        SoundBank:Row("multiKills", "Multi kills", ("Killing blows each within %d seconds of the last: double kill and up."):format(MultiKillWindow), MultiKeys),
-        SoundBank:Row("sprees", "Killing sprees", "Every 5 killing blows without dying, from killing spree to wicked sick.", SpreeKeys),
-        { name = "share", kind = "boolean", default = true, label = "Share my sprees with the Krew",
-            description = "Your Krew sees a raid warning for your first blood, each spree, and when a spree of 5 or more ends." },
-    },
-    uses = { "kills", "death" },
-    OnEnable = function(module)
-        module:OnIncrease("kills.blows", function(state)
-            OnKill(state:Get("kills.streak"))
-        end)
-        module:OnIncrease("death.count", OnDeath)
-        module:OnIncrease("death.attributed", function(state)
-            ReportEnd(state:Get("death.killerKind") == "self" and "" or state:Get("death.killer"))
-        end)
-    end,
-    OnDisable = function()
-        Streak, Multi, LastKillAt, EndedAt = 0, 0, nil, nil
-    end,
-})
-
-Krew:Listen("STREAK", function(sender, fields)
+local function OnMessage(sender, fields)
     local event, count = fields[1], CleanCount(fields[2], MaxCount)
-    if not StreaksModule.Enabled or not count then
+    if not count then
         return
     end
     local spree = SpreeByKey[event]
@@ -150,4 +124,31 @@ Krew:Listen("STREAK", function(sender, fields)
     elseif spree then
         Alert(("%s %s! (%d kills)"):format(sender, spree.says, count))
     end
-end)
+end
+
+StreaksModule = Addon:Module("Streaks", {
+    label = "Kill streaks",
+    page = "Sounds",
+    description = "Unreal Tournament's announcer for your world PvP killing blows: first blood, multi kills and killing sprees. Kills in battlegrounds, arenas or other instances do not count.",
+    state = {
+        SoundBank:Row("firstBlood", "First blood", "Your first killing blow on a player this session, unless a Krew member drew it first.", { "firstBlood" }),
+        SoundBank:Row("multiKills", "Multi kills", ("Killing blows each within %d seconds of the last: double kill and up."):format(MultiKillWindow), MultiKeys),
+        SoundBank:Row("sprees", "Killing sprees", "Every 5 killing blows without dying, from killing spree to wicked sick.", SpreeKeys),
+        { name = "share", kind = "boolean", default = true, label = "Share my sprees with the Krew",
+            description = "Your Krew sees a raid warning for your first blood, each spree, and when a spree of 5 or more ends." },
+    },
+    uses = { "kills", "death" },
+    OnEnable = function(module)
+        module:Listen(Krew, "STREAK", OnMessage)
+        module:OnIncrease("kills.blows", function(state)
+            OnKill(state:Get("kills.streak"))
+        end)
+        module:OnIncrease("death.count", OnDeath)
+        module:OnIncrease("death.attributed", function(state)
+            ReportEnd(state:Get("death.killerKind") == "self" and "" or state:Get("death.killer"))
+        end)
+    end,
+    OnDisable = function()
+        Streak, Multi, LastKillAt, EndedAt = 0, 0, nil, nil
+    end,
+})

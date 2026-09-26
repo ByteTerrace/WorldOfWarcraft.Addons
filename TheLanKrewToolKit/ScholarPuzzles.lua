@@ -8,12 +8,12 @@ local addonName, ns = ...
 --
 --   ns.Puzzles.Grades     { id, label } from { 0, "Kindergarten" } to { 6, "Grade 6" }, in order.
 --   ns.Puzzles.Generate   see Generate below.
---   ns.Puzzles.Kit        the building blocks, for the generators and for riddles made elsewhere
---                         (ScholarFacts.lua). Kit.Generators[kind] is function(state) -> puzzle.
+--   ns.Puzzles.Kit        the building blocks, for the generators (Journal.lua also borrows Count).
+--                         Kit.Generators[kind] is function(state) -> puzzle.
 --
 -- A generator's state is one generation's record: roll (options.random), subject, grade, level and
--- a sanitized context. The Kit functions that only draw (Pick, Chance, Shuffle, Arrange,
--- WrongNumbers) read nothing but state.roll.
+-- a sanitized context. The Kit functions that only draw (Pick, Chance, Shuffle, WrongNumbers) read
+-- nothing but state.roll.
 
 local MaxPrompt, MaxChoice = 240, 40
 
@@ -135,11 +135,11 @@ local function Item(state)
     return Pick(state, state.grade == 1 and items.small or items.adventure)
 end
 
---- Word problem variables: a copy of vars plus {Hero} (first mention), {hero}, {place} and
---- {items}. Each number {a} also comes counted with the item as {A} ("3 apples").
+--- Word problem variables: a copy of vars plus {Hero} (first mention), {hero}, {place}, {item}
+--- and {items}. Each number {a} also comes counted with the item as {A} ("3 apples").
 local function Vars(state, vars)
     local hero, item = Hero(state), Item(state)
-    local out = { Hero = hero[1], hero = hero[2], place = Place(state), items = item[2] }
+    local out = { Hero = hero[1], hero = hero[2], place = Place(state), item = item[1], items = item[2] }
     for key, value in pairs(vars) do
         out[key] = value
         if type(value) == "number" then
@@ -169,33 +169,47 @@ local function Arrange(state, correct, wrongs)
     return { choices[1], choices[2], choices[3], choices[4] }, answer
 end
 
---- Builds a puzzle of kind from its text entry (prompt or prompts, hint, explain, expr) and
---- variables. vars.v (or vars.report) becomes the puzzle's value; vars.r and vars.terms its
---- remainder and terms. A hint that would give the answer away is replaced by a stock one.
--- Pictures for small numbers in the early grades: what ScholarView draws as icons. a and b are the
--- riddle's two numbers; groups riddles put a groups of b.
+-- Pictures for small numbers in the early grades: what ScholarPictures draws as icons of item. a
+-- and b are the riddle's two numbers; groups riddles put a groups of b.
 local Pictures = {
-    ["math.add"] = function(vars) return vars.a + vars.b <= 20 and { kind = "join", a = vars.a, b = vars.b } or nil end,
-    ["math.subtract"] = function(vars) return vars.a <= 20 and { kind = "take", a = vars.a, b = vars.b } or nil end,
-    ["math.groups"] = function(vars)
-        return vars.a * vars.b <= 30 and vars.a <= 6 and { kind = "groups", groups = vars.a, each = vars.b } or nil
+    ["math.add"] = function(vars, item)
+        return vars.a + vars.b <= 20 and { kind = "join", a = vars.a, b = vars.b, item = item } or nil
+    end,
+    ["math.subtract"] = function(vars, item)
+        return vars.a <= 20 and { kind = "take", a = vars.a, b = vars.b, item = item } or nil
+    end,
+    ["math.groups"] = function(vars, item)
+        return vars.a * vars.b <= 30 and vars.a <= 6
+            and { kind = "groups", groups = vars.a, each = vars.b, item = item } or nil
     end,
 }
 
+-- The item a riddle counts (vars.item) when its prompt names it; nil for a bare sum ("What is
+-- 5 - 2?"), which is drawn with stars.
+local function Counted(prompt, vars)
+    if vars.item and (Mentions(prompt, vars.item) or Mentions(prompt, vars.items)) then
+        return vars.item
+    end
+end
+
+--- Builds a puzzle of kind from its text entry (prompt or prompts, hint, explain, expr) and
+--- variables. vars.v (or vars.report) becomes the puzzle's value; vars.r and vars.terms its
+--- remainder and terms. A hint that would give the answer away is replaced by a stock one.
 local function Finish(state, kind, text, vars, correct, wrongs)
     local choices, answer = Arrange(state, correct, wrongs)
     local hint = Fill(text.hint, vars)
     if Mentions(hint, correct) then
         hint = ScholarWords.hintFallback
     end
+    local title = Pick(state, ScholarWords.titles[kind])
+    local prompt = Fill(text.prompt or Pick(state, text.prompts), vars)
     return {
-        subject = state.subject, kind = kind, title = Pick(state, ScholarWords.titles[kind]),
-        prompt = Fill(text.prompt or Pick(state, text.prompts), vars), choices = choices, answer = answer, hint = hint,
-        explanation = Fill(text.explain, vars) .. " " .. Pick(state, ScholarWords.praise),
+        subject = state.subject, kind = kind, title = title, prompt = prompt, choices = choices, answer = answer,
+        hint = hint, explanation = Fill(text.explain, vars) .. " " .. Pick(state, ScholarWords.praise),
         value = vars.report or vars.v, expression = text.expr and Fill(text.expr, vars), remainder = vars.r,
         terms = vars.terms,
         picture = state.grade <= 3 and Pictures[kind] and type(vars.a) == "number" and type(vars.b) == "number"
-            and Pictures[kind](vars) or nil,
+            and Pictures[kind](vars, Counted(prompt, vars)) or nil,
     }
 end
 
@@ -275,8 +289,6 @@ end
 
 local Kit = {
     Pick = Pick, Chance = Chance, Shuffle = Shuffle, Trim = Trim, Fill = Fill, Count = Count, Coins = Coins,
-    Mentions = Mentions, Clean = Clean, WholeNumber = WholeNumber, Vars = Vars, Arrange = Arrange, Finish = Finish,
-    WrongNumbers = WrongNumbers, Words = ScholarWords, Generators = Generators, MaxPrompt = MaxPrompt,
-    MaxChoice = MaxChoice,
+    Vars = Vars, Finish = Finish, WrongNumbers = WrongNumbers, Words = ScholarWords, Generators = Generators,
 }
 ns.Puzzles = { Grades = Grades, Generate = Generate, Kit = Kit }

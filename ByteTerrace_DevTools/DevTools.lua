@@ -14,8 +14,9 @@ local addonName, ns = ...
 --                      in the order one play session in a starting zone reaches them (Probes.Steps).
 --
 -- From load it also listens for UNIT_COMBAT on the player and the target, for the unitCombat.seen
--- probe (Probes.NoteUnitCombat keeps the payloads' shapes), and for the kill events, for
--- kills.seen (Probes.NoteKill).
+-- probe (Probes.NoteUnitCombat keeps the payloads' shapes), for the kill events, for
+-- kills.seen (Probes.NoteKill), and for chat events' senders, for names.chatSenders
+-- (Probes.NoteSender keeps their shapes, never the names).
 --
 -- Only the client's own names are dumped. A global or table member any addon set is tainted by
 -- that addon (issecurevariable), so it's counted under `skipped` instead, per addon: other addons'
@@ -225,6 +226,22 @@ local CombatListener = CreateFrame("Frame")
 CombatListener:RegisterUnitEvent("UNIT_COMBAT", "player", "target")
 CombatListener:SetScript("OnEvent", function(_, _, ...)
     Probes.NoteUnitCombat(...)
+end)
+
+-- Chat events' senders for names.chatSenders, from load.
+local ChatListener = CreateFrame("Frame")
+for _, event in ipairs({ "CHAT_MSG_ADDON", "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_CHANNEL", "CHAT_MSG_PARTY",
+    "CHAT_MSG_RAID", "CHAT_MSG_GUILD", "CHAT_MSG_WHISPER" }) do
+    ChatListener:RegisterEvent(event)
+end
+ChatListener:SetScript("OnEvent", function(_, event, ...)
+    if event == "CHAT_MSG_ADDON" then
+        local _, _, _, sender = ...
+        Probes.NoteSender(event, sender)
+    else
+        local _, author = ...
+        Probes.NoteSender(event, author)
+    end
 end)
 
 -- The kill events for kills.seen, from load.

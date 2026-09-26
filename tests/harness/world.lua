@@ -41,7 +41,7 @@
 --               and lineID counts up from 1.
 --   Raid notice [D] RaidNotice_AddMessage(frame, text, colorInfo, displayTime) is Blizzard's
 --               deprecation fallback (Blizzard_DeprecatedRaidWarning, only while the
---               loadDeprecationFallbacks CVar is on; Harness.new{ loadDeprecationFallbacks = false }
+--               loadDeprecationFallbacks CVar is on; Harness.New{ loadDeprecationFallbacks = false }
 --               leaves it undefined). It ignores the frame and calls RaidWarningUtil.AddMessage, which
 --               adds the message to RaidWarningFrame: SetText(text) takes a secret (the Text aspect
 --               turns secret), SetTextColor(colorInfo.r, .g, .b) takes secrets, and displayTime is
@@ -62,9 +62,9 @@ Harness.GLOBAL_STRINGS = {
     FACTION_HORDE = "Horde",
 }
 
-local INSTANCE_TYPES = { party = true, raid = true, pvp = true, arena = true, scenario = true }
+local InstanceTypes = { party = true, raid = true, pvp = true, arena = true, scenario = true }
 
--- World state, from Harness.new's player spec (see the header).
+-- World state, from Harness.New's player spec (see the header).
 function Harness:InitWorld(player)
     self:InitUnits(player)
     self.mapID = player.mapID
@@ -79,8 +79,6 @@ function Harness:InitWorld(player)
     self.deprecationFallbacks = player.loadDeprecationFallbacks ~= false
 end
 
--- Location ------------------------------------------------------------------
-
 -- Moves the player: spec = { zone, subZone, mapID, x, y, instance } (a missing field keeps its
 -- value; subZone = "" leaves subzones; instance = false leaves an instance). Fires
 -- ZONE_CHANGED_NEW_AREA when the zone changes, otherwise ZONE_CHANGED when the subzone does.
@@ -88,7 +86,7 @@ function Harness:SetLocation(spec)
     local zoneChanged = spec.zone ~= nil and spec.zone ~= self.zone
     local subZoneChanged = spec.subZone ~= nil and spec.subZone ~= self.subZone
     if spec.instance ~= nil then
-        assert(spec.instance == false or INSTANCE_TYPES[spec.instance], "SetLocation: unknown instance type " .. tostring(spec.instance))
+        assert(spec.instance == false or InstanceTypes[spec.instance], "SetLocation: unknown instance type " .. tostring(spec.instance))
         self.instance = spec.instance or nil
     end
     if spec.mapID ~= nil then
@@ -107,21 +105,19 @@ function Harness:SetLocation(spec)
     end
 end
 
--- Maps and waypoints -------------------------------------------------------
-
-local VECTOR_METHODS = {}
-function VECTOR_METHODS:OnLoad(x, y) self:SetXY(x, y) end
-function VECTOR_METHODS:GetXY() return self.x, self.y end
-function VECTOR_METHODS:SetXY(x, y) self.x, self.y = x, y end
-function VECTOR_METHODS:IsEqualTo(other) return self.x == other.x and self.y == other.y end
-function VECTOR_METHODS:Clone() return Harness.Vector2D(self.x, self.y) end
-Harness.VECTOR_METHODS = VECTOR_METHODS
+local VectorMethods = {}
+function VectorMethods:OnLoad(x, y) self:SetXY(x, y) end
+function VectorMethods:GetXY() return self.x, self.y end
+function VectorMethods:SetXY(x, y) self.x, self.y = x, y end
+function VectorMethods:IsEqualTo(other) return self.x == other.x and self.y == other.y end
+function VectorMethods:Clone() return Harness.Vector2D(self.x, self.y) end
+Harness.VECTOR_METHODS = VectorMethods
 
 -- CreateVector2D (Blizzard_SharedXML/Vector2D.lua): a table with Vector2DMixin's methods copied in.
 -- Only the methods above are modeled; the rest of the mixin is absent.
 function Harness.Vector2D(x, y)
     local vector = {}
-    for name, fn in pairs(VECTOR_METHODS) do
+    for name, fn in pairs(VectorMethods) do
         vector[name] = fn
     end
     vector:OnLoad(x, y)
@@ -129,7 +125,7 @@ function Harness.Vector2D(x, y)
 end
 
 -- UiMapPoint (Blizzard_ObjectAPI/Mainline/UiMapPoint.lua).
-local UI_MAP_POINT = {
+local UiMapPoint = {
     CreateFromCoordinates = function(mapID, x, y, z)
         return { uiMapID = mapID, position = Harness.Vector2D(x, y), z = z }
     end,
@@ -141,7 +137,7 @@ local UI_MAP_POINT = {
     end,
 }
 
-local WAYPOINT_MAP_TYPES = { Zone = true, Continent = true, Micro = true }
+local WaypointMapTypes = { Zone = true, Continent = true, Micro = true }
 
 -- Adds a map the C_Map fakes know: spec = { name, mapType (an Enum.UIMapType name, "Zone"),
 -- parentMapID, flags (Enum.UIMapFlag bits), canSetWaypoint (overrides the mapType rule) }.
@@ -164,7 +160,7 @@ function Harness:CanSetWaypointOn(mapID)
     end
     local enums = __snapshot.enums
     for name, value in pairs(enums.UIMapType) do
-        if value == map.mapType and WAYPOINT_MAP_TYPES[name] then
+        if value == map.mapType and WaypointMapTypes[name] then
             return true
         end
     end
@@ -222,12 +218,10 @@ local function MapFakes(h)
         HasUserWaypoint = function() return h.waypoint ~= nil end,
         GetUserWaypoint = function()
             local w = h.waypoint
-            if w then return UI_MAP_POINT.CreateFromCoordinates(w.uiMapID, w.x, w.y, w.z) end
+            if w then return UiMapPoint.CreateFromCoordinates(w.uiMapID, w.x, w.y, w.z) end
         end,
     }
 end
-
--- Honor ---------------------------------------------------------------------
 
 -- CHAT_MSG_COMBAT_HONOR_GAIN with the documented 18-field payload around text.
 function Harness:FireHonorMessage(text)
@@ -257,8 +251,6 @@ function Harness:AwardHonor(honor)
     return text
 end
 
--- Raid warnings -------------------------------------------------------------
-
 -- RaidWarningFrameMixin:AddMessage's checks on its arguments (see the header), then the record.
 local function AddRaidNotice(h, frame, text, colorInfo, displayTime)
     if type(colorInfo) ~= "table" then
@@ -283,8 +275,6 @@ local function ChatTypeInfo()
         __index = function(_, key) error("ChatTypeInfo." .. tostring(key) .. " isn't modeled by the harness", 2) end,
     })
 end
-
--- Fakes ---------------------------------------------------------------------
 
 -- The world fakes, merged into the env (env.lua) before it wraps them. uiParent parents
 -- RaidWarningFrame.
@@ -313,8 +303,8 @@ function Harness:WorldFakes(uiParent)
             end,
         },
     }
-    for name, fn in pairs(VECTOR_METHODS) do fakes.Vector2DMixin[name] = fn end
-    for name, fn in pairs(UI_MAP_POINT) do fakes.UiMapPoint[name] = fn end
+    for name, fn in pairs(VectorMethods) do fakes.Vector2DMixin[name] = fn end
+    for name, fn in pairs(UiMapPoint) do fakes.UiMapPoint[name] = fn end
     for name, value in pairs(Harness.GLOBAL_STRINGS) do fakes[name] = value end
     local raidWarningFrame = h:CreateWidget("Frame", "RaidWarningFrame", uiParent)
     Harness.State(raidWarningFrame).shown = false

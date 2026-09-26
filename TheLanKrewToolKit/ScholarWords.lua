@@ -1,8 +1,8 @@
 local addonName, ns = ...
 
 -- Word banks, stories and flavor text for the Scholar puzzles, as ns.ScholarWords: the puzzle
--- files (ScholarPuzzles.lua and its generators, and ScholarFacts.lua) read it; this file only
--- holds data. Everything is original, kid-friendly plain ASCII.
+-- files (ScholarPuzzles.lua and its generators) read it; this file only holds data. Everything is
+-- original, kid-friendly plain ASCII.
 --
 -- A tier (t) scales difficulty inside a grade band: 1 is easiest. Story and sentence templates
 -- use {hero} and {place}; the defaults beside them fill in when the player's context doesn't.

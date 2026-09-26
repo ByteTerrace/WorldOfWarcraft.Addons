@@ -1,14 +1,15 @@
 local addonName, ns = ...
 
--- Cards: the toolkit's celebratory pop-ups (journal, Krew, Scholar, Warband), one at a time, at
--- the top of the screen.
+-- Cards: the toolkit's notices on your screen. Celebratory pop-ups (journal, Krew, Scholar,
+-- Warband) show one at a time at the top of the screen; news that can't wait is a raid warning.
 --
---   ns.Cards.Show(entry)   queues a card: { icon, title, body, sound, onClick }.
---   ns.Cards.Clear()       drops every queued card and hides the current one.
+--   ns.Cards.Show(entry)         queues a card: { icon, title, body, sound, onClick }.
+--   ns.Cards.Alert(text, sound)  a raid warning on your own screen, now, in combat too.
 --
 -- The queue holds at most MaxQueued cards; beyond that new cards are dropped, so a chatty group
 -- can't bury the screen. Cards never interrupt a fight: during combat they wait in the queue and
--- appear when it ends. Hovering a card holds it; clicking dismisses it (and shows the next);
+-- appear when it ends, and a card showing when combat starts hides and goes back to the front of
+-- the queue. Hovering a card holds it; clicking dismisses it (and shows the next);
 -- otherwise it hides after CardSeconds. A card with onClick is a question: a left-click runs
 -- onClick() in a state batch and dismisses it, a right-click (or the timeout) dismisses it without
 -- acting.
@@ -21,13 +22,14 @@ local CardWidth = 440
 local MinCardHeight = 88
 local MaxQueued = 6
 
-local C_Sound, C_Timer, CreateFrame = C_Sound, C_Timer, CreateFrame
-local remove = table.remove
+local C_Sound, ChatTypeInfo, CreateFrame, RaidWarningUtil = C_Sound, ChatTypeInfo, CreateFrame, RaidWarningUtil
+local insert, remove = table.insert, table.remove
 
 local Addon = ns.Addon
 local Card, HideTimer, Current
 local Queue = {}
 local InCombat = false
+local Cards -- the module, declared at the end; it always runs
 
 local function CreateCard()
     local frame = CreateFrame("Button", addonName .. "Card", UIParent, "BackdropTemplate")
@@ -69,17 +71,13 @@ end
 local ShowNext
 
 local function StartTimer()
-    if HideTimer then
-        HideTimer:Cancel()
-    end
-    HideTimer = C_Timer.NewTimer(CardSeconds, ShowNext)
+    Cards:Cancel(HideTimer)
+    HideTimer = Cards:After(CardSeconds, ShowNext)
 end
 
 local function HoldTimer()
-    if HideTimer then
-        HideTimer:Cancel()
-        HideTimer = nil
-    end
+    Cards:Cancel(HideTimer)
+    HideTimer = nil
 end
 
 -- Shows the next queued card, or hides when there's none (always, in combat).
@@ -105,13 +103,11 @@ function ShowNext()
     StartTimer()
 end
 
-ns.Cards = {}
-
 --- Queues a card, showing it now unless another card is up or combat holds it. Dropped when the
 --- queue is full.
 ---@param entry table { icon, title, body, sound, onClick }: sound is a SOUNDKIT id or nil; onClick
 ---                   makes the card a question
-function ns.Cards.Show(entry)
+local function Show(entry)
     if not Card then
         Card = CreateCard()
         Card:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -134,15 +130,25 @@ function ns.Cards.Show(entry)
     end
 end
 
---- Drops every queued card and hides the current one.
-function ns.Cards.Clear()
-    wipe(Queue)
-    if Card then
+--- A raid warning on your own screen.
+---@param text string
+---@param sound integer? a SOUNDKIT id
+local function Alert(text, sound)
+    RaidWarningUtil.AddMessage(text, ChatTypeInfo.RAID_WARNING)
+    if sound then
+        C_Sound.PlaySound(sound)
+    end
+end
+
+-- Combat started: the card showing goes back to the front of the queue until combat ends.
+local function Withdraw()
+    if Current then
+        insert(Queue, 1, Current)
         ShowNext()
     end
 end
 
-Addon:Module("Cards", {
+Cards = Addon:Module("Cards", {
     toggle = false,
     OnEnable = function(module)
         local combat = module:Id("combat.active")
@@ -151,10 +157,14 @@ Addon:Module("Cards", {
             reads = { combat }, when = function(state) return state.Values[combat] end,
             changed = function(active)
                 InCombat = active
-                if not active and Card and not Card:IsShown() and #Queue > 0 then
+                if active then
+                    Withdraw()
+                elseif Card and not Card:IsShown() and #Queue > 0 then
                     ShowNext()
                 end
             end,
         })
     end,
 })
+
+ns.Cards = { Show = Show, Alert = Alert }

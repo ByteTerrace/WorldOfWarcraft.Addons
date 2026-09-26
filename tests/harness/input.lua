@@ -7,8 +7,6 @@
 --   * h:Drag(frame, dx, dy [, button]) drags a frame with the mouse (see Harness:Drag).
 --   * h:SeedRandom(n) makes the env's math.random (and random) deterministic.
 
--- Keyboard -----------------------------------------------------------------
-
 -- Presses (down = true) or releases a keyboard key like "W", "1", "ESCAPE" or "ENTER". Visible
 -- frames (every ancestor shown) with the keyboard enabled get it topmost first: higher frame
 -- strata, then higher frame level, then newest. Each runs its OnKeyDown (or OnKeyUp) script if it
@@ -45,8 +43,6 @@ function Harness:Key(key, down)
     self.propagatedKeys[#self.propagatedKeys + 1] = key
     return false
 end
-
--- Mouse coverage -----------------------------------------------------------
 
 -- Whether a region covers the whole screen: it is UIParent, or it is anchored (SetAllPoints, or
 -- two opposite corners on the same corners, flush or outside) to a region that does.
@@ -97,8 +93,6 @@ function Harness:WorldClickBlocked()
     return false
 end
 
--- Dragging -------------------------------------------------------------------
-
 -- Drags a frame with the mouse button (default "LeftButton") by dx, dy. Only a visible,
 -- mouse-enabled frame that registered the button with RegisterForDrag starts a drag ([D]
 -- RegisterForDrag's page: dragging needs EnableMouse, since OnDragStart doesn't imply it). The
@@ -125,8 +119,6 @@ function Harness:Drag(frame, dx, dy, button)
     if s.scripts.OnDragStop then self:Protect(s.scripts.OnDragStop, frame) end
     return true
 end
-
--- Random -------------------------------------------------------------------
 
 -- Makes the env's math.random (and random) deterministic from seed n: the harness's own linear
 -- congruential generator (Numerical Recipes' 32-bit constants), independent of Lua's global

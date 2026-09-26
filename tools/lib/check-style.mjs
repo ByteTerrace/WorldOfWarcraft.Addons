@@ -60,7 +60,7 @@ export function checkStyleRules(file, text, report) {
     }
 
     for (const comment of ast.comments ?? []) {
-        const body = comment.value.replace(/^-/, ""); // a `---` doc comment's third dash isn't a banner
+        const body = comment.value.replace(/^-(?=[^-]|$)/, ""); // a `---` doc comment's third dash isn't a banner
         if (BANNER.test(body)) {
             report(file, comment.loc.start.line, "COMMENT", "banner divider: let the code's structure and doc comments do that work");
         }

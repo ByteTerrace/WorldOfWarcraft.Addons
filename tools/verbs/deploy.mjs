@@ -3,12 +3,13 @@
 // TOC changes (new files, SavedVariables) need a full client restart.
 //
 //   Before linking, deploy runs the gates: `check`, then `test` (skip the tests with --no-test).
-//   --addon <name> limits it to those addons; an unknown name is an error.
+//   --addon <name> limits it to those addons and the addons they depend on (linking the toolkit
+//   links ByteTerrace_Core too); an unknown name is an error. The AddOns folder must exist.
 //
 //   --unlink removes only links that point at this repo's addon folders, and reports every link
 //   it leaves alone (pointing elsewhere, or at a path that differs only in case).
 
-import { lstatSync, readlinkSync, rmdirSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, readlinkSync, rmdirSync, symlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { findAddons } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, findForeverInstall } from "../lib/wow.mjs";
@@ -66,7 +67,17 @@ export async function run(values) {
         console.log(`Forever ${install.version} (${install.product}) -> ${flavor}, interface ${install.interface}`);
     }
     const addOnsDir = join(values["wow-root"], flavor, "Interface", "AddOns");
-    const addons = all.filter((addon) => !values.addon || values.addon.includes(addon.name));
+    if (!existsSync(addOnsDir)) {
+        console.error(`No AddOns folder at ${addOnsDir}; start the game once so it creates it.`);
+        return 1;
+    }
+    const wanted = new Set(values.addon ?? all.map((addon) => addon.name));
+    for (const addon of all) {
+        if (wanted.has(addon.name) && values.addon && !values.unlink) {
+            for (const dependency of addon.dependencies) wanted.add(dependency);
+        }
+    }
+    const addons = all.filter((addon) => wanted.has(addon.name));
 
     if (!values.unlink && (await runChecks({ quiet: true, wowRoot: values["wow-root"] })).length > 0) {
         console.error("Checks failed; not deploying. Run `tlk check` for details.");

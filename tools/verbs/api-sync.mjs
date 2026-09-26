@@ -32,6 +32,7 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { findAddons, repoRoot } from "../lib/repo.mjs";
 import { createLua } from "../lib/lua.mjs";
+import { buildOf } from "../lib/probes.mjs";
 
 export const options = {
     docs: { type: "string" },
@@ -275,7 +276,6 @@ export function serialize(snapshot) {
         + "}\n";
 }
 
-const buildOf = (source) => /\d+\.\d+\.\d+ \(\d+\)/.exec(source ?? "")?.[0] ?? null;
 
 export async function run(values) {
     if (!values.docs && !values.globals) {

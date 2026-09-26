@@ -6,10 +6,8 @@ local function Enemy(fields)
     return unit
 end
 
--- Secret values ---------------------------------------------------------------
-
 test("secret values are opaque userdata that refuse every use", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:EnterCombat()
     local env = h.env
     local health = env.UnitHealth("player")
@@ -34,7 +32,7 @@ test("secret values are opaque userdata that refuse every use", function()
 end)
 
 test("issecretvalue is exact: NaN and plain values aren't secret", function()
-    local h = Harness.new()
+    local h = Harness.New()
     falsy(h.env.issecretvalue(0 / 0), "NaN")
     falsy(h.env.issecretvalue(nil))
     falsy(h.env.issecretvalue({}))
@@ -42,19 +40,17 @@ test("issecretvalue is exact: NaN and plain values aren't secret", function()
 end)
 
 test("wrapping keeps return arity: nil stays nil and trailing values survive", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:EnterCombat()
     h:SetTarget(nil)
     eq(select("#", h.env.UnitClass("target")), 0, "no unit: nothing returned")
-    local name, realm = h.env.UnitName("player")
+    local name, surname = h.env.UnitName("player")
     eq(Reveal(name), "Tester")
-    eq(realm, nil)
+    eq(Reveal(surname), Harness.DEFAULT_SURNAME, "the trailing surname survives")
 end)
 
--- Restrictions and predicates ----------------------------------------------------
-
--- GetRaidTargetIndex carries SecretReturns and nothing observed overrides it (UnitHealth, the
--- flag's other famous user, is secret always: see "UnitHealth is always secret").
+-- GetRaidTargetIndex carries SecretReturns, which is secret always (probed: UnitHealth and
+-- UnitHealthPercent, the flag's other users, came back secret with no restriction).
 local function Marked(h)
     if h.player.raidTarget ~= 1 then
         h:MarkRaidTarget("player", 1) -- marking the same icon twice would clear it
@@ -62,110 +58,27 @@ local function Marked(h)
     return h.env.GetRaidTargetIndex("player")
 end
 
+-- UnitIsAFK is secret during chat messaging lockdown (encounter, challenge mode, PvP match,
+-- restricted map, chat): the witness for a restriction being enforced.
+local function Restricted(h)
+    return h.env.issecretvalue(h.env.UnitIsAFK("player"))
+end
+
 test("UnitHealth is always secret, for every unit, even with no restriction (probed in game)", function()
-    local h = Harness.new()
+    local h = Harness.New()
     truthy(h.env.issecretvalue(h.env.UnitHealth("player")), "your own health")
     h:SetTarget({ name = "Hogger" })
     truthy(h.env.issecretvalue(h.env.UnitHealth("target")), "an NPC's")
     falsy(h.env.issecretvalue(h.env.UnitHealthMax("player")), "your max health is readable")
 end)
 
-test("SecretReturns is secret under combat, encounter, challenge mode and PvP, not on a map alone", function()
-    local h = Harness.new()
-    falsy(h.env.issecretvalue(Marked(h)), "no restriction")
-    for _, name in ipairs({ "Encounter", "ChallengeMode", "PvPMatch" }) do
-        h:SetRestriction(name, true)
-        truthy(h.env.issecretvalue(Marked(h)), name)
-        h:SetRestriction(name, false)
-    end
-    h:SetRestriction("Map", true)
-    falsy(h.env.issecretvalue(Marked(h)), "Map alone")
-    h:SetRestriction("Map", false)
-    h:EnterCombat()
-    truthy(h.env.issecretvalue(Marked(h)), "Combat")
-    h:LeaveCombat()
-    falsy(h.env.issecretvalue(Marked(h)), "after combat")
-end)
-
-test("chat messaging lockdown doesn't include combat", function()
-    local h = Harness.new()
-    h:EnterCombat()
-    falsy(h.env.issecretvalue(h.env.UnitIsAFK("player")), "combat alone")
-    h:SetRestriction("Chat", true)
-    truthy(h.env.issecretvalue(h.env.UnitIsAFK("player")))
-    h:SetRestriction("Chat", false)
-    h:SetRestriction("Map", true)
-    truthy(h.env.issecretvalue(h.env.UnitIsAFK("player")), "restricted map")
-end)
-
-test("unit identity is hidden in instanced content, not in open-world combat (probed in game)", function()
-    local h = Harness.new()
-    falsy(h.env.issecretvalue(h.env.UnitClass("player")), "the player is player-controlled")
-    h:SetTarget({ classFile = "WARRIOR" })
-    falsy(h.env.issecretvalue(h.env.UnitClass("target")), "an NPC's identity in the open world")
-    h:EnterCombat()
-    falsy(h.env.issecretvalue(h.env.UnitClass("target")), "and in open-world combat")
-    h:SetRestriction("Encounter", true)
-    truthy(h.env.issecretvalue(h.env.UnitClass("target")), "an NPC's identity in an encounter")
-    h:SetTarget(Enemy({ classFile = "MAGE" }))
-    falsy(h.env.issecretvalue(h.env.UnitClass("target")), "players are player-controlled")
-    h:SetTarget({ classFile = "PRIEST", inGroup = true })
-    falsy(h.env.issecretvalue(h.env.UnitClass("target")), "group members are accessible")
-end)
-
-test("unit names: identity rule under a restriction, except players during a PvP match", function()
-    local h = Harness.new()
-    h:SetTarget({ name = "Hogger" })
-    falsy(h.env.issecretvalue(h.env.UnitName("target")), "an NPC's name with no restriction (seen in game)")
-    h:EnterCombat()
-    falsy(h.env.issecretvalue(h.env.UnitName("target")), "in open-world combat too (probed)")
-    h:SetRestriction("Encounter", true)
-    truthy(h.env.issecretvalue(h.env.UnitName("target")), "NPC in an encounter")
-    h:SetTarget(Enemy({ name = "Gankalot", playerControlled = false }))
-    truthy(h.env.issecretvalue(h.env.UnitName("target")), "not player-controlled")
-    h:SetRestriction("PvPMatch", true)
-    falsy(h.env.issecretvalue(h.env.UnitName("target")), "players in a PvP match")
-end)
-
-test("unit power is secret except never-secret secondary resources, and max power follows control", function()
-    local h = Harness.new({ classFile = "ROGUE", powerType = 3 })
-    truthy(h.env.issecretvalue(h.env.UnitPower("player", 3)), "energy: always, no restriction needed")
-    h.player.power[4] = 3
-    falsy(h.env.issecretvalue(h.env.UnitPower("player", 4)), "combo points never")
-    falsy(h.env.issecretvalue(h.env.UnitPower("player", 0)), "a power the unit doesn't have")
-    falsy(h.env.issecretvalue(h.env.UnitPowerMax("player", 3)), "the player is player-controlled")
-    h:SetTarget({ power = { [1] = 50 }, powerMax = { [1] = 100 }, powerType = 1 })
-    truthy(h.env.issecretvalue(h.env.UnitPowerMax("target", 1)), "an NPC's max power")
-    truthy(h.env.issecretvalue(h.env.UnitHealthMax("target")), "an NPC's max health")
-    h:SetTarget(Enemy())
-    truthy(h.env.issecretvalue(h.env.UnitHealthMax("target")), "an enemy player's max health (probed in game)")
-    falsy(h.env.issecretvalue(h.env.UnitHealthMax("player")), "yours")
-end)
-
-test("flags without a predicate are secret under any restriction", function()
-    local h = Harness.new()
-    local flags = { SecretSomethingNew = true }
-    falsy(h:SecretFor(flags, Harness.CallContext({}, "Arguments", { n = 0 })))
-    h:SetRestriction("Map", true)
-    truthy(h:SecretFor(flags, Harness.CallContext({}, "Arguments", { n = 0 })))
-end)
-
-test("secret event payloads follow their predicate", function()
-    local h = Harness.new()
-    local got
-    local frame = h.env.CreateFrame("Frame")
-    frame:RegisterEvent("CHAT_MSG_AFK")
-    frame:SetScript("OnEvent", function(_, _, text) got = text end)
-    h:Fire("CHAT_MSG_AFK", "brb")
-    falsy(h.env.issecretvalue(got), "no lockdown")
-    h:SetRestriction("Chat", true)
-    h:Fire("CHAT_MSG_AFK", "brb")
-    truthy(h.env.issecretvalue(got), "chat lockdown")
-    eq(Reveal(got), "brb")
+test("SecretReturns is secret always, even with no restriction (probed in game)", function()
+    local h = Harness.New()
+    truthy(h.env.issecretvalue(Marked(h)))
 end)
 
 test("restriction changes fire Activating, then Active once enforced, and Inactive after", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local seen = {}
     local frame = env.CreateFrame("Frame")
@@ -173,7 +86,7 @@ test("restriction changes fire Activating, then Active once enforced, and Inacti
     frame:SetScript("OnEvent", function(_, _, kind, state)
         seen[#seen + 1] = ("%d:%d active=%s state=%d secret=%s"):format(kind, state,
             tostring(env.C_RestrictedActions.IsAddOnRestrictionActive(kind)),
-            env.C_RestrictedActions.GetAddOnRestrictionState(kind), tostring(Reveal(env.issecretvalue(Marked(h)))))
+            env.C_RestrictedActions.GetAddOnRestrictionState(kind), tostring(Restricted(h)))
     end)
     h:SetRestriction("Encounter", true)
     truthy(env.C_RestrictedActions.IsAddOnRestrictionActive(env.Enum.AddOnRestrictionType.Encounter))
@@ -183,10 +96,8 @@ test("restriction changes fire Activating, then Active once enforced, and Inacti
         .. "1:0 active=false state=0 secret=false")
 end)
 
--- Secret arguments and aspects -----------------------------------------------------
-
 test("secrets held in a table argument count, and LuaValueVariant arguments are read", function()
-    local h = Harness.new()
+    local h = Harness.New()
     throws(function() h.env.C_GamePad.SetLedColor(h.env.CreateColor(Secret(1), 0, 0)) end, "secret argument #1 refused")
     eq(h.led, nil)
     local serialize = h:WrapFunction("C_EncodingUtil.SerializeJSON", function() return "{}" end)
@@ -195,7 +106,7 @@ test("secrets held in a table argument count, and LuaValueVariant arguments are 
 end)
 
 test("undocumented fakes refuse secret arguments by default", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:AddMedia("x.ogg")
     throws(function() h.env.PlaySoundFile("x.ogg", Secret("Master")) end, "undocumented")
     throws(function() h.env.StopSound(Secret(1)) end, "undocumented")
@@ -204,14 +115,14 @@ test("undocumented fakes refuse secret arguments by default", function()
 end)
 
 test("RequiresFontStringTextAccess methods return nothing on a fontstring with secret text", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local fs = h.env.CreateFrame("Frame"):CreateFontString()
     fs:SetText(Secret("hidden"))
     eq(select("#", fs:FindCharacterIndexAtCoordinate(1, 1)), 0)
 end)
 
 test("addon code is tainted: a secret argument is refused unless the API allows it when tainted", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:EnterCombat()
     local health = h.env.UnitHealth("player")
     throws(function() h.env.UnitClass(health) end, "SecretArguments AllowedWhenUntainted")
@@ -226,7 +137,7 @@ test("addon code is tainted: a secret argument is refused unless the API allows 
 end)
 
 test("a secret reaching a setter makes that aspect's getters secret until SetToDefaults", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local text = h.env.CreateFrame("Frame"):CreateFontString()
     text:SetText("plain")
     falsy(h.env.issecretvalue(text:GetText()))
@@ -240,14 +151,12 @@ test("a secret reaching a setter makes that aspect's getters secret until SetToD
 end)
 
 test("SetFormattedText formats a secret into a secret string", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local text = h.env.CreateFrame("Frame"):CreateFontString()
     text:SetFormattedText("%d%%", Secret(42))
     truthy(h.env.issecretvalue(text:GetText()))
     eq(Reveal(text:GetText()), "42%")
 end)
-
--- Protected calls -------------------------------------------------------------
 
 -- Blizzard_Game routes ADDON_ACTION_BLOCKED to a "blocked" message and ADDON_ACTION_FORBIDDEN to
 -- a popup; the client itself skips the call and the caller keeps running.
@@ -261,7 +170,7 @@ local function WatchBlocked(h)
 end
 
 test("protected methods on protected frames are blocked during lockdown: the call does nothing, the caller continues", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local seen = WatchBlocked(h)
     local secure = h.env.CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
     local holder = h.env.CreateFrame("Frame")
@@ -287,7 +196,7 @@ test("protected methods on protected frames are blocked during lockdown: the cal
 end)
 
 test("Settings.OpenToCategory is blocked during lockdown (C_SettingsUtil.OpenSettingsPanel has restrictions)", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h.env.Settings.OpenToCategory(7)
     eq(h.opened[1], 7)
     h:EnterCombat()
@@ -297,7 +206,7 @@ test("Settings.OpenToCategory is blocked during lockdown (C_SettingsUtil.OpenSet
 end)
 
 test("Settings layouts: controls join their own category's layout, headers go where they're added", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local Settings = h.env.Settings
     local main, mainLayout = Settings.RegisterVerticalLayoutCategory("Main")
     local sub, subLayout = Settings.RegisterVerticalLayoutSubcategory(main, "Sub")
@@ -325,7 +234,7 @@ test("Settings layouts: controls join their own category's layout, headers go wh
 end)
 
 test("a protected global is forbidden to addon code at any time", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local seen = WatchBlocked(h)
     local ran = false
     local compare = h:WrapFunction("C_TooltipComparison.CompareItem", function() ran = true end)
@@ -336,7 +245,7 @@ test("a protected global is forbidden to addon code at any time", function()
 end)
 
 test("HasRestrictions: a specific marker replaces the lockdown rule, otherwise lockdown blocks", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local calls = 0
     local send = h:WrapFunction("C_ChatInfo.SendChatMessage", function() calls = calls + 1 end)
     local propagate = h.env.CreateFrame("Frame")
@@ -346,8 +255,6 @@ test("HasRestrictions: a specific marker replaces the lockdown rule, otherwise l
     propagate:SetPropagateKeyboardInput(true) -- HasRestrictions, no marker: blocked in lockdown
     eq(h.blocked[1], "Frame:SetPropagateKeyboardInput (SimpleFrameAPI)")
 end)
-
--- Loading, SavedVariables, reload -----------------------------------------------
 
 Harness.DefineAddOn("HarnessProbe", {
     savedVariables = { "ProbeDB" }, savedVariablesPerCharacter = { "ProbeCharDB" },
@@ -371,7 +278,7 @@ Harness.DefineAddOn("HarnessProbe", {
 })
 
 test("SavedVariables are nil while files run and assigned before ADDON_LOADED", function()
-    local h = Harness.new({ saved = { ProbeDB = { value = 1 }, ProbeCharDB = { count = 4 } } })
+    local h = Harness.New({ saved = { ProbeDB = { value = 1 }, ProbeCharDB = { count = 4 } } })
     local ns = h:LoadAddon("HarnessProbe")
     eq(ns.atLoad.db, nil, "account table while files run")
     eq(ns.atLoad.char, nil, "per-character table while files run")
@@ -382,14 +289,14 @@ test("SavedVariables are nil while files run and assigned before ADDON_LOADED", 
 end)
 
 test("a missing SavedVariable keeps what the files assigned", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local ns = h:LoadAddon("HarnessProbe")
     eq(ns.loaded.db.default, true)
     eq(ns.loaded.char, nil)
 end)
 
 test("Reload and Relog write SavedVariables and pass the right login arguments", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local ns = h:LoadAddon("HarnessProbe")
     eq(ns.world[1], true)
     eq(ns.world[2], false)
@@ -412,13 +319,13 @@ Harness.DefineAddOn("SerializeProbe", { savedVariables = { "SerDB" }, sources = 
     frame:SetScript("OnEvent", function()
         local shared = { x = 1 }
         SerDB = { a = shared, b = shared, inf = math.huge, nan = 0 / 0, fn = print, frame = frame,
-            [true] = "boolean key", [1.5] = "number key", secret = UnitHealth("player"), list = { "x", "y" } }
+            [true] = "boolean key", [1.5] = "number key", list = { "x", "y" } }
         SerDB.self = SerDB
     end)
 ]] } })
 
 test("SavedVariables keep only what the client writes: copies, no cycles, no inf or NaN", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:LoadAddon("SerializeProbe")
     h:EnterCombat()
     h:Reload()
@@ -431,14 +338,25 @@ test("SavedVariables keep only what the client writes: copies, no cycles, no inf
     eq(db.nan, nil)
     eq(db.fn, nil)
     eq(db.frame, nil)
-    eq(db.secret, nil)
     eq(db[true], nil)
     eq(db[1.5], "number key")
     eq(table.concat(db.list, ","), "x,y")
 end)
 
+Harness.DefineAddOn("SecretSaver", { savedVariables = { "LeakDB" }, sources = { [[
+    local frame = CreateFrame("Frame")
+    frame:RegisterEvent("PLAYER_LOGOUT")
+    frame:SetScript("OnEvent", function() LeakDB = { health = UnitHealth("player") } end)
+]] } })
+
+test("a secret that reaches SavedVariables is an error, not a silent drop", function()
+    local h = Harness.New()
+    h:LoadAddon("SecretSaver")
+    throws(function() h:Reload() end, "a secret value reached SavedVariables")
+end)
+
 test("Relog ends combat, lockdown and restrictions; Reload keeps them", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:LoadAddon("HarnessProbe")
     h:EnterCombat()
     h:SetRestriction("Map", true)
@@ -448,13 +366,11 @@ test("Relog ends combat, lockdown and restrictions; Reload keeps them", function
     falsy(h.env.InCombatLockdown())
     falsy(h.inCombat)
     falsy(h.env.C_RestrictedActions.IsAddOnRestrictionActive(h.env.Enum.AddOnRestrictionType.Map))
-    falsy(h.env.issecretvalue(Marked(h)))
+    falsy(Restricted(h))
 end)
 
--- Timers and animations -------------------------------------------------------------
-
 test("C_Timer callbacks run in due order as time advances, and cancel", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local log = {}
     h.env.C_Timer.After(2, function() log[#log + 1] = "after2@" .. h.env.GetTime() end)
     h.env.C_Timer.After(1, function() log[#log + 1] = "after1@" .. h.env.GetTime() end)
@@ -473,16 +389,16 @@ test("C_Timer callbacks run in due order as time advances, and cancel", function
 end)
 
 test("Advance refuses a timer that keeps rescheduling itself", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local n = 0
-    local function tick() n = n + 1; h.env.C_Timer.After(0, tick) end
-    h.env.C_Timer.After(0, tick)
+    local function Tick() n = n + 1; h.env.C_Timer.After(0, Tick) end
+    h.env.C_Timer.After(0, Tick)
     throws(function() h:Advance(0) end, "keeps rescheduling itself")
     eq(n, Harness.MAX_TIMER_CALLBACKS)
 end)
 
 test("a ticker cancels from its own callback, and a callback error is reported", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local ticks = 0
     h.env.C_Timer.NewTicker(1, function(self) ticks = ticks + 1; if ticks == 2 then self:Cancel() end end)
     h.env.C_Timer.After(1, function() error("boom") end)
@@ -492,7 +408,7 @@ test("a ticker cancels from its own callback, and a callback error is reported",
 end)
 
 test("an alpha animation group finishes when time passes its duration", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local frame = h.env.CreateFrame("Frame")
     local group = frame:CreateAnimationGroup()
     local fade = group:CreateAnimation("Alpha")
@@ -516,10 +432,8 @@ test("an alpha animation group finishes when time passes its duration", function
     eq(finished, 1, "a stopped group doesn't finish")
 end)
 
--- Events, input, frames -----------------------------------------------------------
-
 test("a dispatch goes to the frames registered when it starts, and handler errors are reported", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local late
     local first = h.env.CreateFrame("Frame")
     first:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -539,7 +453,7 @@ test("a dispatch goes to the frames registered when it starts, and handler error
 end)
 
 test("ExpectErrors takes a count or patterns", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:ReportError("alpha")
     h:ReportError("beta")
     h:ExpectErrors(2)
@@ -554,7 +468,7 @@ test("ExpectErrors takes a count or patterns", function()
 end)
 
 test("InCombatLockdown is false during PLAYER_REGEN_DISABLED", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local seen
     local frame = h.env.CreateFrame("Frame")
     frame:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -565,7 +479,7 @@ test("InCombatLockdown is false during PLAYER_REGEN_DISABLED", function()
 end)
 
 test("only real API is allowed", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local frame = h.env.CreateFrame("Frame")
     throws(function() frame:RegisterEvent("NOT_A_REAL_EVENT") end, "unknown event")
     throws(function() frame:NotARealMethod() end, "no method")
@@ -576,7 +490,7 @@ test("only real API is allowed", function()
 end)
 
 test("unit events respect their unit filter", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local count = 0
     local frame = h.env.CreateFrame("Frame")
     frame:RegisterUnitEvent("UNIT_HEALTH", "player")
@@ -588,7 +502,7 @@ test("unit events respect their unit filter", function()
 end)
 
 test("unit-filtered events with a secret payload are delivered; unit tokens aren't wrapped", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:SetTarget({})
     local cast, castUnit = 0, nil
@@ -608,7 +522,7 @@ test("unit-filtered events with a secret payload are delivered; unit tokens aren
 end)
 
 test("widget state lives beside the widget: addon fields never collide with it", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local b = env.CreateFrame("Button", nil, env.UIParent)
     b.text = b:CreateFontString()
@@ -633,7 +547,7 @@ test("widget state lives beside the widget: addon fields never collide with it",
 end)
 
 test("fontstrings measure their text: 7 px per character, 14 px per line, wrapped at their width", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local frame = h.env.CreateFrame("Frame")
     frame:SetSize(300, 50)
     local fs = frame:CreateFontString()
@@ -664,7 +578,7 @@ test("fontstrings measure their text: 7 px per character, 14 px per line, wrappe
 end)
 
 test("hovering runs OnEnter and OnLeave on visible mouse-enabled widgets", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local button = h.env.CreateFrame("Button")
     local log = {}
     button:SetScript("OnEnter", function(_, motion) log[#log + 1] = "enter:" .. tostring(motion) end)
@@ -677,7 +591,7 @@ test("hovering runs OnEnter and OnLeave on visible mouse-enabled widgets", funct
 end)
 
 test("gamepad input and IsVisible use effective visibility", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local parent = h.env.CreateFrame("Frame")
     local child = h.env.CreateFrame("Frame", nil, parent)
     child:EnableGamePadButton(true)
@@ -695,7 +609,7 @@ test("gamepad input and IsVisible use effective visibility", function()
 end)
 
 test("clicks reach visible mouse-enabled widgets; buttons are mouse-enabled", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local button = h.env.CreateFrame("Button")
     local clicks = 0
     button:SetScript("OnClick", function(_, which) clicks = clicks + 1; eq(which, "LeftButton") end)
@@ -710,10 +624,8 @@ test("clicks reach visible mouse-enabled widgets; buttons are mouse-enabled", fu
     eq(ups, 1)
 end)
 
--- Unit and utility fakes ------------------------------------------------------------
-
 test("UnitCanAttack honors both units", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:SetTarget(Enemy())
     truthy(h.env.UnitCanAttack("player", "target"))
     truthy(h.env.UnitCanAttack("target", "player"))
@@ -722,7 +634,7 @@ test("UnitCanAttack honors both units", function()
 end)
 
 test("pet, focus, party, mouseover and nameplate units are absent until a test sets them", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:EnterCombat()
     falsy(env.UnitExists("focus"))
@@ -740,7 +652,7 @@ test("pet, focus, party, mouseover and nameplate units are absent until a test s
 end)
 
 test("UnitPowerType returns the token for each type", function()
-    local h = Harness.new({ powerType = 1 })
+    local h = Harness.New({ powerType = 1 })
     local _, token = h.env.UnitPowerType("player")
     eq(token, "RAGE")
     for powerType, expected in pairs({ [0] = "MANA", [2] = "FOCUS", [3] = "ENERGY", [6] = "RUNIC_POWER" }) do
@@ -750,14 +662,14 @@ test("UnitPowerType returns the token for each type", function()
 end)
 
 test("strsplit splits on any delimiter character, and honors its limit", function()
-    local h = Harness.new()
+    local h = Harness.New()
     eq(table.concat({ h.env.strsplit(", ", "a,b c") }, "|"), "a|b|c")
     eq(table.concat({ h.env.strsplit(":", "a:b:c", 2) }, "|"), "a|b:c")
     eq(table.concat({ h.env.strsplit("%", "x%y") }, "|"), "x|y", "magic characters are literal")
 end)
 
 test("session fakes: money, XP, zones, clocks and formatting", function()
-    local h = Harness.new({ money = 1234567, level = 12, xp = 300, xpMax = 900, rested = 0 })
+    local h = Harness.New({ money = 1234567, level = 12, xp = 300, xpMax = 900, rested = 0 })
     local env = h.env
     eq(env.GetMoney(), 1234567)
     eq(env.GetMoneyString(1234567), "123g 45s 67c")
@@ -779,7 +691,7 @@ test("session fakes: money, XP, zones, clocks and formatting", function()
 end)
 
 test("sound kits play through PlaySound and C_Sound.PlaySound", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local ok, handle = h.env.PlaySound(h.env.SOUNDKIT.LFG_REWARDS)
     truthy(ok)
     h.env.C_Sound.PlaySound(h.env.SOUNDKIT.IG_SPELLBOOK_OPEN, "Master")
@@ -791,6 +703,6 @@ end)
 
 test("a TOC file missing on disk fails that addon's load, not the run", function()
     Harness.DefineAddOn("MissingFileProbe", { sources = { "" }, missing = { "Gone.lua" } })
-    local h = Harness.new()
+    local h = Harness.New()
     throws(function() h:LoadFiles("MissingFileProbe") end, "Gone.lua, which doesn't exist")
 end)

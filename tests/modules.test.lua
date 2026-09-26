@@ -2,7 +2,7 @@
 
 -- A harness with the framework loaded and a bare addon, not yet started.
 local function NewAddOn(options)
-    local h = Harness.new(options and options.harness)
+    local h = Harness.New(options and options.harness)
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
     rawset(h.env, "TestDB", h.saved.TestDB)
@@ -26,8 +26,6 @@ local function StartRefused(h, addon)
     falsy(addon.Started, "addon must not start")
     return h.errors[1] or ""
 end
-
--- Module activation and per-character rows ----------------------------------
 
 test("a module with an active rule runs only while the rule holds", function()
     local h, addon = NewAddOn()
@@ -69,8 +67,6 @@ test("character scope needs a per-character SavedVariable", function()
     truthy(StartRefused(h, addon):find("savedVariablePerCharacter", 1, true))
 end)
 
--- Locks and per-character modules ------------------------------------------------
-
 test("a row locked by another row refuses writes from code, slash and the panel", function()
     local h, addon = NewAddOn()
     local m = addon:Module("M", { toggle = false, state = {
@@ -105,9 +101,7 @@ test("a character-scoped module's switch is saved per character", function()
     eq(h.env.TestDB["Kid.enabled"], nil)
 end)
 
--- Records ---------------------------------------------------------------------------
-
-local PEOPLE = {
+local People = {
     name = "people", limit = 3, evict = "seen",
     fields = {
         { name = "kind", kind = "string", default = "grudge", values = { "grudge", "glory" } },
@@ -120,7 +114,7 @@ local PEOPLE = {
 local function NewLedger(saved)
     local h, addon = NewAddOn({ harness = { saved = { TestDB = saved } } })
     rawset(h.env, "TestDB", h.saved.TestDB)
-    local m = addon:Module("Ledger", { toggle = false, records = { PEOPLE } })
+    local m = addon:Module("Ledger", { toggle = false, records = { People } })
     Start(h)
     return h, addon, m.Records.people
 end

@@ -7,13 +7,14 @@
 -- Formatting helpers (GetMoneyString, SecondsToTime) are deterministic stand-ins, not
 -- Blizzard's exact output (no coin textures, English unit names). date() and time() run in UTC.
 --
--- Names: UnitName returns the realm only for another realm's unit; UnitFullName also always
--- returns the player's (normalized) realm. Ambiguate follows the documented context table
--- (all, guild, mail, none, short, craftingorder). The harness has no guild roster, so no name
--- counts as a guildmate: "all" and "guild" act like "none", dropping the realm only for the
--- player's own realm.
+-- Names [E]: Forever's names are regionally unique "First Last". UnitName, UnitNameUnmodified and
+-- UnitFullName return (first, surname) for a player and (name, nil) for an NPC; no realm.
+-- GetPlayerInfoByGUID's name is "First Last" with realm "" on your realm. Ambiguate follows the
+-- documented context table (all, guild, mail, none, short, craftingorder). The harness has no
+-- guild roster, so no name counts as a guildmate: "all" and "guild" act like "none", dropping the
+-- realm only for the player's own realm.
 
-local SNAPSHOT = __snapshot
+local Snapshot = __snapshot
 
 local function Color(r, g, b, a)
     return {
@@ -24,7 +25,7 @@ local function Color(r, g, b, a)
 end
 
 -- UnitPowerType's token per Enum.PowerType value.
-local POWER_TOKENS = {
+local PowerTokens = {
     [0] = "MANA", [1] = "RAGE", [2] = "FOCUS", [3] = "ENERGY", [4] = "COMBO_POINTS", [5] = "RUNES",
     [6] = "RUNIC_POWER", [7] = "SOUL_SHARDS", [8] = "LUNAR_POWER", [9] = "HOLY_POWER", [10] = "ALTERNATE",
     [11] = "MAELSTROM", [12] = "CHI", [13] = "INSANITY", [16] = "ARCANE_CHARGES", [17] = "FURY", [18] = "PAIN",
@@ -32,7 +33,7 @@ local POWER_TOKENS = {
 }
 
 -- UnitClass: className (enUS), classFile, classID.
-local CLASSES = {
+local Classes = {
     WARRIOR = { "Warrior", 1 }, PALADIN = { "Paladin", 2 }, HUNTER = { "Hunter", 3 }, ROGUE = { "Rogue", 4 },
     PRIEST = { "Priest", 5 }, DEATHKNIGHT = { "Death Knight", 6 }, SHAMAN = { "Shaman", 7 }, MAGE = { "Mage", 8 },
     WARLOCK = { "Warlock", 9 }, MONK = { "Monk", 10 }, DRUID = { "Druid", 11 }, DEMONHUNTER = { "Demon Hunter", 12 },
@@ -41,14 +42,14 @@ local CLASSES = {
 
 -- A few real SOUNDKIT entries (Blizzard_SharedXML/Mainline/SoundKitConstants.lua). Reading any
 -- other key is an error: add it here, with its real value, when an addon needs it.
-local SOUNDKITS = {
+local Soundkits = {
     IG_SPELLBOOK_OPEN = 829, IG_QUEST_LOG_OPEN = 844, IG_MAINMENU_OPTION_CHECKBOX_ON = 856,
     IG_QUEST_LIST_COMPLETE = 878, RAID_WARNING = 8959, READY_CHECK = 8960, LFG_REWARDS = 17316,
     UI_EPICLOOT_TOAST = 31578,
 }
 
 -- Lua libraries, limited to the members the client has (it removes some, e.g. string.dump).
-local LIBRARIES = {
+local Libraries = {
     math = { "abs", "acos", "asin", "atan", "atan2", "ceil", "cos", "cosh", "deg", "exp", "floor", "fmod", "frexp",
         "huge", "ldexp", "log", "log10", "max", "min", "modf", "pi", "pow", "rad", "random", "sin", "sinh", "sqrt", "tan", "tanh" },
     string = { "byte", "char", "find", "format", "gmatch", "gsub", "len", "lower", "match", "rep", "reverse", "sub", "upper" },
@@ -65,14 +66,14 @@ end
 
 local function Library(name)
     local lib = {}
-    for _, member in ipairs(LIBRARIES[name]) do
+    for _, member in ipairs(Libraries[name]) do
         lib[member] = _G[name][member]
     end
     return lib
 end
 
 -- WoW's strsplit: every character of delimiter separates (a set, not a sequence).
-local function strsplit(delimiter, s, limit)
+local function Strsplit(delimiter, s, limit)
     local set = "[" .. delimiter:gsub("[%]%[%^%-%%]", "%%%0") .. "]"
     local parts, start = {}, 1
     while not limit or #parts < limit - 1 do
@@ -85,7 +86,7 @@ local function strsplit(delimiter, s, limit)
     return unpack(parts)
 end
 
-local function strtrim(s, chars)
+local function Strtrim(s, chars)
     local set = chars and ("[" .. chars:gsub("[%]%[%^%-%%]", "%%%0") .. "]") or "%s"
     return (s:gsub("^" .. set .. "+", ""):gsub(set .. "+$", ""))
 end
@@ -111,7 +112,7 @@ local function MoneyString(money)
     return table.concat(parts, " ")
 end
 
-local TIME_UNITS = {
+local TimeUnits = {
     { 86400, "Day", "Day", "Days" }, { 3600, "Hr", "Hour", "Hours" }, { 60, "Min", "Minute", "Minutes" },
     { 1, "Sec", "Second", "Seconds" },
 }
@@ -120,8 +121,8 @@ local function SecondsToTime(seconds, noSeconds, notAbbreviated, maxCount)
     maxCount = maxCount or 2
     seconds = math.floor(seconds)
     local parts = {}
-    for i, unit in ipairs(TIME_UNITS) do
-        local isSeconds = i == #TIME_UNITS
+    for i, unit in ipairs(TimeUnits) do
+        local isSeconds = i == #TimeUnits
         local count = math.floor(seconds / unit[1])
         if count > 0 and #parts < maxCount and not (isSeconds and noSeconds) then
             local label = notAbbreviated and (count == 1 and unit[3] or unit[4]) or unit[2]
@@ -180,7 +181,7 @@ function Harness:BuildEnvironment()
         math = Library("math"), string = Library("string"), table = Library("table"),
         tinsert = table.insert, tremove = table.remove,
         wipe = function(t) for k in pairs(t) do t[k] = nil end return t end,
-        strtrim = strtrim, strsplit = strsplit, strjoin = function(sep, ...) return table.concat({ ... }, sep) end,
+        strtrim = Strtrim, strsplit = Strsplit, strjoin = function(sep, ...) return table.concat({ ... }, sep) end,
         print = function(...)
             Refuse("print", ...)
             local parts = {}
@@ -216,6 +217,7 @@ function Harness:BuildEnvironment()
         end,
         CreateColor = Color,
         SlashCmdList = {},
+        hash_SlashCmdList = {}, -- the chat frame's imported commands, [uppercased alias] = handler
 
         -- Units.
         UnitExists = function(u) return Field(u, "exists", false) end,
@@ -227,14 +229,18 @@ function Harness:BuildEnvironment()
         UnitHealthMax = function(u) return Field(u, "maxHealth", 0) end,
         UnitName = function(u)
             local unit = Unit(u)
-            if unit then return unit.name, unit.realm ~= h.player.realm and unit.realm or nil end
+            if unit then return unit.name, unit.surname end
         end,
+        UnitNameUnmodified = function(u)
+            local unit = Unit(u)
+            if unit then return unit.name, unit.surname end
+        end,
+        -- [E] Forever's separator for "First Last" (names.player).
+        Constants = { CharacterNameSeparatorConsts = { CHARACTERNAME_SURNAME_SEPARATOR = " " } },
+        RegionalUniqueNamesEnabled = function() return true end,
         UnitFullName = function(u)
             local unit = Unit(u)
-            if not unit then return end
-            local realm = Harness.NormalizeRealm(unit.realm)
-            if u ~= "player" and realm == Harness.NormalizeRealm(h.player.realm) then realm = nil end
-            return unit.name, realm
+            if unit then return unit.name, unit.surname end
         end,
         -- Group membership (group.lua). UnitInParty is true for the player in any group and for
         -- the members of their party (in a raid, their subgroup); UnitInRaid is a raid member's
@@ -277,17 +283,17 @@ function Harness:BuildEnvironment()
         UnitClass = function(u)
             local unit = Unit(u)
             local classFile = unit and unit.classFile
-            local class = CLASSES[classFile or ""]
+            local class = Classes[classFile or ""]
             if class then return unit.className or class[1], classFile, class[2] end
         end,
         UnitLevel = function(u) return Field(u, "level", 0) end,
         GetPlayerInfoByGUID = function(guid)
             local unit = h.guidUnits[guid]
             if not unit or not unit.isPlayer or not unit.name then return end
-            local class, race = CLASSES[unit.classFile or ""], unit.race and Harness.RACES[unit.race]
+            local class, race = Classes[unit.classFile or ""], unit.race and Harness.RACES[unit.race]
             local realm = (unit.realm == nil or unit.realm == h.player.realm) and "" or unit.realm
             return class and (unit.className or class[1]), unit.classFile, race and race[1], unit.race, unit.sex or 2,
-                unit.name, realm
+                Harness.DisplayName(unit), realm
         end,
         UnitIsBossMob = function(u)
             local unit = Unit(u)
@@ -305,7 +311,7 @@ function Harness:BuildEnvironment()
         GetMoney = function() return h.player.money end,
         UnitPowerType = function(u)
             local powerType = Field(u, "powerType", 0)
-            return powerType, POWER_TOKENS[powerType] or "MANA"
+            return powerType, PowerTokens[powerType] or "MANA"
         end,
         UnitPower = function(u, powerType)
             local unit = Unit(u)
@@ -413,6 +419,17 @@ function Harness:BuildEnvironment()
             end,
         },
 
+        -- The addon profiler and memory (Blizzard_AddOnList reads them). Metrics come from
+        -- h.profiler: numbers keyed by Enum.AddOnProfilerMetric value, 0 when unset.
+        C_AddOnProfiler = {
+            IsEnabled = function() return h.profiler.enabled end,
+            GetAddOnMetric = function(name, metric) return (h.profiler.addons[name] or {})[metric] or 0 end,
+            GetApplicationMetric = function(metric) return h.profiler.application[metric] or 0 end,
+            GetOverallMetric = function(metric) return h.profiler.overall[metric] or 0 end,
+        },
+        UpdateAddOnMemoryUsage = function() h.memoryUpdates = h.memoryUpdates + 1 end,
+        GetAddOnMemoryUsage = function(name) return h.profiler.memory[name] or 0 end,
+
         -- Addon messages (group.lua); the rest of C_ChatInfo is merged in below.
         C_ChatInfo = h:AddonMessageFakes(),
 
@@ -439,10 +456,10 @@ function Harness:BuildEnvironment()
     -- math.random and random are Lua's until h:SeedRandom (see wow.lua).
     fakes.math.random = function(...) return h:Random(...) end
     fakes.random = fakes.math.random
-    for key, value in pairs(SOUNDKITS) do
+    for key, value in pairs(Soundkits) do
         rawset(fakes.SOUNDKIT, key, value)
     end
-    fakes.string.trim, fakes.string.split, fakes.string.join = strtrim, strsplit, fakes.strjoin
+    fakes.string.trim, fakes.string.split, fakes.string.join = Strtrim, Strsplit, fakes.strjoin
     local format = fakes.string.format
     fakes.string.format = function(fmt, ...)
         Refuse("string.format", fmt, ...)
@@ -452,7 +469,7 @@ function Harness:BuildEnvironment()
 
     -- Enum, from the documented enumerations.
     fakes.Enum = {}
-    for name, fields in pairs(SNAPSHOT.enums) do
+    for name, fields in pairs(Snapshot.enums) do
         local enum = {}
         for field, value in pairs(fields) do
             enum[field] = value
@@ -630,7 +647,7 @@ end
 -- Every fake's name ("Name" or "Table.member"), for the test runner's check that each one exists
 -- in the client dump. Tables whose members are data (Enum values, SOUNDKIT) list one level.
 function Harness.FakeNames()
-    local h = Harness.new()
+    local h = Harness.New()
     Harness.created = {}
     local names = {}
     for name, value in pairs(h.env) do

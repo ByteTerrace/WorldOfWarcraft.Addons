@@ -7,98 +7,132 @@ local addonName, ns = ...
 -- Drag it anywhere; it shows itself when there's someone to list, and hides when there isn't.
 --
 -- The window is the global frame TheLanKrewToolKitRadar: Title, then Rows (MaxRows buttons, each
--- with Icon, Name and Detail). A redraw touches only the rows in use and the ones it clears.
+-- with Icon, Name and Detail). While it shows, a once-a-second tick redraws it; a sighting only
+-- updates its entry, and draws at once only when the window is hidden. A redraw sets only what
+-- changed: a row keeps what it shows and sets a region only when its entry's value differs, so a
+-- tick where nobody came or went touches only the Detail texts whose "ago" moved.
 --
 -- Sharing: enemies you see for the first time in a while are batched and sent to the Krew at most
--- once per ShareInterval, only while there's something new: no timer runs when nothing is.
+-- once per ShareInterval, only while there's something new: no timer runs when nothing is. A
+-- NEARBY message is "NEARBY:" then entries "First Last;CLASS;level", as many as fit in Comms'
+-- MaxMessage bytes; the rest wait for the next one.
 
 local NearbySeconds = 120
 local ShareInterval = 10
 local MaxRows = 10
 local RowHeight = 18
 local Width = 240
-local MaxMessageFields = 200 -- bytes of entries per NEARBY message (the rest waits its turn)
+local MaxMessage = ByteTerrace.Comms.MaxMessage
+local Room = MaxMessage - #"NEARBY:" -- bytes of entries and their tab separators per message
 local Points = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
 
-local C_Timer, CreateFrame, GetRealZoneText, GetSubZoneText, GetTime = C_Timer, CreateFrame, GetRealZoneText, GetSubZoneText, GetTime
+local CreateFrame, GetTime = CreateFrame, GetTime
 local MenuUtil, RAID_CLASS_COLORS = MenuUtil, RAID_CLASS_COLORS
-local floor, tostring = math.floor, tostring
-local concat, sort = table.concat, table.sort
+local floor = math.floor
+local sort, wipe = table.sort, wipe
 
 local Addon = ns.Addon
 local Krew = ns.Krew
 local Warband = ns.Warband
 
-local Nearby = {} -- [key] = { key, class, level, faction, guild, time, by, zone, status }
+local Nearby = {} -- [key] = { key, class, level, faction, guild, time, by, status }
 local Pending = {} -- [key] = true for your own sightings not yet shared
+local List = {}    -- scratch: the entries a redraw shows, in order
 local FlushTimer, Window, Ticker
 local Radar
 
 local Render
 
-local function Note(info, by, zone)
+local function Note(info, by)
     local entry = Nearby[info.key]
     if not entry then
-        entry = { key = info.key }
+        entry = { key = info.key, class = "", level = 0, faction = "", guild = "" }
         Nearby[info.key] = entry
         if not by then
             Pending[info.key] = true
         end
     end
-    entry.class = info.class ~= "" and info.class or entry.class or ""
-    entry.level = info.level > 0 and info.level or entry.level or 0
-    entry.faction = info.faction ~= "" and info.faction or entry.faction or ""
-    entry.guild = (info.guild and info.guild ~= "") and info.guild or entry.guild or ""
+    if info.class ~= "" then
+        entry.class = info.class
+    end
+    if info.level > 0 then
+        entry.level = info.level
+    end
+    if info.faction ~= "" then
+        entry.faction = info.faction
+    end
+    if info.guild ~= "" then
+        entry.guild = info.guild
+    end
     if not by or not entry.time or entry.by then
         entry.by = by -- your own sighting wins over a Krew report
     end
     entry.time = GetTime()
-    entry.zone = zone or ""
-    Render()
+    if not Ticker then
+        Render() -- the window is hidden: show it now; while it shows, the tick draws
+    end
 end
 
 local function Flush()
     FlushTimer = nil
-    if not Radar:Get("share") or not Krew.Ready() then
+    if not Radar:Get("share") or not Krew:Ready() then
         wipe(Pending)
         return
     end
-    local fields = { Warband.CleanText(GetRealZoneText()), Warband.CleanText(GetSubZoneText()) }
-    local size = 0
+    local fields, room = {}, Room
     for key in pairs(Pending) do
         local entry = Nearby[key]
-        Pending[key] = nil
-        if entry then
+        if not entry then
+            Pending[key] = nil -- gone from the list: nothing to share
+        else
             local text = key .. ";" .. entry.class .. ";" .. entry.level
-            if size + #text + 1 > MaxMessageFields then
-                Pending[key] = true -- next message
-                break
+            local size = #fields > 0 and #text + 1 or #text
+            if size > room then
+                break -- the rest wait for the next message
             end
-            size = size + #text + 1
+            room = room - size
             fields[#fields + 1] = text
+            Pending[key] = nil
         end
     end
-    if #fields > 2 then
-        Krew.Send("NEARBY", fields)
+    if #fields > 0 then
+        Krew:Send("NEARBY", fields)
     end
     if next(Pending) then
-        FlushTimer = C_Timer.NewTimer(ShareInterval, Flush)
+        FlushTimer = Radar:After(ShareInterval, Flush)
     end
 end
 
 local function OnNearby(info)
     Note(info)
     if next(Pending) and not FlushTimer then
-        FlushTimer = C_Timer.NewTimer(ShareInterval, Flush)
+        FlushTimer = Radar:After(ShareInterval, Flush)
     end
 end
 
-local function Ago(seconds)
-    seconds = floor(seconds)
-    if seconds < 60 then
-        return seconds .. "s"
+-- Standing first (marks, then grudges ...), then the most recently seen, then by name.
+local function ByStanding(a, b)
+    local rankA, rankB = Warband.Order[a.status] or 9, Warband.Order[b.status] or 9
+    if rankA ~= rankB then
+        return rankA < rankB
     end
-    return floor(seconds / 60) .. "m"
+    if a.time ~= b.time then
+        return a.time > b.time
+    end
+    return a.key < b.key
+end
+
+-- "60 - 5s - Mom Doe": level, how long ago, and who saw them.
+local function Detail(entry, now)
+    local seconds = floor(now - entry.time)
+    local detail = seconds < 60 and (seconds .. "s") or (floor(seconds / 60) .. "m")
+    if entry.level > 0 then
+        detail = entry.level .. " - " .. detail
+    end
+    if entry.by then
+        detail = detail .. " - " .. entry.by
+    end
+    return detail
 end
 
 local function OpenMenu(row)
@@ -161,16 +195,47 @@ local function CreateWindow()
     return frame
 end
 
-local function StopTicker()
-    if Ticker then
-        Ticker:Cancel()
-        Ticker = nil
+-- Shows entry on row, setting only the regions whose value differs from what the row shows.
+local function Draw(row, entry, now)
+    if not row.m_entry then
+        row:Show()
+    end
+    row.m_entry = entry
+    if row.m_key ~= entry.key then
+        row.m_key = entry.key
+        row.Name:SetText(entry.key)
+    end
+    if row.m_class ~= entry.class then
+        row.m_class = entry.class
+        local color = RAID_CLASS_COLORS[entry.class]
+        if color then
+            row.Name:SetTextColor(color.r, color.g, color.b)
+        else
+            row.Name:SetTextColor(1, 1, 1)
+        end
+    end
+    local status = entry.status or ""
+    if row.m_status ~= status then
+        row.m_status = status
+        row.Icon:SetTexture(entry.status and Warband.Icons[entry.status] or nil)
+    end
+    local detail = Detail(entry, now)
+    if row.m_detail ~= detail then
+        row.m_detail = detail
+        row.Detail:SetText(detail)
     end
 end
 
--- Expires old entries and redraws. Runs on each sighting and once a second while shown.
+local function Clear(row)
+    row.m_entry, row.m_key, row.m_class, row.m_status, row.m_detail = nil, nil, nil, nil, nil
+    row:Hide()
+end
+
+-- Expires old entries and redraws what changed; hides the window and stops the tick when nobody
+-- is left. The window shows exactly while the tick runs.
 function Render()
-    local now, list = GetTime(), {}
+    local now, list = GetTime(), List
+    wipe(list)
     for key, entry in pairs(Nearby) do
         if now - entry.time > NearbySeconds then
             Nearby[key] = nil
@@ -180,59 +245,35 @@ function Render()
         end
     end
     if #list == 0 then
-        if Window then
+        if Ticker then
             Window:Hide()
+            Radar:Cancel(Ticker)
+            Ticker = nil
         end
-        StopTicker()
         return
     end
-    sort(list, function(a, b)
-        local rankA, rankB = Warband.Order[a.status] or 9, Warband.Order[b.status] or 9
-        if rankA ~= rankB then
-            return rankA < rankB
-        end
-        if a.time ~= b.time then
-            return a.time > b.time
-        end
-        return a.key < b.key
-    end)
+    sort(list, ByStanding)
     Window = Window or CreateWindow()
-    Window.Title:SetText("Nearby enemies (" .. #list .. ")")
+    if Window.m_total ~= #list then
+        Window.m_total = #list
+        Window.Title:SetText("Nearby enemies (" .. #list .. ")")
+    end
     local count = #list < MaxRows and #list or MaxRows
     for i = 1, (Window.m_count or 0) > count and Window.m_count or count do -- rows in use, and rows to clear
-        local row, entry = Window.Rows[i], list[i]
+        local row = Window.Rows[i]
         if i <= count then
-            row.m_entry = entry
-            row.Icon:SetTexture(entry.status and Warband.Icons[entry.status] or nil)
-            row.Name:SetText(Warband.Short(entry.key))
-            local color = RAID_CLASS_COLORS[entry.class]
-            if color then
-                row.Name:SetTextColor(color.r, color.g, color.b)
-            else
-                row.Name:SetTextColor(1, 1, 1)
-            end
-            local detail = {}
-            if entry.level > 0 then
-                detail[#detail + 1] = tostring(entry.level)
-            end
-            detail[#detail + 1] = Ago(now - entry.time)
-            if entry.by then
-                detail[#detail + 1] = entry.by
-            end
-            row.Detail:SetText(concat(detail, " - "))
-            row:Show()
-        else
-            row.m_entry = nil
-            row:Hide()
+            Draw(row, list[i], now)
+        elseif row.m_entry then
+            Clear(row)
         end
     end
     if Window.m_count ~= count then
         Window:SetHeight(12 + (count + 1) * RowHeight)
         Window.m_count = count
     end
-    Window:Show()
     if not Ticker then
-        Ticker = C_Timer.NewTicker(1, Render)
+        Window:Show()
+        Ticker = Radar:Every(1, Render)
     end
 end
 
@@ -240,7 +281,7 @@ Radar = Addon:Module("Radar", {
     label = "Nearby enemies window",
     page = "Warband",
     description = "A list of enemy players you and your Krew have seen in the last two minutes, with their standing. Right-click a name for the Krew's choices; drag the window to move it.",
-    active = { reads = { "Warband.enabled" }, when = function(s) return s:Get("Warband.enabled") end },
+    active = { reads = { "Warband.enabled" }, when = function(state) return state:Get("Warband.enabled") end },
     state = {
         { name = "share", kind = "boolean", default = true, label = "Share nearby enemies with the Krew",
             description = "Send the enemies you see to your group (batched, at most every " .. ShareInterval .. " seconds)." },
@@ -256,26 +297,22 @@ Radar = Addon:Module("Radar", {
         Warband.OnNearby = nil
         wipe(Nearby)
         wipe(Pending)
-        if FlushTimer then
-            FlushTimer:Cancel()
-            FlushTimer = nil
-        end
-        StopTicker()
+        wipe(List)
+        FlushTimer, Ticker = nil, nil -- the module's timers stop with it
         if Window then
             Window:Hide()
         end
     end,
 })
 
-Krew.Listen("NEARBY", function(sender, fields)
+Krew:Listen("NEARBY", function(sender, fields)
     if not Radar.Enabled then
         return
     end
-    local zone = Warband.CleanText(fields[2]) ~= "" and Warband.CleanText(fields[2]) or Warband.CleanText(fields[1])
-    for i = 3, #fields do
+    for i = 1, #fields do
         local key, class, level = fields[i]:match("^([^;]+);([^;]*);([^;]*)$")
         if key and Warband.ValidKey(key) then
-            Note({ key = key, class = Warband.CleanClass(class), level = Warband.CleanLevel(level), faction = "", guild = "" }, sender, zone)
+            Note({ key = key, class = Warband.CleanClass(class), level = Warband.CleanLevel(level), faction = "", guild = "" }, sender)
         end
     end
 end)

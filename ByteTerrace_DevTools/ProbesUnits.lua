@@ -81,6 +81,27 @@ end
 
 Probes.Define({
     {
+        -- What addon code may do with a secret (UnitHealth("player") is always one, probed): each
+        -- operation is tried in pcall, so a refusal is recorded instead of raised.
+        name = "secrets.operations",
+        needs = {},
+        run = function()
+            local health = UnitHealth("player") -- secret: only handed to the operations under test
+            local function Try(fn)
+                return (pcall(fn))
+            end
+            return {
+                isSecret = issecretvalue(health),
+                tostring = Try(function() return tostring(health) end), -- secret: the operation under test
+                concat = Try(function() return "hp " .. health end), -- secret: the operation under test
+                format = Try(function() return ("%d"):format(health) end), -- secret: the operation under test
+                compare = Try(function() return health == health end), -- secret: the operation under test
+                arithmetic = Try(function() return health + 1 end), -- secret: the operation under test
+                tableKey = Try(function() return ({ [health] = true }) end), -- secret: the operation under test
+            }
+        end,
+    },
+    {
         name = "unitIdentity.npcTarget",
         needs = { "idle", "npcTarget" },
         run = function() return Identity("target", true) end,

@@ -8,7 +8,7 @@
 --     [D] IsEnabled() is the player's Combat Audio Alerts setting (the CAAEnabled CVar, "0" by
 --         default: off until the player turns it on). Blizzard_CombatAudioAlerts checks IsEnabled
 --         before every alert. [G] While disabled, SpeakText speaks nothing and returns nothing
---         (the doc says it MayReturnNothing). Harness.new{ combatAudioAlerts = true } or
+--         (the doc says it MayReturnNothing). Harness.New{ combatAudioAlerts = true } or
 --         h.combatAudioAlerts turns it on. Recorded: { api = "C_CombatAudioAlert.SpeakText",
 --         text, category, allowOverlap, utteranceID }; utterance IDs count up from 1.
 --     [G] The player's per-category voice, volume and speed apply in the client; the harness
@@ -26,8 +26,8 @@
 --         "C_VoiceChat.SpeakText", voiceID, text, rate, volume, overlap }. [G] The playback
 --         events (VOICE_CHAT_TTS_PLAYBACK_STARTED / _FINISHED) aren't fired.
 
-local SNAPSHOT = __snapshot
-local CATEGORIES = SNAPSHOT.enums.CombatAudioAlertCategory
+local Snapshot = __snapshot
+local Categories = Snapshot.enums.CombatAudioAlertCategory
 
 function Harness:InitSpeech(player)
     self.spoken = {}
@@ -38,7 +38,7 @@ function Harness:InitSpeech(player)
 end
 
 local function IsCategory(value)
-    for _, known in pairs(CATEGORIES) do
+    for _, known in pairs(Categories) do
         if known == value then return true end
     end
     return false

@@ -4,10 +4,11 @@
 // timeout counts from when the worker finishes its setup (Lua VM, snapshot, harness, test file),
 // which has its own, generous limit (SETUP_MS), so load on the machine can't fail a quick test.
 //
-//   node tools/tlk.mjs test [filter] [--timeout <seconds>] [--dir <folder>]
+//   node tools/tlk.mjs test [filter | test files...] [--timeout <seconds>] [--dir <folder>]
 //
-// The filter is a substring of "<file> > <test name>"; only matching tests run, and a filter
-// that matches nothing fails the run. Besides the files, the run checks that every harness fake
+// Test file paths (tests/krew.test.lua) run exactly those files. Otherwise the filter is a
+// substring of "<file> > <test name>"; only matching tests run. A filter or file list that
+// matches nothing fails the run. Besides the files, the run checks that every harness fake
 // names a global the client dump has ("harness > every fake names a real client global").
 //
 // A Lua test file calls test(name, fn). Assertions: eq(actual, expected, message),
@@ -29,7 +30,7 @@ export const options = {
 
 const WORKER = new URL("../lib/test-worker.mjs", import.meta.url);
 const SETUP_MS = 120000;
-export const FAKES_JOB = "harness";
+const FAKES_JOB = "harness";
 
 function runJob(job, timeoutMs) {
     return new Promise((resolve) => {
@@ -57,13 +58,14 @@ function runJob(job, timeoutMs) {
 const display = (name) => (/[\x00-\x1f]/.test(name) ? JSON.stringify(name) : name);
 
 export async function run(values, positionals) {
-    // A path to a test file (tests/harness.test.lua) filters to that file.
-    let filter = positionals[0] ?? null;
-    if (filter && /\.test\.(lua|mjs)$/.test(filter)) filter = filter.replaceAll("\\", "/").split("/").pop();
+    const isFile = (arg) => /\.test\.(lua|mjs)$/.test(arg);
+    const only = new Set(positionals.filter(isFile).map((arg) => arg.replaceAll("\\", "/").split("/").pop()));
+    const filter = positionals.find((arg) => !isFile(arg)) ?? null;
     const timeoutMs = Number(values.timeout) * 1000;
     const dir = values.dir ? resolve(values.dir) : join(repoRoot, "tests");
-    const files = readdirSync(dir).filter((f) => f.endsWith(".test.lua") || f.endsWith(".test.mjs")).sort();
-    const jobs = [{ kind: "fakes", label: FAKES_JOB, filter }, ...files.map((file) => ({
+    const files = readdirSync(dir).filter((f) => (f.endsWith(".test.lua") || f.endsWith(".test.mjs"))
+        && (only.size === 0 || only.has(f))).sort();
+    const jobs = [...(only.size === 0 ? [{ kind: "fakes", label: FAKES_JOB, filter }] : []), ...files.map((file) => ({
         kind: file.endsWith(".mjs") ? "mjs" : "lua", label: file, file: join(dir, file), filter,
     }))];
 
@@ -101,8 +103,8 @@ export async function run(values, positionals) {
             }
         }
     });
-    if (filter && matched === 0) {
-        console.log(`No test matches "${filter}".`);
+    if ((filter || only.size > 0) && matched === 0) {
+        console.log(`No test matches "${filter ?? [...only].join(" ")}".`);
         return 1;
     }
     console.log(`${passed} passed, ${failed} failed${pending ? `, ${pending} pending` : ""}`);

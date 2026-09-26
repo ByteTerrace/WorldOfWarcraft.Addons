@@ -9,6 +9,7 @@ local addonName, ns = ...
 --   /tlk journal   this session's highlights so far.
 --
 -- Cards come from ns.Cards (Cards.lua): they wait out combat, hold on hover, dismiss on click.
+-- Deaths come from the death fact (death.count), which runs while the journal does.
 --
 -- The session lives in per-character rows. A /reload continues it; the next login looks back on
 -- it. Played time is summed from GetTime deltas while the journal runs; time away is server time.
@@ -18,6 +19,10 @@ local MinRestedPercent = 1
 local ContinueWindowSeconds = 120
 local JournalIcon = "Interface\\Icons\\INV_Misc_Book_09"
 local DingIcon = "Interface\\Icons\\Spell_Holy_SurgeOfLight"
+-- { one, many }, for Tally.
+local Quests = { "quest", "quests" }
+local Levels = { "level", "levels" }
+local Trips = { "trip to the spirit healer", "trips to the spirit healer" }
 
 local Rows = {
     { name = "welcome", kind = "boolean", default = true, label = "Welcome-back card",
@@ -45,6 +50,7 @@ local issecretvalue, floor, abs, concat = issecretvalue, math.floor, math.abs, t
 
 local Addon = ns.Addon
 local ShowCard = ns.Cards.Show
+local Count = ns.Puzzles.Kit.Count
 
 local Journal -- the Journal module, declared last
 
@@ -69,11 +75,9 @@ local function Money(copper)
     return (copper > 0 and "+" or "-") .. GetMoneyString(abs(copper), true)
 end
 
-local function Count(number, one, many)
-    if number == 0 then
-        return nil
-    end
-    return number == 1 and ("1 " .. one) or (number .. " " .. many)
+-- "1 quest" or "3 quests"; nil for none, so Line leaves it out.
+local function Tally(number, item)
+    return number ~= 0 and Count(number, item) or nil
 end
 
 -- Joins the non-nil parts with a middle dot.
@@ -86,10 +90,6 @@ local function Line(...)
         end
     end
     return concat(parts, " · ")
-end
-
-local function Deaths(count)
-    return Count(count, "trip to the spirit healer", "trips to the spirit healer")
 end
 
 local function PlayerName()
@@ -162,7 +162,7 @@ local function WelcomeCard()
     end
     local last = (zone ~= "" and ("Last time in " .. zone .. ": ") or "Last time: ") .. Line(
         Duration(Get("sessionPlayed")),
-        Count(Get("sessionQuests"), "quest", "quests"),
+        Tally(Get("sessionQuests"), Quests),
         Money(Get("sessionEndMoney") - Get("sessionStartMoney")),
         levels > 0 and ("reached level " .. Get("sessionEndLevel")) or nil)
     return { icon = JournalIcon, sound = SOUNDKIT.IG_SPELLBOOK_OPEN,
@@ -174,10 +174,10 @@ local function SessionCard()
     local levels = UnitLevel("player") - Get("sessionStartLevel")
     local summary = Line(
         Duration(Get("sessionPlayed")),
-        Count(Get("sessionQuests"), "quest", "quests"),
-        Count(levels, "level", "levels"),
+        Tally(Get("sessionQuests"), Quests),
+        Tally(levels, Levels),
         Money(GetMoney() - Get("sessionStartMoney")),
-        Deaths(Get("sessionDeaths")))
+        Tally(Get("sessionDeaths"), Trips))
     local rested = RestedPercent(GetXPExhaustion() or 0)
     if rested >= MinRestedPercent then
         summary = summary .. "\nRested XP banked: " .. floor(rested) .. "% of a level."
@@ -200,9 +200,9 @@ local function DingCard(level)
         or ("Since the journal started: " .. Duration(Get("levelPlayed")))
     local body = Line(
         lead,
-        Count(Get("levelQuests"), "quest", "quests"),
+        Tally(Get("levelQuests"), Quests),
         Money(GetMoney() - Get("levelStartMoney")),
-        deaths == 0 and "not a single death!" or Deaths(deaths))
+        deaths == 0 and "not a single death!" or Tally(deaths, Trips))
     local milestone = Milestone(level)
     if milestone then
         body = body .. "\n" .. milestone
@@ -219,6 +219,7 @@ Journal = Addon:Module("Journal", {
     label = "Session journal",
     description = "Celebrates your play: a welcome-back card at login, a Ding! card at level-up, and /tlk journal for this session's highlights.",
     state = Rows,
+    uses = { "death" },
     commands = {
         { name = "show", slash = "journal", label = "Show this session's journal", run = function() ShowCard(SessionCard()) end },
     },
@@ -251,7 +252,7 @@ Journal = Addon:Module("Journal", {
             Add("sessionQuests", 1)
             Add("levelQuests", 1)
         end)
-        module:On("PLAYER_DEAD", function()
+        module:OnIncrease("death.count", function()
             Add("sessionDeaths", 1)
             Add("levelDeaths", 1)
         end)

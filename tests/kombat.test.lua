@@ -1,18 +1,18 @@
 -- The sound bank's variants, the Mortal Kombat announcer and the Unreal Tournament kill streaks,
 -- end to end through the real addon files.
 
-local MEDIA = "Interface\\AddOns\\TheLanKrewToolKit\\Media\\"
-local PREFIX = "TLKKrew1"
+local MediaPath = "Interface\\AddOns\\TheLanKrewToolKit\\Media\\"
+local Prefix = "TLKKrew1"
 
 local function Load(player)
-    local h = Harness.new(player)
+    local h = Harness.New(player)
     local ns = h:LoadAddon("TheLanKrewToolKit")
     return h, ns.Addon
 end
 
 local function Media(h, ...)
     for i = 1, select("#", ...) do
-        h:AddMedia(MEDIA .. select(i, ...))
+        h:AddMedia(MediaPath .. select(i, ...))
     end
 end
 
@@ -26,7 +26,7 @@ end
 local function Heard(h)
     local names = {}
     for _, sound in ipairs(h.sounds) do
-        names[#names + 1] = sound.path:sub(#MEDIA + 1)
+        names[#names + 1] = sound.path:sub(#MediaPath + 1)
     end
     return table.concat(names, " ")
 end
@@ -42,7 +42,7 @@ end
 local function Sent(h, kind)
     local found = {}
     for _, message in ipairs(h.addonMessages) do
-        if message.prefix == PREFIX and message.message:find("^" .. kind .. ":") then
+        if message.prefix == Prefix and message.message:find("^" .. kind .. ":") then
             found[#found + 1] = message.message
         end
     end
@@ -218,9 +218,9 @@ test("dying ends the spree; bonus honor isn't a kill", function()
         h:Advance(20)
     end
     h:AwardHonor(100)
-    eq(addon.State:Get("Honor.streak"), 4)
+    eq(addon.State:Get("kills.streak"), 4)
     h:Die()
-    eq(addon.State:Get("Honor.streak"), 0)
+    eq(addon.State:Get("kills.streak"), 0)
     h:Revive()
     Blow(h, "Foe5")
     eq(#h.sounds, 0, "the spree started over")
@@ -231,8 +231,8 @@ test("the Krew hears your first blood, sprees and a spree's end, and yours yield
     h:JoinGroup("party", { "Mom" })
     h:Echo(false)
     h:Advance(2)
-    h:ReceiveAddonMessage(PREFIX, "STREAK:firstBlood\t1", "PARTY", "Mom")
-    eq(Notices(h), "Mom drew first blood!")
+    h:ReceiveAddonMessage(Prefix, "STREAK:firstBlood\t1", "PARTY", "Mom")
+    eq(Notices(h), "Mom Doe drew first blood!")
     for i = 1, 5 do
         Blow(h, "Foe" .. i)
         h:Advance(20)
@@ -242,10 +242,12 @@ test("the Krew hears your first blood, sprees and a spree's end, and yours yield
     h:Die()
     h:Advance(4) -- no death recap: after the wait, the spree ends with no killer named
     eq(Sent(h, "STREAK")[2], "STREAK:ended\t5")
-    h:ReceiveAddonMessage(PREFIX, "STREAK:rampage\t10", "PARTY", "Mom")
-    truthy(Notices(h):find("Mom is on a rampage! (10 kills)", 1, true))
-    h:ReceiveAddonMessage(PREFIX, "STREAK:rampage\tlots", "PARTY", "Mom")
-    h:ReceiveAddonMessage(PREFIX, "STREAK:nonsense\t3", "PARTY", "Mom")
+    h:ReceiveAddonMessage(Prefix, "STREAK:rampage\t10", "PARTY", "Mom")
+    truthy(Notices(h):find("Mom Doe is on a rampage! (10 kills)", 1, true))
+    h:ReceiveAddonMessage(Prefix, "STREAK:rampage\tlots", "PARTY", "Mom")
+    h:ReceiveAddonMessage(Prefix, "STREAK:rampage\t1e1", "PARTY", "Mom")
+    h:ReceiveAddonMessage(Prefix, "STREAK:rampage\t0x0A", "PARTY", "Mom")
+    h:ReceiveAddonMessage(Prefix, "STREAK:nonsense\t3", "PARTY", "Mom")
     eq(select(2, Notices(h):gsub("\n", "")), 2, "malformed messages show nothing")
     addon.State:Set("Streaks.share", false)
     h:Revive()
@@ -324,12 +326,12 @@ test("a kill streak counts your killing blows and your pet's, not a groupmate's 
     h:HonorKill("Ann", "Private", 10) -- honor credit for a groupmate's kill
     h:Fire("PARTY_KILL", h:GUID(mom), h:GUID({ name = "Ben", isPlayer = true }))
     h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ name = "Kobold" }))
-    eq(addon.State:Get("Honor.killingBlows"), 0)
-    eq(addon.State:Get("Honor.kills"), 1, "the honor credit still counts for Warband")
+    eq(addon.State:Get("kills.blows"), 0)
+    eq(addon.State:Get("kills.honorable"), 1, "the honor credit still counts for Warband")
     h:Fire("PARTY_KILL", h:GUID(pet), h:GUID({ name = "Cid", isPlayer = true }))
     Blow(h, "Dee")
-    eq(addon.State:Get("Honor.killingBlows"), 2)
-    eq(addon.State:Get("Honor.streak"), 2)
+    eq(addon.State:Get("kills.blows"), 2)
+    eq(addon.State:Get("kills.streak"), 2)
 end)
 
 test("a sound test tells a muted channel from a missing file", function()

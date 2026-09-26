@@ -18,7 +18,7 @@ local function Watch(h, ...)
     return seen
 end
 
-local METER_EVENTS = { "DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_CURRENT_SESSION_UPDATED", "DAMAGE_METER_RESET" }
+local MeterEvents = { "DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_CURRENT_SESSION_UPDATED", "DAMAGE_METER_RESET" }
 
 -- "Bob hit me for 3000 and killed me; Mom healed 5000."
 local function BobKillsMe(h, endCombat)
@@ -37,13 +37,13 @@ local function BobKillsMe(h, endCombat)
 end
 
 test("a combat is a session: its events, its sources sorted by amount, and its rates", function()
-    local h = Harness.new({ name = "Tester", classFile = "WARRIOR" })
+    local h = Harness.New({ name = "Tester", classFile = "WARRIOR" })
     local env = h.env
-    local T, S = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
-    local seen = Watch(h, unpack(METER_EVENTS))
+    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local seen = Watch(h, unpack(MeterEvents))
     local fight = h:MeterFight({ duration = 10, sources = {
         { unit = "player", amounts = { DamageDone = 1000 } },
-        { name = "Cara", classFilename = "MAGE", amounts = { [T.DamageDone] = 2000 } },
+        { name = "Cara", classFilename = "MAGE", amounts = { [types.DamageDone] = 2000 } },
     } })
     eq(fight.sessionID, 1)
     local pair = "DAMAGE_METER_COMBAT_SESSION_UPDATED:0:0,DAMAGE_METER_COMBAT_SESSION_UPDATED:0:1,"
@@ -51,7 +51,7 @@ test("a combat is a session: its events, its sources sorted by amount, and its r
     eq(table.concat(seen, ","), "DAMAGE_METER_CURRENT_SESSION_UPDATED," .. pair .. "," .. pair,
         "each source's change fires Overall (0) then the session, for DamageDone and Dps")
     falsy(h.inCombat, "the fight ends combat")
-    local session = env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.DamageDone)
+    local session = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone)
     falsy(env.issecretvalue(session.totalAmount), "plain out of combat")
     eq(#session.combatSources, 2)
     local top, me = session.combatSources[1], session.combatSources[2]
@@ -68,40 +68,40 @@ test("a combat is a session: its events, its sources sorted by amount, and its r
     eq(session.maxAmount, 2000)
     eq(session.totalAmount, 3000)
     eq(session.durationSeconds, 10)
-    local dps = env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.Dps)
+    local dps = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.Dps)
     eq(dps.combatSources[1].amountPerSecond, 200, "Dps reads DamageDone's entries")
-    eq(env.C_DamageMeter.GetSessionDurationSeconds(S.Current), 10)
+    eq(env.C_DamageMeter.GetSessionDurationSeconds(sessionTypes.Current), 10)
     local list = env.C_DamageMeter.GetAvailableCombatSessions()
     eq(#list, 1)
     eq(list[1].sessionID, 1)
     eq(list[1].name, "Combat 1", "sessions are always named (probed); the harness's default")
     eq(list[1].durationSeconds, 10)
-    eq(#env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.HealingDone).combatSources, 0)
-    local byID = env.C_DamageMeter.GetCombatSessionFromID(1, T.DamageDone)
+    eq(#env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.HealingDone).combatSources, 0)
+    local byID = env.C_DamageMeter.GetCombatSessionFromID(1, types.DamageDone)
     eq(byID.combatSources[1].name, "Cara")
 end)
 
 test("Bob hit me for 3000 and killed me; Mom healed 5000: deaths, spells and the recap", function()
-    local h = Harness.new({ name = "Tester" })
+    local h = Harness.New({ name = "Tester" })
     local env = h.env
-    local T, S = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
     local fight = BobKillsMe(h)
     truthy(h.player.dead, "the local player's death kills the player")
     falsy(h.inCombat)
     local recapID = fight.recaps.Tester
     truthy(recapID and recapID ~= 0)
-    local deaths = env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.Deaths).combatSources
+    local deaths = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.Deaths).combatSources
     eq(#deaths, 1)
     eq(deaths[1].name, "Tester")
     eq(deaths[1].deathRecapID, recapID)
     eq(deaths[1].deathTimeSeconds, 12, "seconds into the session")
     eq(deaths[1].totalAmount, 0)
-    eq(env.C_DamageMeter.GetCombatSessionFromType(S.Overall, T.Deaths).combatSources[1].deathTimeSeconds, -1,
+    eq(env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Overall, types.Deaths).combatSources[1].deathTimeSeconds, -1,
         "no timestamps for the overall session")
-    local taken = env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.DamageTaken)
+    local taken = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageTaken)
     eq(taken.combatSources[1].totalAmount, 3000, "the spells sum to the amount")
     eq(taken.combatSources[1].deathRecapID, 0, "only Deaths entries carry the recap")
-    local mine = env.C_DamageMeter.GetCombatSessionSourceFromType(S.Current, T.DamageTaken, env.UnitGUID("player"))
+    local mine = env.C_DamageMeter.GetCombatSessionSourceFromType(sessionTypes.Current, types.DamageTaken, env.UnitGUID("player"))
     eq(mine.totalAmount, 3000)
     eq(#mine.combatSpells, 1)
     local spell = mine.combatSpells[1]
@@ -112,10 +112,10 @@ test("Bob hit me for 3000 and killed me; Mom healed 5000: deaths, spells and the
     eq(spell.combatSpellDetails.unitName, "Bob")
     eq(spell.combatSpellDetails.unitClassFilename, "ROGUE")
     eq(spell.combatSpellDetails.amount, 3000)
-    local healing = env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.HealingDone).combatSources
+    local healing = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.HealingDone).combatSources
     eq(healing[1].name, "Mom")
     eq(healing[1].totalAmount, 5000)
-    local bob = env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.DamageDone).combatSources[1]
+    local bob = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone).combatSources[1]
     eq(bob.sourceDisplayType, env.Enum.DamageMeterSourceDisplayType.Enemy)
     eq(bob.factionGroup, "Horde")
     eq(env.C_DamageMeter.GetAvailableCombatSessions()[1].name, "Bob")
@@ -137,7 +137,7 @@ test("Bob hit me for 3000 and killed me; Mom healed 5000: deaths, spells and the
 end)
 
 test("scripted recap events come back newest first, with their fields", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local fight = h:MeterFight({ duration = 5, sources = {
         { name = "Mom", classFilename = "PRIEST", death = { time = 4, maxHealth = 900, events = {
@@ -160,12 +160,12 @@ test("scripted recap events come back newest first, with their fields", function
 end)
 
 test("in combat every field is secret except the NeverSecret ones; the tables stay plain", function()
-    local h = Harness.new({ name = "Tester" })
+    local h = Harness.New({ name = "Tester" })
     local env = h.env
-    local T, S = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
     BobKillsMe(h, false)
     truthy(h.inCombat)
-    local session = env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.Deaths)
+    local session = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.Deaths)
     local death = session.combatSources[1]
     falsy(env.issecretvalue(death.isLocalPlayer))
     falsy(env.issecretvalue(death.deathRecapID))
@@ -176,12 +176,12 @@ test("in combat every field is secret except the NeverSecret ones; the tables st
     truthy(env.issecretvalue(death.sourceGUID))
     truthy(env.issecretvalue(death.deathTimeSeconds))
     truthy(env.issecretvalue(session.totalAmount))
-    local healing = env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.HealingDone)
+    local healing = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.HealingDone)
     truthy(env.issecretvalue(healing.combatSources[1].totalAmount))
     truthy(env.issecretvalue(healing.combatSources[1].amountPerSecond))
     truthy(env.issecretvalue(healing.durationSeconds))
     throws(function() return healing.combatSources[1].totalAmount + 1 end, "compute with")
-    local mine = env.C_DamageMeter.GetCombatSessionSourceFromID(1, T.DamageTaken, h.player.guid)
+    local mine = env.C_DamageMeter.GetCombatSessionSourceFromID(1, types.DamageTaken, h.player.guid)
     local spell = mine.combatSpells[1]
     truthy(env.issecretvalue(spell.spellID))
     truthy(env.issecretvalue(spell.combatSpellDetails.unitName))
@@ -189,23 +189,23 @@ test("in combat every field is secret except the NeverSecret ones; the tables st
     truthy(env.issecretvalue(mine.totalAmount))
     local list = env.C_DamageMeter.GetAvailableCombatSessions()
     falsy(env.issecretvalue(list[1].sessionID), "no secret flags")
-    falsy(env.issecretvalue(env.C_DamageMeter.GetSessionDurationSeconds(S.Current)))
+    falsy(env.issecretvalue(env.C_DamageMeter.GetSessionDurationSeconds(sessionTypes.Current)))
     falsy(env.issecretvalue(env.C_DeathRecap.GetRecapMaxHealth(death.deathRecapID)))
-    throws(function() env.C_DamageMeter.GetCombatSessionSourceFromType(S.Current, T.DamageDone, death.sourceGUID) end,
+    throws(function() env.C_DamageMeter.GetCombatSessionSourceFromType(sessionTypes.Current, types.DamageDone, death.sourceGUID) end,
         "secret argument #3 refused", "a secret GUID can't go back to the API")
     h:LeaveCombat()
-    falsy(env.issecretvalue(env.C_DamageMeter.GetCombatSessionFromType(S.Current, T.HealingDone).totalAmount))
+    falsy(env.issecretvalue(env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.HealingDone).totalAmount))
 end)
 
 test("Current is the latest fight, Expired is empty after ordinary fights (probed), Overall merges them all", function()
-    local h = Harness.new({ name = "Tester" })
+    local h = Harness.New({ name = "Tester" })
     local env = h.env
-    local T, S = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
-    local C = env.C_DamageMeter
-    eq(#C.GetCombatSessionFromType(S.Current, T.DamageDone).combatSources, 0, "no session yet: an empty one")
-    eq(C.GetCombatSessionFromType(S.Current, T.DamageDone).totalAmount, 0)
-    eq(C.GetCombatSessionFromType(S.Current, T.DamageDone).durationSeconds, nil)
-    eq(C.GetSessionDurationSeconds(S.Expired), nil)
+    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local damageMeter = env.C_DamageMeter
+    eq(#damageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone).combatSources, 0, "no session yet: an empty one")
+    eq(damageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone).totalAmount, 0)
+    eq(damageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone).durationSeconds, nil)
+    eq(damageMeter.GetSessionDurationSeconds(sessionTypes.Expired), nil)
     h:MeterFight({ duration = 10, sources = {
         { unit = "player", amounts = { DamageDone = 1000 } }, { name = "Mom", amounts = { HealingDone = 50 } },
     } })
@@ -216,33 +216,33 @@ test("Current is the latest fight, Expired is empty after ordinary fights (probe
     h:LeaveCombat()
     h:EnterCombat()
     h:Advance(2)
-    eq(C.GetSessionDurationSeconds(S.Current), 2, "the fight in progress")
-    eq(#C.GetCombatSessionFromType(S.Current, T.DamageDone).combatSources, 0)
-    eq(#C.GetCombatSessionFromType(S.Expired, T.DamageDone).combatSources, 0, "Expired is empty")
-    local overall = C.GetCombatSessionFromType(S.Overall, T.DamageDone)
+    eq(damageMeter.GetSessionDurationSeconds(sessionTypes.Current), 2, "the fight in progress")
+    eq(#damageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone).combatSources, 0)
+    eq(#damageMeter.GetCombatSessionFromType(sessionTypes.Expired, types.DamageDone).combatSources, 0, "Expired is empty")
+    local overall = damageMeter.GetCombatSessionFromType(sessionTypes.Overall, types.DamageDone)
     eq(#overall.combatSources, 1, "one source across sessions")
     eq(overall.combatSources[1].totalAmount, 1500)
     eq(overall.durationSeconds, 17)
-    local healing = C.GetCombatSessionFromType(S.Overall, T.HealingDone).combatSources
+    local healing = damageMeter.GetCombatSessionFromType(sessionTypes.Overall, types.HealingDone).combatSources
     eq(#healing, 1, "a named source keeps its GUID across fights")
     eq(healing[1].totalAmount, 120)
     h:LeaveCombat()
-    eq(#C.GetAvailableCombatSessions(), 3)
-    eq(C.GetCombatSessionFromID(1, T.DamageDone).combatSources[1].totalAmount, 1000)
-    eq(#C.GetCombatSessionFromID(9, T.DamageDone).combatSources, 0, "an unknown ID: an empty session")
-    eq(C.GetCombatSessionSourceFromID(9, T.DamageDone, h.player.guid).totalAmount, 0)
-    throws(function() C.GetCombatSessionFromType(S.Current, 99) end, "unknown DamageMeterType")
+    eq(#damageMeter.GetAvailableCombatSessions(), 3)
+    eq(damageMeter.GetCombatSessionFromID(1, types.DamageDone).combatSources[1].totalAmount, 1000)
+    eq(#damageMeter.GetCombatSessionFromID(9, types.DamageDone).combatSources, 0, "an unknown ID: an empty session")
+    eq(damageMeter.GetCombatSessionSourceFromID(9, types.DamageDone, h.player.guid).totalAmount, 0)
+    throws(function() damageMeter.GetCombatSessionFromType(sessionTypes.Current, 99) end, "unknown DamageMeterType")
 end)
 
 test("resetting clears every session and fires DAMAGE_METER_RESET; a relog clears, a reload keeps", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
-    local T, S = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
     local ok, reason = env.C_DamageMeter.IsDamageMeterAvailable()
     eq(ok, true)
     eq(reason, "")
     h:MeterFight({ duration = 3, sources = { { unit = "player", amounts = { DamageDone = 10 } } } })
-    local seen = Watch(h, unpack(METER_EVENTS))
+    local seen = Watch(h, unpack(MeterEvents))
     env.C_DamageMeter.ResetAllCombatSessions()
     eq(table.concat(seen, ","), "DAMAGE_METER_RESET")
     eq(#env.C_DamageMeter.GetAvailableCombatSessions(), 0)
@@ -258,7 +258,7 @@ test("resetting clears every session and fires DAMAGE_METER_RESET; a relog clear
     throws(function() h:MeterAdd({ unit = "player", amounts = { DamageDone = 1 } }) end, "enter combat first")
     h:EnterCombat()
     throws(function() h:MeterAdd({ unit = "player", amounts = { Dps = 1 } }) end, "Dps/Hps read them")
-    local seenReset = Watch(h, unpack(METER_EVENTS))
+    local seenReset = Watch(h, unpack(MeterEvents))
     h.env.C_DamageMeter.ResetAllCombatSessions()
     eq(table.concat(seenReset, ","), "DAMAGE_METER_RESET,DAMAGE_METER_CURRENT_SESSION_UPDATED",
         "in combat a fresh session starts")

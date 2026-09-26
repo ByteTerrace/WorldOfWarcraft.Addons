@@ -13,7 +13,8 @@
 -- reaches the error handler with its stack, and the rest still run), and a whole dispatch is one
 -- state batch, so the rows it writes publish once.
 --
--- Frame, the dispatcher frame, is public so tests can ask what's registered. Handles are opaque.
+-- Frame, the dispatcher frame, is public so tests can ask what's registered, and Counts ([event] =
+-- dispatches since load or the last debug reset) feeds debug events. Handles are opaque.
 
 local ByteTerrace = ByteTerrace
 local SafeCall = ByteTerrace.SafeCall
@@ -68,7 +69,9 @@ end
 --- Creates an addon's dispatcher and its frame.
 ---@param addon table the owning AddOn, whose state batches each dispatch
 function ByteTerrace.NewEvents(addon)
-    local self = setmetatable({ m_addon = addon, m_handlers = {}, m_registered = {}, m_filtered = {} }, Events)
+    local self = setmetatable({
+        Counts = {}, m_addon = addon, m_handlers = {}, m_registered = {}, m_filtered = {},
+    }, Events)
     local frame = CreateFrame("Frame")
     frame:SetScript("OnEvent", function(_, event, ...)
         self:Dispatch(event, ...)
@@ -150,6 +153,25 @@ function Events:OffAll(handles)
     end
 end
 
+--- The client registration of every event some handler wants: [event] = "all" or "unit1|unit2".
+--- A fresh table.
+---@return table
+function Events:Registrations()
+    local registrations = {}
+    for event, key in pairs(self.m_registered) do
+        registrations[event] = key
+    end
+    return registrations
+end
+
+--- How many live handlers an event has.
+---@param event string
+---@return integer
+function Events:HandlerCount(event)
+    local list = self.m_handlers[event]
+    return list and #list or 0
+end
+
 --- Runs an event's live handlers as one state batch. The frame's OnEvent calls it.
 ---@param event string
 function Events:Dispatch(event, ...)
@@ -157,6 +179,8 @@ function Events:Dispatch(event, ...)
     if not list then
         return
     end
+    local counts = self.Counts
+    counts[event] = (counts[event] or 0) + 1
     local state = self.m_addon.State
     local unit = ...
     -- A unit token that is itself secret can't be compared; filtered handlers can't claim it.

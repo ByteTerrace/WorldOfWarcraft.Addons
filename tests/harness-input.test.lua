@@ -1,10 +1,8 @@
 -- The harness's fidelity rules for keyboard input, mouse coverage, frame strata and random
 -- numbers (tests/harness/input.lua, widgets.lua).
 
--- Keyboard, mouse, strata ----------------------------------------------------------------
-
 test("keyboard input: a keyboard-enabled frame consumes keys unless it propagates them", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local log = {}
     local under = env.CreateFrame("Frame")
@@ -37,7 +35,7 @@ test("keyboard input: a keyboard-enabled frame consumes keys unless it propagate
 end)
 
 test("keyboard order follows strata, then level, then creation", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local order = {}
     local function Receiver(name)
@@ -59,7 +57,7 @@ test("keyboard order follows strata, then level, then creation", function()
 end)
 
 test("EnableKeyboard is blocked in combat only on protected frames; SetPropagateKeyboardInput on any", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local plain = env.CreateFrame("Frame")
     local secure = env.CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
@@ -79,7 +77,7 @@ test("EnableKeyboard is blocked in combat only on protected frames; SetPropagate
 end)
 
 test("frame strata and levels: set, inherited, validated", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local parent = env.CreateFrame("Frame", nil, env.UIParent)
     local child = env.CreateFrame("Frame", nil, parent)
@@ -100,7 +98,7 @@ test("frame strata and levels: set, inherited, validated", function()
 end)
 
 test("a visible, mouse-enabled frame covering the screen blocks world clicks", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     falsy(h:WorldClickBlocked())
     local cover = env.CreateFrame("Frame", nil, env.UIParent)
@@ -128,8 +126,6 @@ test("a visible, mouse-enabled frame covering the screen blocks world clicks", f
     truthy(h:WorldClickBlocked(), "a mouse-enabled button filling a full-screen frame")
 end)
 
--- Random -----------------------------------------------------------------------------
-
 Harness.DefineAddOn("RandomProbe", { sources = { [[
     local _, ns = ...
     local random = math.random
@@ -137,7 +133,7 @@ Harness.DefineAddOn("RandomProbe", { sources = { [[
 ]] } })
 
 test("SeedRandom makes math.random deterministic, even through an addon's local copy", function()
-    local h = Harness.new()
+    local h = Harness.New()
     truthy(h.env.math.random, "the client has math.random")
     local ns = h:LoadAddon("RandomProbe")
     h:SeedRandom(42)
@@ -157,7 +153,7 @@ test("SeedRandom makes math.random deterministic, even through an addon's local 
     local n = h.env.random(3)
     truthy(n >= 1 and n <= 3, "random is math.random")
     throws(function() h.env.math.random(5, 1) end, "interval is empty")
-    local other = Harness.new()
+    local other = Harness.New()
     other:SeedRandom(42)
     eq(other.env.math.random(1, 1000000), (function() h:SeedRandom(42); return h.env.math.random(1, 1000000) end)(),
         "independent of Lua's global random state")

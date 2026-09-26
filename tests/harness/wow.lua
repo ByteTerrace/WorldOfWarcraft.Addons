@@ -41,11 +41,11 @@
 --     /btdev probe does in game and compares it with the client's record (Harness.OBSERVED_PROBES).
 --
 -- Usage (see tests/*.test.lua):
---   local h = Harness.new({ classFile = "ROGUE" })
+--   local h = Harness.New({ classFile = "ROGUE" })
 --   h:LoadAddon("TheLanKrewToolKit")
 --   h:EnterCombat()
 
-local ADDONS = __addons -- set by tools/lib/harness.mjs: { [name] = { files, sources, metadata, ... } }
+local Addons = __addons -- set by tools/lib/harness.mjs: { [name] = { files, sources, metadata, ... } }
 
 -- Decodes the API snapshot tools/lib/harness.mjs passes as text into
 -- { functions, events, methods = { [api] = { [method] = entry } }, enums }. An entry holds secret
@@ -103,7 +103,7 @@ end
 if type(__snapshot) == "string" then
     __snapshot = DecodeSnapshot(__snapshot)
 end
-local SNAPSHOT = __snapshot
+local Snapshot = __snapshot
 
 -- JS arrays arrive 0-based; make them Lua sequences.
 local function Sequence(t)
@@ -117,7 +117,7 @@ local function Sequence(t)
     end
     return out
 end
-for _, addon in pairs(ADDONS) do
+for _, addon in pairs(Addons) do
     addon.files, addon.sources = Sequence(addon.files), Sequence(addon.sources)
     addon.savedVariables, addon.savedVariablesPerCharacter = Sequence(addon.savedVariables), Sequence(addon.savedVariablesPerCharacter)
     addon.dependencies = Sequence(addon.dependencies)
@@ -145,9 +145,9 @@ end
 Harness.MAX_TIMER_CALLBACKS = 10000
 
 -- Unit tokens a test can populate with h:SetUnit (absent until set: UnitExists is false).
-local CONFIGURABLE_UNITS = { pet = true, focus = true, mouseover = true, vehicle = true }
-for i = 1, 4 do CONFIGURABLE_UNITS["party" .. i] = true end
-for i = 1, 40 do CONFIGURABLE_UNITS["nameplate" .. i] = true end
+local ConfigurableUnits = { pet = true, focus = true, mouseover = true, vehicle = true }
+for i = 1, 4 do ConfigurableUnits["party" .. i] = true end
+for i = 1, 40 do ConfigurableUnits["nameplate" .. i] = true end
 
 -- Defines a test-only addon (for the harness's own tests): spec = { sources = { "lua", ... },
 -- savedVariables, savedVariablesPerCharacter, dependencies, metadata, missing = { TOC files the disk lacks } }.
@@ -156,7 +156,7 @@ function Harness.DefineAddOn(name, spec)
     for i in ipairs(spec.sources) do
         files[i] = "File" .. i .. ".lua"
     end
-    ADDONS[name] = {
+    Addons[name] = {
         files = files, sources = spec.sources, metadata = spec.metadata or {},
         savedVariables = spec.savedVariables or {}, savedVariablesPerCharacter = spec.savedVariablesPerCharacter or {},
         dependencies = spec.dependencies or {}, missing = spec.missing or {},
@@ -166,18 +166,19 @@ end
 -- A fixed server clock start (2025-09-25 12:00:00 UTC), so date-based output is deterministic.
 Harness.SERVER_EPOCH = 1758801600
 
--- Harness ------------------------------------------------------------------
-
-local UNIT_DEFAULTS = {
+local UnitDefaults = {
     exists = true, isPlayer = false, canAttack = false, dead = false, feign = false, afk = false,
     health = 100, maxHealth = 100, level = 1, inGroup = false,
 }
 
 local function FillUnit(unit)
-    for field, default in pairs(UNIT_DEFAULTS) do
+    for field, default in pairs(UnitDefaults) do
         if unit[field] == nil then
             unit[field] = default
         end
+    end
+    if unit.isPlayer and unit.surname == nil then
+        unit.surname = Harness.DEFAULT_SURNAME -- [E] every Forever character has a surname
     end
     if unit.playerControlled == nil then
         unit.playerControlled = unit.isPlayer -- players (and their pets) are player-controlled
@@ -186,7 +187,16 @@ local function FillUnit(unit)
 end
 Harness.FillUnit = FillUnit
 
-function Harness.new(player)
+-- The surname a player unit gets when a test gives none.
+Harness.DEFAULT_SURNAME = "Doe"
+
+-- [E] A unit's full name as Forever shows it: "First Last" for a player, the name alone for an NPC
+-- (GetPlayerInfoByGUID and chat senders say "Aa Aa", probed in game).
+function Harness.DisplayName(unit)
+    return unit.surname and (unit.name .. " " .. unit.surname) or unit.name
+end
+
+function Harness.New(player)
     player = player or {}
     local h = setmetatable({}, Harness)
     h.time = 0                -- GetTime()
@@ -207,6 +217,11 @@ function Harness.new(player)
     h.timers = {}             -- pending C_Timer callbacks and animations, see Advance
     h.timerSerial = 0
     h.handles = 0
+    h.apiCalls = {}           -- [API name] = calls to that wrapped function (h:CountApiCalls)
+    -- C_AddOnProfiler's answers: enabled, and [metric] = number for each addon, the application
+    -- and all addons together; memory is GetAddOnMemoryUsage's KB by addon.
+    h.profiler = { enabled = false, addons = {}, application = {}, overall = {}, memory = {} }
+    h.memoryUpdates = 0       -- UpdateAddOnMemoryUsage calls
     h.printed = {}
     h.sounds = {}             -- { path, channel, handle } per PlaySoundFile that played
     h.soundKits = {}          -- { kit, channel, handle } per PlaySound / C_Sound.PlaySound
@@ -227,7 +242,8 @@ function Harness.new(player)
     local powerType = player.powerType or 3   -- Enum.PowerType.Energy
     h.player = FillUnit({
         isPlayer = true, playerControlled = true,
-        classFile = player.classFile or "ROGUE", name = player.name or "Tester", realm = player.realm or "Forever",
+        classFile = player.classFile or "ROGUE", name = player.name or "Tester", surname = player.surname,
+        realm = player.realm or "Forever",
         level = player.level or 1, xp = player.xp or 0, xpMax = player.xpMax or 400, rested = player.rested or 0,
         money = player.money or 0, resting = player.resting or false,
         powerType = powerType,
@@ -279,7 +295,7 @@ end
 -- vehicle, party1-4 or nameplate1-40 (a party token set here wins over h:JoinGroup's). Missing fields default like SetTarget's. Fires nothing;
 -- fire the event the change would cause (PLAYER_FOCUS_CHANGED, UNIT_PET, ...) if the test needs it.
 function Harness:SetUnit(token, unit)
-    assert(CONFIGURABLE_UNITS[token], "SetUnit: " .. tostring(token) .. " isn't a configurable unit (use h.player or h:SetTarget)")
+    assert(ConfigurableUnits[token], "SetUnit: " .. tostring(token) .. " isn't a configurable unit (use h.player or h:SetTarget)")
     self.units[token] = unit and FillUnit(unit) or nil
 end
 
@@ -398,8 +414,6 @@ function Harness:AddMedia(path)
     self.files[path] = true
 end
 
--- Timers -------------------------------------------------------------------
-
 -- Schedules fn at h.time + delay; returns the entry (entry.cancelled stops it).
 function Harness:Schedule(delay, fn)
     self.timerSerial = self.timerSerial + 1
@@ -456,14 +470,12 @@ function Harness:Protect(fn, ...)
     return ok
 end
 
--- Events -------------------------------------------------------------------
-
 -- Dispatches an event to every frame registered for it when the dispatch starts (frames created
 -- or registered during it wait for the next one). Unit registrations filter on the raw unit
 -- token, before any wrapping. A payload the snapshot flags as secret is wrapped when its
 -- predicate holds, except its unit-token fields. Handler errors reach the error handler.
 function Harness:Fire(event, ...)
-    local entry = SNAPSHOT.events[event]
+    local entry = Snapshot.events[event]
     assert(entry, "Fire: unknown event " .. tostring(event))
     local payload = { n = select("#", ...), ... }
     local unit = payload[1]
@@ -498,6 +510,12 @@ function Harness:ResetCalls()
     end
 end
 
+-- Calls to a wrapped API function ("UnitHealth", "C_Spell.IsSpellUsable") since the harness was
+-- made or the count was reset (h.apiCalls = {}), so tests can assert the work per event.
+function Harness:CountApiCalls(name)
+    return self.apiCalls[name] or 0
+end
+
 -- Every widget's (frames, regions, animations) calls to method, summed.
 function Harness:CountCalls(method)
     local total = 0
@@ -506,8 +524,6 @@ function Harness:CountCalls(method)
     end
     return total
 end
-
--- Addon loading ------------------------------------------------------------
 
 local function SavedNames(addon)
     local names = {}
@@ -526,7 +542,7 @@ function Harness:LoadFiles(name)
     if self.loaded[name] then
         return self.loaded[name]
     end
-    local addon = assert(ADDONS[name], "unknown addon " .. tostring(name))
+    local addon = assert(Addons[name], "unknown addon " .. tostring(name))
     assert(#addon.missing == 0, ("%s: the TOC lists %s, which doesn't exist"):format(name, table.concat(addon.missing, ", ")))
     for _, dependency in ipairs(addon.dependencies) do
         self:LoadFiles(dependency)
@@ -541,7 +557,7 @@ function Harness:LoadFiles(name)
     for i, file in ipairs(addon.files) do
         local chunk = assert(loadstring(addon.sources[i], "@" .. name .. "/" .. file))
         setfenv(chunk, self.env)
-        chunk(name, ns)
+        self:Protect(chunk, name, ns) -- like the client: a file that errors is reported, the rest still load
     end
     self.loading = nil
     self.loaded[name] = ns
@@ -575,9 +591,14 @@ end
 
 -- What the client writes to disk and reads back: finite numbers, strings, booleans, and tables
 -- keyed by strings or finite numbers, written out as text, so every table read back is a fresh
--- copy (shared references become separate tables). Functions, userdata (secrets), widgets, NaN,
--- inf and a cycle's back-reference aren't saved. path holds the tables being written.
+-- copy (shared references become separate tables). Functions, widgets, NaN, inf and a cycle's
+-- back-reference aren't saved. A secret is an error [C]: what the client does with one is
+-- unknown, and an addon that lets a secret reach its SavedVariables broke the secret rule anyway.
+-- path holds the tables being written.
 local function Serialize(value, path)
+    if IsSecret(value) then
+        error("a secret value reached SavedVariables", 0)
+    end
     local kind = type(value)
     if kind == "string" or kind == "boolean" then
         return value
@@ -613,7 +634,7 @@ Harness.Serialize = Serialize
 function Harness:Restart(isInitialLogin, isReloadingUi, whileAway)
     self:Fire("PLAYER_LOGOUT")
     for _, name in ipairs(self.loadOrder) do
-        for _, variable in ipairs(SavedNames(ADDONS[name])) do
+        for _, variable in ipairs(SavedNames(Addons[name])) do
             self.saved[variable] = Serialize(rawget(self.env, variable))
         end
     end
@@ -659,8 +680,6 @@ function Harness:Relog(serverSecondsLater, whileAway)
         end
     end)
 end
-
--- Input --------------------------------------------------------------------
 
 -- Presses (down = true) or releases a gamepad key like "PAD1". Visible frames (every ancestor
 -- shown) with gamepad buttons enabled get it newest first until one consumes it (its script

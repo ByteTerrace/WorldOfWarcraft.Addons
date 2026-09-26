@@ -1,17 +1,25 @@
 ## Interface: 16001
 ## Title: ByteTerrace Core
-## Notes: Shared framework for ByteTerrace addons: state, commands, input, events, modules.
+## Notes: Shared framework for ByteTerrace addons: state, commands, input, events, modules, messages, sounds, facts.
 ## Author: ByteTerrace
 ## Version: 0.1.0
 ## Category: ByteTerrace
 ## X-Globals: ByteTerrace
 
 Core.lua
+Names.lua
 State.lua
 Records.lua
 Events.lua
 Commands.lua
 Input.lua
 Settings.lua
+Comms.lua
+SoundBank.lua
 Facts.lua
+FactsTarget.lua
+FactsKills.lua
+FactsDeath.lua
+Module.lua
 AddOn.lua
+Diagnostics.lua

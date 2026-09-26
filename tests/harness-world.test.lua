@@ -17,48 +17,44 @@ local function Watch(h, ...)
     return seen
 end
 
-local HILLSBRAD = 1424
+local Hillsbrad = 1424
 
 local function WithMaps()
-    local h = Harness.new()
-    h:AddMap(HILLSBRAD, { name = "Hillsbrad Foothills", mapType = "Zone", parentMapID = 1415 })
+    local h = Harness.New()
+    h:AddMap(Hillsbrad, { name = "Hillsbrad Foothills", mapType = "Zone", parentMapID = 1415 })
     h:AddMap(1415, { name = "Eastern Kingdoms", mapType = "Continent" })
     h:AddMap(229, { name = "Deadmines", mapType = "Dungeon" })
     return h
 end
 
--- Location ---------------------------------------------------------------------------------
-
 test("SetLocation: a new zone fires ZONE_CHANGED_NEW_AREA, a new subzone alone ZONE_CHANGED", function()
     local h = WithMaps()
     local env = h.env
     local seen = Watch(h, "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA")
-    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Southshore", mapID = HILLSBRAD, x = 0.5, y = 0.25 })
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Southshore", mapID = Hillsbrad, x = 0.5, y = 0.25 })
     eq(env.GetZoneText(), "Hillsbrad Foothills")
     eq(env.GetSubZoneText(), "Southshore")
     h:SetLocation({ subZone = "Tarren Mill" })
     h:SetLocation({ subZone = "Tarren Mill" })
     eq(table.concat(seen, ","), "ZONE_CHANGED_NEW_AREA,ZONE_CHANGED", "no event without a change")
-    eq(env.C_Map.GetBestMapForUnit("player"), HILLSBRAD)
+    eq(env.C_Map.GetBestMapForUnit("player"), Hillsbrad)
 end)
-
--- Maps -------------------------------------------------------------------------------------
 
 test("GetPlayerMapPosition: a vector on the player's own map, nil elsewhere, in an instance and for strangers", function()
     local h = WithMaps()
     local env = h.env
-    h:SetLocation({ zone = "Hillsbrad Foothills", mapID = HILLSBRAD, x = 0.5, y = 0.25 })
-    local position = env.C_Map.GetPlayerMapPosition(HILLSBRAD, "player")
+    h:SetLocation({ zone = "Hillsbrad Foothills", mapID = Hillsbrad, x = 0.5, y = 0.25 })
+    local position = env.C_Map.GetPlayerMapPosition(Hillsbrad, "player")
     local x, y = position:GetXY()
     eq(x, 0.5)
     eq(y, 0.25)
     eq(position.x, 0.5)
     eq(env.C_Map.GetPlayerMapPosition(1415, "player"), nil, "parent maps aren't projected")
     h:SetTarget({ name = "Bob", isPlayer = true, canAttack = true })
-    eq(env.C_Map.GetPlayerMapPosition(HILLSBRAD, "target"), nil, "only the player and party members")
+    eq(env.C_Map.GetPlayerMapPosition(Hillsbrad, "target"), nil, "only the player and party members")
     eq(env.C_Map.GetBestMapForUnit("target"), nil)
-    h:JoinGroup("party", { { name = "Mom", mapID = HILLSBRAD, mapPosition = { x = 0.1, y = 0.2 } } })
-    eq(select(2, env.C_Map.GetPlayerMapPosition(HILLSBRAD, "party1"):GetXY()), 0.2)
+    h:JoinGroup("party", { { name = "Mom", mapID = Hillsbrad, mapPosition = { x = 0.1, y = 0.2 } } })
+    eq(select(2, env.C_Map.GetPlayerMapPosition(Hillsbrad, "party1"):GetXY()), 0.2)
     h:SetLocation({ zone = "The Deadmines", mapID = 229, instance = "party" })
     eq(env.C_Map.GetBestMapForUnit("player"), 229, "the instance's map")
     eq(env.C_Map.GetPlayerMapPosition(229, "player"), nil, "no position in an instance")
@@ -71,8 +67,8 @@ end)
 
 test("GetMapInfo returns UiMapDetails for an added map; any other map doesn't exist", function()
     local h = WithMaps()
-    local info = h.env.C_Map.GetMapInfo(HILLSBRAD)
-    eq(info.mapID, HILLSBRAD)
+    local info = h.env.C_Map.GetMapInfo(Hillsbrad)
+    eq(info.mapID, Hillsbrad)
     eq(info.name, "Hillsbrad Foothills")
     eq(info.mapType, h.env.Enum.UIMapType.Zone)
     eq(info.parentMapID, 1415)
@@ -81,13 +77,11 @@ test("GetMapInfo returns UiMapDetails for an added map; any other map doesn't ex
     throws(function() h:AddMap(1, { name = "X", mapType = "Planet" }) end, "unknown mapType")
 end)
 
--- Waypoints --------------------------------------------------------------------------------
-
 test("UiMapPoint builds Blizzard's table shape, and CreateVector2D has the mixin's methods", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
-    local point = env.UiMapPoint.CreateFromCoordinates(HILLSBRAD, 0.5, 0.25, 3)
-    eq(point.uiMapID, HILLSBRAD)
+    local point = env.UiMapPoint.CreateFromCoordinates(Hillsbrad, 0.5, 0.25, 3)
+    eq(point.uiMapID, Hillsbrad)
     eq(point.z, 3)
     eq(select(2, point.position:GetXY()), 0.25)
     local vector = env.CreateVector2D(0.1, 0.2)
@@ -100,17 +94,17 @@ test("user waypoints: set on a map that allows them, USER_WAYPOINT_UPDATED, read
     local h = WithMaps()
     local env = h.env
     local seen = Watch(h, "USER_WAYPOINT_UPDATED", "SUPER_TRACKING_CHANGED")
-    truthy(env.C_Map.CanSetUserWaypointOnMap(HILLSBRAD))
+    truthy(env.C_Map.CanSetUserWaypointOnMap(Hillsbrad))
     falsy(env.C_Map.CanSetUserWaypointOnMap(229), "not in a dungeon")
     falsy(env.C_Map.HasUserWaypoint())
     eq(select("#", env.C_Map.GetUserWaypoint()), 0)
     falsy(env.C_Map.SetUserWaypoint(env.UiMapPoint.CreateFromCoordinates(229, 0.5, 0.5)), "refused")
     eq(#seen, 0)
-    truthy(env.C_Map.SetUserWaypoint(env.UiMapPoint.CreateFromCoordinates(HILLSBRAD, 0.5, 0.25)))
-    eq(h.waypoint.uiMapID, HILLSBRAD)
+    truthy(env.C_Map.SetUserWaypoint(env.UiMapPoint.CreateFromCoordinates(Hillsbrad, 0.5, 0.25)))
+    eq(h.waypoint.uiMapID, Hillsbrad)
     eq(h.waypoint.x, 0.5)
     local point = env.C_Map.GetUserWaypoint()
-    eq(point.uiMapID, HILLSBRAD)
+    eq(point.uiMapID, Hillsbrad)
     eq(select(2, point.position:GetXY()), 0.25)
     falsy(env.C_SuperTrack.IsSuperTrackingUserWaypoint())
     env.C_SuperTrack.SetSuperTrackedUserWaypoint(true)
@@ -127,7 +121,7 @@ test("user waypoints: set on a map that allows them, USER_WAYPOINT_UPDATED, read
 end)
 
 test("AlwaysAllowUserWaypoints and canSetWaypoint override the map type rule", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local flags = h.env.Enum.UIMapFlag
     h:AddMap(1, { name = "City", mapType = "Dungeon", flags = flags.AlwaysAllowUserWaypoints + flags.NoHighlight })
     h:AddMap(2, { name = "Blocked", mapType = "Zone", canSetWaypoint = false })
@@ -135,10 +129,8 @@ test("AlwaysAllowUserWaypoints and canSetWaypoint override the map type rule", f
     falsy(h.env.C_Map.CanSetUserWaypointOnMap(2))
 end)
 
--- Honor ------------------------------------------------------------------------------------
-
 test("honorable kills fire CHAT_MSG_COMBAT_HONOR_GAIN with the Forever enUS text and 18 fields", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local got
     local frame = env.CreateFrame("Frame")
@@ -162,7 +154,7 @@ test("honorable kills fire CHAT_MSG_COMBAT_HONOR_GAIN with the Forever enUS text
 end)
 
 test("the honor message has no secret flags: plain even under chat lockdown", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local got
     local frame = h.env.CreateFrame("Frame")
     frame:RegisterEvent("CHAT_MSG_COMBAT_HONOR_GAIN")
@@ -173,10 +165,8 @@ test("the honor message has no secret flags: plain even under chat lockdown", fu
     falsy(h.env.issecretvalue(got))
 end)
 
--- Flash and raid warnings ------------------------------------------------------------------
-
 test("FlashClientIcon records each call", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h.env.FlashClientIcon()
     h.env.FlashClientIcon(true)
     eq(#h.flashes, 2)
@@ -186,7 +176,7 @@ test("FlashClientIcon records each call", function()
 end)
 
 test("RaidNotice_AddMessage records the message for RaidWarningFrame with its color", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local color = env.ChatTypeInfo.RAID_WARNING
     eq(color.r, 1)
@@ -204,7 +194,7 @@ test("RaidNotice_AddMessage records the message for RaidWarningFrame with its co
 end)
 
 test("RaidNotice_AddMessage refuses what RaidWarningFrame can't use: secret text or time, no color", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local color = env.ChatTypeInfo.RAID_WARNING
     throws(function() env.RaidNotice_AddMessage(env.RaidWarningFrame, Secret("hidden"), color) end, "compute with a secret")
@@ -214,7 +204,7 @@ test("RaidNotice_AddMessage refuses what RaidWarningFrame can't use: secret text
 end)
 
 test("RaidNotice_AddMessage is a deprecation fallback: gone when loadDeprecationFallbacks is off", function()
-    local h = Harness.new({ loadDeprecationFallbacks = false })
+    local h = Harness.New({ loadDeprecationFallbacks = false })
     throws(function() return h.env.RaidNotice_AddMessage end, "undefined global RaidNotice_AddMessage")
     h.env.RaidWarningUtil.AddMessage("still works", h.env.ChatTypeInfo.RAID_WARNING)
     eq(#h.raidNotices, 1)

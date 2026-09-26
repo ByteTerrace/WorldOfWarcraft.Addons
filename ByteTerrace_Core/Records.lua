@@ -19,11 +19,12 @@
 -- A collection is also a runtime number row of the same name: its version, which moves on every
 -- change. Watchers and rules read that row like any other, so a change publishes with its batch.
 --
--- Loading validates the saved table: a record that isn't a table, has a bad key or has too many
--- keys is dropped, and a field that no longer validates (or no longer exists) is reset. Only
--- fields that differ from their default are stored.
+-- Loading validates the saved table: a record that isn't a table or has a bad key is dropped, a
+-- field that no longer validates (or no longer exists) is reset, and a collection over its limit
+-- (a lowered limit) is trimmed by eviction. Only fields that differ from their default are stored.
 --
--- Public members: Name (the full "<Module>.<name>") and Keep (the spec's keep function, or nil).
+-- Public members: Name (the full "<Module>.<name>"), Limit and Keep (the spec's keep function, or
+-- nil).
 
 local MaxKeyLength = 64
 local FieldPattern = "^%a[%w_]*$"
@@ -51,7 +52,11 @@ end
 
 local function Bump(self)
     local state = self.m_addon.State
-    local id = state:Id(self.Name)
+    local id = self.m_versionId
+    if not id then
+        id = state:Id(self.Name)
+        self.m_versionId = id
+    end
     state:Set(id, state.Values[id] + 1)
 end
 
@@ -97,10 +102,10 @@ function ByteTerrace.NewRecords(addon, name, spec)
     local scope = spec.scope or "account"
     addon.State:Declare(name, { kind = "number", default = 0, persist = false, records = true, scope = scope })
     return setmetatable({
-        Name = name, Keep = spec.keep,
+        Name = name, Limit = limit, Keep = spec.keep,
         m_addon = addon, m_fields = fields, m_fieldOrder = fieldOrder,
-        m_limit = limit, m_evict = spec.evict, m_scope = scope,
-        m_store = nil, m_count = 0,
+        m_evict = spec.evict, m_scope = scope,
+        m_store = nil, m_count = 0, m_versionId = nil,
     }, Records)
 end
 
@@ -125,9 +130,11 @@ function Records:Load(stores)
         else
             for field, value in pairs(record) do
                 local spec = fields[field]
-                if not spec or value == spec.default or not admits(spec, value) then
+                if not spec or not admits(spec, value) then
                     record[field] = nil
                     reset = reset + 1
+                elseif value == spec.default then
+                    record[field] = nil -- a changed default: store only what differs
                 end
             end
             count = count + 1
@@ -135,10 +142,13 @@ function Records:Load(stores)
     end
     self.m_store, self.m_count = store, count
     -- Nothing watches yet, so the version doesn't move.
-    while self.m_count > self.m_limit do
-        store[self:EvictionCandidate() or self:EvictionCandidate(true)] = nil
-        self.m_count = self.m_count - 1
-        dropped = dropped + 1
+    if self.m_count > self.Limit then
+        local victims = self:EvictionOrder()
+        for i = 1, self.m_count - self.Limit do
+            store[victims[i]] = nil
+        end
+        dropped = dropped + self.m_count - self.Limit
+        self.m_count = self.Limit
     end
     return dropped, reset
 end
@@ -225,6 +235,31 @@ function Records:EvictionCandidate(includeKept)
     return best
 end
 
+--- Every key in eviction order: unkept keys first, then kept ones, each by the lowest evict field
+--- then by key. One sort, so trimming a collection far over its limit stays cheap.
+---@return string[]
+function Records:EvictionOrder()
+    local store, evict, keep = Loaded(self), self.m_evict, self.Keep
+    local default = evict and self.m_fields[evict].default or 0
+    local keys, kept, value = {}, {}, {}
+    for key, record in pairs(store) do
+        keys[#keys + 1] = key
+        kept[key] = keep ~= nil and keep(key) and true or false
+        local field = evict and record[evict]
+        value[key] = field == nil and default or field
+    end
+    sort(keys, function(a, b)
+        if kept[a] ~= kept[b] then
+            return not kept[a]
+        end
+        if value[a] ~= value[b] then
+            return value[a] < value[b]
+        end
+        return a < b
+    end)
+    return keys
+end
+
 --- Creates or updates the record for key, merging the given fields. Every value is validated
 --- before anything is written, so a bad write changes nothing. At the limit, a new key evicts
 --- the lowest record by the evict field; with nothing to evict, it's an error.
@@ -253,10 +288,10 @@ function Records:Set(key, values)
     local record = store[key]
     local changed = false
     if not record then
-        if self.m_count >= self.m_limit then
+        if self.m_count >= self.Limit then
             local victim = self.m_evict and self:EvictionCandidate()
             if not victim then
-                error(self.m_addon.Name .. ": records " .. self.Name .. " is full (" .. self.m_limit .. ")", 2)
+                error(self.m_addon.Name .. ": records " .. self.Name .. " is full (" .. self.Limit .. ")", 2)
             end
             self:Remove(victim)
         end

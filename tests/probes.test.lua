@@ -12,7 +12,7 @@
 local Observed = Harness.OBSERVED_PROBES.probes
 
 -- The probe list, from a harness of its own (each test runs its probe in a fresh one).
-local Definitions = Harness.new():LoadFiles("ByteTerrace_DevTools").Probes
+local Definitions = Harness.New():LoadFiles("ByteTerrace_DevTools").Probes
 
 for _, definition in ipairs(Definitions.List) do
     local name = definition.name

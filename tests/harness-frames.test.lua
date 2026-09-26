@@ -5,10 +5,8 @@ local function Recorder(log, name)
     return function() log[#log + 1] = name end
 end
 
--- Visibility ---------------------------------------------------------------------------------
-
 test("OnShow and OnHide run when visibility changes, for the frame and its visible descendants", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local log = {}
     local parent = env.CreateFrame("Frame", nil, env.UIParent)
@@ -39,7 +37,7 @@ test("OnShow and OnHide run when visibility changes, for the frame and its visib
 end)
 
 test("an error in OnHide is reported and the rest still run", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local parent = env.CreateFrame("Frame")
     local child = env.CreateFrame("Frame", nil, parent)
@@ -50,8 +48,6 @@ test("an error in OnHide is reported and the rest still run", function()
     parent:Hide()
     truthy(ran)
 end)
-
--- Moving -------------------------------------------------------------------------------------
 
 local function Movable(h)
     local env = h.env
@@ -65,7 +61,7 @@ local function Movable(h)
 end
 
 test("dragging runs OnMouseDown, OnDragStart and OnDragStop, not OnMouseUp or OnClick, and moves the frame", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local frame = Movable(h)
     local log, stopped = {}, nil
@@ -93,7 +89,7 @@ test("dragging runs OnMouseDown, OnDragStart and OnDragStop, not OnMouseUp or On
 end)
 
 test("only a visible, mouse-enabled frame dragged with a registered button starts a drag", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local frame = Movable(h)
     local starts = 0
     frame:SetScript("OnDragStart", function() starts = starts + 1 end)
@@ -115,7 +111,7 @@ test("only a visible, mouse-enabled frame dragged with a registered button start
 end)
 
 test("StartMoving needs a movable frame; a moving frame follows the mouse until it stops or hides", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local frame = Movable(h)
     frame:SetMovable(false)
     falsy(frame:IsMovable())
@@ -140,7 +136,7 @@ test("StartMoving needs a movable frame; a moving frame follows the mouse until 
 end)
 
 test("moving a protected frame is blocked in combat lockdown", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local secure = env.CreateFrame("Button", nil, env.UIParent, "SecureActionButtonTemplate")
     secure:SetMovable(true)
@@ -153,7 +149,7 @@ test("moving a protected frame is blocked in combat lockdown", function()
 end)
 
 test("GetChildren lists child frames and GetRegions the regions, in creation order", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local parent = env.CreateFrame("Frame")
     local a = env.CreateFrame("Frame", nil, parent)
@@ -174,7 +170,7 @@ test("GetChildren lists child frames and GetRegions the regions, in creation ord
 end)
 
 test("mask textures attach to textures once each, and translation and scale animations keep their settings", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local frame = h.env.CreateFrame("Frame")
     local texture = frame:CreateTexture()
     local mask = frame:CreateMaskTexture()

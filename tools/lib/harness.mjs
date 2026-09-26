@@ -6,9 +6,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createLua } from "./lua.mjs";
 import { PROBES_PATH, luaLiteral, readProbes } from "./probes.mjs";
-import { findAddons, repoRoot } from "./repo.mjs";
+import { findAddons, repoRoot, splitList } from "./repo.mjs";
 
-export const HARNESS_FILES = [
+const HARNESS_FILES = [
     "wow.lua", "secrets.lua", "widgets.lua", "input.lua", "group.lua", "units.lua", "world.lua", "ui.lua", "meter.lua",
     "speech.lua", "env.lua", "probes.lua",
 ];
@@ -43,10 +43,6 @@ export function loadSnapshot() {
     return { raw: snapshot, lua: lines.join("\n") };
 }
 
-function list(value) {
-    return (value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-}
-
 function loadAddons() {
     const addons = {};
     for (const addon of findAddons()) {
@@ -60,8 +56,8 @@ function loadAddons() {
             missing: lua.filter((f) => !exists(f)),
             metadata: addon.metadata,
             dependencies: addon.dependencies,
-            savedVariables: list(addon.metadata.SavedVariables),
-            savedVariablesPerCharacter: list(addon.metadata.SavedVariablesPerCharacter),
+            savedVariables: splitList(addon.metadata.SavedVariables),
+            savedVariablesPerCharacter: splitList(addon.metadata.SavedVariablesPerCharacter),
         };
     }
     return addons;

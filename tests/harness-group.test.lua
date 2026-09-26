@@ -1,7 +1,5 @@
 -- The harness's fidelity rules for groups and addon messages (tests/harness/group.lua).
 
--- Groups ------------------------------------------------------------------------------
-
 local function Watch(h, ...)
     local seen = {}
     local frame = h.env.CreateFrame("Frame")
@@ -19,7 +17,7 @@ local function Watch(h, ...)
 end
 
 test("joining a party fires GROUP_JOINED with its category and GUID, then GROUP_ROSTER_UPDATE", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local seen = Watch(h, "GROUP_JOINED", "GROUP_LEFT", "GROUP_ROSTER_UPDATE")
     falsy(env.IsInGroup())
@@ -44,20 +42,21 @@ test("joining a party fires GROUP_JOINED with its category and GUID, then GROUP_
 end)
 
 test("group members are named, existing, identity-accessible units, even in combat", function()
-    local h = Harness.new({ realm = "Home Realm" })
+    local h = Harness.New({ realm = "Home Realm" })
     local env = h.env
-    h:JoinGroup("party", { "Bob", "Cara-OtherRealm" })
+    h:JoinGroup("party", { "Bob", "Cara Smith-OtherRealm" })
     h:EnterCombat()
     truthy(env.UnitExists("party1"))
     falsy(env.UnitExists("party3"))
-    local name, realm = env.UnitName("party1")
+    local name, surname = env.UnitName("party1")
     falsy(env.issecretvalue(name), "group members aren't identity-restricted")
     eq(name, "Bob")
-    eq(realm, nil, "same realm")
-    eq(select(2, env.UnitName("party2")), "OtherRealm")
-    eq(select(2, env.UnitFullName("party1")), nil, "UnitFullName: same realm is nil")
-    eq(select(2, env.UnitFullName("player")), "HomeRealm", "UnitFullName always gives the player's normalized realm")
-    eq(select(2, env.UnitName("player")), nil)
+    eq(surname, Harness.DEFAULT_SURNAME, "a member named by first name gets the default surname")
+    eq(table.concat({ env.UnitName("party2") }, ","), "Cara,Smith", "another realm's member: first and surname, no realm")
+    eq(table.concat({ env.UnitFullName("party2") }, ","), "Cara,Smith", "UnitFullName: no realm either")
+    eq(table.concat({ env.UnitFullName("player") }, ","), "Tester," .. Harness.DEFAULT_SURNAME,
+        "UnitFullName gives the player's surname, not their realm")
+    eq(select(2, env.UnitName("player")), Harness.DEFAULT_SURNAME)
     falsy(env.issecretvalue(env.UnitClass("party1")))
     truthy(env.UnitInParty("party1"))
     truthy(env.UnitInParty("player"))
@@ -65,7 +64,7 @@ test("group members are named, existing, identity-accessible units, even in comb
 end)
 
 test("members come and go with GROUP_ROSTER_UPDATE; the last one leaving disbands the group", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:JoinGroup("party", { "Bob" })
     local seen = Watch(h, "GROUP_LEFT", "GROUP_ROSTER_UPDATE")
@@ -86,7 +85,7 @@ test("members come and go with GROUP_ROSTER_UPDATE; the last one leaving disband
 end)
 
 test("raids give raid tokens, the player a raid index too, and party tokens for the player's subgroup", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local names = {}
     for i = 1, 7 do names[i] = "M" .. i end
@@ -106,7 +105,7 @@ test("raids give raid tokens, the player a raid index too, and party tokens for 
 end)
 
 test("instance groups are LE_PARTY_CATEGORY_INSTANCE, and a raid past five", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local seen = Watch(h, "GROUP_JOINED")
     h:JoinGroup("instance", { "A", "B", "C", "D" })
@@ -122,153 +121,151 @@ test("instance groups are LE_PARTY_CATEGORY_INSTANCE, and a raid past five", fun
 end)
 
 test("Ambiguate follows the documented contexts", function()
-    local h = Harness.new({ realm = "Die Aldor" })
-    local A = h.env.Ambiguate
-    eq(A("Shion-DieAldor", "none"), "Shion", "none: same realm drops it")
-    eq(A("Shion-Nagrand", "none"), "Shion-Nagrand", "none: another realm keeps it")
-    eq(A("Shion-Nagrand", "short"), "Shion", "short always drops it")
-    eq(A("Shion-DieAldor", "mail"), "Shion-DieAldor", "mail always keeps it")
-    eq(A("Shion-DieAldor", "all"), "Shion")
-    eq(A("Shion-Nagrand", "guild"), "Shion-Nagrand", "no guild is modeled")
-    eq(A("Shion", "none"), "Shion")
-    throws(function() A("Shion-Nagrand", "bogus") end, "unknown context")
+    local h = Harness.New({ realm = "Die Aldor" })
+    local ambiguate = h.env.Ambiguate
+    eq(ambiguate("Shion-DieAldor", "none"), "Shion", "none: same realm drops it")
+    eq(ambiguate("Shion-Nagrand", "none"), "Shion-Nagrand", "none: another realm keeps it")
+    eq(ambiguate("Shion-Nagrand", "short"), "Shion", "short always drops it")
+    eq(ambiguate("Shion-DieAldor", "mail"), "Shion-DieAldor", "mail always keeps it")
+    eq(ambiguate("Shion-DieAldor", "all"), "Shion")
+    eq(ambiguate("Shion-Nagrand", "guild"), "Shion-Nagrand", "no guild is modeled")
+    eq(ambiguate("Shion", "none"), "Shion")
+    throws(function() ambiguate("Shion-Nagrand", "bogus") end, "unknown context")
 end)
-
--- Addon messages --------------------------------------------------------------------------
 
 local function Result(h, name) return h.env.Enum.SendAddonMessageResult[name] end
 
 test("prefixes register once, up to 16 characters", function()
-    local h = Harness.new()
-    local C, R = h.env.C_ChatInfo, h.env.Enum.RegisterAddonMessagePrefixResult
-    eq(C.RegisterAddonMessagePrefix("Krew"), R.Success)
-    eq(C.RegisterAddonMessagePrefix("Krew"), R.DuplicatePrefix)
-    eq(C.RegisterAddonMessagePrefix(""), R.InvalidPrefix)
-    eq(C.RegisterAddonMessagePrefix(string.rep("x", 17)), R.InvalidPrefix)
-    eq(C.RegisterAddonMessagePrefix(string.rep("x", 16)), R.Success)
-    truthy(C.IsAddonMessagePrefixRegistered("Krew"))
-    falsy(C.IsAddonMessagePrefixRegistered("Other"))
-    eq(#C.GetRegisteredAddonMessagePrefixes(), 2)
+    local h = Harness.New()
+    local chatInfo, results = h.env.C_ChatInfo, h.env.Enum.RegisterAddonMessagePrefixResult
+    eq(chatInfo.RegisterAddonMessagePrefix("Krew"), results.Success)
+    eq(chatInfo.RegisterAddonMessagePrefix("Krew"), results.DuplicatePrefix)
+    eq(chatInfo.RegisterAddonMessagePrefix(""), results.InvalidPrefix)
+    eq(chatInfo.RegisterAddonMessagePrefix(string.rep("x", 17)), results.InvalidPrefix)
+    eq(chatInfo.RegisterAddonMessagePrefix(string.rep("x", 16)), results.Success)
+    truthy(chatInfo.IsAddonMessagePrefixRegistered("Krew"))
+    falsy(chatInfo.IsAddonMessagePrefixRegistered("Other"))
+    eq(#chatInfo.GetRegisteredAddonMessagePrefixes(), 2)
     h:Reload()
     falsy(h.env.C_ChatInfo.IsAddonMessagePrefixRegistered("Krew"), "a new UI session starts with none")
 end)
 
 test("SendAddonMessage validates prefix, message and chat type, and records every call", function()
-    local h = Harness.new()
-    local C = h.env.C_ChatInfo
+    local h = Harness.New()
+    local chatInfo = h.env.C_ChatInfo
     h:JoinGroup("party", { "Bob" })
-    eq(C.SendAddonMessage("Unregistered", "hi"), Result(h, "Success"), "sending needs no registration, only receiving does")
-    eq(C.SendAddonMessage(string.rep("p", 17), "hi", "PARTY"), Result(h, "InvalidPrefix"))
-    eq(C.SendAddonMessage("", "hi", "PARTY"), Result(h, "InvalidPrefix"))
-    eq(C.SendAddonMessage("K", string.rep("m", 256), "PARTY"), Result(h, "InvalidMessage"))
-    eq(C.SendAddonMessage("K", string.rep("m", 255), "PARTY"), Result(h, "Success"))
-    eq(C.SendAddonMessage("K", "a\0b", "PARTY"), Result(h, "InvalidMessage"))
-    eq(C.SendAddonMessage("K", "hi", "BOGUS"), Result(h, "InvalidChatType"))
-    eq(C.SendAddonMessage("K", "hi", "WHISPER"), Result(h, "TargetRequired"))
-    eq(C.SendAddonMessage("K", "hi", "GUILD"), Result(h, "NotInGuild"))
-    throws(function() C.SendAddonMessage("K", "hi", "SAY") end, "isn't modeled")
+    eq(chatInfo.SendAddonMessage("Unregistered", "hi"), Result(h, "Success"), "sending needs no registration, only receiving does")
+    eq(chatInfo.SendAddonMessage(string.rep("p", 17), "hi", "PARTY"), Result(h, "InvalidPrefix"))
+    eq(chatInfo.SendAddonMessage("", "hi", "PARTY"), Result(h, "InvalidPrefix"))
+    eq(chatInfo.SendAddonMessage("K", string.rep("m", 256), "PARTY"), Result(h, "InvalidMessage"))
+    eq(chatInfo.SendAddonMessage("K", string.rep("m", 255), "PARTY"), Result(h, "Success"))
+    eq(chatInfo.SendAddonMessage("K", "a\0b", "PARTY"), Result(h, "InvalidMessage"))
+    eq(chatInfo.SendAddonMessage("K", "hi", "BOGUS"), Result(h, "InvalidChatType"))
+    eq(chatInfo.SendAddonMessage("K", "hi", "WHISPER"), Result(h, "TargetRequired"))
+    eq(chatInfo.SendAddonMessage("K", "hi", "GUILD"), Result(h, "NotInGuild"))
+    throws(function() chatInfo.SendAddonMessage("K", "hi", "SAY") end, "isn't modeled")
     local first = h.addonMessages[1]
     eq(first.prefix, "Unregistered")
     eq(first.chatType, "PARTY", "the default chat type is recorded")
     eq(first.result, 0)
     eq(#h.addonMessages, 9, "a harness error records nothing")
-    throws(function() C.SendAddonMessage("K", Secret("hi"), "PARTY") end, "NotAllowed")
+    throws(function() chatInfo.SendAddonMessage("K", Secret("hi"), "PARTY") end, "NotAllowed")
 end)
 
 test("group chat types need that group", function()
-    local h = Harness.new()
-    local C = h.env.C_ChatInfo
+    local h = Harness.New()
+    local chatInfo = h.env.C_ChatInfo
     for _, chatType in ipairs({ "PARTY", "RAID", "INSTANCE_CHAT" }) do
-        eq(C.SendAddonMessage("K", "hi", chatType), Result(h, "NotInGroup"), chatType .. " outside a group")
+        eq(chatInfo.SendAddonMessage("K", "hi", chatType), Result(h, "NotInGroup"), chatType .. " outside a group")
     end
     h:JoinGroup("party", { "Bob" })
-    eq(C.SendAddonMessage("K", "hi", "PARTY"), Result(h, "Success"))
-    eq(C.SendAddonMessage("K", "hi", "RAID"), Result(h, "NotInGroup"), "a party isn't a raid")
-    eq(C.SendAddonMessage("K", "hi", "INSTANCE_CHAT"), Result(h, "NotInGroup"))
+    eq(chatInfo.SendAddonMessage("K", "hi", "PARTY"), Result(h, "Success"))
+    eq(chatInfo.SendAddonMessage("K", "hi", "RAID"), Result(h, "NotInGroup"), "a party isn't a raid")
+    eq(chatInfo.SendAddonMessage("K", "hi", "INSTANCE_CHAT"), Result(h, "NotInGroup"))
     h:LeaveGroup()
     h:JoinGroup("instance", { "Bob" })
-    eq(C.SendAddonMessage("K", "hi", "PARTY"), Result(h, "NotInGroup"), "an instance group isn't a home party")
-    eq(C.SendAddonMessage("K", "hi", "INSTANCE_CHAT"), Result(h, "Success"))
+    eq(chatInfo.SendAddonMessage("K", "hi", "PARTY"), Result(h, "NotInGroup"), "an instance group isn't a home party")
+    eq(chatInfo.SendAddonMessage("K", "hi", "INSTANCE_CHAT"), Result(h, "Success"))
 end)
 
 test("chat messaging lockdown refuses sends: encounter, challenge mode, PvP, map, chat; not combat", function()
-    local h = Harness.new()
-    local C = h.env.C_ChatInfo
+    local h = Harness.New()
+    local chatInfo = h.env.C_ChatInfo
     h:JoinGroup("party", { "Bob" })
     h:EnterCombat()
-    falsy(C.InChatMessagingLockdown(), "combat alone")
-    eq(C.SendAddonMessage("K", "hi"), Result(h, "Success"))
+    falsy(chatInfo.InChatMessagingLockdown(), "combat alone")
+    eq(chatInfo.SendAddonMessage("K", "hi"), Result(h, "Success"))
     h:LeaveCombat()
     for _, name in ipairs({ "Encounter", "ChallengeMode", "PvPMatch", "Map", "Chat" }) do
         h:SetRestriction(name, true)
-        truthy(C.InChatMessagingLockdown(), name)
-        eq(C.SendAddonMessage("K", "hi"), Result(h, "AddOnMessageLockdown"), name)
+        truthy(chatInfo.InChatMessagingLockdown(), name)
+        eq(chatInfo.SendAddonMessage("K", "hi"), Result(h, "AddOnMessageLockdown"), name)
         h:SetRestriction(name, false)
     end
-    falsy(C.InChatMessagingLockdown())
+    falsy(chatInfo.InChatMessagingLockdown())
 end)
 
 test("each prefix may burst 10 messages and regains 1 per second; refused sends cost nothing", function()
-    local h = Harness.new()
-    local C = h.env.C_ChatInfo
+    local h = Harness.New()
+    local chatInfo = h.env.C_ChatInfo
     h:JoinGroup("party", { "Bob" })
     for i = 1, 10 do
-        eq(C.SendAddonMessage("K", "m" .. i), Result(h, "Success"), "burst " .. i)
+        eq(chatInfo.SendAddonMessage("K", "m" .. i), Result(h, "Success"), "burst " .. i)
     end
-    eq(C.SendAddonMessage("K", "m11"), Result(h, "AddonMessageThrottle"))
-    eq(C.SendAddonMessage("Other", "x"), Result(h, "Success"), "the throttle is per prefix")
+    eq(chatInfo.SendAddonMessage("K", "m11"), Result(h, "AddonMessageThrottle"))
+    eq(chatInfo.SendAddonMessage("Other", "x"), Result(h, "Success"), "the throttle is per prefix")
     h:Advance(0.5)
-    eq(C.SendAddonMessage("K", "m12"), Result(h, "AddonMessageThrottle"), "half a message regained")
+    eq(chatInfo.SendAddonMessage("K", "m12"), Result(h, "AddonMessageThrottle"), "half a message regained")
     h:Advance(0.5)
-    eq(C.SendAddonMessage("K", "m13"), Result(h, "Success"))
-    eq(C.SendAddonMessage("K", "m14"), Result(h, "AddonMessageThrottle"))
+    eq(chatInfo.SendAddonMessage("K", "m13"), Result(h, "Success"))
+    eq(chatInfo.SendAddonMessage("K", "m14"), Result(h, "AddonMessageThrottle"))
     h:Advance(100)
     for i = 1, 10 do
-        C.SendAddonMessage("K", "again" .. i)
+        chatInfo.SendAddonMessage("K", "again" .. i)
     end
-    eq(C.SendAddonMessage("K", "over"), Result(h, "AddonMessageThrottle"), "regains up to 10, no more")
+    eq(chatInfo.SendAddonMessage("K", "over"), Result(h, "AddonMessageThrottle"), "regains up to 10, no more")
 end)
 
 test("received addon messages reach only registered prefixes, with the full documented payload", function()
-    local h = Harness.new({ realm = "Home Realm" })
+    local h = Harness.New({ realm = "Home Realm" })
     local got = {}
     local frame = h.env.CreateFrame("Frame")
     frame:RegisterEvent("CHAT_MSG_ADDON")
     frame:SetScript("OnEvent", function(_, _, ...) got[#got + 1] = { n = select("#", ...), ... } end)
-    falsy(h:ReceiveAddonMessage("Krew", "hi", "PARTY", "Bob"), "unregistered: not delivered")
+    falsy(h:ReceiveAddonMessage("Krew", "hi", "PARTY", "Bob Doe"), "unregistered: not delivered")
     eq(#got, 0)
     h.env.C_ChatInfo.RegisterAddonMessagePrefix("Krew")
-    truthy(h:ReceiveAddonMessage("Krew", "hi", "PARTY", "Bob"))
+    truthy(h:ReceiveAddonMessage("Krew", "hi", "PARTY", "Bob Doe-Home Realm"))
     local p = got[1]
     eq(p.n, 9)
     eq(table.concat({ p[1], p[2], p[3], p[4], "[" .. p[5] .. "]", p[6], p[7], "[" .. p[8] .. "]", p[9] }, "|"),
-        "Krew|hi|PARTY|Bob-HomeRealm|[]|0|0|[]|0")
-    h:ReceiveAddonMessage("Krew", "psst", "WHISPER", "Cara-Elsewhere")
-    eq(got[2][4], "Cara-Elsewhere")
-    eq(got[2][5], "Cara-Elsewhere", "a whisper's target is the sender, per the event's doc")
+        "Krew|hi|PARTY|Bob Doe|[]|0|0|[]|0", "a sender on your realm is \"First Last\" with no realm")
+    h:ReceiveAddonMessage("Krew", "psst", "WHISPER", "Cara Doe-Elsewhere")
+    eq(got[2][4], "Cara Doe-Elsewhere", "another realm's sender keeps its realm")
+    eq(got[2][5], "Cara Doe-Elsewhere", "a whisper's target is the sender, per the event's doc")
 end)
 
 test("your own group messages echo back on the next Advance, never during the send", function()
-    local h = Harness.new()
-    local C = h.env.C_ChatInfo
-    C.RegisterAddonMessagePrefix("Krew")
+    local h = Harness.New()
+    local chatInfo = h.env.C_ChatInfo
+    chatInfo.RegisterAddonMessagePrefix("Krew")
     local got = {}
     local frame = h.env.CreateFrame("Frame")
     frame:RegisterEvent("CHAT_MSG_ADDON")
     frame:SetScript("OnEvent", function(_, _, prefix, text, channel, sender) got[#got + 1] = text .. "@" .. channel .. "<" .. sender end)
     h:JoinGroup("party", { "Bob" })
-    C.SendAddonMessage("Krew", "hello", "PARTY")
+    chatInfo.SendAddonMessage("Krew", "hello", "PARTY")
     eq(#got, 0, "not inside the call")
     h:Advance(0)
-    eq(got[1], "hello@PARTY<Tester-Forever", "from yourself, with your realm")
-    C.SendAddonMessage("Unheard", "x", "PARTY")
-    C.SendAddonMessage("Krew", "to bob", "WHISPER", "Bob")
-    C.SendAddonMessage("Krew", "to me", "WHISPER", "Tester")
+    eq(got[1], "hello@PARTY<Tester Doe", "from yourself, by your full name with no realm")
+    chatInfo.SendAddonMessage("Unheard", "x", "PARTY")
+    chatInfo.SendAddonMessage("Krew", "to bob", "WHISPER", "Bob Doe")
+    chatInfo.SendAddonMessage("Krew", "to me", "WHISPER", "Tester Doe")
     h:Advance(0)
     eq(#got, 2, "an unregistered prefix and a whisper to someone else don't come back")
-    eq(got[2], "to me@WHISPER<Tester-Forever")
+    eq(got[2], "to me@WHISPER<Tester Doe")
     h:Echo(false)
-    C.SendAddonMessage("Krew", "quiet", "PARTY")
+    chatInfo.SendAddonMessage("Krew", "quiet", "PARTY")
     h:Advance(1)
     eq(#got, 2, "echo off")
 end)

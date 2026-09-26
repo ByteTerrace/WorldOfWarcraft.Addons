@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-export const TOC_SUFFIX = "_Camelot.toc";
+const TOC_SUFFIX = "_Camelot.toc";
 
 // An addon is a top-level folder holding <Name>_Camelot.toc.
 export function findAddons(root = repoRoot) {

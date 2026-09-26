@@ -2,16 +2,16 @@
 -- and text to speech.
 
 test("combat audio alerts speak only when the player turned them on, and refuse secret text", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
-    local C, category = env.C_CombatAudioAlert, env.Enum.CombatAudioAlertCategory.General
-    falsy(C.IsEnabled(), "off by default (CAAEnabled is 0)")
-    eq(select("#", C.SpeakText("Incoming", category)), 0, "disabled: nothing spoken, nothing returned")
+    local alerts, category = env.C_CombatAudioAlert, env.Enum.CombatAudioAlertCategory.General
+    falsy(alerts.IsEnabled(), "off by default (CAAEnabled is 0)")
+    eq(select("#", alerts.SpeakText("Incoming", category)), 0, "disabled: nothing spoken, nothing returned")
     eq(#h.spoken, 0)
     h.combatAudioAlerts = true
-    truthy(C.IsEnabled())
-    eq(C.SpeakText("Incoming", category), 1)
-    eq(C.SpeakText("Again", category, false), 2)
+    truthy(alerts.IsEnabled())
+    eq(alerts.SpeakText("Incoming", category), 1)
+    eq(alerts.SpeakText("Again", category, false), 2)
     eq(#h.spoken, 2)
     eq(h.spoken[1].api, "C_CombatAudioAlert.SpeakText")
     eq(h.spoken[1].text, "Incoming")
@@ -19,14 +19,14 @@ test("combat audio alerts speak only when the player turned them on, and refuse 
     eq(h.spoken[1].allowOverlap, true, "allowOverlap defaults to true")
     eq(h.spoken[2].allowOverlap, false)
     eq(h.spoken[2].utteranceID, 2)
-    throws(function() C.SpeakText("x", 99) end, "unknown category")
-    throws(function() C.SpeakText(Secret("Bob"), category) end, "secret argument #1 refused")
-    local on = Harness.new({ combatAudioAlerts = true })
+    throws(function() alerts.SpeakText("x", 99) end, "unknown category")
+    throws(function() alerts.SpeakText(Secret("Bob"), category) end, "secret argument #1 refused")
+    local on = Harness.New({ combatAudioAlerts = true })
     truthy(on.env.C_CombatAudioAlert.IsEnabled())
 end)
 
 test("text to speech speaks with the player's settings and takes a secret text", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local voiceID = env.C_TTSSettings.GetVoiceOptionID(env.Enum.TtsVoiceType.Standard)
     local voices = env.C_VoiceChat.GetTtsVoices()

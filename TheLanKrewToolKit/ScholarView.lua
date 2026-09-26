@@ -19,7 +19,7 @@ local addonName, ns = ...
 --
 -- The panel is opaque and sized to its content, over a dark shade. The screen only draws;
 -- Scholar.lua owns the rules and gives it handlers through ns.ScholarView.Init before the first
--- Show.
+-- Show. Its colors, textures and backdrop come from ns.ScholarStyle (ScholarPictures.lua).
 
 local Width = 760
 local Pad = 28
@@ -31,35 +31,19 @@ local FooterHeight = 44
 local PortraitSize = 60
 local OwlIcon = "Interface\\Icons\\Ability_Hunter_Pet_Owl"
 local CircleMask = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
-local StarIcon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1"
 local RightIcon = "Interface\\RAIDFRAME\\ReadyCheck-Ready"
-local WrongIcon = "Interface\\RAIDFRAME\\ReadyCheck-NotReady"
 local SpeakerIcon = "Interface\\Common\\VoiceChat-Speaker"
-local Solid = "Interface\\Buttons\\WHITE8X8"
-local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
-local Palette = {
-    panel = { 0.08, 0.06, 0.04 },
-    band = { 0.2, 0.15, 0.09 },
-    button = { 0.2, 0.15, 0.09 },
-    edge = { 0.45, 0.36, 0.17 },
-    keycap = { 0.34, 0.27, 0.15 },
-    keycapDim = { 0.19, 0.15, 0.09 },
-    gold = { 1, 0.82, 0 },
-    story = { 0.88, 0.85, 0.79 },
-    question = { 1, 1, 1 },
-    muted = { 0.62, 0.59, 0.54 },
-    streak = { 1, 0.7, 0.28 },
-    math = { 0.42, 0.77, 1 },
-    reading = { 0.5, 0.88, 0.48 },
-    good = { 0.35, 0.95, 0.45 },
-    bad = { 1, 0.4, 0.35 },
-}
 local NumberColor = "|cffffd100"
 local WordColor = "|cff7fe0ff"
 
 local CreateFrame = CreateFrame
 local floor, max = math.floor, math.max
 local concat = table.concat
+
+local ScholarStyle = ns.ScholarStyle
+local Palette, Solid, StarIcon, WrongIcon = ScholarStyle.Palette, ScholarStyle.Solid, ScholarStyle.StarIcon,
+    ScholarStyle.WrongIcon
+local Backdrop, TextColor = ScholarStyle.Backdrop, ScholarStyle.TextColor
 
 local ScholarView = {}
 ns.ScholarView = ScholarView
@@ -102,7 +86,6 @@ local function Split(prompt)
     local story = prompt:sub(1, cut):gsub("%s+$", ""):gsub("\n", " ")
     return story, (prompt:sub(cut + 1):gsub("^%s+", ""))
 end
-
 
 --- What a child hears when they press Read aloud: the story, the question, then the choices.
 ---@param puzzle table
@@ -152,19 +135,9 @@ local function Fill(region, color, alpha)
     region:SetColorTexture(color[1], color[2], color[3], alpha or 1)
 end
 
-local function TextColor(fontString, color)
-    fontString:SetTextColor(color[1], color[2], color[3])
-end
-
 local function Hex(color)
     return ("|cff%02x%02x%02x"):format(floor(color[1] * 255), floor(color[2] * 255), floor(color[3] * 255))
 end
-
-local function Backdrop(frame, edgeSize)
-    frame:SetBackdrop({ bgFile = Solid, edgeFile = Border, edgeSize = edgeSize,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-end
-
 
 local function Paint(button, state)
     button.State = state
@@ -263,15 +236,12 @@ local function CreatePill(parent, text, icon)
     return button
 end
 
-
 -- Labels a pill with its key ("LB  Need a hint?") and fits the pill to it.
 local function LabelPill(button, key)
     button.Label:SetText(key and (NumberColor .. key .. "|r  " .. button.m_text) or button.m_text)
     -- secret: pill labels are built from fixed strings and key names, so they hold no secret aspect
     button:SetWidth(button.m_left + button.Label:GetStringWidth() + 14)
 end
-
-
 
 local function CreateHeader(frame, panel)
     local ring = panel:CreateTexture(nil, "ARTWORK")
@@ -424,8 +394,6 @@ local function Create()
     return frame
 end
 
--- Lays the panel out top to bottom from its content, so it's always exactly as tall as it needs
--- to be.
 -- The footer row: help on the left (Need a hint?, or the feedback banner in its place), Skip and
 -- Read aloud on the right. The banner stretches to whichever right-hand button comes first.
 function PlaceFooter()
@@ -454,6 +422,8 @@ function PlaceFooter()
     banner:SetHeight(FooterHeight)
 end
 
+-- Lays the panel out top to bottom from its content, so it's always exactly as tall as it needs
+-- to be.
 local function Layout(hasStory, puzzle)
     local panel, y = Overlay.Panel, 116
     if hasStory then
@@ -465,7 +435,7 @@ local function Layout(hasStory, puzzle)
     else
         Overlay.Story:Hide()
     end
-    local pictureHeight = ns.ScholarPictures.Draw(Overlay.Pictures, puzzle.picture, puzzle.prompt, puzzle.tiles)
+    local pictureHeight = ns.ScholarPictures.Draw(Overlay.Pictures, puzzle.picture, puzzle.tiles)
     if pictureHeight > 0 then
         local pictures = Overlay.Pictures
         pictures:ClearAllPoints()
@@ -543,7 +513,7 @@ function ScholarView.Init(handlers)
 end
 
 --- Shows a puzzle, creating the screen on first use. The caller takes the keyboard.
----@param puzzle table a puzzle from ns.Puzzles.Generate or FromFact
+---@param puzzle table a puzzle from ns.Puzzles.Generate
 ---@param info table { stars, rank, nextRank?, nextAt?, progress (0 to 1), streak, gentle, canSpeak,
 ---  controller (a controller is connected), keys = { four answer key labels },
 ---  actions = { hint, speak, skip key labels } }
@@ -635,10 +605,11 @@ function ScholarView.IsShown()
     return Overlay ~= nil and Overlay:IsShown()
 end
 
---- The full-screen overlay, or nil before the first Show. Its children: Buttons[1..4] (each with
---- Key, Text, Mark and State: "normal", "hover", "wrong", "right" or "dim"), Asks, Tag, Stars,
---- Goal, Progress, Rank, Streak, Gain, Story, Speak, Pictures (Icons, Cards), Question, Hint,
---- Keys, Skip and Feedback (a banner with Text).
+--- The full-screen overlay, or nil before the first Show. Among its children: Buttons[1..4] (each with
+--- Key, Keycap, Text, Mark, Shake and State: "normal", "hover", "wrong", "right" or "dim"),
+--- Portrait, Asks, Tag, Stars, StarIcon, Progress, Rank, Streak, Gain (raised by Rise), Story,
+--- Speak, Pictures (Icons, Cards, Tiles), Clue, Question, Hint, Skip and Feedback (a banner with
+--- Text).
 ---@return table?
 function ScholarView.Frame()
     return Overlay

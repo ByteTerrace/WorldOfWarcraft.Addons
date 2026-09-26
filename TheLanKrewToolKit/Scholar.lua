@@ -3,10 +3,11 @@ local addonName, ns = ...
 -- Scholar's challenge: math and reading riddles for young players, set up by a parent.
 --
 -- Off by default and per character: a parent turns it on for a child's character, picks a grade,
--- and can lock the settings with a PIN (/tlk lock 1234; /tlk unlock 1234 for the session).
+-- and can lock the settings with a PIN (/tlk lock 1234; /tlk unlock 1234 for the session). While
+-- locked the PIN can't be changed, and after three wrong PINs unlocking waits a minute.
 --
 --   When     every N minutes of play (saved per character, so relogging doesn't skip one), and
---            optionally at each level-up.
+--            optionally at each level-up. Time AFK, or with both subjects off, doesn't count.
 --   Where    a riddle covers the screen and holds the mouse and keyboard until it's solved; in
 --            Gentle mode a Skip appears after one try. Never during combat: a riddle waits for the
 --            fight to end, and one on screen steps aside if a fight starts and comes back after.
@@ -27,10 +28,12 @@ local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NU
 local ActionSources = { hint = "gamepad.leftShoulder", speak = "gamepad.rightShoulder", skip = "gamepad.back" }
 local ActionKeys = { hint = "H", speak = "R", skip = "Esc" }
 local LockedBy = "Scholar.locked"
+local MaxPinMisses = 3
+local PinWaitSeconds = 60
 
 local ByteTerrace = ByteTerrace
-local C_Sound, C_Timer, C_TTSSettings, C_VoiceChat, GetMoney = C_Sound, C_Timer, C_TTSSettings, C_VoiceChat, GetMoney
-local GetRealZoneText, GetTime = GetRealZoneText, GetTime
+local C_Sound, C_TTSSettings, C_VoiceChat, GetMoney = C_Sound, C_TTSSettings, C_VoiceChat, GetMoney
+local GetRealZoneText, GetServerTime, GetTime = GetRealZoneText, GetServerTime, GetTime
 local SOUNDKIT, UnitClass, UnitLevel, UnitName = SOUNDKIT, UnitClass, UnitLevel, UnitName
 local issecretvalue, floor, random, byte = issecretvalue, math.floor, math.random, string.byte
 
@@ -46,9 +49,9 @@ for _, grade in ipairs(Puzzles.Grades) do
 end
 
 -- The riddle on screen (or waiting out a fight) until it's solved or skipped.
-local Current, Answered, Wrongs = nil, false, 0
+local Current, Wrongs = nil, 0
 local LastSubject
-local Ticker, SegmentStart
+local SegmentStart
 local Scholar -- the module, declared at the end
 
 -- Kid-proofing, not security: a small hash so the PIN isn't sitting in the SavedVariables as-is.
@@ -155,6 +158,10 @@ local function Context()
     }
 end
 
+local function HasSubject()
+    return Scholar:Get("math") or Scholar:Get("reading")
+end
+
 -- The next riddle, alternating subjects when both are on; nil when neither is.
 local function NextPuzzle()
     local subjects = {}
@@ -178,10 +185,12 @@ local function NextPuzzle()
     })
 end
 
+-- Ends the riddle, solved (after its celebration) or skipped; either way the timer starts over.
 local function Finish(solved)
     local before = Scholar:Get("stars")
-    Current, Answered, Wrongs = nil, false, 0
+    Current, Wrongs = nil, 0
     Close()
+    Scholar:Set("solved", false)
     Scholar:Set("elapsed", 0)
     Scholar:Set("pending", false)
     if solved and Rank(before - 1) ~= Rank(before) then
@@ -193,11 +202,15 @@ end
 
 local function Choose(i)
     local buttons = ScholarView.IsShown() and ScholarView.Frame().Buttons
-    if not Current or Answered or not buttons or (buttons[i] and not buttons[i]:IsEnabled()) then
+    if not Current or Scholar:Get("solved") or not buttons or (buttons[i] and not buttons[i]:IsEnabled()) then
         return
     end
     if i == Current.answer then
-        Answered = true
+        -- The riddle stops being due now, so a /reload during the celebration doesn't ask another;
+        -- solved holds the screen until Finish closes it.
+        Scholar:Set("solved", true)
+        Scholar:Set("pending", false)
+        Scholar:Set("elapsed", 0)
         local streak = Scholar:Get("streak") + 1
         Scholar:Set("streak", streak)
         Scholar:Set("stars", Scholar:Get("stars") + 1)
@@ -207,7 +220,7 @@ local function Choose(i)
         end
         ScholarView.Correct(i, Current.explanation, Progress({ earned = 1, levelUp = levelUp }))
         C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LIST_COMPLETE)
-        C_Timer.After(FinishDelay, function() Addon:Batch(Finish, true) end)
+        Scholar:After(FinishDelay, function() Finish(true) end)
     else
         Wrongs = Wrongs + 1
         Scholar:Set("streak", 0)
@@ -219,7 +232,7 @@ local function Choose(i)
 end
 
 local function Skip()
-    if Current and not Answered and Wrongs > 0 and Scholar:Get("mode") == "gentle" then
+    if Current and not Scholar:Get("solved") and Wrongs > 0 and Scholar:Get("mode") == "gentle" then
         Finish(false)
     end
 end
@@ -233,7 +246,7 @@ local function Speak()
 end
 
 local function Hint()
-    if Current and not Answered then
+    if Current and not Scholar:Get("solved") then
         ScholarView.Hint(Current.hint)
     end
 end
@@ -281,9 +294,15 @@ local Rows = {
     { name = "level", kind = "number", default = 1, min = 1, max = 3, scope = "character" },
     { name = "elapsed", kind = "number", default = 0, scope = "character" },
     { name = "pending", kind = "boolean", default = false, scope = "character" },
+    -- The riddle on screen was just solved: its celebration holds the screen until Finish.
+    { name = "solved", kind = "boolean", default = false, persist = false },
     -- The parent's PIN (a hash; 0 = none), account-wide, and whether settings are locked right now.
-    { name = "pin", kind = "number", default = 0 },
+    { name = "pin", kind = "number", default = 0, lockedBy = LockedBy },
     { name = "locked", kind = "boolean", default = false, persist = false },
+    -- Wrong unlock PINs since the last wait, and the server time unlocking waits until. Saved, so a
+    -- /reload doesn't buy more tries.
+    { name = "pinMisses", kind = "number", default = 0 },
+    { name = "pinWait", kind = "number", default = 0 },
 }
 
 local Commands = {
@@ -297,7 +316,9 @@ local Commands = {
         Scholar:Set("pending", true)
     end },
     { name = "lock", slash = "lock", label = "Parents: lock Scholar settings with a PIN (lock <pin>)", run = function(pin)
-        if Scholar:Get("pin") ~= 0 and not pin then
+        if Scholar:Get("locked") then
+            Addon:Print("Scholar settings are locked. Unlock them first to change the PIN.")
+        elseif Scholar:Get("pin") ~= 0 and not pin then
             Scholar:Set("locked", true)
             Addon:Print("Scholar settings locked.")
         elseif ValidPin(pin) then
@@ -309,12 +330,23 @@ local Commands = {
         end
     end },
     { name = "unlock", slash = "unlock", label = "Parents: unlock Scholar settings (unlock <pin>)", run = function(pin)
+        local wait = Scholar:Get("pinWait") - GetServerTime()
         if Scholar:Get("pin") == 0 then
             Addon:Print("Scholar settings aren't locked.")
-        elseif pin and PinHash(pin) == Scholar:Get("pin") then
+        elseif wait > 0 then
+            Addon:Print(("Too many wrong PINs. Try again in %d seconds."):format(wait))
+        elseif not pin then
+            Addon:Print("Usage: " .. Addon.Slash[1] .. " unlock <pin>.")
+        elseif PinHash(pin) == Scholar:Get("pin") then
+            Scholar:Set("pinMisses", 0)
             Scholar:Set("locked", false)
             Addon:Print("Scholar settings unlocked for this session.")
+        elseif Scholar:Get("pinMisses") + 1 >= MaxPinMisses then
+            Scholar:Set("pinMisses", 0)
+            Scholar:Set("pinWait", GetServerTime() + PinWaitSeconds)
+            Addon:Print(("That PIN isn't right. Try again in %d seconds."):format(PinWaitSeconds))
         else
+            Scholar:Set("pinMisses", Scholar:Get("pinMisses") + 1)
             Addon:Print("That PIN isn't right.")
         end
     end },
@@ -349,17 +381,19 @@ Scholar = Addon:Module("Scholar", {
         module:Set("locked", module:Get("pin") ~= 0)
         SegmentStart = GetTime()
 
-        -- Count play time toward the next riddle.
-        Ticker = C_Timer.NewTicker(CheckSeconds, function()
+        -- Count play time toward the next riddle, leaving out time AFK or with no subject to ask.
+        module:Every(CheckSeconds, function()
             local now = GetTime()
-            local elapsed = module:Get("elapsed") + floor(now - SegmentStart)
+            local played = floor(now - SegmentStart)
             SegmentStart = now
-            Addon:Batch(function()
-                module:Set("elapsed", elapsed)
-                if elapsed >= module:Get("interval") * 60 then
-                    module:Set("pending", true)
-                end
-            end)
+            if module:Get("afk.active") or not HasSubject() then
+                return
+            end
+            local elapsed = module:Get("elapsed") + played
+            module:Set("elapsed", elapsed)
+            if elapsed >= module:Get("interval") * 60 then
+                module:Set("pending", true)
+            end
         end)
 
         module:On("PLAYER_LEVEL_UP", function()
@@ -368,13 +402,18 @@ Scholar = Addon:Module("Scholar", {
             end
         end)
 
-        -- A riddle shows when one is due and there's no fight; a fight sends it away until it ends.
-        local pending, combat = module:Id("pending"), module:Id("combat.active")
+        -- A riddle shows when one is due (or celebrating) and there's no fight; a fight sends it
+        -- away until it ends. A celebration a fight cut short doesn't come back: Finish ends it.
+        local pending, solved, combat = module:Id("pending"), module:Id("solved"), module:Id("combat.active")
         module:Rule({
-            reads = { pending, combat }, initial = true,
-            when = function(state) return state.Values[pending] and not state.Values[combat] end,
-            changed = function(show)
-                if show then
+            reads = { pending, solved, combat }, initial = true,
+            when = function(state)
+                return (state.Values[pending] or state.Values[solved]) and not state.Values[combat]
+            end,
+            changed = function(show, state)
+                if show and state.Values[solved] then
+                    return
+                elseif show then
                     Current = Current or NextPuzzle()
                     if Current then
                         Open()
@@ -387,12 +426,11 @@ Scholar = Addon:Module("Scholar", {
             end,
         })
     end,
-    OnDisable = function()
-        if Ticker then
-            Ticker:Cancel()
-            Ticker = nil
+    OnDisable = function(module)
+        if module:Get("solved") then
+            Finish(true) -- its celebration timer stops with the module; the rank card still shows
         end
-        Current, Answered, Wrongs = nil, false, 0
+        Current, Wrongs = nil, 0
         Close()
     end,
 })

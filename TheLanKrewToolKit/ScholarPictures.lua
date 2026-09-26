@@ -4,12 +4,16 @@ local addonName, ns = ...
 -- on the screen; this file fills it.
 --
 --   ns.ScholarPictures.Create(parent) -> frame   an empty picture area
---   ns.ScholarPictures.Draw(frame, picture, prompt, tiles) -> height
+--   ns.ScholarPictures.Draw(frame, picture, tiles) -> height
 --     picture (from the puzzle) is { kind = "groups", groups, each } (bags of items), "join"
---     { a, b } (two piles), "take" { a, b } (a pile with b crossed out) or "count" { n }; tiles
---     are an unscramble's letters, drawn as letter tiles instead. The items are drawn with the
---     icon of the first item word in the prompt (a star when none is known). Returns 0 when
---     there's nothing to draw, and the frame is then hidden.
+--     { a, b } (two piles), "take" { a, b } (a pile with b crossed out) or "count" { n }, each with
+--     the item it counts ("apple"), drawn with that item's icon (a star when none is known); tiles
+--     are an unscramble's letters, drawn as letter tiles instead. Returns 0 when there's nothing
+--     to draw, and the frame is then hidden.
+--
+-- It also defines ns.ScholarStyle, the look the whole Scholar screen shares: { Palette, Solid,
+-- Border, StarIcon, WrongIcon, Backdrop(frame, edgeSize), TextColor(fontString, color) }. This file
+-- loads before ScholarView.lua, which reads it.
 
 local IconSize = 20
 local IconGap = 3
@@ -19,22 +23,36 @@ local StarIcon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1"
 local WrongIcon = "Interface\\RAIDFRAME\\ReadyCheck-NotReady"
 local Solid = "Interface\\Buttons\\WHITE8X8"
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
-local Colors = {
+local Palette = {
+    panel = { 0.08, 0.06, 0.04 },
+    band = { 0.2, 0.15, 0.09 },
+    button = { 0.2, 0.15, 0.09 },
     edge = { 0.45, 0.36, 0.17 },
+    keycap = { 0.34, 0.27, 0.15 },
+    keycapDim = { 0.19, 0.15, 0.09 },
     gold = { 1, 0.82, 0 },
+    story = { 0.88, 0.85, 0.79 },
+    question = { 1, 1, 1 },
+    muted = { 0.62, 0.59, 0.54 },
+    streak = { 1, 0.7, 0.28 },
+    math = { 0.42, 0.77, 1 },
+    reading = { 0.5, 0.88, 0.48 },
+    good = { 0.35, 0.95, 0.45 },
+    bad = { 1, 0.4, 0.35 },
     tile = { 0.93, 0.86, 0.68 },
     ink = { 0.16, 0.11, 0.05 },
 }
--- The items riddles talk about, by the words that name them. An unknown item is drawn as a star.
+-- Icons for the items riddles count, by the item's name (ScholarWords.lua's items). An item not
+-- listed is drawn as a star.
 local ItemIcons = {
-    { "apple", "Interface\\Icons\\INV_Misc_Food_19" },
-    { "fish", "Interface\\Icons\\INV_Misc_Fish_02" },
-    { "gem", "Interface\\Icons\\INV_Misc_Gem_Ruby_01" },
-    { "potion", "Interface\\Icons\\INV_Potion_51" },
-    { "arrow", "Interface\\Icons\\INV_Ammo_Arrow_02" },
-    { "scroll", "Interface\\Icons\\INV_Scroll_03" },
-    { "mushroom", "Interface\\Icons\\INV_Mushroom_11" },
-    { "gear", "Interface\\Icons\\INV_Misc_Gear_01" },
+    apple = "Interface\\Icons\\INV_Misc_Food_19",
+    fish = "Interface\\Icons\\INV_Misc_Fish_02",
+    gem = "Interface\\Icons\\INV_Misc_Gem_Ruby_01",
+    potion = "Interface\\Icons\\INV_Potion_51",
+    arrow = "Interface\\Icons\\INV_Ammo_Arrow_02",
+    scroll = "Interface\\Icons\\INV_Scroll_03",
+    mushroom = "Interface\\Icons\\INV_Mushroom_11",
+    gear = "Interface\\Icons\\INV_Misc_Gear_01",
 }
 
 local CreateFrame = CreateFrame
@@ -43,26 +61,19 @@ local ceil, floor, max, min = math.ceil, math.floor, math.max, math.min
 local ScholarPictures = {}
 ns.ScholarPictures = ScholarPictures
 
+--- Gives frame (a BackdropTemplate frame) the screen's solid backdrop with a tooltip border.
+---@param frame table
+---@param edgeSize number
 local function Backdrop(frame, edgeSize)
     frame:SetBackdrop({ bgFile = Solid, edgeFile = Border, edgeSize = edgeSize,
         insets = { left = 3, right = 3, top = 3, bottom = 3 } })
 end
 
+--- Colors fontString with a palette color, { r, g, b }.
+---@param fontString table
+---@param color table
 local function TextColor(fontString, color)
     fontString:SetTextColor(color[1], color[2], color[3])
-end
-
---- The icon for the item a riddle talks about (the first known item word in its prompt).
----@param prompt string
----@return string texture
-local function ItemIcon(prompt)
-    local lower = prompt:lower()
-    for _, entry in ipairs(ItemIcons) do
-        if lower:find(entry[1], 1, true) then
-            return entry[2]
-        end
-    end
-    return StarIcon
 end
 
 local function PictureIcon(pictures, index)
@@ -85,7 +96,7 @@ local function PictureCard(pictures, index)
         card = CreateFrame("Frame", nil, pictures, "BackdropTemplate")
         Backdrop(card, 10)
         card:SetBackdropColor(0.16, 0.12, 0.06, 1)
-        card:SetBackdropBorderColor(Colors.edge[1], Colors.edge[2], Colors.edge[3])
+        card:SetBackdropBorderColor(Palette.edge[1], Palette.edge[2], Palette.edge[3])
         pictures.Cards[index] = card
     end
     return card
@@ -109,8 +120,7 @@ local function Grid(pictures, first, count, columns, x, y, texture, crossedFrom)
     return columnsUsed * (IconSize + IconGap) - IconGap, rows * (IconSize + IconGap) - IconGap
 end
 
---- Draws a puzzle's picture (see ScholarPuzzles.lua's picture field) and returns its height, or 0
---- when there's nothing to draw.
+-- Lays out an unscramble's letters as tiles; returns their width and height.
 local function DrawTiles(pictures, tiles)
     local x = 0
     for i, letter in ipairs(tiles) do
@@ -119,11 +129,11 @@ local function DrawTiles(pictures, tiles)
             tile = CreateFrame("Frame", nil, pictures, "BackdropTemplate")
             tile:SetSize(TileSize, TileSize + 4)
             Backdrop(tile, 10)
-            tile:SetBackdropColor(Colors.tile[1], Colors.tile[2], Colors.tile[3], 1)
-            tile:SetBackdropBorderColor(Colors.edge[1], Colors.edge[2], Colors.edge[3])
+            tile:SetBackdropColor(Palette.tile[1], Palette.tile[2], Palette.tile[3], 1)
+            tile:SetBackdropBorderColor(Palette.edge[1], Palette.edge[2], Palette.edge[3])
             tile.Letter = tile:CreateFontString(nil, "OVERLAY", "Game24Font")
             tile.Letter:SetPoint("CENTER", 0, 1)
-            TextColor(tile.Letter, Colors.ink)
+            TextColor(tile.Letter, Palette.ink)
             pictures.Tiles[i] = tile
         end
         tile.Letter:SetText(letter)
@@ -135,7 +145,13 @@ local function DrawTiles(pictures, tiles)
     return x - TileGap, TileSize + 4
 end
 
-local function Draw(pictures, picture, prompt, tiles)
+--- Draws a puzzle's picture (see the header) or its tiles, and returns the height, or 0 when
+--- there's nothing to draw.
+---@param pictures table the frame from Create
+---@param picture table?
+---@param tiles table?
+---@return number height
+local function Draw(pictures, picture, tiles)
     for _, icon in ipairs(pictures.Icons) do
         icon:Hide()
         icon.Cross:Hide()
@@ -157,7 +173,7 @@ local function Draw(pictures, picture, prompt, tiles)
         pictures:Hide()
         return 0
     end
-    local texture, width, height = ItemIcon(prompt), 0, 0
+    local texture, width, height = ItemIcons[picture.item] or StarIcon, 0, 0
     if picture.kind == "groups" then
         local columns = picture.each <= 6 and 3 or 5
         local gridWidth = min(picture.each, columns) * (IconSize + IconGap) - IconGap
@@ -198,8 +214,13 @@ function ScholarPictures.Create(parent)
     pictures.Icons, pictures.Cards, pictures.Tiles = {}, {}, {}
     pictures.Plus = pictures:CreateFontString(nil, "OVERLAY", "Game24Font")
     pictures.Plus:SetText("+")
-    TextColor(pictures.Plus, Colors.gold)
+    TextColor(pictures.Plus, Palette.gold)
     return pictures
 end
 
 ScholarPictures.Draw = Draw
+
+ns.ScholarStyle = {
+    Palette = Palette, Solid = Solid, Border = Border, StarIcon = StarIcon, WrongIcon = WrongIcon,
+    Backdrop = Backdrop, TextColor = TextColor,
+}

@@ -1,7 +1,7 @@
 local addonName, ns = ...
 
--- Streaks: an Unreal Tournament announcer for your killing blows on players (Honor.killingBlows,
--- Honor.lua), shared with the Krew. A kill counts for whoever landed it, as in Unreal, not for
+-- Streaks: an Unreal Tournament announcer for your killing blows on players (ByteTerrace_Core's
+-- kills fact, kills.blows), shared with the Krew. A kill counts for whoever landed it, as in Unreal, not for
 -- everyone the honorable kill credits.
 --
 --   First blood  your first killing blow of the session, unless a Krew member drew it first.
@@ -12,7 +12,7 @@ local addonName, ns = ...
 -- A kill announces one of them: a spree it reaches, else a multi kill, else first blood. You see it
 -- as a raid warning and hear its sound (Streaks.* settings; the master sound switch applies). With
 -- Streaks.share on, the Krew sees your first blood, each spree, and the end of a spree when you die,
--- with who ended it when the death recap names them (Honor.killer).
+-- with who ended it when the death recap names them (the death fact's death.killer).
 -- A Krew member's first blood takes yours for the session. Krew messages only show a raid warning.
 
 local MultiKillWindow = 10 -- seconds between kills; Unreal's 4 is too short for WoW's fights
@@ -36,26 +36,25 @@ local MultiKills = {
     { key = "holyShit", file = "HolyShit", word = "holy", label = "Holy shit" },
 }
 
-local GetTime, tonumber, tostring = GetTime, tonumber, tostring
+local GetTime, tostring = GetTime, tostring
 local min = math.min
 
 local Addon = ns.Addon
-local Krew, Alert, CleanText = ns.Krew, ns.Warband.Alert, ns.Warband.CleanText
+local Krew, Alert = ns.Krew, ns.Cards.Alert
+local CleanText, CleanCount = ns.KrewFields.CleanText, ns.KrewFields.CleanCount
 local SoundBank = ns.SoundBank
-local Define, Row, Play = SoundBank.Define, SoundBank.Row, SoundBank.Play
-
 local SpreeAt, SpreeByKey, SpreeKeys, MultiKeys = {}, {}, {}, {}
 for i, spree in ipairs(Sprees) do
     SpreeAt[spree.kills] = spree
     SpreeByKey[spree.key] = spree
     SpreeKeys[i] = spree.key
-    Define(spree.key, { file = spree.file, word = spree.word, label = spree.label, row = "Streaks.sprees" })
+    SoundBank:Define(spree.key, { file = spree.file, word = spree.word, label = spree.label, row = "Streaks.sprees" })
 end
 for i, multi in ipairs(MultiKills) do
     MultiKeys[i] = multi.key
-    Define(multi.key, { file = multi.file, word = multi.word, label = multi.label, row = "Streaks.multiKills" })
+    SoundBank:Define(multi.key, { file = multi.file, word = multi.word, label = multi.label, row = "Streaks.multiKills" })
 end
-Define("firstBlood", { file = "FirstBlood", word = "first", label = "First blood", row = "Streaks.firstBlood" })
+SoundBank:Define("firstBlood", { file = "FirstBlood", word = "first", label = "First blood", row = "Streaks.firstBlood" })
 
 local StreaksModule
 local FirstBloodTaken = false -- this session's first blood is drawn, by you or the Krew
@@ -66,7 +65,7 @@ local EndedAt                 -- the spree your last death ended, until its kill
 
 local function Share(event, count, killer)
     if StreaksModule:Get("share") then
-        Krew.Send("STREAK", { event, tostring(count), killer })
+        Krew:Send("STREAK", { event, tostring(count), killer })
     end
 end
 
@@ -80,15 +79,15 @@ local function OnKill(streak)
     local spree = SpreeAt[streak]
     if spree then
         Alert(("%s! %d kills without dying."):format(spree.label, streak))
-        Play(spree.key)
+        SoundBank:Play(spree.key)
         Share(spree.key, streak)
     elseif Multi >= 2 then
         local multi = MultiKills[min(Multi - 1, #MultiKills)]
         Alert(multi.label .. "!")
-        Play(multi.key)
+        SoundBank:Play(multi.key)
     elseif first then
         Alert("First blood!")
-        Play("firstBlood")
+        SoundBank:Play("firstBlood")
         Share("firstBlood", 1)
     end
 end
@@ -115,44 +114,30 @@ StreaksModule = Addon:Module("Streaks", {
     page = "Sounds",
     description = "Unreal Tournament's announcer for your killing blows on players: first blood, multi kills and killing sprees.",
     state = {
-        Row("firstBlood", "First blood", "Your first killing blow on a player this session, unless a Krew member drew it first.", { "firstBlood" }),
-        Row("multiKills", "Multi kills", ("Killing blows each within %d seconds of the last: double kill and up."):format(MultiKillWindow), MultiKeys),
-        Row("sprees", "Killing sprees", "Every 5 killing blows without dying, from killing spree to wicked sick.", SpreeKeys),
+        SoundBank:Row("firstBlood", "First blood", "Your first killing blow on a player this session, unless a Krew member drew it first.", { "firstBlood" }),
+        SoundBank:Row("multiKills", "Multi kills", ("Killing blows each within %d seconds of the last: double kill and up."):format(MultiKillWindow), MultiKeys),
+        SoundBank:Row("sprees", "Killing sprees", "Every 5 killing blows without dying, from killing spree to wicked sick.", SpreeKeys),
         { name = "share", kind = "boolean", default = true, label = "Share my sprees with the Krew",
             description = "Your Krew sees a raid warning for your first blood, each spree, and when a spree of 5 or more ends." },
     },
+    uses = { "kills", "death" },
     OnEnable = function(module)
-        local kills, deaths, killedBy = module:Get("Honor.killingBlows"), module:Get("Honor.deaths"), module:Get("Honor.killedBy")
-        module:Watch({ "Honor.killingBlows" }, function(state)
-            local now = state:Get("Honor.killingBlows")
-            if now > kills then
-                OnKill(state:Get("Honor.streak"))
-            end
-            kills = now
-        end, true)
-        module:Watch({ "Honor.deaths" }, function(state)
-            local now = state:Get("Honor.deaths")
-            if now > deaths then
-                OnDeath()
-            end
-            deaths = now
-        end, true)
-        module:Watch({ "Honor.killedBy" }, function(state)
-            local now = state:Get("Honor.killedBy")
-            if now > killedBy then
-                ReportEnd(state:Get("Honor.killerKind") == "self" and "" or state:Get("Honor.killer"))
-            end
-            killedBy = now
-        end, true)
+        module:OnIncrease("kills.blows", function(state)
+            OnKill(state:Get("kills.streak"))
+        end)
+        module:OnIncrease("death.count", OnDeath)
+        module:OnIncrease("death.attributed", function(state)
+            ReportEnd(state:Get("death.killerKind") == "self" and "" or state:Get("death.killer"))
+        end)
     end,
     OnDisable = function()
         Streak, Multi, LastKillAt, EndedAt = 0, 0, nil, nil
     end,
 })
 
-Krew.Listen("STREAK", function(sender, fields)
-    local event, count = fields[1], tonumber(fields[2])
-    if not StreaksModule.Enabled or not count or count < 1 or count > MaxCount or count % 1 ~= 0 then
+Krew:Listen("STREAK", function(sender, fields)
+    local event, count = fields[1], CleanCount(fields[2], MaxCount)
+    if not StreaksModule.Enabled or not count then
         return
     end
     local spree = SpreeByKey[event]

@@ -8,13 +8,15 @@
 --                        (a boolean row's name: while that row is true, writes to this row are
 --                        refused, e.g. settings a parent locked). The spec is copied; the
 --                        caller's table is never changed.
---   Compile(stores)      sorts names to dense ids and validates every declaration, reporting all
+--   Compile(stores, modules)
+--                        sorts names to dense ids and validates every declaration, reporting all
 --                        problems at once. stores = { account = table, character = table? }: the
 --                        SavedVariables tables persisted rows load from and write to, by scope.
---                        A value that no longer validates is dropped, and so is a key under a
---                        declared module that no row declares (a renamed row). Keys under modules
---                        this load didn't declare are kept: a module whose file failed to load
---                        must not lose its settings.
+--                        modules = { [name] = true } for every module that finished declaring. A
+--                        value that no longer validates is dropped, and so is a key under one of
+--                        those modules that no row declares (a renamed row). Keys under any other
+--                        module are kept: a module whose file failed to load, or whose declaration
+--                        failed partway, must not lose its settings.
 --                        A records row (declared by Records.lua with records = true) is a
 --                        collection's version; its store key holds the collection and is kept.
 --   Get / Set / Toggle   by id (hot paths) or name (boundaries). Every write is validated: kind,
@@ -25,6 +27,8 @@
 --
 -- After compile, hot paths read state.Values[id] directly; Ids, Specs and Order (names in
 -- declaration order, the settings layout) are public too. Nothing outside this file writes them.
+-- Counts (publishes and watcher runs since load or the last debug reset) and Trace (a callback
+-- for every published change of chosen rows) serve the debug command.
 --
 -- A row changes only if its value at publish differs from its baseline: its value when the batch
 -- first touched it, or, for a watcher registered later in the same batch, its value when that
@@ -113,6 +117,9 @@ local function Validate(name, spec, problems)
     if spec.lockedBy ~= nil and type(spec.lockedBy) ~= "string" then
         AddProblem("lockedBy must be a row name")
     end
+    if spec.lockedBy ~= nil and not spec.persist then
+        AddProblem("lockedBy only applies to persisted rows (a stopping module resets its runtime rows)")
+    end
     if spec.section ~= nil and type(spec.section) ~= "string" then
         AddProblem("section must be a string")
     end
@@ -148,7 +155,7 @@ end
 local function Settle(self, list, stamp)
     local values, original, isTouched = self.Values, self.m_original, self.m_isTouched
     local versions, watchersByRow = self.m_versions, self.m_watchersByRow
-    local scheduled, count = self.m_scheduled, 0
+    local scheduled, count, traced = self.m_scheduled, 0, self.m_traced
     for i = 1, #list do
         local id = list[i]
         list[i] = nil
@@ -156,6 +163,9 @@ local function Settle(self, list, stamp)
         local value = values[id]
         if value ~= original[id] then
             versions[id] = versions[id] + 1
+            if traced and traced[id] then
+                SafeCall(self.m_traceFn, self.m_names[id], original[id], value)
+            end
             local watchers = watchersByRow[id]
             if watchers then
                 for j = 1, #watchers do
@@ -187,17 +197,28 @@ end
 
 local function Publish(self)
     self.m_batchDepth = self.m_batchDepth + 1
+    local counts = self.Counts
+    counts.publishes = counts.publishes + 1
 
-    local scheduled, deferred = self.m_scheduled, self.m_deferred
+    local scheduled = self.m_scheduled
     for _ = 1, MaxPublishRounds do
+        local deferred = self.m_deferred
         -- Rules registered during the batch (or by a watcher last round) take their first verdict
         -- from the state as it stands, before this round's changes are delivered.
-        for i = 1, #deferred do
-            local watcher = deferred[i]
-            deferred[i] = nil
-            if watcher.active then
-                SafeCall(watcher.fn, self)
+        -- A rule registered by one of these goes to the fresh list and takes its verdict next pass.
+        for _ = 1, MaxPublishRounds do
+            if #deferred == 0 then
+                break
             end
+            self.m_deferred, self.m_spareDeferred = self.m_spareDeferred, deferred
+            for i = 1, #deferred do
+                local watcher = deferred[i]
+                deferred[i] = nil
+                if watcher.active then
+                    SafeCall(watcher.fn, self)
+                end
+            end
+            deferred = self.m_deferred
         end
         local list = self.m_touchedList
         if #list == 0 then
@@ -207,6 +228,7 @@ local function Publish(self)
         self.m_stamp = self.m_stamp + 1
         local count = Settle(self, list, self.m_stamp)
         SortScheduled(scheduled, count)
+        counts.watchers = counts.watchers + count
         for i = 1, count do
             local watcher = scheduled[i]
             scheduled[i] = nil
@@ -302,6 +324,7 @@ State.Prepare = Validate
 function ByteTerrace.NewState(addon)
     return setmetatable({
         Order = {},
+        Counts = { publishes = 0, watchers = 0 },
         m_addon = addon,
         m_declared = {},
         m_compiled = false,
@@ -314,6 +337,7 @@ function ByteTerrace.NewState(addon)
         m_scheduled = {},      -- reused: watchers to run this round
         m_baselined = {},      -- watchers holding per-row baselines until the batch publishes
         m_deferred = {},       -- rules waiting for their batch's publish to take a first verdict
+        m_spareDeferred = {},  -- the other half of that double buffer
         m_seq = 0,
         m_stamp = 0,
     }, State)
@@ -342,16 +366,15 @@ end
 ---@param stores table { account = table, character = table? }
 ---@return string[] dropped saved keys reset because they no longer validate
 ---@return string[] unclaimed saved keys kept because no loaded module declares them
-function State:Compile(stores)
+function State:Compile(stores, modules)
     local problems = {}
     local names = SortedKeys(self.m_declared)
-    local ids, specs, values, versions, modules = {}, {}, {}, {}, {}
+    local ids, specs, values, versions = {}, {}, {}, {}
     for id, name in ipairs(names) do
         local spec = self.m_declared[name]
         ids[name], specs[id], versions[id] = id, spec, 0
-        modules[ModuleOf(name) or name] = true
         Validate(name, spec, problems)
-        if spec.persist and not stores[spec.scope] then
+        if (spec.persist or spec.records) and not stores[spec.scope] then
             local variable = spec.scope == "character" and "savedVariablePerCharacter" or "savedVariable"
             problems[#problems + 1] = ("%s: scope %s needs the addon's %s"):format(name, spec.scope, variable)
         end
@@ -372,7 +395,10 @@ function State:Compile(stores)
     for scope, store in pairs(stores) do
         for key, value in pairs(store) do
             local id = ids[key]
-            if not id and not modules[ModuleOf(key) or ""] then
+            local claimed = modules[ModuleOf(key) or ""]
+            if not claimed and (not id or specs[id].records) then
+                unclaimed[#unclaimed + 1] = tostring(key)
+            elseif not claimed and not specs[id].persist then
                 unclaimed[#unclaimed + 1] = tostring(key)
             elseif id and specs[id].records then
                 if specs[id].scope ~= scope or type(value) ~= "table" then
@@ -415,6 +441,13 @@ function State:Id(name)
     return id
 end
 
+--- A row's name.
+---@param id integer
+---@return string
+function State:Name(id)
+    return self.m_names[id]
+end
+
 --- A row's value, by id or name.
 ---@param ref integer|string
 function State:Get(ref)
@@ -445,21 +478,20 @@ end
 ---@param level integer? the error level for a caller that wraps Set (Module:Set passes 2)
 function State:Set(ref, value, level)
     local id = type(ref) == "number" and ref or self:Id(ref)
-    local current = self.Values[id]
-    -- Already validated, and never secret, since a secret can't equal a stored value.
-    if current == value and current ~= nil then
-        return
-    end
     level = (level or 1) + 1
+    if issecretvalue(value) then
+        error(self.m_addon.Name .. ": state row " .. tostring(self.m_names[id]) .. " cannot hold a secret value", level)
+    end
+    local current = self.Values[id]
+    if current == value and current ~= nil then
+        return -- already validated
+    end
     local spec = self.Specs[id]
     if not spec then
         error(self.m_addon.Name .. ": unknown state row id " .. tostring(id), level)
     end
     if spec.lockId and self.Values[spec.lockId] then
         error(self.m_addon.Name .. ": state row " .. self.m_names[id] .. " is locked", level)
-    end
-    if issecretvalue(value) then
-        error(self.m_addon.Name .. ": state row " .. self.m_names[id] .. " cannot hold a secret value", level)
     end
     local ok, why = Admits(spec, value)
     if not ok then
@@ -535,6 +567,37 @@ function State:Unwatch(watcher)
     for _, id in ipairs(watcher.ids) do
         RemoveFrom(self.m_watchersByRow[id], watcher)
     end
+end
+
+--- Calls fn(name, old, new) for every published change of the given rows, until Trace(nil).
+--- Untraced rows cost nothing extra.
+---@param ids integer[]? nil stops tracing
+---@param fn fun(name: string, old: any, new: any)?
+function State:Trace(ids, fn)
+    if not ids then
+        self.m_traced, self.m_traceFn = nil, nil
+        return
+    end
+    local traced = {}
+    for _, id in ipairs(ids) do
+        traced[id] = true
+    end
+    self.m_traced, self.m_traceFn = traced, fn
+end
+
+--- How many watchers and rules are registered.
+---@return integer
+function State:WatcherCount()
+    local seen, count = {}, 0
+    for _, watchers in pairs(self.m_watchersByRow) do
+        for _, watcher in ipairs(watchers) do
+            if not seen[watcher] then
+                seen[watcher] = true
+                count = count + 1
+            end
+        end
+    end
+    return count
 end
 
 --- A verdict over rows. changed runs whenever the verdict flips; with spec.initial it also runs

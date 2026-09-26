@@ -13,22 +13,29 @@
 --   Input    (Input.lua)    positional controller vocabulary, per-family labels, and binding maps
 --                           that route buttons to commands.
 --
--- Records (Records.lua) are keyed collections of typed records that persist like rows.
+-- Records (Records.lua) are keyed collections of typed records that persist like rows. Modules
+-- (Module.lua) own their handlers, watchers, rules and timers, and can depend on demand modules.
+-- Names (Names.lua) reads players' names as Forever gives them (first and surname, no realm),
+-- Comms (Comms.lua) are a module's group messages, SoundBank (SoundBank.lua) plays player-supplied
+-- sounds, Facts (Facts*.lua) publish shared game state, and Diagnostics (Diagnostics.lua) is the
+-- built-in debug command.
 --
 -- Declare once, compile once: names resolve to dense integer ids when the addon loads, and the
 -- hot paths index arrays. Declaring after compile is an error.
 --
 -- This file loads first and exports the helpers every other file uses: SortedKeys, Report,
--- SafeCall and Refuse.
+-- SafeCall and Refuse. ByteTerrace.Errors counts the errors SafeCall has caught since load, in
+-- every ByteTerrace addon (debug status shows it).
 
 local geterrorhandler, xpcall = geterrorhandler, xpcall
 local pairs, sort = pairs, table.sort
 
-ByteTerrace = {}
+ByteTerrace = { Errors = 0 }
 
 -- Looked up only when an error happens, so a handler installed later (BugSack) still receives
 -- it. Blizzard's CallErrorHandler does the same.
 local function OnError(message)
+    ByteTerrace.Errors = ByteTerrace.Errors + 1
     return geterrorhandler()(message)
 end
 

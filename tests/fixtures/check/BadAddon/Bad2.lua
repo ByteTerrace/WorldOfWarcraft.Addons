@@ -76,4 +76,9 @@ Chat:SetScript("OnEvent", function(_, _, text)
 end)
 local Events = {}
 Events:On("CHAT_MSG_AFK", function(text) return #text end) -- !
+Events:On("CHAT_MSG_AFK", function(text) local copy = text print(copy) end) -- !
+Events:On("CHAT_MSG_AFK", function(text) Events.last = text end) -- !
+Events:On("CHAT_MSG_AFK", function(text) return { text } end) -- !
+local function Discard() local _ = UnitHealth("target") return _ + 1 end -- !
+print(Discard)
 print(Annotated, Unannotated, BlockCommented, Reassigned, Late, Store, Discarded, Recomputed, NoExit, BarValue, GetBarValue, ViaGetglobal, Leak, Ignored, NoReturn, Later, Param)

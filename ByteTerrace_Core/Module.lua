@@ -1,0 +1,328 @@
+-- Module: one feature of an addon, declared with addon:Module (AddOn.lua), which validates the
+-- spec and declares its rows, records, messages and commands.
+--
+-- A module owns what it creates through its methods: handlers (On), watchers (Watch, OnIncrease),
+-- rules (Rule) and timers (After, Every). Stopping removes all of them in one pass, runs OnDisable,
+-- and returns its runtime rows to their defaults, so a stopped module registers no events, runs
+-- no code and leaves no stale facts.
+--
+-- Timers run their callback as one state batch, isolated like an event handler, and never after
+-- the module stops: a retry scheduled by a feature the player just switched off doesn't fire.
+--
+-- Dependencies: a module with demand = true runs only while a running module names it in its
+-- uses list. A user's dependencies start before its OnEnable, so their rows hold real values
+-- when its rules take their first reading and their handlers for an event run before its own.
+-- They stop after the last user stops. That's how shared facts cost nothing while no feature
+-- reads them.
+--
+-- Public members: Name, Addon, Spec (the declaration, never changed), Enabled, Records ([name] =
+-- collection), Comms (its messages, when spec.comms declares them) and Users (how many running
+-- modules use a demand module).
+
+local ByteTerrace = ByteTerrace
+local SafeCall = ByteTerrace.SafeCall
+local C_Timer = C_Timer
+local ipairs, pairs, type = ipairs, pairs, type
+
+local Module = {}
+Module.__index = Module
+ByteTerrace.Module = Module
+
+--- Creates a module object; AddOn:Module declares everything else.
+---@param addon table the owning AddOn
+---@param name string
+---@param spec table
+---@return table module
+function ByteTerrace.NewModule(addon, name, spec)
+    return setmetatable({
+        Addon = addon, Spec = spec, Enabled = false, Records = {}, Users = 0,
+        Name = name, m_handles = {}, m_watchers = {}, m_timers = {}, m_ids = {}, m_runtime = {}, m_uses = {},
+        m_stopping = false,
+    }, Module)
+end
+
+--- Resolves "row" to "<Module>.row"; a name containing "." ("combat.active") is already absolute.
+---@param row string
+---@return string
+function Module:RowName(row)
+    return row:find(".", 1, true) and row or (self.Name .. "." .. row)
+end
+
+--- A row's id, from its name (resolved once and cached) or an id passed straight through. An
+--- unknown row is an error.
+---@param row integer|string
+---@return integer
+function Module:Id(row)
+    if type(row) == "number" then
+        return row
+    end
+    local id = self.m_ids[row]
+    if not id then
+        id = self.Addon.State.Ids[self:RowName(row)]
+        if not id then
+            error(self.Addon.Name .. ": unknown state row " .. self:RowName(row), 2)
+        end
+        self.m_ids[row] = id
+    end
+    return id
+end
+
+--- A row's value.
+---@param row integer|string relative to the module unless it contains "."
+function Module:Get(row)
+    return self.Addon.State.Values[self:Id(row)]
+end
+
+--- Writes a row through State:Set; errors point at the caller.
+---@param row integer|string
+function Module:Set(row, value)
+    self.Addon.State:Set(self:Id(row), value, 2)
+end
+
+--- Flips a boolean row.
+---@param row integer|string
+function Module:Toggle(row)
+    self.Addon.State:Toggle(self:Id(row), 2)
+end
+
+--- Raises when the module is stopped or stopping (in OnDisable): what it would create then would
+--- outlive it.
+function Module:CheckRunning()
+    if not self.Enabled or self.m_stopping then
+        error(self.Addon.Name .. ": module " .. self.Name .. " is stopped", 3)
+    end
+end
+
+--- Adds an event handler that the module owns: it's removed when the module stops.
+---@param event string
+---@param fn function
+---@param unit string?
+---@return table handle for Off
+function Module:On(event, fn, unit)
+    self:CheckRunning()
+    local handle = self.Addon.Events:On(event, fn, unit)
+    self.m_handles[#self.m_handles + 1] = handle
+    return handle
+end
+
+--- Removes a handler early; the module's teardown skips handles that are already removed.
+---@param handle table from On
+function Module:Off(handle)
+    self.Addon.Events:Off(handle)
+end
+
+--- Resolves a list of rows to ids.
+---@param rows (integer|string)[]
+---@return integer[]
+function Module:ResolveRows(rows)
+    local ids = {}
+    for i, row in ipairs(rows) do
+        ids[i] = self:Id(row)
+    end
+    return ids
+end
+
+--- State:Watch, owned by the module.
+---@param rows (integer|string)[]
+---@param fn fun(state: table)
+---@param skipInitial boolean?
+---@return table watcher
+function Module:Watch(rows, fn, skipInitial)
+    self:CheckRunning()
+    local watcher = self.Addon.State:Watch(self:ResolveRows(rows), fn, skipInitial)
+    self.m_watchers[#self.m_watchers + 1] = watcher
+    return watcher
+end
+
+--- Calls fn(state, count, previous) after each publish in which a count row went up: how a
+--- feature reacts to something that happened (a kill, a death, a star) rather than to a value.
+--- A count that goes down (a stopped module resetting its rows) is only remembered.
+---@param row integer|string a number row
+---@param fn fun(state: table, count: number, previous: number)
+---@return table watcher
+function Module:OnIncrease(row, fn)
+    local id = self:Id(row)
+    local last = self.Addon.State.Values[id]
+    return self:Watch({ id }, function(state)
+        local count, previous = state.Values[id], last
+        last = count
+        if count > previous then
+            fn(state, count, previous)
+        end
+    end, true)
+end
+
+--- State:Rule, owned by the module; reads may be relative row names.
+---@param spec table { reads, when, changed, initial? }
+---@return table watcher
+function Module:Rule(spec)
+    self:CheckRunning()
+    local watcher = self.Addon.State:Rule({
+        reads = self:ResolveRows(spec.reads), when = spec.when, changed = spec.changed, initial = spec.initial,
+    })
+    self.m_watchers[#self.m_watchers + 1] = watcher
+    return watcher
+end
+
+--- Calls fn() once after seconds, as one state batch, unless the module stops (or Cancel) first.
+--- Scheduling on a stopped or stopping module (from OnDisable) is an error, as for On, Watch and
+--- Rule.
+---@param seconds number
+---@param fn function
+---@return table timer for Cancel
+function Module:After(seconds, fn)
+    self:CheckRunning()
+    local timers, addon = self.m_timers, self.Addon
+    local timer
+    timer = C_Timer.NewTimer(seconds, function()
+        timers[timer] = nil
+        addon:Batch(fn)
+    end)
+    timers[timer] = true
+    return timer
+end
+
+--- Calls fn() every seconds, each call one state batch, until Cancel or the module stops.
+---@param seconds number
+---@param fn function
+---@return table timer for Cancel
+function Module:Every(seconds, fn)
+    self:CheckRunning()
+    local addon = self.Addon
+    local timer = C_Timer.NewTicker(seconds, function()
+        addon:Batch(fn)
+    end)
+    self.m_timers[timer] = true
+    return timer
+end
+
+--- Cancels a timer from After or Every; nil, or a timer that already ran, is ignored.
+---@param timer table?
+function Module:Cancel(timer)
+    if timer and self.m_timers[timer] then
+        self.m_timers[timer] = nil
+        timer:Cancel()
+    end
+end
+
+--- How many of the module's timers are pending.
+---@return integer
+function Module:PendingTimers()
+    local count = 0
+    for _ in pairs(self.m_timers) do
+        count = count + 1
+    end
+    return count
+end
+
+-- Returns the module's runtime rows to their defaults.
+local function ResetRuntime(module)
+    local state = module.Addon.State
+    for _, id in ipairs(module.m_runtime) do
+        state:Set(id, state.Specs[id].default)
+    end
+end
+
+--- Starts a demand module for one more user.
+function Module:Acquire()
+    self.Users = self.Users + 1
+    if self.Users == 1 then
+        self:SetEnabled(true)
+    end
+end
+
+--- Releases one user of a demand module; the last one stops it.
+function Module:Release()
+    if self.Users <= 0 then
+        error(self.Addon.Name .. ": module " .. self.Name .. " released more often than acquired", 2)
+    end
+    self.Users = self.Users - 1
+    if self.Users == 0 then
+        self:SetEnabled(false)
+    end
+end
+
+--- Starts or stops the module now. Starting starts its dependencies first. Stopping removes
+--- everything it owns in one pass (every handler goes dead at once, even mid-dispatch, and each
+--- affected event re-registers once), runs OnDisable, cancels its timers, returns its runtime
+--- rows to their defaults so no reader sees stale facts, then releases its dependencies.
+---@param enabled boolean
+function Module:SetEnabled(enabled)
+    if enabled == self.Enabled or self.m_stopping then
+        return -- a stop in progress finishes first; a nested start or stop is ignored
+    end
+    local addon, spec = self.Addon, self.Spec
+    if enabled then
+        self.Enabled = true
+        for _, dependency in ipairs(self.m_uses) do
+            dependency:Acquire()
+        end
+        if self.Comms then
+            self.Comms:Open()
+        end
+        if spec.OnEnable then
+            SafeCall(spec.OnEnable, self)
+        end
+        return
+    end
+    self.m_stopping = true
+    local handles, watchers = self.m_handles, self.m_watchers
+    self.m_handles, self.m_watchers = {}, {}
+    for i = 1, #watchers do
+        addon.State:Unwatch(watchers[i])
+    end
+    addon.Events:OffAll(handles)
+    if self.Comms then
+        self.Comms:Close()
+    end
+    if spec.OnDisable then
+        SafeCall(spec.OnDisable, self)
+    end
+    for timer in pairs(self.m_timers) do
+        self.m_timers[timer] = nil
+        timer:Cancel()
+    end
+    addon:Batch(ResetRuntime, self)
+    self.Enabled, self.m_stopping = false, false
+    for i = #self.m_uses, 1, -1 do
+        self.m_uses[i]:Release()
+    end
+end
+
+--- Resolves what the module needs to start and stop: its dependencies and its runtime rows.
+--- AddOn:Start prepares every module before starting any, since a user may start a dependency
+--- declared after it.
+---@param uses table[] the modules its spec.uses names, resolved by AddOn:ResolveUses
+function Module:Prepare(uses)
+    self.m_uses = uses
+    self.m_runtime = {}
+    for _, row in ipairs(self.Spec.state or {}) do
+        if row.persist == false then
+            self.m_runtime[#self.m_runtime + 1] = self:Id(row.name)
+        end
+    end
+end
+
+--- Connects the module to its enabled row and active rule. A module runs while its enabled row
+--- (if it has one) is true and its spec.active rule (if any) holds; that's how a module depends
+--- on other rows, so a switched-off feature registers nothing. A demand module waits for users.
+function Module:Start()
+    local spec, state = self.Spec, self.Addon.State
+    if spec.demand then
+        return
+    end
+    local enabledId = spec.toggle ~= false and self:Id("enabled") or nil
+    local active = spec.active
+    if not enabledId and not active then
+        self:SetEnabled(true)
+        return
+    end
+    local reads = active and self:ResolveRows(active.reads) or {}
+    if enabledId then
+        reads[#reads + 1] = enabledId
+    end
+    local when = active and active.when
+    state:Watch(reads, function(current)
+        self:SetEnabled((not enabledId or current.Values[enabledId]) and (not when or when(current)) and true or false)
+    end)
+end

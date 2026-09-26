@@ -1,6 +1,6 @@
 // The tooling's own tests. The check gate runs over fixture addons (tests/fixtures/check): BadAddon
 // has one violation per marked line, GoodAddon exercises every allowed construct, LegacyAddon has
-// no _Camelot TOC. The findings must be exactly EXPECTED, so a rule that stops firing (or starts
+// no _Camelot TOC, and FrameworkAddon (built on a stub ByteTerrace_Core) reaches past the framework. The findings must be exactly EXPECTED, so a rule that stops firing (or starts
 // misfiring) fails. api-sync, the test runner, deploy's link handling and the probes verb are
 // tested here too.
 
@@ -30,6 +30,10 @@ const BS = "BadAddon/BadStyle.lua";
 const BANNER = "COMMENT banner divider: let the code's structure and doc comments do that work";
 const DEBT = (marker) => `COMMENT debt marker "${marker}": do the work, or say what's true today`;
 const HP = `UnitHealth can return a secret (SecretReturns); ${SECRET_CALL}`;
+
+const FW = "FrameworkAddon/Framework.lua";
+const TIMERS = "use a module timer (module:After, module:Every), which runs as a batch and stops with its module";
+const COMMS = "use a module's comms (comms = { prefix }), which keeps Blizzard's addon message rules";
 
 const EXPECTED = [
     "LegacyAddon/LegacyAddon.toc:1: TOC LegacyAddon has no LegacyAddon_Camelot.toc, so the Forever client won't load it",
@@ -99,6 +103,10 @@ const EXPECTED = [
     `${B2}:71: ${BLOCKED(":SetPropagateKeyboardInput()", "HasRestrictions")}`, // any receiver
     `${B2}:75: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`,
     `${B2}:78: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`,
+    `${B2}:79: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // copied
+    `${B2}:80: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // stored
+    `${B2}:81: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`, // tabled
+    `${B2}:82: SECRET ${HP}`, // \`_\` only discards what nothing reads
     // Naming and comments (GoodAddon/GoodStyle.lua holds the allowed constructs).
     `${BS}:3: NAMING constant 'MAX_ITEMS' should be PascalCase (MaxItems)`,
     `${BS}:4: NAMING file-level local 'itemCount' should be PascalCase (ItemCount)`,
@@ -114,6 +122,12 @@ const EXPECTED = [
     `${BS}:21: ${BANNER}`,
     `${BS}:22: ${DEBT("TODO")}`,
     `${BS}:23: ${DEBT("for now")}`,
+    `${FW}:7: FRAMEWORK C_Timer.After belongs to the framework; ${TIMERS}`,
+    `${FW}:8: FRAMEWORK C_Timer.NewTicker belongs to the framework; ${TIMERS}`,
+    `${FW}:9: FRAMEWORK CHAT_MSG_ADDON belongs to the framework; ${COMMS}`,
+    `${FW}:10: FRAMEWORK C_ChatInfo.SendAddonMessage belongs to the framework; ${COMMS}`,
+    `${FW}:11: FRAMEWORK PlaySoundFile belongs to the framework; use a sound bank (ByteTerrace.NewSoundBank)`,
+    `${FW}:12: FRAMEWORK C_Timer.NewTimer belongs to the framework; ${TIMERS}`,
 ];
 
 function assertSame(actual, expected) {
@@ -218,9 +232,9 @@ export const tests = [
         run: async () => {
             const none = tlk(["test", "no test is named this"]);
             assert(none.status === 1 && none.stdout.includes("No test matches"), `unmatched filter: ${none.status} ${none.stdout}`);
-            const hang = tlk(["test", "--dir", join(FIXTURES, "runner"), "--timeout", "5"]);
+            const hang = tlk(["test", "--dir", join(FIXTURES, "runner"), "--timeout", "1"]);
             assert(hang.status === 1, `hang exits non-zero (got ${hang.status})`);
-            assert(/FAIL hang\.test\.lua: timed out after 5s/.test(hang.stdout), hang.stdout);
+            assert(/FAIL hang\.test\.lua: timed out after 1s/.test(hang.stdout), hang.stdout);
             assert(/\b2 passed, 1 failed/.test(hang.stdout), hang.stdout);
         },
     },

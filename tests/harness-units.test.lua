@@ -24,15 +24,14 @@ local function EnemyPlayer(fields)
     return unit
 end
 
--- Enemy players --------------------------------------------------------------------------
-
-test("an enemy player's identity reads plainly: name, realm, class, race, faction, level", function()
-    local h = Harness.new({ realm = "Home Realm", faction = "Horde", race = "Orc" })
+test("an enemy player's identity reads plainly: name, surname, class, race, faction, level", function()
+    local h = Harness.New({ realm = "Home Realm", faction = "Horde", race = "Orc" })
     local env = h.env
-    h:SetTarget(EnemyPlayer({ realm = "Other Realm" }))
-    local name, realm = env.UnitName("target")
+    h:SetTarget(EnemyPlayer({ realm = "Other Realm", surname = "Smith" }))
+    local name, surname = env.UnitName("target")
     eq(name, "Bob")
-    eq(realm, "Other Realm")
+    eq(surname, "Smith", "the second return is the surname, never the realm")
+    eq(select("#", env.UnitName("target")), 2, "no realm return, even from another realm")
     falsy(env.issecretvalue(name), "a player-controlled unit's name is readable")
     local className, classFile, classID = env.UnitClass("target")
     eq(className, "Rogue")
@@ -52,11 +51,12 @@ test("an enemy player's identity reads plainly: name, realm, class, race, factio
     truthy(env.UnitIsPlayer("target"))
     truthy(env.UnitPlayerControlled("target"))
     h:SetTarget(EnemyPlayer({ realm = "Home Realm" }))
-    eq(select(2, env.UnitName("target")), nil, "same realm: no realm")
+    eq(select(2, env.UnitName("target")), Harness.DEFAULT_SURNAME, "no surname given: the default one")
+    eq(select(2, env.UnitFullName("target")), Harness.DEFAULT_SURNAME, "UnitFullName: the surname too")
 end)
 
 test("an NPC's race is secret like its other identity, and unknown races are errors", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:SetTarget({ name = "Defias Thug", race = "Human" })
     falsy(h.env.issecretvalue(h.env.UnitRace("target")), "plain in the open world")
     h:SetRestriction("Encounter", true)
@@ -67,7 +67,7 @@ test("an NPC's race is secret like its other identity, and unknown races are err
 end)
 
 test("hostility is relative to the player: canAttack, and isEnemy defaulting to it", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:SetTarget(EnemyPlayer())
     truthy(env.UnitCanAttack("player", "target"))
@@ -82,7 +82,7 @@ test("hostility is relative to the player: canAttack, and isEnemy defaulting to 
 end)
 
 test("combat and death are per unit; the player's combat is the harness's", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:SetTarget(EnemyPlayer({ inCombat = true }))
     truthy(env.UnitAffectingCombat("target"))
@@ -98,10 +98,8 @@ test("combat and death are per unit; the player's combat is the harness's", func
     truthy(env.UnitIsDeadOrGhost("target"))
 end)
 
--- GUIDs ------------------------------------------------------------------------------------
-
 test("GUIDs: players and NPCs have their formats, NPC GUIDs are secret, and the token comes back", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:SetTarget(EnemyPlayer())
     local guid = env.UnitGUID("target")
@@ -121,7 +119,7 @@ test("GUIDs: players and NPCs have their formats, NPC GUIDs are secret, and the 
 end)
 
 test("a secret token passed where secrets are allowed names the unit, and the answer is secret", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:SetTarget({ name = "Hogger" })
     h:SetRestriction("Encounter", true)
     local token = h.env.UnitTokenFromGUID(Reveal(h.env.UnitGUID("target")))
@@ -132,7 +130,7 @@ test("a secret token passed where secrets are allowed names the unit, and the an
 end)
 
 test("UnitTokenPvPRestrictedForAddOns: in a PvP match an enemy's GUID is secret, the group's isn't", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:SetTarget(EnemyPlayer())
     h:JoinGroup("party", { "Mom" })
@@ -144,10 +142,8 @@ test("UnitTokenPvPRestrictedForAddOns: in a PvP match an enemy's GUID is secret,
     falsy(env.issecretvalue(env.UnitName("target")), "UnitName takes a plain UnitToken: players stay named")
 end)
 
--- Nameplates -------------------------------------------------------------------------------
-
 test("nameplates take the lowest free token, exist for every unit API, and fire added and removed", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local seen = Watch(h, "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED")
     local during
@@ -171,7 +167,7 @@ test("nameplates take the lowest free token, exist for every unit API, and fire 
 end)
 
 test("C_NamePlate returns each active unit's plate frame, created once with NAME_PLATE_CREATED", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local created = 0
     local frame = env.CreateFrame("Frame")
@@ -195,7 +191,7 @@ test("C_NamePlate returns each active unit's plate frame, created once with NAME
 end)
 
 test("a plate shows before NAME_PLATE_UNIT_ADDED and hides after _REMOVED, taking its children along", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local seen = {}
     local watcher = env.CreateFrame("Frame")
@@ -226,10 +222,8 @@ test("a plate shows before NAME_PLATE_UNIT_ADDED and hides after _REMOVED, takin
     eq(table.concat(log, ","), "hide,show")
 end)
 
--- Mouseover --------------------------------------------------------------------------------
-
 test("mouseover: a unit fires UPDATE_MOUSEOVER_UNIT, clearing it fires nothing", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local seen = Watch(h, "UPDATE_MOUSEOVER_UNIT")
     h:SetMouseover(EnemyPlayer())
     eq(#seen, 1)
@@ -239,10 +233,8 @@ test("mouseover: a unit fires UPDATE_MOUSEOVER_UNIT, clearing it fires nothing",
     falsy(h.env.UnitExists("mouseover"))
 end)
 
--- Death ------------------------------------------------------------------------------------
-
 test("death: PLAYER_DEAD in lockdown, then combat ends; release and revive fire the wiki's events", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local seen = Watch(h, "PLAYER_DEAD", "PLAYER_REGEN_ENABLED", "PLAYER_ALIVE", "PLAYER_UNGHOST")
     local lockedAtDeath
@@ -268,10 +260,8 @@ test("death: PLAYER_DEAD in lockdown, then combat ends; release and revive fire 
     throws(function() h:ReleaseSpirit() end, "isn't dead")
 end)
 
--- Raid targets -----------------------------------------------------------------------------
-
 test("raid icons: one per unit and unit per icon, the same icon toggles off, and each change fires", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local seen = Watch(h, "RAID_TARGET_UPDATE")
     local enemy = EnemyPlayer()
@@ -295,7 +285,7 @@ test("raid icons: one per unit and unit per icon, the same icon toggles off, and
 end)
 
 test("raid icons follow group rank, and GetRaidTargetIndex keeps SecretReturns", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:SetTarget(EnemyPlayer())
     h:JoinGroup("raid", { "Mom", "Dad" })
@@ -319,7 +309,7 @@ test("raid icons follow group rank, and GetRaidTargetIndex keeps SecretReturns",
 end)
 
 test("addon code can't set raid icons: SetRaidTarget is forbidden, as the client refused it", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local seen = Watch(h, "ADDON_ACTION_FORBIDDEN", "RAID_TARGET_UPDATE")
     h:SetTarget(EnemyPlayer())
@@ -332,7 +322,7 @@ test("addon code can't set raid icons: SetRaidTarget is forbidden, as the client
 end)
 
 test("joining and leaving a group fires RAID_TARGET_UPDATE; the leader is the harness's", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local seen = Watch(h, "GROUP_ROSTER_UPDATE", "RAID_TARGET_UPDATE")
     h:JoinGroup("party", { "Mom" })
     falsy(h.env.UnitIsGroupLeader("player"))
@@ -343,18 +333,14 @@ test("joining and leaving a group fires RAID_TARGET_UPDATE; the leader is the ha
     falsy(h.env.UnitIsGroupLeader("player"))
 end)
 
--- Realms -----------------------------------------------------------------------------------
-
 test("realm names: GetRealmName as is, GetNormalizedRealmName without spaces or hyphens", function()
-    local h = Harness.new({ realm = "Blood-Moon Keep" })
+    local h = Harness.New({ realm = "Blood-Moon Keep" })
     eq(h.env.GetRealmName(), "Blood-Moon Keep")
     eq(h.env.GetNormalizedRealmName(), "BloodMoonKeep")
 end)
 
--- Guilds -----------------------------------------------------------------------------------
-
 test("GetGuildInfo returns name, rank, rank index and another realm's name; nothing without a guild", function()
-    local h = Harness.new({ realm = "Home Realm", guild = "The Lan Krew", guildRank = "Officer", guildRankIndex = 1 })
+    local h = Harness.New({ realm = "Home Realm", guild = "The Lan Krew", guildRank = "Officer", guildRankIndex = 1 })
     local env = h.env
     local name, rank, index, realm = env.GetGuildInfo("player")
     eq(name, "The Lan Krew")
@@ -379,7 +365,7 @@ test("GetGuildInfo returns name, rank, rank index and another realm's name; noth
 end)
 
 test("IsInGuild and UnitIsInMyGuild follow the guilds; GUILD addon messages need one", function()
-    local h = Harness.new({ guild = "The Lan Krew" })
+    local h = Harness.New({ guild = "The Lan Krew" })
     local env = h.env
     truthy(env.IsInGuild())
     truthy(env.UnitIsInMyGuild("player"))
@@ -389,16 +375,16 @@ test("IsInGuild and UnitIsInMyGuild follow the guilds; GUILD addon messages need
     falsy(env.UnitIsInMyGuild("target"), "a namesake on another realm")
     h:SetTarget(EnemyPlayer({ guild = "Knights of Light" }))
     falsy(env.UnitIsInMyGuild("target"))
-    local R = env.Enum.SendAddonMessageResult
-    eq(env.C_ChatInfo.SendAddonMessage("K", "hi", "GUILD"), R.Success)
-    local alone = Harness.new()
+    local results = env.Enum.SendAddonMessageResult
+    eq(env.C_ChatInfo.SendAddonMessage("K", "hi", "GUILD"), results.Success)
+    local alone = Harness.New()
     falsy(alone.env.IsInGuild())
     falsy(alone.env.UnitIsInMyGuild("player"))
-    eq(alone.env.C_ChatInfo.SendAddonMessage("K", "hi", "GUILD"), R.NotInGuild)
+    eq(alone.env.C_ChatInfo.SendAddonMessage("K", "hi", "GUILD"), results.NotInGuild)
 end)
 
 test("an NPC's name is plain with no restriction active and secret under one (seen in game)", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     h:SetTarget({ name = "Aramis Hammerhand" })
     local name = env.UnitName("target")
@@ -411,12 +397,13 @@ test("an NPC's name is plain with no restriction active and secret under one (se
 end)
 
 test("GetPlayerInfoByGUID knows the player units a test made, and nothing else", function()
-    local h = Harness.new()
+    local h = Harness.New()
     local env = h.env
     local bob = { name = "Bob", realm = "Other", isPlayer = true, classFile = "ROGUE", race = "Human" }
     h:SetTarget(bob)
     local className, classFile, raceName, raceFile, sex, name, realm = env.GetPlayerInfoByGUID(env.UnitGUID("target"))
-    eq(table.concat({ className, classFile, raceName, raceFile, sex, name, realm }, ","), "Rogue,ROGUE,Human,Human,2,Bob,Other")
+    eq(table.concat({ className, classFile, raceName, raceFile, sex, name, realm }, ","), "Rogue,ROGUE,Human,Human,2,Bob Doe,Other")
+    eq(select(6, env.GetPlayerInfoByGUID(env.UnitGUID("player"))), "Tester Doe", "the name is \"First Last\"")
     eq(select(7, env.GetPlayerInfoByGUID(env.UnitGUID("player"))), "", "your own realm is empty")
     h:SetTarget({ name = "Wolf", canAttack = true })
     eq(env.GetPlayerInfoByGUID(env.UnitGUID("target")), nil, "a creature")

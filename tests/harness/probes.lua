@@ -20,7 +20,7 @@ Harness.OBSERVED_PROBES = type(__probes) == "string" and assert(loadstring("retu
     or { build = "", probes = {} }
 
 function Harness.RunProbe(name)
-    local h = Harness.new()
+    local h = Harness.New()
     local Probes = h:LoadFiles("ByteTerrace_DevTools").Probes
     local probe = assert(Probes.ByName[name], "no probe named " .. tostring(name))
     local run = { probe = probe, Probes = Probes, h = h, observed = Harness.OBSERVED_PROBES.probes[name] }

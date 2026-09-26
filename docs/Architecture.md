@@ -61,7 +61,7 @@ A command is a named intent, `{ name, label, run(arg, phase, source), slash?, he
 - **Batches.** Each run is one state batch, so a command that writes several rows publishes once.
 - **Phases.** Every command gets `"down"`. Held commands also get `"up"` and `"cancel"`.
 - **Module commands** run only while their module runs; otherwise the player is told it's turned off. A command marked `always` runs regardless, e.g. one that turns its own module on.
-- **Built-in commands:** bare slash (open settings), `help`, `version`, `debug`, `set <setting> <value>`, and `toggle <setting>`. `set` and `toggle` only reach settings (labeled, persisted rows), never internal rows.
+- **Built-in commands:** bare slash (open settings), `help`, `version`, `debug` (see Diagnostics below), `set <setting> <value>`, and `toggle <setting>`. `set` and `toggle` only reach settings (labeled, persisted rows), never internal rows.
 - **Slash aliases:** an alias another addon already registered is reported and skipped; the addon still starts.
 - **Limit:** commands are insecure. They drive the addon's own UI and state, never protected actions such as casting or targeting.
 
@@ -81,13 +81,49 @@ Controller sources are named by position (`gamepad.south`), never by printed let
 
 - **Switch options.** `default` sets the enabled row's default (true unless given). `scope` and `lockedBy` apply to it like any row, so `scope = "character"` makes a module per character, and a lock can keep it on.
 - **Activation.** A module runs while its enabled row is true and its optional `active = { reads, when }` rule holds. That's how a module depends on other rows: a sound's module runs only while the Sounds master switch and that sound's toggle are on.
-- **Ownership.** Everything a module creates through `module:On`, `:Watch` and `:Rule` belongs to it and is torn down in one pass when it stops.
+- **Ownership.** Everything a module creates through `module:On`, `:Watch`, `:OnIncrease`, `:Rule`, `:After` and `:Every` belongs to it and is torn down in one pass when it stops.
+- **Timers.** `module:After(seconds, fn)` and `module:Every(seconds, fn)` run `fn` as one state batch, isolated like a handler, and never after the module stops, so a retry scheduled by a feature the player just switched off doesn't fire. `module:Cancel(timer)` cancels one early. Scheduling on a stopped module is an error.
+- **Rising counts.** `module:OnIncrease(row, fn)` runs `fn(state, count, previous)` when a count row goes up: how a feature reacts to something that happened (a kill, a death) rather than to a value. A count that falls (a stopped module resetting its rows) is only remembered.
+- **Demand dependencies.** A module with `demand = true` (and `toggle = false`, no `active` rule) runs only while a running module names it in `uses = { ... }`. A user's dependencies start before its `OnEnable`, so their rows hold real values for its first reading and their handlers for an event run before its own; they stop after the last user stops. Start refuses a `uses` that names an unknown or non-demand module, or forms a cycle.
 - **Runtime rows reset.** When a module stops, its runtime (`persist = false`) rows return to their defaults, so no reader ever sees stale facts.
 - **Isolated starts.** A module that fails to start is reported and the rest still start.
 - **Reserved names:** `addon` and the fact names.
 - **Stopping through the row.** Switching a module off through its row takes effect when that batch publishes, like any write; `module:SetEnabled(false)` stops it immediately.
 
-**Facts** are shared runtime rows, such as `combat.active` and `afk.active`. An addon opts in with `facts = { ... }`. A fact's adapter is the only code that reads its API. Facts are declared first and take their real value the moment they're enabled, so a `/reload` in combat doesn't look like combat starting to any rule.
+**Facts** are shared runtime rows. An addon opts in with `facts = { ... }`. A fact's adapter is the only code that reads its API. Facts are declared first and take their real value the moment they're enabled, so a `/reload` in combat doesn't look like combat starting to any rule.
+
+- `combat` and `afk` always run: `combat.active`, `afk.active`.
+- `target`, `kills` and `death` are demand facts, running only while a module that uses them runs:
+  - `target`: what your target is (`target.serial`, `enemyPlayer`, `formidable`, `alive`, `died`, `duelEnded`). A health event only re-reads whether it lives (one API call); attackability and rank re-read on the events that change them.
+  - `kills`: honorable kills and their victim (`kills.honorable`, `kills.victim`), your killing blows on players from `PARTY_KILL` (`kills.blows`) and those since you last died (`kills.streak`).
+  - `death`: your deaths (`death.count`) and your killer from Blizzard's death recap (`death.killer`, `killerKind`, `killerClass`, `killerFaction`, `killerSpell`, `killerDamage`), published with `death.attributed`, which rises once per death even when the killer stays unknown.
+
+## Group messages
+
+A module's `comms = { prefix, interval?, queue? }` gives it `module.Comms`: `Send(kind, fields, urgent)`, `Ready()` and `Listen(kind, fn)`, where `fn(sender, fields)` gets each valid message of that kind. Every feature that talks to the group plays by Blizzard's addon message rules the same way:
+
+- Your own group only (party, raid, instance chat); received messages must arrive on a group channel.
+- At most one message per `interval` (default 1 second) from a bounded queue (default 8); beyond it messages are dropped. A client throttle keeps the message queued for the next turn.
+- Nothing during chat messaging lockdown, and the queue drops then and when you leave your group.
+- Secret payloads (lockdown) are ignored, and so are your own messages the client echoes. The prefix is tested first, so other addons' messages cost one check.
+- Messages are parsed strictly: an uppercase kind, then tab-separated fields. One longer than 255 bytes is a caller bug and raises.
+- Nothing is sent or received while the module is stopped.
+
+## Sounds
+
+`ByteTerrace.NewSoundBank(addon, { master, channel, folder? })` plays player-supplied sounds: an addon ships no audio, players drop files named after each sound into its media folder, and numbered copies are variants picked at random. `Define`, `Row` (a setting row naming the files), `IsOn`, `Play` (with an optional cooldown), `WhileOn` (an active rule for a module that only serves some sounds), `Stop` and `Test` (the test command, which says why nothing played). Which files exist comes from `C_UIFileAsset.IsKnownFile`.
+
+## Diagnostics
+
+The built-in `debug` command shows what an addon is doing on a player's machine:
+
+- `debug` toggles debug output (`AddOn:Debug` lines in chat).
+- `debug status`: modules running and stopped (demand modules with their users), events registered, watchers, pending timers, records, queued messages, and the errors `SafeCall` has caught.
+- `debug events`: each registered event with its dispatches, handlers and unit filter, busiest first; then publishes and watcher runs.
+- `debug rows <text>`: every row whose name contains the text, runtime rows included, with value and version.
+- `debug trace <text>` prints each published change of the matching rows until `debug trace off`. Untraced rows cost nothing.
+- `debug cpu`: the client's addon profiler for this addon (time per frame recent, session, peak and in encounters, its share of the game's time as Blizzard's AddOn list computes it, frames over 1 to 100 ms) and its memory.
+- `debug reset` zeroes the counts. The counts are always kept: an integer increment per dispatch and per publish.
 
 ## Secret values
 
@@ -111,6 +147,10 @@ In code:
 - Cache globals as file-level locals.
 - Resolve row ids once and read `state.Values[id]` in hot paths.
 - Create no closures or tables inside event handlers.
+- Read in a hot handler only what that event can change (the target fact's health handler reads one API); tests assert API calls per event with `h:CountApiCalls`.
+- Test the cheapest disqualifier first on busy events (`CHAT_MSG_ADDON` carries every addon's messages).
+
+The check gate's FRAMEWORK rule keeps addons on the framework: an addon that depends on `ByteTerrace_Core` can't call `C_Timer`'s timers, send addon messages or register prefixes, call `PlaySoundFile`, register settings itself, or handle `CHAT_MSG_ADDON`.
 
 ## Adding a module
 
@@ -126,6 +166,7 @@ ns.Addon:Module("Example", {
         local combat = module:Id("combat.active")
         module:Rule({ reads = { combat }, when = function(state) return state.Values[combat] end,
             changed = function(active) ... end })
+        module:OnIncrease("kills.blows", function() ... end) -- needs uses = { "kills" }
     end,
 })
 ```

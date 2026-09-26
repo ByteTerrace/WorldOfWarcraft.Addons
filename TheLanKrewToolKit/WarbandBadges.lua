@@ -7,7 +7,8 @@ local addonName, ns = ...
 --
 -- One badge frame per nameplate frame, parented to it, so it hides and recycles with the plate;
 -- its texture is badge.Icon. Badges refresh when a plate appears and when the ledger or the wars
--- change; nothing polls.
+-- change; nothing polls. A plate that appears is read once, by Warband.lua, which hands the info
+-- to Warband.OnPlate while this module runs.
 
 local BadgeSize = 24
 local MaxNameplates = 40 -- nameplate1 to nameplate40
@@ -33,14 +34,13 @@ local function BadgeFor(plate)
     return badge
 end
 
--- Shows or hides the badge for one nameplate unit.
-local function Refresh(unit)
+-- Shows or hides the badge for one nameplate unit; info is what Warband.Identify read from it.
+local function Show(unit, info)
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
     if not plate then
         return -- a plate addons can't touch (friendly plates in instances)
     end
     Shown[unit] = plate
-    local info = Warband.Identify(unit)
     local status = info and Warband.Status(info.key, info.guild)
     if status then
         local badge = BadgeFor(plate)
@@ -49,6 +49,10 @@ local function Refresh(unit)
     elseif Badges[plate] then
         Badges[plate]:Hide()
     end
+end
+
+local function Refresh(unit)
+    Show(unit, Warband.Identify(unit))
 end
 
 local function RefreshAll()
@@ -68,9 +72,9 @@ Addon:Module("Badges", {
     label = "Nameplate badges",
     page = "Warband",
     description = "A skull, cross, square or star above the nameplates of marked, grudge, guild-at-war and champion players. Needs enemy nameplates on.",
-    active = { reads = { "Warband.enabled" }, when = function(s) return s:Get("Warband.enabled") end },
+    active = { reads = { "Warband.enabled" }, when = function(state) return state:Get("Warband.enabled") end },
     OnEnable = function(module)
-        module:On("NAME_PLATE_UNIT_ADDED", Refresh)
+        Warband.OnPlate = Show
         -- The plate the unit showed on: nameplate addons find GetNamePlateForUnit can already
         -- answer nil while the removal dispatches.
         module:On("NAME_PLATE_UNIT_REMOVED", function(unit)
@@ -88,5 +92,8 @@ Addon:Module("Badges", {
             end
         end
     end,
-    OnDisable = HideAll,
+    OnDisable = function()
+        Warband.OnPlate = nil
+        HideAll()
+    end,
 })

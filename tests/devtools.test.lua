@@ -7,7 +7,7 @@ local function Printed(h, from)
 end
 
 local function Load(saved)
-    local h = Harness.new({ saved = saved })
+    local h = Harness.New({ saved = saved })
     h:LoadAddon("ByteTerrace_DevTools")
     return h
 end
@@ -126,8 +126,9 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
         end
     end
     table.sort(registered)
-    eq(table.concat(registered, " "), "PARTY_KILL() PLAYER_TARGET_DIED() UNIT_COMBAT(player,target) UNIT_DIED()",
-        "UNIT_COMBAT for two units, and the kill events")
+    eq(table.concat(registered, " "), "CHAT_MSG_ADDON() CHAT_MSG_CHANNEL() CHAT_MSG_GUILD() CHAT_MSG_PARTY() "
+        .. "CHAT_MSG_RAID() CHAT_MSG_SAY() CHAT_MSG_WHISPER() CHAT_MSG_YELL() PARTY_KILL() PLAYER_TARGET_DIED() "
+        .. "UNIT_COMBAT(player,target) UNIT_DIED()", "the chat senders, UNIT_COMBAT for two units, and the kill events")
     h:Fire("UNIT_COMBAT", "target", "WOUND", "CRITICAL", 42, 1)
     h:Fire("UNIT_COMBAT", "target", "DODGE", "", 0, 1)
     h:Slash("/btdev probe")
@@ -171,4 +172,13 @@ test("kill events are kept for kills.seen: whose blow, and what died", function(
     eq(kills.partyKill.target, "Creature")
     eq(kills.unitDied.unit, "Creature")
     truthy(kills.targetDied)
+end)
+
+test("chat senders are kept as name shapes, never names", function()
+    local h = Harness.New()
+    local ns = h:LoadAddon("ByteTerrace_DevTools")
+    h:Fire("CHAT_MSG_SAY", "hello", "Dh Taketwo-Realm")
+    h:Fire("CHAT_MSG_CHANNEL", "hi", "Bob")
+    eq(ns.Probes.Senders.CHAT_MSG_SAY, "Aa Aa-Aa")
+    eq(ns.Probes.Senders.CHAT_MSG_CHANNEL, "Aa")
 end)

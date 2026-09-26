@@ -2,7 +2,7 @@
 
 -- A harness with the framework loaded and a bare addon, not yet started.
 local function NewAddOn(options)
-    local h = Harness.new(options and options.harness)
+    local h = Harness.New(options and options.harness)
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
     rawset(h.env, "TestDB", h.saved.TestDB)
@@ -27,7 +27,6 @@ local function StartRefused(h, addon)
     return h.errors[1] or ""
 end
 
--- State --------------------------------------------------------------------
 
 test("state ids are sorted by name, whatever the declaration order", function()
     local h, addon = NewAddOn()
@@ -164,7 +163,6 @@ test("a watcher that errors is reported and the others still run", function()
     truthy(ran)
 end)
 
--- Events -------------------------------------------------------------------
 
 test("events register with the client only while handled", function()
     local h, addon = NewAddOn()
@@ -212,7 +210,6 @@ test("a handler that errors doesn't stop the others", function()
     truthy(ran)
 end)
 
--- Modules ------------------------------------------------------------------
 
 test("a disabled module registers nothing, and disabling removes what it owned", function()
     local h, addon = NewAddOn()
@@ -239,7 +236,6 @@ test("declaring after start is refused", function()
     throws(function() addon:Module("Late", {}) end, "after start")
 end)
 
--- Commands -----------------------------------------------------------------
 
 test("slash words run their commands with the rest as the argument", function()
     local h, addon = NewAddOn()
@@ -286,10 +282,9 @@ test("duplicate slash words are refused at compile", function()
     truthy(tostring(err):find("slash word 'x' is taken", 1, true))
 end)
 
--- Input --------------------------------------------------------------------
 
 test("labels follow the connected controller family", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:LoadFiles("ByteTerrace_Core")
     local Input = h.env.ByteTerrace.Input
     eq(Input.Label("gamepad.south"), "South", "no controller: positional")
@@ -355,7 +350,6 @@ test("bindings to unknown sources or commands are refused at compile", function(
     truthy(tostring(err):find("unknown command M.missing", 1, true))
 end)
 
--- Settings -----------------------------------------------------------------
 
 test("the settings panel is generated from labeled persisted rows, in declaration order", function()
     local h, addon = NewAddOn()
@@ -448,7 +442,6 @@ test("settings open after combat, not during lockdown", function()
     eq(#h.opened, 1, "opened once, after combat")
 end)
 
--- Review regressions ---------------------------------------------------------
 
 test("a handler removed mid-dispatch doesn't receive the rest of that dispatch", function()
     local h, addon = NewAddOn()
@@ -629,7 +622,6 @@ test("controller capture works in combat: the capture frame isn't a protected fr
     eq(ran, 1)
 end)
 
--- Round 2 regressions -----------------------------------------------------------
 
 test("a module that fails to start can't stop the others or wedge publication", function()
     local h, addon = NewAddOn()
@@ -645,7 +637,7 @@ test("a module that fails to start can't stop the others or wedge publication", 
 end)
 
 test("a row spec shared by two addons in one client writes to each addon's own SavedVariables", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h:LoadFiles("ByteTerrace_Core")
     h.declared.ADB, h.declared.BDB = true, true
     local shared = { toggle = false, state = { { name = "n", kind = "number", default = 0 } } }
@@ -704,8 +696,10 @@ end)
 
 test("a taken slash alias is reported and skipped; the addon still starts", function()
     local h, addon = NewAddOn()
-    rawset(h.env, "SLASH_SOMEONEELSE1", "/test")
-    h:ExpectErrors("already taken")
+    rawset(h.env, "SLASH_SOMEONEELSE1", "/other")
+    rawset(h.env, "SLASH_SOMEONEELSE2", "/TEST")
+    h.env.SlashCmdList.SOMEONEELSE = function() end
+    h:ExpectErrors("already taken by SLASH_SOMEONEELSE2")
     Start(h)
     truthy(addon.Started)
 end)

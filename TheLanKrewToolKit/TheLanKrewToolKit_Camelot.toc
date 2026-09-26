@@ -15,7 +15,6 @@ ScholarWords.lua
 ScholarPuzzles.lua
 ScholarMath.lua
 ScholarReading.lua
-ScholarFacts.lua
 Cards.lua
 FuckOMeter.lua
 Sounds.lua
@@ -23,9 +22,9 @@ Kombat.lua
 Controller.lua
 Journal.lua
 Krew.lua
-Honor.lua
 WarbandUtil.lua
 Warband.lua
+WarbandMessages.lua
 WarbandDeaths.lua
 WarbandMenus.lua
 WarbandBadges.lua

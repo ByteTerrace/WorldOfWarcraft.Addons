@@ -40,6 +40,11 @@
 //             branch returns, sits in a `not InCombatLockdown()` branch, or is annotated
 //             `-- protected: <why>`. A closure doesn't inherit its definer's guard.
 //
+//   FRAMEWORK in an addon built on ByteTerrace_Core, no call to a client API the framework owns
+//             (C_Timer's timers, addon message sending and prefixes, PlaySoundFile, settings
+//             registration), nor one taken as a value, and no handler for CHAT_MSG_ADDON: the framework's versions own their
+//             lifetime and the client's rules, and a second implementation is a defect.
+//
 //   An annotation is a `--` line comment on the construct's line, or alone on the line above.
 //   Not seen: dynamic reads (_G[k]), values that cross files or function calls, and handlers
 //   that aren't function literals. Guards are per function and don't flow out of loops.
@@ -53,6 +58,9 @@
 //             HACK, XXX, KLUDGE, REVISIT in capitals, or "for now"), as Puck's comment-smell gate.
 //   LENGTH    no file exceeds MAX_LINES.
 //   STYLE     LF line endings, final newline, no tabs, no trailing whitespace.
+//
+//   Beyond the addons, tools/ and tests/ get LENGTH and STYLE, and the tests' Lua (tests/*.lua and
+//   tests/harness, not tests/fixtures, which are deliberately bad) gets NAMING and COMMENT too.
 //
 // Snapshot truth: when the snapshot has a client dump, a global or member counts as known only if
 // the dump has it; documented-only names don't. Without a dump, the documented API is the fallback.
@@ -212,7 +220,7 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
             const path = join(dir, file);
             const text = readFileSync(path, "utf8");
             checkStyle(text, path, report);
-            checkLua(path, text, { api, known, clientGlobal, writes }, report);
+            checkLua(path, text, { api, known, clientGlobal, writes, framework: dependencies.includes("ByteTerrace_Core") }, report);
             checkStyleRules(path, text, report);
         }
         for (const write of writes) {
@@ -226,7 +234,11 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
         for (const dir of ["tools", "tests"]) {
             for (const file of readdirSync(join(root, dir), { recursive: true }).map(toPosix)) {
                 const skip = file.startsWith("api/") || file.startsWith("fixtures/");
-                if (/\.(mjs|lua|json)$/.test(file) && !skip) checkStyle(readFileSync(join(root, dir, file), "utf8"), join(root, dir, file), report);
+                if (!/\.(mjs|lua|json)$/.test(file) || skip) continue;
+                const path = join(root, dir, file);
+                const text = readFileSync(path, "utf8");
+                checkStyle(text, path, report);
+                if (dir === "tests" && file.endsWith(".lua")) checkStyleRules(path, text, report);
             }
         }
     }

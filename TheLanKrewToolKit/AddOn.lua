@@ -4,14 +4,15 @@ local addonName, ns = ...
 -- ns.Addon, which compiles on ADDON_LOADED (ByteTerrace_Core's AddOn.lua).
 --
 -- Slash commands are /tlk and /lankrew. The combat and afk facts publish combat.active and
--- afk.active for any module to read.
+-- afk.active for any module to read; the target, kills and death facts run while a module that
+-- uses them runs (ByteTerrace_Core's Facts.lua).
 
 ns.Addon = ByteTerrace.NewAddOn({
     name = addonName,
     savedVariable = "TheLanKrewToolKitDB",
     savedVariablePerCharacter = "TheLanKrewToolKitCharDB",
     slash = { "/tlk", "/lankrew" },
-    facts = { "combat", "afk" },
+    facts = { "combat", "afk", "target", "kills", "death" },
 })
 
 --- Opens the toolkit's settings; the TOC's AddonCompartmentFunc.

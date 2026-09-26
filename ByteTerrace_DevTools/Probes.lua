@@ -31,7 +31,7 @@ local addonName, ns = ...
 -- the player and the target only) and passes each payload to Probes.NoteUnitCombat, which keeps
 -- the last payload's shape per unit and action in Probes.UnitCombat; unitCombat.seen records it.
 -- The kill events (PARTY_KILL, PLAYER_TARGET_DIED, UNIT_DIED) go to Probes.NoteKill the same
--- way, for kills.seen.
+-- way, for kills.seen, and chat events' senders to Probes.NoteSender, for names.chatSenders.
 --
 -- A record is { build = "1.60.1 (70009)", context = { combat, restrictions }, result }: the build,
 -- whether combat lockdown held and which addon restrictions were active ("none", or their
@@ -67,6 +67,9 @@ local UnitCombat = { units = { player = {}, target = {} }, actions = {}, flagTex
 -- payload described (whose blow, what kind of unit), and whether PLAYER_TARGET_DIED fired.
 local Kills = { partyKill = nil, unitDied = nil, targetDied = false }
 
+-- The last sender's name shape per chat event since load (Probes.NoteSender).
+local Senders = {}
+
 --- The marker a secret is recorded as.
 local function Marker(value)
     return { secret = true, type = type(value) }
@@ -86,6 +89,17 @@ local function Shape(value)
         return Marker(value)
     end
     return type(value)
+end
+
+--- A name's shape: each run of letters (accented ones too) becomes "Aa", so "Dh Taketwo-Realm"
+--- is "Aa Aa-Aa"; "empty", the type name, or the marker for a secret otherwise. No name survives.
+local function NameShape(value)
+    if issecretvalue(value) then
+        return Marker(value)
+    elseif type(value) ~= "string" then
+        return type(value)
+    end
+    return value == "" and "empty" or (value:gsub("[%a\128-\255]+", "Aa"))
 end
 
 --- "text", "empty" or the type name for a text an API returns, or the marker for a secret.
@@ -228,6 +242,10 @@ Probes.UnitCombat = UnitCombat
 --- The kill events seen since load (Kills above), for kills.seen.
 Probes.Kills = Kills
 
+--- The chat senders seen, by event (Probes.NoteSender).
+Probes.Senders = Senders
+Probes.NameShape = NameShape
+
 --- The shape helpers probes record with (documented above).
 Probes.Marker, Probes.Value, Probes.Shape, Probes.Text = Marker, Value, Shape, Text
 Probes.Byte, Probes.Fields, Probes.FieldShapes, Probes.Same = Byte, Fields, FieldShapes, Same
@@ -360,6 +378,12 @@ function Probes.NoteKill(event, ...)
     elseif event == "PLAYER_TARGET_DIED" then
         Kills.targetDied = true
     end
+end
+
+--- Keeps a chat event's sender shape for names.chatSenders (DevTools.lua passes each one).
+---@param event string
+function Probes.NoteSender(event, sender)
+    Senders[event] = NameShape(sender)
 end
 
 --- The needs' texts joined with " + ", or "nothing" for a probe that runs anywhere.

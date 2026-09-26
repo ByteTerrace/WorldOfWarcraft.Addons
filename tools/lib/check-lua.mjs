@@ -1,4 +1,4 @@
-// The per-file Lua rules of the check verb (GLOBAL, MEMBER, EVENT, SECRET, PROTECTED); see
+// The per-file Lua rules of the check verb (GLOBAL, MEMBER, EVENT, SECRET, PROTECTED, FRAMEWORK); see
 // tools/verbs/check.mjs for what each rule enforces and what it can't see.
 
 import { NOT_LOCKDOWN, flow } from "./lua-flow.mjs";
@@ -16,6 +16,21 @@ const OPAQUE_ENVIRONMENT = {
 const REGION_FACTORIES = new Set(["CreateFontString", "CreateTexture", "CreateMaskTexture", "CreateLine", "CreateAnimationGroup"]);
 const UNIT_TYPES = new Set(["UnitToken", "UnitTokenVariant", "UnitTokenNamePlate", "UnitTokenPvPRestrictedForAddOns", "UnitTokenRestrictedForAddOns"]);
 const SECRET_CALL = "check issecretvalue on each result before any use or annotate \"-- secret: <why>\"";
+// Client APIs and events ByteTerrace_Core owns, with what an addon built on it uses instead.
+const TIMERS = "a module timer (module:After, module:Every), which runs as a batch and stops with its module";
+const COMMS = "a module's comms (comms = { prefix }), which keeps Blizzard's addon message rules";
+const SETTINGS = "declared rows: the framework generates the settings panel";
+const FRAMEWORK_CALLS = {
+    "C_Timer.After": TIMERS,
+    "C_Timer.NewTimer": TIMERS,
+    "C_Timer.NewTicker": TIMERS,
+    "C_ChatInfo.SendAddonMessage": COMMS,
+    "C_ChatInfo.RegisterAddonMessagePrefix": COMMS,
+    PlaySoundFile: "a sound bank (ByteTerrace.NewSoundBank)",
+    "Settings.RegisterProxySetting": SETTINGS,
+    "Settings.RegisterAddOnCategory": SETTINGS,
+};
+const FRAMEWORK_EVENTS = { CHAT_MSG_ADDON: COMMS };
 
 export const callBase = (node) => (node?.type === "CallExpression" || node?.type === "StringCallExpression" || node?.type === "TableCallExpression") ? node.base : null;
 export const callArgs = (node) => node.type === "CallExpression" ? node.arguments : node.type === "StringCallExpression" ? [node.argument] : [node.arguments];
@@ -36,7 +51,7 @@ function collectAnnotations(comments, lines) {
 }
 
 export function checkLua(file, text, context, report) {
-    const { api, known, clientGlobal, writes } = context;
+    const { api, known, clientGlobal, writes, framework } = context;
     let ast;
     try {
         ast = parse(text);
@@ -137,7 +152,6 @@ export function checkLua(file, text, context, report) {
                 if (key) (fieldFrames.get(key) ?? fieldFrames.set(key, new Set()).get(key)).add(kind);
             });
         }
-        void parent;
     });
 
     // Secret payload parameters of event handlers passed as function literals:
@@ -222,6 +236,19 @@ export function checkLua(file, text, context, report) {
         if (node.type === "AssignmentStatement") node.variables.forEach((target) => assignTo(target, node));
         if (node.type === "FunctionDeclaration" && node.identifier && !node.isLocal) assignTo(node.identifier, node);
 
+        // Framework-owned functions taken as values (an alias, a callback) reach past it too; calls
+        // are reported below.
+        const isMemberName = parent?.type === "MemberExpression" && parent.identifier === node;
+        const isChainBase = parent?.type === "MemberExpression" && parent.base === node;
+        const isLocal = node.type === "Identifier" && scope.bindingOf(node); // the alias was reported where it was made
+        if (framework && (node.type === "MemberExpression" || node.type === "Identifier") && !isMemberName
+            && !isChainBase && !isLocal && callBase(parent) !== node) {
+            const owned = path(node);
+            if (owned && FRAMEWORK_CALLS[owned]) {
+                report(file, line(node), "FRAMEWORK", `${owned} belongs to the framework; use ${FRAMEWORK_CALLS[owned]}`);
+            }
+        }
+
         // Global reads.
         if (node.type === "Identifier" && !scope.bindingOf(node)) {
             const isWriteTarget = (parent?.type === "AssignmentStatement" && parent.variables.includes(node))
@@ -273,6 +300,14 @@ export function checkLua(file, text, context, report) {
                 if (event && /^[A-Z][A-Z0-9_]+$/.test(event) && !api.events.has(event)) {
                     report(file, line(node), "EVENT", `unknown event ${event}`);
                 }
+                if (framework && FRAMEWORK_EVENTS[event]) {
+                    report(file, line(node), "FRAMEWORK", `${event} belongs to the framework; use ${FRAMEWORK_EVENTS[event]}`);
+                }
+            }
+
+            // Client APIs the framework owns.
+            if (framework && name && FRAMEWORK_CALLS[name]) {
+                report(file, line(node), "FRAMEWORK", `${name} belongs to the framework; use ${FRAMEWORK_CALLS[name]}`);
             }
 
             // Global access through functions, and frame names.
@@ -350,9 +385,14 @@ export function checkLua(file, text, context, report) {
         return stringValue(node)?.startsWith("SLASH_") ?? false;
     }
 
-    // Whether an identifier's value decides something: compared, computed with, tested, indexed or called.
+    // Whether an identifier's value decides something: compared, computed with, tested, indexed or
+    // called; or is kept where later code could do those unchecked: assigned (to a local, a field or
+    // a global) or put in a table.
     function decides(node, parent) {
         if (!parent) return false;
+        if (parent.type === "AssignmentStatement" || parent.type === "LocalStatement") return parent.init.includes(node);
+        if (parent.type === "TableValue" || parent.type === "TableKeyString") return parent.value === node;
+        if (parent.type === "TableKey") return parent.value === node || parent.key === node;
         if (parent.type === "BinaryExpression" || parent.type === "UnaryExpression") return true;
         if (parent.type === "LogicalExpression") return parent.left === node;
         if (parent.type === "IfClause" || parent.type === "ElseifClause" || parent.type === "WhileStatement" || parent.type === "RepeatStatement") {
@@ -406,7 +446,9 @@ export function checkLua(file, text, context, report) {
         const index = parent.init.indexOf(call);
         if (index < 0) return false;
         const targets = index === parent.init.length - 1 ? parent.variables.slice(index) : [parent.variables[index]];
-        return targets.filter((t) => t && t.name !== "_").every((target) => {
+        // `_` discards a result only when nothing reads it.
+        const discarded = (t) => t.name === "_" && scope.references(scope.bindingOf(t)).length === 0;
+        return targets.filter((t) => t && !discarded(t)).every((target) => {
             const binding = scope.bindingOf(target);
             if (!binding || binding.reassigned) return false;
             return scope.references(binding).every((ref) => guardArguments.has(ref) || facts.factsAt(ref).has(binding));

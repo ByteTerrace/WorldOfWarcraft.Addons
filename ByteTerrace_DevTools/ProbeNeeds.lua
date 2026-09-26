@@ -266,6 +266,26 @@ local Needs = {
             })
         end,
     },
+    playerTarget = {
+        label = "player target",
+        text = "target another player (any faction; one whose name shows a surname is best)",
+        step = 1,
+        check = function()
+            local target, me = UnitGUID("target"), UnitGUID("player")
+            if issecretvalue(target) or issecretvalue(me) then
+                return false
+            end
+            return UnitIsPlayer("target") and target ~= nil and target ~= me
+        end,
+        setup = function(h) h:SetTarget({ name = "Grommash", isPlayer = true, classFile = "WARRIOR", race = "Orc", level = 20 }) end,
+    },
+    heardChat = {
+        label = "heard chat",
+        text = "someone spoke in say, a channel (General), your group or guild since you logged in",
+        step = 1,
+        check = function() return next(Probes.Senders) ~= nil end,
+        harness = "the harness doesn't raise chat from other players",
+    },
     party = {
         label = "in a party",
         text = "in a party (not a raid) with another player",

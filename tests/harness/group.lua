@@ -1,7 +1,7 @@
 -- Groups and addon messages of the fake client (see wow.lua for the rest).
 --
 -- Group model: h.group = { kind = nil | "party" | "raid" | "instance", guid, members = { unit, ... } }.
--- Each member is a harness unit table (name, realm, unit, plus FillUnit's defaults and
+-- Each member is a harness unit table (name, surname, realm, unit, plus FillUnit's defaults and
 -- classFile = "WARRIOR" unless given): a player-controlled group member, so identity APIs don't
 -- make it secret. Tokens follow the client's rules:
 --   * a party (or an instance group of up to 4 others) gives party1-4 in member order;
@@ -44,7 +44,7 @@
 --     (h:Echo(false) turns it off) and delivers the echo on the next h:Advance, like a server
 --     round trip, never inside the SendAddonMessage call.
 --   * h:ReceiveAddonMessage fires CHAT_MSG_ADDON only for a registered prefix, like the client:
---     prefix, text, channel, sender ("Name-Realm", always with the normalized realm), target
+--     prefix, text, channel, sender (Harness:FullName: "First Last", "-Realm" only for another realm), target
 --     (for WHISPER the sender, per the event's documentation; otherwise ""), zoneChannelID 0,
 --     localID 0, name "", instanceID 0.
 
@@ -52,23 +52,30 @@ Harness.PARTY_CATEGORY = { HOME = 1, INSTANCE = 2 } -- LE_PARTY_CATEGORY_HOME / 
 Harness.MAX_PREFIX_LENGTH, Harness.MAX_ADDON_MESSAGE_BYTES, Harness.MAX_PREFIXES = 16, 255, 512
 Harness.ADDON_THROTTLE = { allowance = 10, perSecond = 1 }
 
-local GROUP_KINDS = { party = true, raid = true, instance = true }
-local CHAT_TYPES = { PARTY = true, RAID = true, INSTANCE_CHAT = true, GUILD = true, OFFICER = true, WHISPER = true }
-local UNMODELED_CHAT_TYPES = { CHANNEL = true, SAY = true, YELL = true }
-local ECHOED = { PARTY = true, RAID = true, INSTANCE_CHAT = true, GUILD = true, OFFICER = true }
+local GroupKinds = { party = true, raid = true, instance = true }
+local ChatTypes = { PARTY = true, RAID = true, INSTANCE_CHAT = true, GUILD = true, OFFICER = true, WHISPER = true }
+local UnmodeledChatTypes = { CHANNEL = true, SAY = true, YELL = true }
+local Echoed = { PARTY = true, RAID = true, INSTANCE_CHAT = true, GUILD = true, OFFICER = true }
 
 -- GetNormalizedRealmName's form: no spaces or hyphens.
 function Harness.NormalizeRealm(realm)
     return (tostring(realm):gsub("[%s%-]", ""))
 end
 
--- "Name-Realm" for a name that may lack its realm (the player's realm fills in).
+-- A chat sender as the client writes it: the full name, "First Last" ([E] names.chatSenders),
+-- with "-Realm" only for another realm ([G]: regionally unique names need no realm). name is a
+-- sender ("First Last", "First Last-Realm") or a unit table.
 function Harness:FullName(name)
-    local short, realm = name:match("^([^%-]+)%-(.+)$")
-    return (short or name) .. "-" .. Harness.NormalizeRealm(realm or self.player.realm)
+    if type(name) == "table" then
+        name = Harness.DisplayName(name) .. "-" .. (name.realm or self.player.realm)
+    end
+    local full, realm = name:match("^([^%-]+)%-(.+)$")
+    full = full or name
+    if realm and Harness.NormalizeRealm(realm) ~= Harness.NormalizeRealm(self.player.realm) then
+        return full .. "-" .. Harness.NormalizeRealm(realm)
+    end
+    return full
 end
-
--- Groups -------------------------------------------------------------------
 
 function Harness:GroupIsRaid()
     local g = self.group
@@ -94,7 +101,8 @@ local function Member(h, spec)
     local unit = type(spec) == "table" and spec or {}
     if type(spec) == "string" then
         local name, realm = spec:match("^([^%-]+)%-(.+)$")
-        unit.name, unit.realm = name or spec, realm
+        local first, surname = (name or spec):match("^(%S+) (.+)$")
+        unit.name, unit.surname, unit.realm = first or name or spec, surname, realm
     end
     assert(type(unit.name) == "string" and unit.name ~= "", "a group member needs a name")
     unit.realm = unit.realm or h.player.realm
@@ -146,21 +154,22 @@ function Harness:GroupUnit(token)
     end
 end
 
--- The member with this name ("Name" or "Name-Realm"), and its index.
+-- The member with this name ("First", "First Last" or either with "-Realm"), and its index.
 function Harness:FindMember(name)
     local full = self:FullName(name)
     for i, member in ipairs(self.group.members) do
-        if self:FullName(member.name .. "-" .. member.realm) == full then
+        local memberFull = self:FullName(member)
+        if memberFull == full or self:FullName(member.name .. "-" .. member.realm) == full then
             return member, i
         end
     end
 end
 
 -- Joins a group of kind ("party", "raid" or "instance") with the given members (each "Name",
--- "Name-Realm" or a unit table with a name), then fires GROUP_JOINED(category, partyGUID) and
+-- "First Last", either with "-Realm", or a unit table with a name), then fires GROUP_JOINED(category, partyGUID) and
 -- GROUP_ROSTER_UPDATE.
 function Harness:JoinGroup(kind, names)
-    assert(GROUP_KINDS[kind], "JoinGroup: kind must be party, raid or instance, got " .. tostring(kind))
+    assert(GroupKinds[kind], "JoinGroup: kind must be party, raid or instance, got " .. tostring(kind))
     assert(not self.group.kind, "JoinGroup: already in a group (LeaveGroup first)")
     names = names or {}
     CheckSize(self, kind == "party" and "party" or "raid", #names)
@@ -188,7 +197,7 @@ function Harness:LeaveGroup()
     self:Fire("RAID_TARGET_UPDATE")
 end
 
--- Adds a member ("Name", "Name-Realm" or a unit table) and fires GROUP_ROSTER_UPDATE.
+-- Adds a member ("First", "First Last", either with "-Realm", or a unit table) and fires GROUP_ROSTER_UPDATE.
 function Harness:AddMember(name)
     assert(self.group.kind, "AddMember: not in a group")
     local member = Member(self, name)
@@ -212,21 +221,21 @@ function Harness:RemoveMember(name)
     self:Fire("GROUP_ROSTER_UPDATE")
 end
 
--- Addon messages -----------------------------------------------------------
-
 -- Turns echo of your own group messages on (the default, like the client) or off.
 function Harness:Echo(enabled)
     self.echo = enabled ~= false
 end
 
 -- Delivers an addon message from another client: CHAT_MSG_ADDON with the full documented
--- payload, only when the prefix is registered. sender defaults its realm to the player's.
+-- payload, only when the prefix is registered. sender is written as the client writes it
+-- (Harness:FullName); a group member named by first name ("Mom") sends as their full name.
 -- Returns whether it was delivered.
 function Harness:ReceiveAddonMessage(prefix, text, channel, sender, target)
     if not self.prefixes[prefix] then
         return false
     end
-    sender = self:FullName(sender)
+    local member = self.group.kind and self:FindMember(sender)
+    sender = member and self:FullName(member) or self:FullName(sender) -- a member named by first name: their full name
     if target == nil then
         target = channel == "WHISPER" and sender or ""
     end
@@ -256,10 +265,10 @@ local function SendResult(h, prefix, message, chatType, target)
     if type(message) ~= "string" or #message > Harness.MAX_ADDON_MESSAGE_BYTES or message:find("\0", 1, true) then
         return "InvalidMessage"
     end
-    if UNMODELED_CHAT_TYPES[chatType] then
+    if UnmodeledChatTypes[chatType] then
         error("C_ChatInfo.SendAddonMessage: chat type " .. chatType .. " isn't modeled by the harness", 4)
     end
-    if not CHAT_TYPES[chatType] then
+    if not ChatTypes[chatType] then
         return "InvalidChatType"
     end
     if h:InChatMessagingLockdown() then
@@ -285,10 +294,10 @@ end
 
 -- Whether the client hands this send back to the sender.
 local function Echoes(h, chatType, target)
-    if ECHOED[chatType] then
+    if Echoed[chatType] then
         return true
     end
-    return chatType == "WHISPER" and h:FullName(target) == h:FullName(h.player.name)
+    return chatType == "WHISPER" and (h:FullName(target) == h:FullName(h.player) or h:FullName(target) == h.player.name)
 end
 
 -- The chat messaging lockdown (SecretInChatMessagingLockdown's restrictions).
@@ -338,7 +347,7 @@ function Harness:AddonMessageFakes()
             if name == "Success" then
                 h.throttle[prefix] = { allowance = h:AddonAllowance(prefix) - 1, time = h.time }
                 if h.echo and Echoes(h, chatType, target) then
-                    local sender = h:FullName(h.player.name)
+                    local sender = h:FullName(h.player)
                     h:Schedule(0, function()
                         h:ReceiveAddonMessage(prefix, message, chatType, sender)
                     end)

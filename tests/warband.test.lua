@@ -1,9 +1,9 @@
 -- Warband: the ledger of grudges, marks and champions, sightings, vengeance, rallies and intel.
 
-local PREFIX = "TLKKrew1"
+local Prefix = "TLKKrew1"
 
 local function Load(saved)
-    local h = Harness.new({ saved = saved or {} })
+    local h = Harness.New({ saved = saved or {} })
     local ns = h:LoadAddon("TheLanKrewToolKit")
     return h, ns.Addon
 end
@@ -24,8 +24,9 @@ local function Enemy(name, extra)
     return unit
 end
 
+-- A player's key: Forever's full name (every test player's surname is the harness default).
 local function Key(h, name)
-    return name .. "-" .. h.env.GetNormalizedRealmName()
+    return name .. " " .. Harness.DEFAULT_SURNAME
 end
 
 local function Ledger(addon)
@@ -39,7 +40,7 @@ end
 local function Sent(h, kind)
     local found = {}
     for _, message in ipairs(h.addonMessages) do
-        if message.prefix == PREFIX and message.message:find("^" .. kind .. ":") then
+        if message.prefix == Prefix and message.message:find("^" .. kind .. ":") then
             found[#found + 1] = message.message
         end
     end
@@ -47,7 +48,7 @@ local function Sent(h, kind)
 end
 
 local function Receive(h, sender, kind, ...)
-    h:ReceiveAddonMessage(PREFIX, kind .. ":" .. table.concat({ ... }, "\t"), "PARTY", sender)
+    h:ReceiveAddonMessage(Prefix, kind .. ":" .. table.concat({ ... }, "\t"), "PARTY", sender)
 end
 
 local function Card(h)
@@ -66,8 +67,6 @@ local function Notices(h)
     return table.concat(texts, "\n")
 end
 
--- The ledger ----------------------------------------------------------------------------
-
 test("marking your target records it and tells the Krew", function()
     local h, addon = Grouped()
     h:SetTarget(Enemy())
@@ -81,32 +80,33 @@ end)
 
 test("the ledger is saved with the account", function()
     local h, addon = Load()
-    h:Slash("/tlk grudge Bob")
+    h:Slash("/tlk grudge Bob Doe")
     h:Relog(60)
+    truthy(Ledger(h.ns.Addon):Has(Key(h, "Bob")), "kept under the typed full name")
     eq(Ledger(h.ns.Addon):Field(Key(h, "Bob"), "kind"), "grudge")
 end)
 
 test("names are matched ignoring case, and forgiving removes them", function()
     local h, addon = Load()
-    h:Slash("/tlk glory Cara")
-    h:Slash("/tlk forgive cara")
+    h:Slash("/tlk glory Cara Doe")
+    truthy(Ledger(addon):Has(Key(h, "Cara")))
+    h:Slash("/tlk forgive cara doe")
     falsy(Ledger(addon):Has(Key(h, "Cara")))
 end)
 
 test("a mark can be lifted; the enemy stays a grudge", function()
     local h, addon = Grouped()
-    h:Slash("/tlk mark Bob")
-    h:Slash("/tlk unmark Bob")
+    h:Slash("/tlk mark Bob Doe")
+    h:Slash("/tlk unmark Bob Doe")
+    truthy(Ledger(addon):Has(Key(h, "Bob")))
     eq(Ledger(addon):Field(Key(h, "Bob"), "kind"), "grudge")
     h:Advance(3)
     eq(#Sent(h, "UNMARK"), 1)
 end)
 
--- Sightings ------------------------------------------------------------------------------
-
 test("a marked enemy's nameplate raises one alert and one Krew report, and never a raid icon", function()
     local h, addon = Grouped()
-    h:Slash("/tlk mark Bob")
+    h:Slash("/tlk mark Bob Doe")
     local plate = h:AddNamePlate(Enemy())
     truthy(Notices(h):find("Marked for death", 1, true), Notices(h))
     eq(#h.blocked, 0, "no refused SetRaidTarget")
@@ -121,7 +121,7 @@ end)
 
 test("a champion in a fight asks for aid", function()
     local h = Grouped()
-    h:Slash("/tlk glory Cara")
+    h:Slash("/tlk glory Cara Doe")
     h:AddNamePlate(Enemy("Cara", { inCombat = true, canAttack = false, isEnemy = false, faction = "Horde" }))
     truthy(Notices(h):find("Aid them", 1, true), Notices(h))
 end)
@@ -142,16 +142,14 @@ end)
 
 test("a Krew sighting alerts with the place, and stops us repeating it", function()
     local h = Grouped()
-    h:Slash("/tlk mark Bob")
+    h:Slash("/tlk mark Bob Doe")
     Receive(h, "Mom", "SIGHT", Key(h, "Bob"), "Hillsbrad Foothills", "Tarren Mill", "0")
-    truthy(Notices(h):find("Mom spotted Bob", 1, true), Notices(h))
+    truthy(Notices(h):find("Mom Doe spotted Bob Doe", 1, true), Notices(h))
     truthy(Notices(h):find("Tarren Mill (Hillsbrad Foothills)", 1, true))
     h:AddNamePlate(Enemy())
     h:Advance(3)
     eq(#Sent(h, "SIGHT"), 0, "Mom already told the Krew")
 end)
-
--- Grudges and vengeance -----------------------------------------------------------------
 
 test("dying to the enemy you targeted asks for a grudge; a click holds it with the Krew", function()
     local h, addon = Grouped()
@@ -160,7 +158,7 @@ test("dying to the enemy you targeted asks for a grudge; a click holds it with t
     eq(Card(h), nil, "waits for the death recap")
     h:Advance(3) -- none came: ask about the suspect
     local text, card = Card(h)
-    truthy(text and text:find("Slain by Bob?", 1, true), text)
+    truthy(text and text:find("Slain by Bob Doe?", 1, true), text)
     h:Click(card)
     local key = Key(h, "Bob")
     eq(People(addon):Field(key, "deaths"), 1)
@@ -189,8 +187,8 @@ end)
 
 test("an honorable kill on a grudge settles the score, once for the whole Krew", function()
     local h, addon = Grouped()
-    h:Slash("/tlk grudge Bob")
-    h:HonorKill("Bob", "Private", 12)
+    h:Slash("/tlk grudge Bob Doe")
+    h:HonorKill(Key(h, "Bob"), "Private", 12)
     local key = Key(h, "Bob")
     eq(People(addon):Field(key, "kills"), 1)
     truthy(Card(h):find("Vengeance!", 1, true), Card(h))
@@ -202,7 +200,7 @@ end)
 
 test("honorable kills on strangers count in their record, quietly", function()
     local h, addon = Grouped()
-    h:HonorKill("Stranger", "Private", 12)
+    h:HonorKill(Key(h, "Stranger"), "Private", 12)
     eq(Ledger(addon):Count(), 0)
     eq(People(addon):Field(Key(h, "Stranger"), "kills"), 1)
     eq(Card(h), nil)
@@ -212,26 +210,26 @@ end)
 
 test("a Krew member's death is the Krew's grudge", function()
     local h, addon = Grouped()
-    Receive(h, "Mom", "GRUDGE", "Bob-Realm", "ROGUE", "60", "Alliance", "1")
-    eq(People(addon):Field("Bob-Realm", "deaths"), 1)
-    truthy(Card(h):find("Bob-Realm killed Mom!", 1, true), Card(h))
+    local key = Key(h, "Bob")
+    Receive(h, "Mom", "GRUDGE", key, "ROGUE", "60", "Alliance", "1")
+    eq(People(addon):Field(key, "deaths"), 1)
+    truthy(Card(h):find("Bob Doe killed Mom Doe!", 1, true), Card(h))
 end)
-
--- Marks from the Krew -------------------------------------------------------------------
 
 test("a Krew mark joins the ledger with one card, however often it's synced", function()
     local h, addon = Grouped()
-    Receive(h, "Mom", "MARK", "Bob-Realm", "ROGUE", "60", "Alliance")
-    eq(Ledger(addon):Field("Bob-Realm", "by"), "Mom")
+    local key = Key(h, "Bob")
+    Receive(h, "Mom", "MARK", key, "ROGUE", "60", "Alliance")
+    eq(Ledger(addon):Field(key, "by"), "Mom Doe", "the sender's full name")
     local _, card = Card(h)
     h:Click(card, "RightButton")
-    Receive(h, "Mom", "MARK", "Bob-Realm", "ROGUE", "60", "Alliance")
+    Receive(h, "Mom", "MARK", key, "ROGUE", "60", "Alliance")
     eq(Card(h), nil)
 end)
 
 test("a joining Krew member hears the marks you placed", function()
     local h = Grouped()
-    h:Slash("/tlk mark Bob")
+    h:Slash("/tlk mark Bob Doe")
     h:Advance(3)
     local before = #Sent(h, "MARK")
     Receive(h, "Mom", "HELLO", "0.1.0")
@@ -241,18 +239,18 @@ end)
 
 test("bad messages are ignored: foreign keys, escape codes, junk numbers", function()
     local h, addon = Grouped()
-    Receive(h, "Mom", "MARK", "no realm", "ROGUE", "60", "Alliance")
-    Receive(h, "Mom", "MARK", "Bob|Hlink|h-Realm", "ROGUE", "60", "Alliance")
-    Receive(h, "Mom", "GRUDGE", "Bob-Realm", "rogue|T", "banana", "Martians", "1")
+    local key = Key(h, "Bob")
+    Receive(h, "Mom", "MARK", key .. "-Realm", "ROGUE", "60", "Alliance") -- a key never carries a realm
+    Receive(h, "Mom", "MARK", "Bob|Hlink|h Doe", "ROGUE", "60", "Alliance")
+    Receive(h, "Mom", "GRUDGE", key, "rogue|T", "banana", "Martians", "1")
     eq(Ledger(addon):Count(), 1)
-    eq(People(addon):Field("Bob-Realm", "class"), "")
-    eq(People(addon):Field("Bob-Realm", "level"), 0)
-    eq(People(addon):Field("Bob-Realm", "faction"), "")
+    truthy(Ledger(addon):Has(key), "only the well-formed key")
+    eq(People(addon):Field(key, "class"), "")
+    eq(People(addon):Field(key, "level"), 0)
+    eq(People(addon):Field(key, "faction"), "")
     Receive(h, "Mom", "RALLY", "1", "1", "1", "Hillsbrad|Tinterface\\x|t", "")
     truthy(not Notices(h):find("|T", 1, true), "escape codes never reach the screen")
 end)
-
--- Rally and intel -----------------------------------------------------------------------
 
 test("a rally goes out first, with your position", function()
     local h = Grouped()
@@ -304,8 +302,6 @@ test("Krew intel is a card that sets a waypoint on click", function()
     eq(h.waypoint.uiMapID, 1424)
 end)
 
--- Menus, tooltips, and off --------------------------------------------------------------
-
 test("the right-click menu marks an enemy player", function()
     local h, addon = Load()
     h:SetTarget(Enemy())
@@ -316,12 +312,12 @@ end)
 
 test("the tooltip shows the ledger", function()
     local h, addon = Load()
-    h:Slash("/tlk grudge Bob")
+    h:Slash("/tlk grudge Bob Doe")
     local plate = h:AddNamePlate(Enemy())
     h:ShowUnitTooltip(plate)
     local lines = table.concat(Harness.State(h.env.GameTooltip).lines, "\n")
     truthy(lines:find("\nGrudge\n", 1, true), lines)
-    truthy(lines:find("Krew 0 : 0 Bob", 1, true), lines)
+    truthy(lines:find("Krew 0 : 0 Bob Doe", 1, true), lines)
 end)
 
 test("switched off, Warband listens to nothing", function()
@@ -333,9 +329,131 @@ test("switched off, Warband listens to nothing", function()
     end
 end)
 
-test("the right-click menu offers glory on a friendly player, with their realm", function()
+test("the right-click menu offers glory on a friendly player, by their full name", function()
     local h, addon = Load()
     local menu = h:OpenMenu("MENU_UNIT_PLAYER", { which = "PLAYER", name = "Cara", surname = "Other" })
     menu:Click("Grant glory")
-    eq(Ledger(addon):Field("Cara-Other", "kind"), "glory")
+    eq(Ledger(addon):Field("Cara Other", "kind"), "glory")
+end)
+
+test("a typed name in any case means who it names", function()
+    local h, addon = Grouped()
+    h:Slash("/tlk mark cara doe")
+    truthy(Ledger(addon):Has("Cara Doe"), "capitalized as the client writes names")
+    h:AddNamePlate(Enemy("Cara"))
+    truthy(Notices(h):find("Marked for death", 1, true), Notices(h))
+    h:AddNamePlate(Enemy("Bob"))
+    h:Slash("/tlk grudge BOB DOE")
+    eq(Ledger(addon):Field(Key(h, "Bob"), "kind"), "grudge", "the rivalry record's key")
+    eq(Ledger(addon):Count(), 2)
+    h:Advance(5)
+    eq(Sent(h, "GRUDGE")[1], "GRUDGE:" .. Key(h, "Bob") .. "\tROGUE\t60\tAlliance\t0", "with what the record knows")
+end)
+
+test("a full ledger refuses newcomers and forgets no one, for you and from the Krew", function()
+    local h, addon = Load()
+    for i = 1, 300 do
+        h:Slash("/tlk grudge Foe" .. i .. " Doe")
+    end
+    h:JoinGroup("party", { "Mom" })
+    h:Echo(false)
+    h:Advance(2)
+    h:Slash("/tlk mark Bob Doe")
+    truthy(h.printed[#h.printed]:find("The ledger is full (300), so Bob Doe isn't on it.", 1, true), h.printed[#h.printed])
+    Receive(h, "Mom", "MARK", Key(h, "Cara"), "MAGE", "60", "Alliance")
+    eq(Ledger(addon):Count(), 300)
+    truthy(Ledger(addon):Has("Foe1 Doe"), "the oldest grudge stays")
+    falsy(Ledger(addon):Has(Key(h, "Bob")))
+    falsy(Ledger(addon):Has(Key(h, "Cara")))
+    eq(Card(h), nil, "no card for a mark the ledger refused")
+    h:Advance(5)
+    eq(#Sent(h, "MARK"), 0, "a refused mark isn't sent")
+    h:Slash("/tlk forgive foe1 doe")
+    h:Slash("/tlk mark Bob Doe")
+    eq(Ledger(addon):Field(Key(h, "Bob"), "kind"), "mark", "forgiving made room")
+end)
+
+test("a nameplate or mouseover reads the unit once", function()
+    local h = Grouped()
+    h.apiCalls = {}
+    h:AddNamePlate(Enemy())
+    eq(h:CountApiCalls("UnitName"), 1, "Warband, its badges and the radar share one reading")
+    h.apiCalls = {}
+    h:SetMouseover(Enemy("Cara", { inCombat = true }))
+    eq(h:CountApiCalls("UnitName"), 1, "the sighting and the prime suspect share one reading")
+end)
+
+test("nameplates below a gathering never read the zone", function()
+    local h = Grouped()
+    local plates = {}
+    for i = 1, 4 do
+        plates[i] = h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    for i = 1, 4 do
+        h:RemoveNamePlate(plates[i])
+    end
+    h:Advance(5)
+    h.apiCalls = {}
+    for i = 1, 4 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    eq(h:CountApiCalls("GetSubZoneText"), 0)
+end)
+
+test("a gathering the Krew reported shows once, and isn't reported again", function()
+    local h = Grouped()
+    h:AddMap(1424, { name = "Hillsbrad Foothills", mapType = "Zone" })
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Southshore", mapID = 1424, x = 0.5, y = 0.5 })
+    Receive(h, "Mom", "INTEL", "7", "Alliance", "1424", "5000", "5000", "Hillsbrad Foothills", "Southshore")
+    local _, card = Card(h)
+    h:Click(card, "RightButton")
+    Receive(h, "Mom", "INTEL", "8", "Alliance", "1424", "5000", "5000", "Hillsbrad Foothills", "Southshore")
+    eq(Card(h), nil, "the Krew already knows")
+    for i = 1, 6 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    h:Advance(3)
+    eq(#Sent(h, "INTEL"), 0, "Mom already told the Krew")
+end)
+
+test("counts from the Krew are whole numbers in digits; text holds no control characters", function()
+    local h = Grouped()
+    for _, count in ipairs({ "0x10", "1e2", "inf", "7.0", "-7", "0" }) do
+        Receive(h, "Mom", "INTEL", count, "Alliance", "1424", "5000", "5000", "Hillsbrad Foothills", "Southshore")
+    end
+    eq(Card(h), nil)
+    Receive(h, "Mom", "RALLY", "1", "1", "1", "Hills\7brad", "")
+    truthy(Notices(h):find("needs the Krew at somewhere!", 1, true), Notices(h))
+end)
+
+test("a burst of Krew members joining hears your marks and wars once; a new group hears them again", function()
+    local h = Load()
+    h:JoinGroup("party", { "Mom", "Dad", "Sis", "Bro" })
+    h:Echo(false)
+    for _, name in ipairs({ "Bob", "Cara", "Dan" }) do
+        h:Slash("/tlk mark " .. name .. " Doe")
+    end
+    for _, guild in ipairs({ "Red", "Blue", "Gold" }) do
+        h:Slash("/tlk war " .. guild)
+    end
+    h:Advance(20)
+    local marks, wars = #Sent(h, "MARK"), #Sent(h, "WAR")
+    for _, name in ipairs({ "Mom", "Dad", "Sis", "Bro" }) do
+        Receive(h, name, "HELLO", "0.1.0")
+    end
+    h:Advance(20)
+    eq(#Sent(h, "MARK"), marks + 3, "one sync for the burst")
+    eq(#Sent(h, "WAR"), wars + 3)
+    h:LeaveGroup()
+    h:JoinGroup("party", { "Mom" })
+    h:Advance(40)
+    Receive(h, "Mom", "HELLO", "0.1.0")
+    h:Advance(20)
+    eq(#Sent(h, "MARK"), marks + 6, "a new group hears them again")
+end)
+
+test("a menu whose surname is secret offers nothing", function()
+    local h = Load()
+    local menu = h:OpenMenu("MENU_UNIT_PLAYER", { which = "PLAYER", name = "Cara", surname = Secret("Other") })
+    eq(menu:Find("Grant glory"), nil)
 end)

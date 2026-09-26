@@ -231,6 +231,31 @@
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
       "context": { "combat": false, "restrictions": "none" }
     },
+    "names.chatSenders": {
+      "result": { "CHAT_MSG_CHANNEL": "Aa Aa" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "names.otherPlayer": {
+      "result": {
+        "byGUID": { "name": "Aa Aa", "realm": "empty" },
+        "unitFullName": { "count": 2, "r1": "Aa", "r2": "Aa" },
+        "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
+        "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "names.player": {
+      "result": {
+        "byGUID": { "name": "Aa Aa", "realm": "empty" },
+        "realm": "Aa",
+        "regionalUnique": true,
+        "separator": "[ ]",
+        "unitFullName": { "count": 2, "r1": "Aa", "r2": "Aa" },
+        "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
+        "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
     "quest.offer": {
       "result": { "objectiveText": "text", "questText": "text", "title": "text" },
       "context": { "combat": false, "restrictions": "none" }
@@ -291,6 +316,10 @@
       "result": { "isResting": "boolean" },
       "context": { "combat": false, "restrictions": "none" }
     },
+    "sound.knownFile": {
+      "result": { "addonLua": true, "addonToc": true, "missing": false, "shipped": true },
+      "context": { "combat": false, "restrictions": "none" }
+    },
     "textures.used": {
       "result": {
         "Interface\\Buttons\\WHITE8X8": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
@@ -327,6 +356,22 @@
         "Interface\\TargetingFrame\\UI-RaidTargetingIcon_8": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
         "Interface\\TargetingFrame\\UI-StatusBar": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
         "Interface\\Tooltips\\UI-Tooltip-Border": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
+    "trainer.services": {
+      "result": {
+        "categories": "",
+        "count": "number",
+        "first1": "string",
+        "first2": "string",
+        "first3": "number",
+        "first4": "number",
+        "first5": "string",
+        "first6": "string",
+        "firstReturns": 6,
+        "greeting": "text",
+        "isTradeskill": "boolean"
       },
       "context": { "combat": false, "restrictions": "none" }
     },

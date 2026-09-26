@@ -17,7 +17,7 @@ ByteTerrace addons follow Puck's C# conventions, mapped to Lua. `node tools/tlk.
 | Keys of declarative data (module and row specs, records, messages, options) | camelCase | `{ name = "alerts", kind = "boolean", default = true }` |
 | Row, module and command names (they're data, spoken in slash commands) | camelCase rows, PascalCase modules | `Warband.shareSightings` |
 
-- **Aliases keep their source's name.** `local floor = math.floor`, `local C_Timer = C_Timer`, `local SafeCall = ByteTerrace.SafeCall`. Lua's own library stays lowercase.
+- **Aliases keep their source's name.** `local floor = math.floor`, `local C_Spell = C_Spell`, `local SafeCall = ByteTerrace.SafeCall`. Lua's own library stays lowercase.
 - **File-level means the chunk's top level,** or a top-level `do` block that only scopes state. A local inside a top-level loop or branch is a local: camelCase.
 - **A function is PascalCase wherever it's declared,** including a local declared ahead and given its function later (`local Pump` then `function Pump()`). Metamethods keep Lua's names (`__index`).
 - **Public or private is decided by readers.** A member another file reads is public; tests count as readers, but a test asserts behavior rather than reading an object's private state. Static functions on a type (`State.Admits`) are functions: PascalCase.
@@ -27,7 +27,7 @@ ByteTerrace addons follow Puck's C# conventions, mapped to Lua. `node tools/tlk.
 - **A constant built by a helper** (`local HonorPatterns = { Pattern(...) }`) sits right after that helper: the one exception to constants-first.
 - **Callback parameters are words, not letters:** `function(module)`, `when = function(state)`. A callback may name its parameter `state` even where an outer `state` holds the same object.
 - **Client abbreviations stay capitalized inside PascalCase:** `ExecuteSpellID`, `AFKColor`.
-- **A public function a file also uses itself** is a documented `local function`, exported in one table at the end (`ns.Krew = { Send = Send, ... }`); the doc comment goes on the local.
+- **A public function a file also uses itself** is a documented `local function`, exported in one table at the end (`ns.Puzzles = { Grades = Grades, Generate = Generate, Kit = Kit }`); the doc comment goes on the local.
 - **A rows table built by a loop is a constant,** so it sits with the constants, not beside its module.
 - **A table of functions keyed by data** (dispatch keyed by kind or fact type) keeps its data keys: fill it with local PascalCase functions (`Makers = { objective = FromObjective }`) or assign by string (`Generators["math.add"] = function(state) ... end`), never `function Table.dataKey()`.
 - **A file-level local holding a framework object is named for what it is:** `local Scholar` for a module handle, `local Overlay` for a view's root frame, not `Module` or `Frame`.

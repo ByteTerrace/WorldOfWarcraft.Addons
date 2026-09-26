@@ -1,10 +1,10 @@
--- Who killed you: Honor's death recap attribution, Warband's grudge cards and rivalry records,
+-- Who killed you: the death fact's recap attribution, Warband's grudge cards and rivalry records,
 -- and Streaks' spree endings.
 
-local PREFIX = "TLKKrew1"
+local Prefix = "TLKKrew1"
 
 local function Grouped()
-    local h = Harness.new({ saved = {} })
+    local h = Harness.New({ saved = {} })
     local ns = h:LoadAddon("TheLanKrewToolKit")
     h:JoinGroup("party", { "Mom" })
     h:Echo(false)
@@ -19,8 +19,9 @@ local function Enemy(name, extra)
     return unit
 end
 
+-- A player's key: Forever's full name (every test player's surname is the harness default).
 local function Key(h, name)
-    return name .. "-" .. h.env.GetNormalizedRealmName()
+    return name .. " " .. Harness.DEFAULT_SURNAME
 end
 
 local function People(addon)
@@ -38,7 +39,7 @@ end
 local function Sent(h, kind)
     local found = {}
     for _, message in ipairs(h.addonMessages) do
-        if message.prefix == PREFIX and message.message:find("^" .. kind .. ":") then
+        if message.prefix == Prefix and message.message:find("^" .. kind .. ":") then
             found[#found + 1] = message.message
         end
     end
@@ -69,14 +70,14 @@ test("the death recap names the enemy player who killed you: it counts, and a ca
     local bob = Enemy("Bob", { race = "Human" })
     h:MeterFight({ duration = 5, sources = { KilledBy(bob, { name = "Ambush" }) } })
     local key = Key(h, "Bob")
-    eq(addon.State:Get("Honor.killer"), "Bob")
-    eq(addon.State:Get("Honor.killerKind"), "player")
+    eq(addon.State:Get("death.killer"), "Bob Doe")
+    eq(addon.State:Get("death.killerKind"), "player")
     eq(People(addon):Field(key, "deaths"), 1, "a certain kill counts without a click")
     eq(People(addon):Field(key, "class"), "ROGUE", "the class, from the killer's GUID")
     eq(People(addon):Field(key, "faction"), "Alliance", "the faction, from the killer's race")
     local text, card = Card(h)
-    truthy(text:find("Slain by Bob\n", 1, true), text)
-    truthy(text:find("Ambush for 700. Krew 0 : 1 Bob.", 1, true), text)
+    truthy(text:find("Slain by Bob Doe\n", 1, true), text)
+    truthy(text:find("Ambush for 700. Krew 0 : 1 Bob Doe.", 1, true), text)
     h:Click(card)
     eq(People(addon):Field(key, "deaths"), 1, "holding the grudge doesn't count the death twice")
     eq(addon.Modules.Warband.Records.ledger:Field(key, "kind"), "grudge")
@@ -99,7 +100,7 @@ test("a creature's kill asks nothing, even with an enemy player targeted", funct
     local h, addon = Grouped()
     h:SetTarget(Enemy("Bob"))
     h:MeterFight({ duration = 5, sources = { KilledBy({ name = "Kobold Vermin", canAttack = true }) } })
-    eq(addon.State:Get("Honor.killerKind"), "npc")
+    eq(addon.State:Get("death.killerKind"), "npc")
     eq(Card(h), nil)
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0)
 end)
@@ -108,7 +109,7 @@ test("a pet's kill falls back to asking about the enemy player you were fighting
     local h = Grouped()
     h:SetTarget(Enemy("Bob"))
     h:MeterFight({ duration = 5, sources = { KilledBy({ name = "Wolf", canAttack = true }, { isPet = true }) } })
-    truthy(Card(h):find("Slain by Bob?", 1, true), Card(h))
+    truthy(Card(h):find("Slain by Bob Doe?", 1, true), Card(h))
 end)
 
 test("a recap that lands after the death still names the killer, with the suspect from the moment of death", function()
@@ -121,7 +122,7 @@ test("a recap that lands after the death still names the killer, with the suspec
     h:SetTarget(nil)
     h:MeterAdd(KilledBy(bob))
     h:LeaveCombat() -- cards wait out combat
-    truthy(Card(h):find("Slain by Bob\n", 1, true), Card(h))
+    truthy(Card(h):find("Slain by Bob Doe\n", 1, true), Card(h))
     eq(People(addon):Field(Key(h, "Bob"), "level"), 60)
     falsy(addon.Events.Frame:IsEventRegistered("DAMAGE_METER_COMBAT_SESSION_UPDATED"), "done waiting")
 end)
@@ -142,25 +143,25 @@ test("a spree's end names who ended it, for you and the Krew", function()
     end
     h:MeterFight({ duration = 5, sources = { KilledBy(Enemy("Bob")) } })
     h:Advance(2)
-    truthy(h.printed[#h.printed]:find("Your spree ended at 5 kills. Bob ended it.", 1, true), h.printed[#h.printed])
-    eq(Sent(h, "STREAK")[#Sent(h, "STREAK")], "STREAK:ended\t5\tBob")
-    h:ReceiveAddonMessage(PREFIX, "STREAK:ended\t7\tCid", "PARTY", "Mom")
-    h:ReceiveAddonMessage(PREFIX, "STREAK:ended\t7\t|cffff0000Evil", "PARTY", "Mom")
+    truthy(h.printed[#h.printed]:find("Your spree ended at 5 kills. Bob Doe ended it.", 1, true), h.printed[#h.printed])
+    eq(Sent(h, "STREAK")[#Sent(h, "STREAK")], "STREAK:ended\t5\tBob Doe")
+    h:ReceiveAddonMessage(Prefix, "STREAK:ended\t7\tCid", "PARTY", "Mom")
+    h:ReceiveAddonMessage(Prefix, "STREAK:ended\t7\t|cffff0000Evil", "PARTY", "Mom")
     local notices = {}
     for _, notice in ipairs(h.raidNotices) do
         notices[#notices + 1] = notice.text
     end
-    truthy(table.concat(notices, "\n"):find("Mom's spree ended at 7 kills by Cid.", 1, true))
-    truthy(notices[#notices] == "Mom's spree ended at 7 kills.", "a name with markup is dropped: " .. notices[#notices])
+    truthy(table.concat(notices, "\n"):find("Mom Doe's spree ended at 7 kills by Cid.", 1, true))
+    truthy(notices[#notices] == "Mom Doe's spree ended at 7 kills.", "a name with markup is dropped: " .. notices[#notices])
 end)
 
 test("your own blow is no one's kill", function()
     local h, addon = Grouped()
     h:SetTarget(Enemy("Bob"))
     h:MeterFight({ duration = 5, sources = { KilledBy(h.player, { spellID = 13241, name = "Goblin Sapper Charge" }) } })
-    eq(addon.State:Get("Honor.killerKind"), "self")
+    eq(addon.State:Get("death.killerKind"), "self")
     eq(Card(h), nil)
-    local me = h.player.name .. "-" .. h.env.GetNormalizedRealmName()
+    local me = h.player.name .. " " .. h.player.surname
     eq(People(addon):Field(me, "deaths"), 0)
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0)
 end)
@@ -170,16 +171,16 @@ test("a recap that comes too late is set aside, not given to your next death", f
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
     h:Advance(3) -- given up: unknown
-    eq(addon.State:Get("Honor.killedBy"), 1)
-    eq(addon.State:Get("Honor.killer"), "")
+    eq(addon.State:Get("death.attributed"), 1)
+    eq(addon.State:Get("death.killer"), "")
     h:MeterAdd(KilledBy(Enemy("Bob"))) -- the first death's recap, late
     h:LeaveCombat()
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0, "a late recap counts for no one")
     falsy(addon.Events.Frame:IsEventRegistered("DAMAGE_METER_COMBAT_SESSION_UPDATED"))
     h:Fire("PLAYER_DEAD") -- a fall, out of combat: no new meter session, no new recap
     h:Advance(3)
-    eq(addon.State:Get("Honor.killedBy"), 2)
-    eq(addon.State:Get("Honor.killer"), "", "the fall isn't Bob's")
+    eq(addon.State:Get("death.attributed"), 2)
+    eq(addon.State:Get("death.killer"), "", "the fall isn't Bob's")
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0)
 end)
 
@@ -189,10 +190,10 @@ test("an attacker the recap hides is unknown: the card asks about the suspect", 
     h:SetTarget(bob)
     h:MeterFight({ duration = 5, sources = { { unit = "player", death = { events = {
         { event = "SPELL_DAMAGE", spellId = 8676, spellName = "Ambush", amount = 700, hideCaster = true,
-            sourceName = "Bob", sourceGUID = h:GUID(bob) },
+            sourceName = h:FullName(bob), sourceGUID = h:GUID(bob) },
     } } } } })
-    eq(addon.State:Get("Honor.killer"), "")
-    truthy(Card(h):find("Slain by Bob?", 1, true), Card(h))
+    eq(addon.State:Get("death.killer"), "")
+    truthy(Card(h):find("Slain by Bob Doe?", 1, true), Card(h))
 end)
 
 test("the recap is read again shortly after the death, even without a meter update", function()
@@ -202,7 +203,7 @@ test("the recap is read again shortly after the death, even without a meter upda
     h:Fire("PLAYER_DEAD")
     h:MeterAdd(KilledBy(Enemy("Bob")))
     h:SetMeterAvailable(true, "")
-    eq(addon.State:Get("Honor.killer"), "", "no meter update came after it was back")
+    eq(addon.State:Get("death.killer"), "", "no meter update came after it was back")
     h:Advance(1)
-    eq(addon.State:Get("Honor.killer"), "Bob")
+    eq(addon.State:Get("death.killer"), "Bob Doe")
 end)

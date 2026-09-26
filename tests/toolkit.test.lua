@@ -1,9 +1,9 @@
 -- TheLanKrewToolKit behavior, end to end through the real addon files.
 
-local MEDIA = "Interface\\AddOns\\TheLanKrewToolKit\\Media\\"
+local MediaPath = "Interface\\AddOns\\TheLanKrewToolKit\\Media\\"
 
 local function Load(player)
-    local h = Harness.new(player)
+    local h = Harness.New(player)
     local ns = h:LoadAddon("TheLanKrewToolKit")
     return h, ns.Addon
 end
@@ -17,7 +17,7 @@ end
 local function Played(h, file)
     local count = 0
     for _, sound in ipairs(h.sounds) do
-        if sound.path == MEDIA .. file then count = count + 1 end
+        if sound.path == MediaPath .. file then count = count + 1 end
     end
     return count
 end
@@ -25,8 +25,6 @@ end
 local function Registered(addon, event)
     return addon.Events.Frame:IsEventRegistered(event)
 end
-
--- Load and settings -----------------------------------------------------------
 
 -- Each settings page as one line: "Name < Parent: [Header] Module.row ...".
 local function Pages(h)
@@ -66,8 +64,6 @@ test("loads cleanly and builds its settings panel, organized into pages and sect
     eq(h.category.name, main, "only the main page is registered as the addon's category")
     eq(h.settings["TheLanKrewToolKit_Sounds.channel"].options[2].label, "Sound effects", "friendly channel names")
 end)
-
--- Fuck-o-meter -------------------------------------------------------------
 
 test("fuck-o-meter shows for energy users and passes secret energy straight to the widgets", function()
     local h = Load({ classFile = "ROGUE", powerType = 3 })
@@ -112,21 +108,23 @@ test("fuck-o-meter re-reads range and value after a loading screen", function()
     eq(Reveal(Harness.State(meter.Bar).value), 7)
 end)
 
-test("fom toggles the meter off and removes its events", function()
-    local h, addon = Load()
+test("fom toggles the meter off and removes its events, and on again", function()
+    local h, addon = Load({ classFile = "ROGUE", powerType = 3 })
     addon.State:Set("Sounds.enabled", false) -- combo point callouts listen to power too
     local meter = h.env.TheLanKrewToolKitFuckOMeter
     h:Slash("/tlk fom")
     falsy(meter:IsShown())
     falsy(Registered(addon, "UNIT_POWER_FREQUENT"))
     eq(h.env.TheLanKrewToolKitDB["FuckOMeter.enabled"], false, "persisted")
+    h:Slash("/tlk fom")
+    eq(addon.State:Get("FuckOMeter.enabled"), true, "the command works while its module is off")
+    truthy(meter:IsShown())
+    truthy(Registered(addon, "UNIT_POWER_FREQUENT"))
 end)
-
--- Combat start sound ---------------------------------------------------------
 
 test("combat start plays on entering combat and fades out when it ends", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "CombatStart.mp3")
+    h:AddMedia(MediaPath .. "CombatStart.mp3")
     h:EnterCombat()
     eq(Played(h, "CombatStart.mp3"), 1)
     eq(h.sounds[1].channel, "Master")
@@ -137,7 +135,7 @@ end)
 
 test("combat start respects its toggle and the channel setting, and stops when turned off mid-play", function()
     local h, addon = Load()
-    h:AddMedia(MEDIA .. "CombatStart.ogg")
+    h:AddMedia(MediaPath .. "CombatStart.ogg")
     h:Slash("/tlk set Sounds.channel SFX")
     h:EnterCombat()
     eq(h.sounds[1].channel, "SFX")
@@ -149,8 +147,8 @@ test("combat start respects its toggle and the channel setting, and stops when t
 end)
 
 test("a /reload in combat doesn't replay the combat start sound or rumble", function()
-    local h = Harness.new()
-    h:AddMedia(MEDIA .. "CombatStart.ogg")
+    local h = Harness.New()
+    h:AddMedia(MediaPath .. "CombatStart.ogg")
     h.inCombat, h.lockdown = true, true
     h.restrictions.Combat = true
     h:LoadAddon("TheLanKrewToolKit")
@@ -159,11 +157,9 @@ test("a /reload in combat doesn't replay the combat start sound or rumble", func
     eq(table.concat(h.led, ","), "1,0,0", "light bar knows it's combat")
 end)
 
--- Target sounds ----------------------------------------------------------------
-
 test("choose your destiny plays when a living enemy player becomes the target, at most every 10 seconds", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "ChooseYourDestiny.ogg")
+    h:AddMedia(MediaPath .. "ChooseYourDestiny.ogg")
     h:SetTarget({ isPlayer = false, canAttack = true })
     h:SetTarget({ isPlayer = true, canAttack = false, playerControlled = true })
     h:SetTarget(EnemyPlayer({ dead = true }))
@@ -180,7 +176,7 @@ end)
 
 test("choose your destiny plays when the current target becomes attackable (a duel starts)", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "ChooseYourDestiny.ogg")
+    h:AddMedia(MediaPath .. "ChooseYourDestiny.ogg")
     local rival = EnemyPlayer({ canAttack = false })
     h:SetTarget(rival)
     eq(Played(h, "ChooseYourDestiny.ogg"), 0)
@@ -191,7 +187,7 @@ end)
 
 test("flawless victory: no hits, enemy player target dies in the fight", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
@@ -202,7 +198,7 @@ end)
 
 test("flawless victory needs a fight you're in", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     enemy.dead = true
@@ -212,7 +208,7 @@ end)
 
 test("flawless victory is lost after taking a hit in combat, even if healed", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
@@ -225,7 +221,7 @@ end)
 
 test("heals, regeneration and fully absorbed hits don't break flawless; an ambush just before combat does", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
@@ -264,7 +260,7 @@ end)
 
 test("starting health doesn't matter (addons can't read it); a selected corpse never counts", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     h:HitPlayer(60)
     h:Advance(5) -- out of combat: not part of any fight
     local corpse = EnemyPlayer({ dead = true })
@@ -281,7 +277,7 @@ end)
 
 test("the same target dying twice counts twice", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
@@ -296,7 +292,7 @@ end)
 
 test("finish him: warriors, once per target, when Execute is actually usable", function()
     local h = Load({ classFile = "WARRIOR", powerType = 1 })
-    h:AddMedia(MEDIA .. "FinishHim.ogg")
+    h:AddMedia(MediaPath .. "FinishHim.ogg")
     h:SetTarget(EnemyPlayer())
     h:EnterCombat()
     h.usable.Execute = { false, true } -- not enough rage: not proof of range
@@ -316,7 +312,7 @@ end)
 
 test("finish him never runs for classes without a finisher", function()
     local h, addon = Load({ classFile = "MAGE" })
-    h:AddMedia(MEDIA .. "FinishHim.ogg")
+    h:AddMedia(MediaPath .. "FinishHim.ogg")
     h.usable.Execute = { true, false }
     h:SetTarget(EnemyPlayer())
     falsy(Registered(addon, "SPELL_UPDATE_USABLE"), "no usability polling")
@@ -327,9 +323,13 @@ test("sound test reports missing files and plays present ones", function()
     local h = Load()
     h:Slash("/tlk sound finish")
     truthy(h.printed[#h.printed]:find("No sound played", 1, true))
-    h:AddMedia(MEDIA .. "FinishHim.ogg")
+    h:AddMedia(MediaPath .. "FinishHim.ogg")
     h:Slash("/tlk sound finish")
-    eq(Played(h, "FinishHim.ogg"), 1)
+    eq(Played(h, "FinishHim.ogg"), 0, "the client only sees files that existed at launch")
+    h = Load()
+    h:AddMedia(MediaPath .. "FinishHim.ogg")
+    h:Slash("/tlk sound finish")
+    eq(Played(h, "FinishHim.ogg"), 1, "after a restart it plays")
     h:Slash("/tlk sound")
     truthy(table.concat(h.printed, "\n"):find("destiny - ChooseYourDestiny.ogg or .mp3", 1, true))
 end)
@@ -352,8 +352,6 @@ test("switched-off sounds cost nothing: their events unregister", function()
     addon.State:Set("Sounds.enabled", false)
     falsy(Registered(addon, "PLAYER_TARGET_CHANGED"), "master switch off")
 end)
-
--- Controller ---------------------------------------------------------------
 
 test("light bar is green, red as combat starts (before lockdown), yellow when AFK, cleared when disabled", function()
     local h, addon = Load()
@@ -383,8 +381,6 @@ test("rumble is strong entering combat and light leaving it, never at login, and
     addon.State:Set("Rumble.enabled", false)
     eq(h.vibrationsStopped, 1)
 end)
-
--- Session journal --------------------------------------------------------------
 
 local function CardText(h)
     local card = rawget(h.env, "TheLanKrewToolKitCard") -- created lazily with the first card
@@ -439,6 +435,20 @@ test("a level-up shows a Ding! card for the level you just finished", function()
     truthy(text:find("not a single death", 1, true), text)
 end)
 
+test("deaths count toward the session and the level", function()
+    local h = Load()
+    h:Die()
+    h:Revive()
+    h:Slash("/tlk journal")
+    truthy(CardText(h):find("1 trip to the spirit healer", 1, true), CardText(h))
+    h:Click(h.env.TheLanKrewToolKitCard)
+    h:Die()
+    h:Revive()
+    h.player.level = h.player.level + 1
+    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    truthy(CardText(h):find("2 trips to the spirit healer", 1, true), CardText(h))
+end)
+
 test("cards queue, dismiss on click, and hide on their own", function()
     local h = Load()
     h:Slash("/tlk journal")
@@ -462,11 +472,9 @@ test("card toggles and the module switch are honored", function()
     falsy(Registered(addon, "QUEST_TURNED_IN"))
 end)
 
--- Round 2 regressions -----------------------------------------------------------
-
 test("a duel won without taking a hit is a flawless victory", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local rival = EnemyPlayer()
     h:SetTarget(rival)
     h:EnterCombat()
@@ -476,7 +484,7 @@ end)
 
 test("a duel lost by fleeing out of bounds isn't a victory", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     h:SetTarget(EnemyPlayer())
     h:EnterCombat()
     h:Fire("DUEL_OUTOFBOUNDS")
@@ -486,7 +494,7 @@ end)
 
 test("a flawless victory counts when the fight ends and the damage meter confirms no damage taken", function()
     local h, addon = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
@@ -500,7 +508,7 @@ end)
 
 test("damage the live signal missed stops the victory counting, though the sound already played", function()
     local h, addon = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
@@ -514,7 +522,7 @@ end)
 
 test("an enemy that stops being attackable as it dies still counts as a kill", function()
     local h = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
@@ -525,7 +533,7 @@ end)
 
 test("turning flawless off mid-fight leaves no stale fight behind", function()
     local h, addon = Load()
-    h:AddMedia(MEDIA .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
@@ -539,7 +547,7 @@ end)
 
 test("finish him doesn't replay after a /reload with the same target in range", function()
     local h = Load({ classFile = "WARRIOR", powerType = 1 })
-    h:AddMedia(MEDIA .. "FinishHim.ogg")
+    h:AddMedia(MediaPath .. "FinishHim.ogg")
     h:SetTarget(EnemyPlayer())
     h.usable.Execute = { true, false }
     h:Fire("SPELL_UPDATE_USABLE")
@@ -564,10 +572,8 @@ test("internal rows aren't settings", function()
     falsy(h.printed[#h.printed]:find("sessionQuests", 1, true), "not listed")
 end)
 
--- Journal, round 2 -------------------------------------------------------------------
-
 test("/tlk journal while the journal is off says so instead of failing", function()
-    local h = Harness.new({ saved = { TheLanKrewToolKitDB = { ["Journal.enabled"] = false } } })
+    local h = Harness.New({ saved = { TheLanKrewToolKitDB = { ["Journal.enabled"] = false } } })
     h:LoadAddon("TheLanKrewToolKit")
     h:Slash("/tlk journal")
     truthy(h.printed[#h.printed]:find("turned off", 1, true), h.printed[#h.printed])
@@ -590,7 +596,7 @@ test("a short relog doesn't show a trivial welcome card", function()
 end)
 
 test("a new character's 0 copper is a real baseline", function()
-    local h = Harness.new()
+    local h = Harness.New()
     h.player.money = 0
     h:LoadAddon("TheLanKrewToolKit")
     h:Relog(600) -- short: no welcome card ahead of the Ding! card
@@ -618,7 +624,7 @@ test("turning the journal off keeps the played time so far", function()
 end)
 
 test("enabling the journal later doesn't continue an old session", function()
-    local h = Harness.new({ saved = {
+    local h = Harness.New({ saved = {
         TheLanKrewToolKitDB = { ["Journal.enabled"] = false },
         TheLanKrewToolKitCharDB = { ["Journal.sessionStart"] = 1, ["Journal.sessionSeen"] = 1, ["Journal.sessionQuests"] = 2 },
     } })

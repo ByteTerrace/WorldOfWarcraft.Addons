@@ -177,6 +177,10 @@ async function importRecords(values, positionals, definitions) {
         }
         const clean = { build: record.build, context: { combat: record.context.combat, restrictions: record.context.restrictions }, result: record.result };
         const previous = snapshot.probes[name];
+        if (previous && buildNumber(previous.build) > buildNumber(record.build)) {
+            console.log(`Kept ${name}: the file's record is from ${record.build}, older than ${previous.build}`);
+            continue;
+        }
         counts[!previous ? "new" : stableJson(previous) === stableJson(clean) ? "unchanged" : "changed"]++;
         snapshot.probes[name] = clean;
     }

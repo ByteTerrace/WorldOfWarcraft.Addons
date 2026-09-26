@@ -41,11 +41,11 @@
 -- C_NamePlate returns). Methods the API docs don't list for a type come from
 -- Harness.TYPE_METHODS, with behaviors in Harness.TYPE_BEHAVIORS (ui.lua).
 
-local SNAPSHOT = __snapshot
+local Snapshot = __snapshot
 local State = Harness.State
 
-local FRAME_SCRIPT_OBJECT = { "SimpleObjectAPI", "SimpleFrameScriptObjectAPI" }
-local SCRIPT_REGION = { "SimpleScriptRegionAPI", "SimpleScriptRegionResizingAPI", "SimpleAnimatableObjectAPI" }
+local FrameScriptObject = { "SimpleObjectAPI", "SimpleFrameScriptObjectAPI" }
+local ScriptRegion = { "SimpleScriptRegionAPI", "SimpleScriptRegionResizingAPI", "SimpleAnimatableObjectAPI" }
 
 -- Most-derived API first: the first API that lists a method supplies its entry.
 local function Chain(...)
@@ -58,28 +58,28 @@ local function Chain(...)
     return out
 end
 
-local WIDGET_APIS = {
-    Frame = Chain("SimpleFrameAPI", SCRIPT_REGION, FRAME_SCRIPT_OBJECT),
-    Button = Chain("SimpleButtonAPI", "SimpleFrameAPI", SCRIPT_REGION, FRAME_SCRIPT_OBJECT),
-    StatusBar = Chain("SimpleStatusBarAPI", "SimpleFrameAPI", SCRIPT_REGION, FRAME_SCRIPT_OBJECT),
-    FontString = Chain("SimpleFontStringAPI", "SimpleRegionAPI", SCRIPT_REGION, FRAME_SCRIPT_OBJECT),
-    Texture = Chain("SimpleTextureAPI", "SimpleTextureBaseAPI", "SimpleRegionAPI", SCRIPT_REGION, FRAME_SCRIPT_OBJECT),
+local WidgetApis = {
+    Frame = Chain("SimpleFrameAPI", ScriptRegion, FrameScriptObject),
+    Button = Chain("SimpleButtonAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
+    StatusBar = Chain("SimpleStatusBarAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
+    FontString = Chain("SimpleFontStringAPI", "SimpleRegionAPI", ScriptRegion, FrameScriptObject),
+    Texture = Chain("SimpleTextureAPI", "SimpleTextureBaseAPI", "SimpleRegionAPI", ScriptRegion, FrameScriptObject),
     -- A mask shapes the textures it's added to; it has a texture's base API but no drawing of its own.
-    MaskTexture = Chain("SimpleTextureBaseAPI", "SimpleRegionAPI", SCRIPT_REGION, FRAME_SCRIPT_OBJECT),
-    AnimationGroup = Chain("SimpleAnimGroupAPI", FRAME_SCRIPT_OBJECT),
-    Alpha = Chain("SimpleAnimAlphaAPI", "SimpleAnimAPI", FRAME_SCRIPT_OBJECT),
-    Translation = Chain("SimpleAnimTranslationAPI", "SimpleAnimAPI", FRAME_SCRIPT_OBJECT),
-    Scale = Chain("SimpleAnimScaleAPI", "SimpleAnimAPI", FRAME_SCRIPT_OBJECT),
+    MaskTexture = Chain("SimpleTextureBaseAPI", "SimpleRegionAPI", ScriptRegion, FrameScriptObject),
+    AnimationGroup = Chain("SimpleAnimGroupAPI", FrameScriptObject),
+    Alpha = Chain("SimpleAnimAlphaAPI", "SimpleAnimAPI", FrameScriptObject),
+    Translation = Chain("SimpleAnimTranslationAPI", "SimpleAnimAPI", FrameScriptObject),
+    Scale = Chain("SimpleAnimScaleAPI", "SimpleAnimAPI", FrameScriptObject),
     -- The client's own frames of these types (GameTooltip, nameplates); addons don't create them here.
-    GameTooltip = Chain("FrameAPITooltip", "SimpleFrameAPI", SCRIPT_REGION, FRAME_SCRIPT_OBJECT),
-    NamePlate = Chain("FrameAPINamePlate", "SimpleFrameAPI", SCRIPT_REGION, FRAME_SCRIPT_OBJECT),
+    GameTooltip = Chain("FrameAPITooltip", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
+    NamePlate = Chain("FrameAPINamePlate", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
 }
-Harness.WIDGET_APIS = WIDGET_APIS
+Harness.WIDGET_APIS = WidgetApis
 
-local IS_FRAME = { Frame = true, Button = true, StatusBar = true, GameTooltip = true, NamePlate = true }
+local IsFrame = { Frame = true, Button = true, StatusBar = true, GameTooltip = true, NamePlate = true }
 
 -- Template-provided methods that aren't C API (BackdropTemplateMixin).
-local TEMPLATE_METHODS = { BackdropTemplate = { SetBackdrop = true, SetBackdropColor = true, SetBackdropBorderColor = true } }
+local TemplateMethods = { BackdropTemplate = { SetBackdrop = true, SetBackdropColor = true, SetBackdropBorderColor = true } }
 
 -- Methods a widget type has that the generated API docs don't list, by kind: "C" for the client's
 -- undocumented C methods (they get the undocumented default: no secret arguments), "Lua" for
@@ -94,21 +94,19 @@ Harness.TYPE_METHODS = {
         SetUnit = "Lua", GetUnit = "Lua", GetPrimaryTooltipData = "Lua", GetTooltipData = "Lua", IsTooltipType = "Lua",
     },
 }
--- Behaviors that differ by widget type (GameTooltip:SetText replaces its lines), over `behaviors`.
+-- Behaviors that differ by widget type (GameTooltip:SetText replaces its lines), over `Behaviors`.
 Harness.TYPE_BEHAVIORS = { GameTooltip = {} }
 
 -- The snapshot entry for a widget type's method and the API that documents it, or nil.
 local function MethodEntry(widgetType, method)
-    for _, api in ipairs(WIDGET_APIS[widgetType]) do
-        local methods = SNAPSHOT.methods[api]
+    for _, api in ipairs(WidgetApis[widgetType]) do
+        local methods = Snapshot.methods[api]
         local entry = methods and methods[method]
         if entry then
             return entry, api
         end
     end
 end
-
--- Visibility and protection -----------------------------------------------
 
 -- Shown, and every ancestor shown (IsVisible).
 function Harness:IsVisibleWidget(widget)
@@ -136,16 +134,14 @@ function Harness:IsProtectedWidget(widget)
     return false
 end
 
--- Layout -------------------------------------------------------------------
-
-local CHAR_WIDTH, LINE_HEIGHT = 7, 14
-local LEFT = { LEFT = true, TOPLEFT = true, BOTTOMLEFT = true }
-local RIGHT = { RIGHT = true, TOPRIGHT = true, BOTTOMRIGHT = true }
-local TOP = { TOP = true, TOPLEFT = true, TOPRIGHT = true }
-local BOTTOM = { BOTTOM = true, BOTTOMLEFT = true, BOTTOMRIGHT = true }
-local AXES = {
-    x = { low = LEFT, high = RIGHT, offset = "x", size = "width" },
-    y = { low = BOTTOM, high = TOP, offset = "y", size = "height" },
+local CharWidth, LineHeight = 7, 14
+local Left = { LEFT = true, TOPLEFT = true, BOTTOMLEFT = true }
+local Right = { RIGHT = true, TOPRIGHT = true, BOTTOMRIGHT = true }
+local Top = { TOP = true, TOPLEFT = true, TOPRIGHT = true }
+local Bottom = { BOTTOM = true, BOTTOMLEFT = true, BOTTOMRIGHT = true }
+local Axes = {
+    x = { low = Left, high = Right, offset = "x", size = "width" },
+    y = { low = Bottom, high = Top, offset = "y", size = "height" },
 }
 
 local Size
@@ -180,7 +176,7 @@ local function Lines(s, bound)
     if text == nil or text == "" then
         return {}
     end
-    local lines, perLine = {}, bound > 0 and s.wordWrap ~= false and math.max(1, math.floor(bound / CHAR_WIDTH)) or nil
+    local lines, perLine = {}, bound > 0 and s.wordWrap ~= false and math.max(1, math.floor(bound / CharWidth)) or nil
     for line in (tostring(text) .. "\n"):gmatch("(.-)\n") do
         line = line:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
         local n = select(2, line:gsub("[^\128-\191]", ""))
@@ -196,15 +192,15 @@ end
 local function Longest(lines)
     local longest = 0
     for _, n in ipairs(lines) do longest = math.max(longest, n) end
-    return longest * CHAR_WIDTH
+    return longest * CharWidth
 end
 
 -- A FontString's own text size, for an axis it has no set or anchored size on.
 local function StringSize(s, axis, depth)
-    if axis == AXES.x then
+    if axis == Axes.x then
         return Longest(Lines(s, 0))
     end
-    return #Lines(s, Anchored(s, AXES.x, depth) or s.width or 0) * LINE_HEIGHT
+    return #Lines(s, Anchored(s, Axes.x, depth) or s.width or 0) * LineHeight
 end
 
 function Size(widget, axis, depth)
@@ -227,8 +223,8 @@ function Size(widget, axis, depth)
     return 0
 end
 
-function Harness:WidgetWidth(widget) return Size(widget, AXES.x) end
-function Harness:WidgetHeight(widget) return Size(widget, AXES.y) end
+function Harness:WidgetWidth(widget) return Size(widget, Axes.x) end
+function Harness:WidgetHeight(widget) return Size(widget, Axes.y) end
 
 -- SetPoint(point [, relativeTo [, relativePoint]] [, x, y]); a point replaces the same point.
 local function Anchor(s, point, a, b, c, d)
@@ -250,29 +246,27 @@ local function Anchor(s, point, a, b, c, d)
     s.points[#s.points + 1] = anchor
 end
 
--- Behaviors ----------------------------------------------------------------
-
 -- behavior(state, widget, ...args)
-local behaviors = {}
-function behaviors.Show(s, w) s.harness:SetWidgetShown(w, true) end
-function behaviors.Hide(s, w) s.harness:SetWidgetShown(w, false) end
-function behaviors.SetShown(s, w, shown) s.harness:SetWidgetShown(w, shown) end
-function behaviors.IsShown(s) return s.shown end
-function behaviors.IsVisible(s, w) return s.harness:IsVisibleWidget(w) end
-function behaviors.IsProtected(s, w) return s.harness:IsProtectedWidget(w), s.protected end
+local Behaviors = {}
+function Behaviors.Show(s, w) s.harness:SetWidgetShown(w, true) end
+function Behaviors.Hide(s, w) s.harness:SetWidgetShown(w, false) end
+function Behaviors.SetShown(s, w, shown) s.harness:SetWidgetShown(w, shown) end
+function Behaviors.IsShown(s) return s.shown end
+function Behaviors.IsVisible(s, w) return s.harness:IsVisibleWidget(w) end
+function Behaviors.IsProtected(s, w) return s.harness:IsProtectedWidget(w), s.protected end
 -- [G] No harness widget is forbidden: addon frames never are, and forbidden nameplates aren't modeled (units.lua).
-function behaviors.IsForbidden() return false end
-function behaviors.SetScript(s, _, script, fn) s.scripts[script] = fn end
-function behaviors.GetScript(s, _, script) return s.scripts[script] end
-function behaviors.HasScript(s, _, script) return s.scripts[script] ~= nil end
-function behaviors.HookScript(s, _, script, fn)
+function Behaviors.IsForbidden() return false end
+function Behaviors.SetScript(s, _, script, fn) s.scripts[script] = fn end
+function Behaviors.GetScript(s, _, script) return s.scripts[script] end
+function Behaviors.HasScript(s, _, script) return s.scripts[script] ~= nil end
+function Behaviors.HookScript(s, _, script, fn)
     local previous = s.scripts[script]
     s.scripts[script] = previous and function(...) previous(...); fn(...) end or fn
 end
-function behaviors.SetText(s, _, text) s.text = text end
-function behaviors.GetText(s) return s.text end
+function Behaviors.SetText(s, _, text) s.text = text end
+function Behaviors.GetText(s) return s.text end
 -- The client formats secrets into a secret string (the method takes them when tainted).
-function behaviors.SetFormattedText(s, _, fmt, ...)
+function Behaviors.SetFormattedText(s, _, fmt, ...)
     local args, n, secret = { ... }, select("#", ...), IsSecret(fmt)
     for i = 1, n do
         secret = secret or IsSecret(args[i])
@@ -281,144 +275,142 @@ function behaviors.SetFormattedText(s, _, fmt, ...)
     local text = Reveal(fmt):format(unpack(args, 1, n))
     s.text = secret and Secret(text) or text
 end
-function behaviors.GetStringWidth(s)
-    local bound = s.wordWrap ~= false and (Anchored(s, AXES.x, 0) or s.width) or nil
+function Behaviors.GetStringWidth(s)
+    local bound = s.wordWrap ~= false and (Anchored(s, Axes.x, 0) or s.width) or nil
     local width = Longest(Lines(s, 0))
     return bound and math.min(width, bound) or width
 end
-function behaviors.GetUnboundedStringWidth(s) return Longest(Lines(s, 0)) end
-function behaviors.GetStringHeight(s) return #Lines(s, Anchored(s, AXES.x, 0) or s.width or 0) * LINE_HEIGHT end
-function behaviors.GetNumLines(s) return #Lines(s, Anchored(s, AXES.x, 0) or s.width or 0) end
-function behaviors.SetValue(s, _, value) s.value = value end
-function behaviors.GetValue(s) return s.value end
-function behaviors.SetMinMaxValues(s, _, min, max) s.min, s.max = min, max end
-function behaviors.GetMinMaxValues(s) return s.min, s.max end
-function behaviors.GetName(s) return s.name end
-function behaviors.GetObjectType(s) return s.widgetType end
-function behaviors.IsObjectType(s, _, kind) return s.widgetType == kind or (kind == "Frame" and IS_FRAME[s.widgetType]) or false end
-function behaviors.GetParent(s) return s.parent end
+function Behaviors.GetUnboundedStringWidth(s) return Longest(Lines(s, 0)) end
+function Behaviors.GetStringHeight(s) return #Lines(s, Anchored(s, Axes.x, 0) or s.width or 0) * LineHeight end
+function Behaviors.GetNumLines(s) return #Lines(s, Anchored(s, Axes.x, 0) or s.width or 0) end
+function Behaviors.SetValue(s, _, value) s.value = value end
+function Behaviors.GetValue(s) return s.value end
+function Behaviors.SetMinMaxValues(s, _, min, max) s.min, s.max = min, max end
+function Behaviors.GetMinMaxValues(s) return s.min, s.max end
+function Behaviors.GetName(s) return s.name end
+function Behaviors.GetObjectType(s) return s.widgetType end
+function Behaviors.IsObjectType(s, _, kind) return s.widgetType == kind or (kind == "Frame" and IsFrame[s.widgetType]) or false end
+function Behaviors.GetParent(s) return s.parent end
 -- A frame's child frames (GetChildren) or its regions (GetRegions), in creation order ([G] the order).
-local IS_REGION = { FontString = true, Texture = true, MaskTexture = true }
+local IsRegion = { FontString = true, Texture = true, MaskTexture = true }
 local function Kids(s, wanted)
     local out = {}
     for _, child in ipairs(s.children) do
         local kind = State(child).widgetType
-        if (wanted == "frame" and IS_FRAME[kind]) or (wanted == "region" and IS_REGION[kind]) then
+        if (wanted == "frame" and IsFrame[kind]) or (wanted == "region" and IsRegion[kind]) then
             out[#out + 1] = child
         end
     end
     return out
 end
-function behaviors.GetChildren(s) return unpack(Kids(s, "frame")) end
-function behaviors.GetNumChildren(s) return #Kids(s, "frame") end
-function behaviors.GetRegions(s) return unpack(Kids(s, "region")) end
-function behaviors.GetNumRegions(s) return #Kids(s, "region") end
-function behaviors.SetParent(s, w, parent) s.harness:Adopt(w, parent) end
-function behaviors.SetAlpha(s, _, alpha) s.alpha = alpha end
-function behaviors.GetAlpha(s) return s.alpha end
-function behaviors.SetSize(s, _, width, height) s.width, s.height = width, height end
-function behaviors.SetWidth(s, _, width) s.width = width end
-function behaviors.SetHeight(s, _, height) s.height = height end
-function behaviors.GetWidth(_, w) return Size(w, AXES.x) end
-function behaviors.GetHeight(_, w) return Size(w, AXES.y) end
-function behaviors.GetSize(_, w) return Size(w, AXES.x), Size(w, AXES.y) end
-function behaviors.SetPoint(s, _, ...) Anchor(s, ...) end
-function behaviors.SetAllPoints(s, _, relativeTo)
+function Behaviors.GetChildren(s) return unpack(Kids(s, "frame")) end
+function Behaviors.GetNumChildren(s) return #Kids(s, "frame") end
+function Behaviors.GetRegions(s) return unpack(Kids(s, "region")) end
+function Behaviors.GetNumRegions(s) return #Kids(s, "region") end
+function Behaviors.SetParent(s, w, parent) s.harness:Adopt(w, parent) end
+function Behaviors.SetAlpha(s, _, alpha) s.alpha = alpha end
+function Behaviors.GetAlpha(s) return s.alpha end
+function Behaviors.SetSize(s, _, width, height) s.width, s.height = width, height end
+function Behaviors.SetWidth(s, _, width) s.width = width end
+function Behaviors.SetHeight(s, _, height) s.height = height end
+function Behaviors.GetWidth(_, w) return Size(w, Axes.x) end
+function Behaviors.GetHeight(_, w) return Size(w, Axes.y) end
+function Behaviors.GetSize(_, w) return Size(w, Axes.x), Size(w, Axes.y) end
+function Behaviors.SetPoint(s, _, ...) Anchor(s, ...) end
+function Behaviors.SetAllPoints(s, _, relativeTo)
     s.points = { { point = "TOPLEFT", relativeTo = relativeTo or s.parent, relativePoint = "TOPLEFT", x = 0, y = 0 },
         { point = "BOTTOMRIGHT", relativeTo = relativeTo or s.parent, relativePoint = "BOTTOMRIGHT", x = 0, y = 0 } }
     s.allPoints = relativeTo or s.parent
 end
-function behaviors.ClearAllPoints(s) s.points, s.allPoints = {}, nil end
-function behaviors.GetNumPoints(s) return #s.points end
-function behaviors.GetPoint(s, _, index)
+function Behaviors.ClearAllPoints(s) s.points, s.allPoints = {}, nil end
+function Behaviors.GetNumPoints(s) return #s.points end
+function Behaviors.GetPoint(s, _, index)
     local p = s.points[index or 1]
     if p then return p.point, p.relativeTo, p.relativePoint, p.x, p.y end
 end
-function behaviors.SetTexture(s, _, texture) s.texture, s.atlas = texture, nil end
-function behaviors.GetTexture(s) return s.texture end
-function behaviors.SetAtlas(s, _, atlas) s.atlas, s.texture = atlas, nil end
-function behaviors.GetAtlas(s) return s.atlas end
-function behaviors.SetColorTexture(s, _, r, g, b, a) s.color = { r, g, b, a or 1 } end
-function behaviors.SetJustifyH(s, _, justify) s.justifyH = justify end
-function behaviors.GetJustifyH(s) return s.justifyH or "CENTER" end
-function behaviors.SetWordWrap(s, _, wrap) s.wordWrap = wrap and true or false end
-function behaviors.CanWordWrap(s) return s.wordWrap ~= false end
-function behaviors.SetFontObject(s, _, font) s.fontObject = font end
-function behaviors.GetFontObject(s) return s.fontObject end
-function behaviors.EnableMouse(s, _, enable) s.mouseEnabled = enable and true or false end
-function behaviors.IsMouseEnabled(s) return s.mouseEnabled end
-function behaviors.Enable(s) s.enabled = true end
-function behaviors.Disable(s) s.enabled = false end
-function behaviors.SetEnabled(s, _, enabled) s.enabled = enabled and true or false end
-function behaviors.IsEnabled(s) return s.enabled ~= false end
-function behaviors.Click(s, w, button) s.harness:Click(w, button) end
-function behaviors.SetToDefaults(s) s.secretAspects = {} end
-function behaviors.HasAnySecretAspect(s) return next(s.secretAspects) ~= nil end
-function behaviors.HasSecretValues(s) return next(s.secretAspects) ~= nil end
-function behaviors.CreateFontString(s, w, name) return s.harness:CreateWidget("FontString", name, w) end
-function behaviors.CreateTexture(s, w, name) return s.harness:CreateWidget("Texture", name, w) end
-function behaviors.CreateMaskTexture(s, w, name) return s.harness:CreateWidget("MaskTexture", name, w) end
+function Behaviors.SetTexture(s, _, texture) s.texture, s.atlas = texture, nil end
+function Behaviors.GetTexture(s) return s.texture end
+function Behaviors.SetAtlas(s, _, atlas) s.atlas, s.texture = atlas, nil end
+function Behaviors.GetAtlas(s) return s.atlas end
+function Behaviors.SetColorTexture(s, _, r, g, b, a) s.color = { r, g, b, a or 1 } end
+function Behaviors.SetJustifyH(s, _, justify) s.justifyH = justify end
+function Behaviors.GetJustifyH(s) return s.justifyH or "CENTER" end
+function Behaviors.SetWordWrap(s, _, wrap) s.wordWrap = wrap and true or false end
+function Behaviors.CanWordWrap(s) return s.wordWrap ~= false end
+function Behaviors.SetFontObject(s, _, font) s.fontObject = font end
+function Behaviors.GetFontObject(s) return s.fontObject end
+function Behaviors.EnableMouse(s, _, enable) s.mouseEnabled = enable and true or false end
+function Behaviors.IsMouseEnabled(s) return s.mouseEnabled end
+function Behaviors.Enable(s) s.enabled = true end
+function Behaviors.Disable(s) s.enabled = false end
+function Behaviors.SetEnabled(s, _, enabled) s.enabled = enabled and true or false end
+function Behaviors.IsEnabled(s) return s.enabled ~= false end
+function Behaviors.Click(s, w, button) s.harness:Click(w, button) end
+function Behaviors.SetToDefaults(s) s.secretAspects = {} end
+function Behaviors.HasAnySecretAspect(s) return next(s.secretAspects) ~= nil end
+function Behaviors.HasSecretValues(s) return next(s.secretAspects) ~= nil end
+function Behaviors.CreateFontString(s, w, name) return s.harness:CreateWidget("FontString", name, w) end
+function Behaviors.CreateTexture(s, w, name) return s.harness:CreateWidget("Texture", name, w) end
+function Behaviors.CreateMaskTexture(s, w, name) return s.harness:CreateWidget("MaskTexture", name, w) end
 -- A texture keeps its masks in the order they were added; adding one twice keeps one.
-function behaviors.AddMaskTexture(s, _, mask)
+function Behaviors.AddMaskTexture(s, _, mask)
     s.masks = s.masks or {}
     for _, existing in ipairs(s.masks) do
         if existing == mask then return end
     end
     s.masks[#s.masks + 1] = mask
 end
-function behaviors.RemoveMaskTexture(s, _, mask)
+function Behaviors.RemoveMaskTexture(s, _, mask)
     for i, existing in ipairs(s.masks or {}) do
         if existing == mask then table.remove(s.masks, i) return end
     end
 end
-function behaviors.GetNumMaskTextures(s) return #(s.masks or {}) end
-function behaviors.GetMaskTexture(s, _, index) return (s.masks or {})[index] end
-function behaviors.CreateAnimationGroup(s, w, name)
+function Behaviors.GetNumMaskTextures(s) return #(s.masks or {}) end
+function Behaviors.GetMaskTexture(s, _, index) return (s.masks or {})[index] end
+function Behaviors.CreateAnimationGroup(s, w, name)
     local group = s.harness:CreateWidget("AnimationGroup", name, w)
     State(group).animations = {}
     return group
 end
-function behaviors.RegisterEvent(s, _, event)
-    assert(SNAPSHOT.events[event], "RegisterEvent: unknown event " .. tostring(event))
+function Behaviors.RegisterEvent(s, _, event)
+    assert(Snapshot.events[event], "RegisterEvent: unknown event " .. tostring(event))
     s.events[event] = true
 end
-function behaviors.RegisterUnitEvent(s, _, event, unit1, unit2)
-    assert(SNAPSHOT.events[event], "RegisterUnitEvent: unknown event " .. tostring(event))
+function Behaviors.RegisterUnitEvent(s, _, event, unit1, unit2)
+    assert(Snapshot.events[event], "RegisterUnitEvent: unknown event " .. tostring(event))
     s.events[event] = { [unit1] = true, [unit2 or unit1] = true }
 end
-function behaviors.UnregisterEvent(s, _, event) s.events[event] = nil end
-function behaviors.UnregisterAllEvents(s) s.events = {} end
-function behaviors.IsEventRegistered(s, _, event) return s.events[event] ~= nil end
-function behaviors.EnableGamePadButton(s, _, enable) s.gamepadButtons = enable end
-function behaviors.IsGamePadButtonEnabled(s) return s.gamepadButtons or false end
+function Behaviors.UnregisterEvent(s, _, event) s.events[event] = nil end
+function Behaviors.UnregisterAllEvents(s) s.events = {} end
+function Behaviors.IsEventRegistered(s, _, event) return s.events[event] ~= nil end
+function Behaviors.EnableGamePadButton(s, _, enable) s.gamepadButtons = enable end
+function Behaviors.IsGamePadButtonEnabled(s) return s.gamepadButtons or false end
 -- Keyboard input (see Harness:Key): off and not propagating until set, like the client.
-function behaviors.EnableKeyboard(s, _, enable) s.keyboardEnabled = enable and true or false end
-function behaviors.IsKeyboardEnabled(s) return s.keyboardEnabled or false end
-function behaviors.SetPropagateKeyboardInput(s, _, propagate) s.propagateKeyboard = propagate and true or false end
-function behaviors.GetPropagateKeyboardInput(s) return s.propagateKeyboard or false end
+function Behaviors.EnableKeyboard(s, _, enable) s.keyboardEnabled = enable and true or false end
+function Behaviors.IsKeyboardEnabled(s) return s.keyboardEnabled or false end
+function Behaviors.SetPropagateKeyboardInput(s, _, propagate) s.propagateKeyboard = propagate and true or false end
+function Behaviors.GetPropagateKeyboardInput(s) return s.propagateKeyboard or false end
 
 -- Moving: see the header.
-function behaviors.SetMovable(s, _, movable) s.movable = movable and true or false end
-function behaviors.IsMovable(s) return s.movable or false end
-function behaviors.SetClampedToScreen(s, _, clamped) s.clamped = clamped and true or false end
-function behaviors.IsClampedToScreen(s) return s.clamped or false end
-function behaviors.SetUserPlaced(s, _, placed) s.userPlaced = placed and true or false end
-function behaviors.IsUserPlaced(s) return s.userPlaced or false end
-function behaviors.RegisterForDrag(s, _, ...)
+function Behaviors.SetMovable(s, _, movable) s.movable = movable and true or false end
+function Behaviors.IsMovable(s) return s.movable or false end
+function Behaviors.SetClampedToScreen(s, _, clamped) s.clamped = clamped and true or false end
+function Behaviors.IsClampedToScreen(s) return s.clamped or false end
+function Behaviors.SetUserPlaced(s, _, placed) s.userPlaced = placed and true or false end
+function Behaviors.IsUserPlaced(s) return s.userPlaced or false end
+function Behaviors.RegisterForDrag(s, _, ...)
     s.dragButtons = {}
     for i = 1, select("#", ...) do
         s.dragButtons[(select(i, ...))] = true
     end
 end
-function behaviors.StartMoving(s)
+function Behaviors.StartMoving(s)
     if not s.movable then
         error("Frame:StartMoving(): Frame is not movable", 0)
     end
     s.moving, s.userPlaced = true, true
 end
-function behaviors.StopMovingOrSizing(s) s.moving = false end
-
--- Visibility ------------------------------------------------------------------
+function Behaviors.StopMovingOrSizing(s) s.moving = false end
 
 -- Every widget under (and including) widget that's visible, depth first in creation order.
 local function VisibleTree(h, widget, out)
@@ -465,12 +457,10 @@ function Harness:SetWidgetShown(widget, shown)
     end
 end
 
--- Strata and levels ---------------------------------------------------------
-
 -- The client's frame strata, bottom to top. SetFrameStrata with anything else is an error here.
-local STRATA = { "WORLD", "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP", "BLIZZARD" }
-local STRATA_INDEX = {}
-for i, strata in ipairs(STRATA) do STRATA_INDEX[strata] = i end
+local Strata = { "WORLD", "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP", "BLIZZARD" }
+local StrataIndex = {}
+for i, strata in ipairs(Strata) do StrataIndex[strata] = i end
 
 -- A frame's strata: its own, else its parent's, else MEDIUM (UIParent's).
 function Harness:FrameStrata(frame)
@@ -482,7 +472,7 @@ function Harness:FrameStrata(frame)
     end
     return "MEDIUM"
 end
-function Harness:FrameStrataIndex(frame) return STRATA_INDEX[self:FrameStrata(frame)] end
+function Harness:FrameStrataIndex(frame) return StrataIndex[self:FrameStrata(frame)] end
 
 -- A frame's level: its own, else one above its parent's, else 0.
 function Harness:FrameLevel(frame, depth)
@@ -493,20 +483,18 @@ function Harness:FrameLevel(frame, depth)
     return 0
 end
 
-function behaviors.SetFrameStrata(s, _, strata)
-    if not STRATA_INDEX[strata] then
+function Behaviors.SetFrameStrata(s, _, strata)
+    if not StrataIndex[strata] then
         error("SetFrameStrata: unknown strata " .. tostring(strata), 5)
     end
     s.strata = strata
 end
-function behaviors.GetFrameStrata(s, w) return s.harness:FrameStrata(w) end
-function behaviors.SetFrameLevel(s, _, level) s.level = level end
-function behaviors.GetFrameLevel(s, w) return s.harness:FrameLevel(w) end
+function Behaviors.GetFrameStrata(s, w) return s.harness:FrameStrata(w) end
+function Behaviors.SetFrameLevel(s, _, level) s.level = level end
+function Behaviors.GetFrameLevel(s, w) return s.harness:FrameLevel(w) end
 
--- Animations ---------------------------------------------------------------
-
-function behaviors.CreateAnimation(s, group, animationType, name)
-    assert(WIDGET_APIS[animationType] and animationType ~= "AnimationGroup",
+function Behaviors.CreateAnimation(s, group, animationType, name)
+    assert(WidgetApis[animationType] and animationType ~= "AnimationGroup",
         "CreateAnimation: unsupported animation type " .. tostring(animationType))
     local animation = s.harness:CreateWidget(animationType, name, group)
     local a = State(animation)
@@ -514,28 +502,28 @@ function behaviors.CreateAnimation(s, group, animationType, name)
     s.animations[#s.animations + 1] = animation
     return animation
 end
-function behaviors.SetDuration(a, _, seconds) a.duration = seconds end
-function behaviors.SetStartDelay(a, _, seconds) a.startDelay = seconds end
-function behaviors.SetEndDelay(a, _, seconds) a.endDelay = seconds end
-function behaviors.SetOrder(a, _, order) a.order = order end
-function behaviors.GetOrder(a) return a.order end
-function behaviors.GetStartDelay(a) return a.startDelay end
-function behaviors.GetEndDelay(a) return a.endDelay end
-function behaviors.SetFromAlpha(a, _, alpha) a.fromAlpha = alpha end
-function behaviors.SetToAlpha(a, _, alpha) a.toAlpha = alpha end
-function behaviors.GetFromAlpha(a) return a.fromAlpha or 0 end
-function behaviors.SetOffset(a, _, x, y) a.offsetX, a.offsetY = x, y end
-function behaviors.GetOffset(a) return a.offsetX or 0, a.offsetY or 0 end
-function behaviors.SetScaleFrom(a, _, x, y) a.scaleFromX, a.scaleFromY = x, y end
-function behaviors.GetScaleFrom(a) return a.scaleFromX or 1, a.scaleFromY or 1 end
-function behaviors.SetScaleTo(a, _, x, y) a.scaleToX, a.scaleToY = x, y end
-function behaviors.GetScaleTo(a) return a.scaleToX or 1, a.scaleToY or 1 end
-function behaviors.GetToAlpha(a) return a.toAlpha or 0 end
-function behaviors.SetLooping(g, _, looping) g.looping = looping end
-function behaviors.GetLooping(g) return g.looping or "NONE" end
-function behaviors.SetToFinalAlpha(g, _, final) g.toFinalAlpha = final and true or false end
-function behaviors.IsSetToFinalAlpha(g) return g.toFinalAlpha or false end
-function behaviors.IsPlaying(s) return s.playing or false end
+function Behaviors.SetDuration(a, _, seconds) a.duration = seconds end
+function Behaviors.SetStartDelay(a, _, seconds) a.startDelay = seconds end
+function Behaviors.SetEndDelay(a, _, seconds) a.endDelay = seconds end
+function Behaviors.SetOrder(a, _, order) a.order = order end
+function Behaviors.GetOrder(a) return a.order end
+function Behaviors.GetStartDelay(a) return a.startDelay end
+function Behaviors.GetEndDelay(a) return a.endDelay end
+function Behaviors.SetFromAlpha(a, _, alpha) a.fromAlpha = alpha end
+function Behaviors.SetToAlpha(a, _, alpha) a.toAlpha = alpha end
+function Behaviors.GetFromAlpha(a) return a.fromAlpha or 0 end
+function Behaviors.SetOffset(a, _, x, y) a.offsetX, a.offsetY = x, y end
+function Behaviors.GetOffset(a) return a.offsetX or 0, a.offsetY or 0 end
+function Behaviors.SetScaleFrom(a, _, x, y) a.scaleFromX, a.scaleFromY = x, y end
+function Behaviors.GetScaleFrom(a) return a.scaleFromX or 1, a.scaleFromY or 1 end
+function Behaviors.SetScaleTo(a, _, x, y) a.scaleToX, a.scaleToY = x, y end
+function Behaviors.GetScaleTo(a) return a.scaleToX or 1, a.scaleToY or 1 end
+function Behaviors.GetToAlpha(a) return a.toAlpha or 0 end
+function Behaviors.SetLooping(g, _, looping) g.looping = looping end
+function Behaviors.GetLooping(g) return g.looping or "NONE" end
+function Behaviors.SetToFinalAlpha(g, _, final) g.toFinalAlpha = final and true or false end
+function Behaviors.IsSetToFinalAlpha(g) return g.toFinalAlpha or false end
+function Behaviors.IsPlaying(s) return s.playing or false end
 
 -- A group lasts the sum, over its orders, of the longest animation in each order.
 local function GroupDuration(g)
@@ -582,7 +570,7 @@ local function Schedule(g, group)
     end)
 end
 
-function behaviors.Play(g, group)
+function Behaviors.Play(g, group)
     if g.widgetType ~= "AnimationGroup" then
         g.playing = true
         return
@@ -594,9 +582,9 @@ function behaviors.Play(g, group)
     if g.scripts.OnPlay then g.harness:Protect(g.scripts.OnPlay, group) end
     Schedule(g, group)
 end
-behaviors.Restart = behaviors.Play
+Behaviors.Restart = Behaviors.Play
 
-function behaviors.Stop(g, group)
+function Behaviors.Stop(g, group)
     if g.pending then
         g.pending.cancelled = true
         g.pending = nil
@@ -606,14 +594,12 @@ function behaviors.Stop(g, group)
     if wasPlaying and g.scripts.OnStop then g.harness:Protect(g.scripts.OnStop, group, true) end
 end
 
-function behaviors.Finish(g, group)
+function Behaviors.Finish(g, group)
     if g.pending then
         g.pending.cancelled = true
         FinishGroup(g, group, true)
     end
 end
-
--- Creation -----------------------------------------------------------------
 
 -- Moves a widget under a new parent (nil detaches it).
 function Harness:Adopt(widget, parent)
@@ -644,8 +630,8 @@ function Harness:Method(widgetType, template, method)
         return cached
     end
     local typeBehaviors = Harness.TYPE_BEHAVIORS[widgetType]
-    local behavior = typeBehaviors and typeBehaviors[method] or behaviors[method]
-    local function raw(w, ...)
+    local behavior = typeBehaviors and typeBehaviors[method] or Behaviors[method]
+    local function Raw(w, ...)
         if behavior then
             return behavior(State(w), w, ...)
         end
@@ -654,27 +640,27 @@ function Harness:Method(widgetType, template, method)
     local entry, api = MethodEntry(widgetType, method)
     local typeMethod = Harness.TYPE_METHODS[widgetType] and Harness.TYPE_METHODS[widgetType][method]
     if entry then
-        fn = self:WrapApi(widgetType .. ":" .. method .. " (" .. api .. ")", entry, raw, true)
+        fn = self:WrapApi(widgetType .. ":" .. method .. " (" .. api .. ")", entry, Raw, true)
     elseif typeMethod == "C" then
-        fn = self:WrapApi(widgetType .. ":" .. method .. " (undocumented)", nil, raw, true)
+        fn = self:WrapApi(widgetType .. ":" .. method .. " (undocumented)", nil, Raw, true)
     elseif typeMethod == "Lua" then
-        fn = raw
-    elseif template and TEMPLATE_METHODS[template] and TEMPLATE_METHODS[template][method] then
-        fn = raw
+        fn = Raw
+    elseif template and TemplateMethods[template] and TemplateMethods[template][method] then
+        fn = Raw
     else
         return nil
     end
-    local function counted(w, ...)
+    local function Counted(w, ...)
         local calls = State(w).calls
         calls[method] = (calls[method] or 0) + 1
         return fn(w, ...)
     end
-    self.methodCache[key] = counted
-    return counted
+    self.methodCache[key] = Counted
+    return Counted
 end
 
 function Harness:CreateWidget(widgetType, name, parent, template)
-    assert(WIDGET_APIS[widgetType], "CreateFrame: unsupported widget type " .. tostring(widgetType))
+    assert(WidgetApis[widgetType], "CreateFrame: unsupported widget type " .. tostring(widgetType))
     local widget = {}
     Harness.widgetStates[widget] = {
         harness = self, widgetType = widgetType, name = name, template = template,
@@ -699,7 +685,7 @@ function Harness:CreateWidget(widgetType, name, parent, template)
     })
     self:Adopt(widget, parent)
     self.widgets[#self.widgets + 1] = widget
-    if IS_FRAME[widgetType] then
+    if IsFrame[widgetType] then
         self.frames[#self.frames + 1] = widget
     end
     return widget

@@ -54,8 +54,12 @@ local function AddSetting(addon, category, name, id, spec)
                 return
             end
             fromPanel = true -- the panel already knows; don't notify it back
-            state:Set(id, value)
+            local ok, err = pcall(state.Set, state, id, value)
             fromPanel = false
+            if not ok then
+                Settings.NotifyUpdate(variable)
+                error(err, 0)
+            end
         end)
     state:Watch({ id }, function()
         if not fromPanel then

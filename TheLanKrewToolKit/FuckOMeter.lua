@@ -1,7 +1,7 @@
 local addonName, ns = ...
 
 -- FuckOMeter: a comically oversized energy bar across the middle of the screen, shown while the
--- player's power type is energy. /tlk fom toggles the module.
+-- player's power type is energy. /tlk fom turns the module off and on again.
 --
 -- Energy is a secret value in combat, so it never enters state: UnitPower/UnitPowerMax results
 -- go straight to the bar and text (both accept secrets) and are never compared or computed with.
@@ -74,7 +74,7 @@ ns.Addon:Module("FuckOMeter", {
     description = "Show an obnoxiously wide energy bar across the middle of the screen.",
     commands = {
         {
-            name = "toggle", slash = "fom", label = "Toggle the fuck-o-meter",
+            name = "toggle", slash = "fom", label = "Toggle the fuck-o-meter", always = true,
             run = function() ns.Addon.State:Toggle("FuckOMeter.enabled") end,
         },
     },

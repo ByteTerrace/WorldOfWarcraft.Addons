@@ -1,4 +1,4 @@
--- AddOn and Module: how an addon assembles the framework.
+-- AddOn: how an addon assembles the framework.
 --
 --   local addon = ByteTerrace.NewAddOn({ name = addonName, savedVariable = "MyAddonDB",
 --                                        savedVariablePerCharacter = "MyAddonCharDB", -- optional
@@ -12,7 +12,10 @@
 --       commands = { { name = "toggle", slash = "meter", label = "Toggle the meter", run = function() ... end } },
 --       bindings = { { map = "menu", source = "gamepad.south", command = "Meter.toggle" } },
 --       records = { { name = "people", fields = { ... }, limit = 200, evict = "seen" } }, -- Records.lua
+--       comms = { prefix = "MyAddon1" },        -- optional: module.Comms, messages to the group (Comms.lua)
 --       active = { reads = { "Other.enabled" }, when = function(state) ... end }, -- optional dependency
+--       uses = { "target" },                    -- optional: demand modules it needs running (Module.lua)
+--       demand = true,                          -- runs only while a module that uses it runs (toggle = false)
 --       scope = "character", lockedBy = "Other.locked",   -- optional, for the enabled row
 --       OnEnable = function(module) module:On("UNIT_POWER_FREQUENT", fn, "player") end,
 --       OnDisable = function(module) ... end,
@@ -21,19 +24,20 @@
 -- Everything declares at file load; the addon compiles once on ADDON_LOADED. A module's rows and
 -- commands are named "<Module>.<name>". A module with a label gets an "<Module>.enabled" row
 -- (default spec.default ~= false); toggle = false removes it. A module runs while its enabled row
--- is true and its active rule holds. Handlers, watchers and rules a module creates through
--- module:On / :Watch / :Rule belong to it and are removed when it stops, so a stopped module
--- registers no events and runs no code. Rows with scope = "character" persist per character.
--- A module's collections are module.Records.<name>, usable once the addon has loaded.
+-- is true and its active rule holds. What a module creates through its methods (Module.lua)
+-- belongs to it and is removed when it stops, so a stopped module registers no events and runs
+-- no code. Rows with scope = "character" persist per character. A module's collections are
+-- module.Records.<name>, usable once the addon has loaded. uses must name demand modules and
+-- can't form a cycle; start refuses anything else.
 --
 -- Settings pages (Settings.lua): modules without a page share the main page, in declaration
 -- order, and addon.debug closes it under an "Advanced" header.
 --
--- Built-in commands: bare slash (settings), help, version, debug, set <row> <value>, toggle <row>.
+-- Built-in commands: bare slash (settings), help, version, debug [status | events | rows | trace |
+-- cpu | reset] (Diagnostics.lua), set <row> <value>, toggle <row>.
 --
--- Public members. AddOn: Name, Title, Version, Slash, State, Events, Commands, Input, Modules
--- ([name] = Module) and Started. Module: Addon, Spec (the declaration, never changed), Enabled
--- and Records.
+-- Public members: Name, Title, Version, Slash, State, Events, Commands, Input, Modules ([name] =
+-- Module, Module.lua) and Started.
 
 -- Module and row names are identifiers: "." separates a module from its row, so it can't appear in either.
 local NamePattern = "^%a[%w_]*$"
@@ -47,9 +51,28 @@ local AddOn = {}
 AddOn.__index = AddOn
 ByteTerrace.AddOn = AddOn
 
-local Module = {}
-Module.__index = Module
-ByteTerrace.Module = Module
+-- Who already registered alias ("SLASH_KEYn"), or nil. Read the way Blizzard's chat code reads
+-- slash commands (ChatFrameUtil.lua's ImportListToHash): each SlashCmdList key's numbered SLASH_
+-- globals, never a walk of every global (8 ms in game). The chat frame moves commands out of
+-- SlashCmdList into hash_SlashCmdList (keyed by the uppercased alias) once any is typed.
+local function TakenBy(alias)
+    local wanted = alias:lower()
+    if hash_SlashCmdList[alias:upper()] then
+        return "a command already in use"
+    end
+    for key in pairs(SlashCmdList) do
+        local i = 1
+        local registered = _G["SLASH_" .. key .. i] -- global: the client's slash registration
+        while type(registered) == "string" do
+            if registered:lower() == wanted then
+                return "SLASH_" .. key .. i
+            end
+            i = i + 1
+            registered = _G["SLASH_" .. key .. i] -- global: the client's slash registration
+        end
+    end
+    return nil
+end
 
 -- Parses slash text into a row's kind: on/off/true/false for booleans, numbers for numbers.
 local function ParseValue(kind, text)
@@ -65,161 +88,6 @@ local function ParseValue(kind, text)
         return tonumber(text)
     end
     return text
-end
-
---- Resolves "row" to "<Module>.row"; a name containing "." ("combat.active") is already absolute.
----@param row string
----@return string
-function Module:RowName(row)
-    return row:find(".", 1, true) and row or (self.m_name .. "." .. row)
-end
-
---- A row's id, from its name (resolved once and cached) or an id passed straight through. An
---- unknown row is an error.
----@param row integer|string
----@return integer
-function Module:Id(row)
-    if type(row) == "number" then
-        return row
-    end
-    local id = self.m_ids[row]
-    if not id then
-        id = self.Addon.State.Ids[self:RowName(row)]
-        if not id then
-            error(self.Addon.Name .. ": unknown state row " .. self:RowName(row), 2)
-        end
-        self.m_ids[row] = id
-    end
-    return id
-end
-
---- A row's value.
----@param row integer|string relative to the module unless it contains "."
-function Module:Get(row)
-    return self.Addon.State.Values[self:Id(row)]
-end
-
---- Writes a row through State:Set; errors point at the caller.
----@param row integer|string
-function Module:Set(row, value)
-    self.Addon.State:Set(self:Id(row), value, 2)
-end
-
---- Flips a boolean row.
----@param row integer|string
-function Module:Toggle(row)
-    self.Addon.State:Toggle(self:Id(row), 2)
-end
-
---- Adds an event handler that the module owns: it's removed when the module stops.
----@param event string
----@param fn function
----@param unit string?
----@return table handle for Off
-function Module:On(event, fn, unit)
-    local handle = self.Addon.Events:On(event, fn, unit)
-    self.m_handles[#self.m_handles + 1] = handle
-    return handle
-end
-
---- Removes a handler early; the module's teardown skips handles that are already removed.
----@param handle table from On
-function Module:Off(handle)
-    self.Addon.Events:Off(handle)
-end
-
---- Resolves a list of rows to ids.
----@param rows (integer|string)[]
----@return integer[]
-function Module:ResolveRows(rows)
-    local ids = {}
-    for i, row in ipairs(rows) do
-        ids[i] = self:Id(row)
-    end
-    return ids
-end
-
---- State:Watch, owned by the module.
----@param rows (integer|string)[]
----@param fn fun(state: table)
----@param skipInitial boolean?
----@return table watcher
-function Module:Watch(rows, fn, skipInitial)
-    local watcher = self.Addon.State:Watch(self:ResolveRows(rows), fn, skipInitial)
-    self.m_watchers[#self.m_watchers + 1] = watcher
-    return watcher
-end
-
---- State:Rule, owned by the module; reads may be relative row names.
----@param spec table { reads, when, changed, initial? }
----@return table watcher
-function Module:Rule(spec)
-    local watcher = self.Addon.State:Rule({
-        reads = self:ResolveRows(spec.reads), when = spec.when, changed = spec.changed, initial = spec.initial,
-    })
-    self.m_watchers[#self.m_watchers + 1] = watcher
-    return watcher
-end
-
---- Starts or stops the module now. Stopping removes everything it owns in one pass (every
---- handler goes dead at once, even mid-dispatch, and each affected event re-registers once),
---- runs OnDisable, then returns its runtime rows to their defaults so no reader sees stale facts.
----@param enabled boolean
-function Module:SetEnabled(enabled)
-    if enabled == self.Enabled then
-        return
-    end
-    local addon, spec = self.Addon, self.Spec
-    if enabled then
-        self.Enabled = true
-        if spec.OnEnable then
-            SafeCall(spec.OnEnable, self)
-        end
-        return
-    end
-    local handles, watchers = self.m_handles, self.m_watchers
-    self.m_handles, self.m_watchers = {}, {}
-    for i = 1, #watchers do
-        addon.State:Unwatch(watchers[i])
-    end
-    addon.Events:OffAll(handles)
-    if spec.OnDisable then
-        SafeCall(spec.OnDisable, self)
-    end
-    local state = addon.State
-    state:BeginBatch()
-    for _, id in ipairs(self.m_runtime) do
-        state:Set(id, state.Specs[id].default)
-    end
-    state:EndBatch()
-    self.Enabled = false
-end
-
---- Connects the module to its enabled row and active rule. A module runs while its enabled row
---- (if it has one) is true and its spec.active rule (if any) holds; that's how a module depends
---- on other rows, so a switched-off feature registers nothing.
-function Module:Start()
-    local spec, state = self.Spec, self.Addon.State
-    self.m_runtime = {}
-    for _, row in ipairs(spec.state or {}) do
-        if row.persist == false then
-            self.m_runtime[#self.m_runtime + 1] = self:Id(row.name)
-        end
-    end
-    local enabledId = spec.toggle ~= false and self:Id("enabled") or nil
-    local active = spec.active
-    if not enabledId and not active then
-        self:SetEnabled(true)
-        return
-    end
-    local reads = active and self:ResolveRows(active.reads) or {}
-    if enabledId then
-        reads[#reads + 1] = enabledId
-    end
-    local when = active and active.when
-    state:Watch(reads, function(current)
-        self:SetEnabled((not enabledId or current.Values[enabledId]) and (not when or when(current)) and true or false)
-    end)
 end
 
 --- Creates an addon. It declares its facts and built-in commands now and starts itself on its
@@ -293,10 +161,13 @@ function AddOn:Module(name, spec)
             error(self.Name .. ": module " .. name .. ": " .. key .. " must be a string", 2)
         end
     end
-    local module = setmetatable({
-        Addon = self, Spec = spec, Enabled = false, Records = {},
-        m_name = name, m_handles = {}, m_watchers = {}, m_ids = {}, m_runtime = {},
-    }, Module)
+    if spec.uses ~= nil and type(spec.uses) ~= "table" then
+        error(self.Name .. ": module " .. name .. ": uses must be a list of module names", 2)
+    end
+    if spec.demand and (spec.toggle ~= false or active ~= nil) then
+        error(self.Name .. ": module " .. name .. ": a demand module has toggle = false and no active rule", 2)
+    end
+    local module = ByteTerrace.NewModule(self, name, spec)
     if spec.toggle ~= false then
         self.State:Declare(name .. ".enabled", {
             kind = "boolean", default = spec.default ~= false, label = spec.label, description = spec.description,
@@ -324,12 +195,14 @@ function AddOn:Module(name, spec)
         -- command that turns its own module on, or works without it).
         local run = command.run
         if not command.always then
-            run = function(...)
+            run = function(arg, phase, source)
                 if module.Enabled then
-                    return command.run(...)
+                    return command.run(arg, phase, source)
                 end
-                local slash = self.Slash and self.Slash[1] or ""
-                self:Print(("%s is turned off. Turn it on in settings (%s)."):format(spec.label or name, slash))
+                if phase == "down" then
+                    local slash = self.Slash and self.Slash[1] or ""
+                    self:Print(("%s is turned off. Turn it on in settings (%s)."):format(spec.label or name, slash))
+                end
             end
         end
         self.Commands:Define({
@@ -340,15 +213,60 @@ function AddOn:Module(name, spec)
     for _, binding in ipairs(spec.bindings or {}) do
         self.Input:Bind(binding.map, binding.source, binding.command)
     end
+    if spec.comms ~= nil then
+        module.Comms = ByteTerrace.NewComms(module, spec.comms)
+    end
     self.Modules[name] = module
     self.m_moduleOrder[#self.m_moduleOrder + 1] = module
     return module
+end
+
+--- Resolves each module's uses to the demand modules it names, raising every problem at once:
+--- an unknown name, a module that isn't a demand module, or a cycle.
+---@return table usesOf [module] = array of its dependencies
+function AddOn:ResolveUses()
+    local problems, usesOf = {}, {}
+    for _, module in ipairs(self.m_moduleOrder) do
+        local list = {}
+        for _, name in ipairs(module.Spec.uses or {}) do
+            local dependency = self.Modules[name]
+            if not dependency then
+                problems[#problems + 1] = ("%s uses unknown module %s"):format(module.Name, tostring(name))
+            elseif not dependency.Spec.demand then
+                problems[#problems + 1] = ("%s uses %s, which isn't a demand module"):format(module.Name, name)
+            else
+                list[#list + 1] = dependency
+            end
+        end
+        usesOf[module] = list
+    end
+    local visiting, done = {}, {}
+    local function Visit(module)
+        if done[module] then
+            return
+        end
+        if visiting[module] then
+            problems[#problems + 1] = module.Name .. " is part of a uses cycle"
+            return
+        end
+        visiting[module] = true
+        for _, dependency in ipairs(usesOf[module]) do
+            Visit(dependency)
+        end
+        visiting[module], done[module] = nil, true
+    end
+    for _, module in ipairs(self.m_moduleOrder) do
+        Visit(module)
+    end
+    ByteTerrace.Refuse(self.Name .. " modules", problems)
+    return usesOf
 end
 
 --- Compiles every declaration, loads SavedVariables, builds settings and slash commands, then
 --- starts the modules in one batch. ADDON_LOADED calls it; a refused declaration raises before
 --- anything starts.
 function AddOn:Start()
+    local usesOf = self:ResolveUses()
     self.State:Declare("addon.debug", {
         kind = "boolean", default = false, label = "Debug output", description = "Print diagnostic messages to chat.",
         section = "Advanced",
@@ -362,7 +280,11 @@ function AddOn:Start()
         end
         stores[scope] = store
     end
-    local dropped, unclaimed = self.State:Compile(stores)
+    local declared = { addon = true }
+    for name in pairs(self.Modules) do
+        declared[name] = true
+    end
+    local dropped, unclaimed = self.State:Compile(stores, declared)
     for _, records in ipairs(self.m_collections) do
         local droppedRecords, resetFields = records:Load(stores)
         if droppedRecords + resetFields > 0 then
@@ -376,6 +298,9 @@ function AddOn:Start()
     self:RegisterSlash()
     self.Started = true
     self.State:BeginBatch()
+    for _, module in ipairs(self.m_moduleOrder) do
+        module:Prepare(usesOf[module])
+    end
     for _, module in ipairs(self.m_moduleOrder) do
         SafeCall(module.Start, module) -- one broken module can't stop the rest, or the batch
     end
@@ -399,16 +324,11 @@ function AddOn:RegisterSlash()
         Report(self.Name .. ": slash command key " .. key .. " is already registered; slash commands are off")
         return
     end
-    local taken = {}
-    for name, value in pairs(_G) do
-        if type(name) == "string" and name:sub(1, 6) == "SLASH_" and type(value) == "string" then
-            taken[value:lower()] = name
-        end
-    end
     local index = 0
     for _, alias in ipairs(self.Slash) do
-        if taken[alias:lower()] then
-            Report(self.Name .. ": " .. alias .. " is already taken by " .. taken[alias:lower()] .. "; skipping it")
+        local owner = TakenBy(alias)
+        if owner then
+            Report(self.Name .. ": " .. alias .. " is already taken by " .. owner .. "; skipping it")
         else
             index = index + 1
             _G["SLASH_" .. key .. index] = alias -- global: WoW's slash command registration
@@ -533,11 +453,9 @@ function AddOn:DefineBuiltinCommands()
         run = function() self:Print("Version", self.Version) end,
     })
     commands:Define({
-        name = "addon.debug", slash = "debug", label = "Toggle debug output",
-        run = function()
-            self.State:Toggle(self.m_debugId)
-            self:Print("Debug output", self.State.Values[self.m_debugId] and "enabled." or "disabled.")
-        end,
+        name = "addon.debug", slash = "debug",
+        label = "Toggle debug output, or inspect: debug status | events | rows <text> | trace <text> | trace off | cpu | reset",
+        run = function(arg) self:DebugCommand(arg) end,
     })
     commands:Define({
         name = "addon.set", slash = "set", label = "Set a setting: set <setting> <value>",

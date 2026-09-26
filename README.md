@@ -56,7 +56,10 @@ Turn on Lua error popups in game once: `/console scriptErrors 1`.
 | PROTECTED | A call that can be blocked during combat lockdown is dominated by an `InCombatLockdown()` test that returns early, sits in a `not InCombatLockdown()` branch, or is annotated. A discarded `InCombatLockdown()` doesn't count, and a closure doesn't inherit its definer's guard. That covers restricted functions (`HasRestrictions`), `Settings.OpenToCategory`, `HasRestrictions` methods (`SetPropagateKeyboardInput`) on any receiver, and protected methods on a frame from a Secure template, followed through locals, aliases and fields. In a file that creates a Secure frame, a protected method on any receiver the gate can't prove non-Secure (a parameter, say) needs the guard too. |
 | NAMING | Puck's naming, mapped to Lua ([conventions](docs/Conventions.md)). Functions, methods and file-level locals (constants included: `MaxQueue`, never `MAX_QUEUE`) are PascalCase, and so is a local declared ahead and given a function later. Locals inside functions, loops and branches, parameters and loop variables are camelCase. Aliases keep their source's name (`local floor = math.floor`), and `local addonName, ns = ...` and metamethods are exempt. Member names are review, not gate. |
 | COMMENT | No banner dividers (four or more of `- = * # _ ~`) and no debt markers (`TODO`, `FIXME`, `HACK`, `XXX`, `KLUDGE`, `REVISIT`, "for now"). A `---` doc comment's third dash doesn't count. |
+| FRAMEWORK | An addon that depends on `ByteTerrace_Core` doesn't call a client API the framework owns (`C_Timer`'s timers, addon message sending and prefixes, `PlaySoundFile`, settings registration), take one as a value, or handle `CHAT_MSG_ADDON`: module timers, comms, the sound bank and declared rows do those jobs. |
 | LENGTH / STYLE | 800-line ceiling; LF, final newline, no tabs, no trailing whitespace. |
+
+NAMING, COMMENT, LENGTH and STYLE also cover the tests' Lua (`tests/*.test.lua` and `tests/harness`, not the deliberately bad `tests/fixtures`); LENGTH and STYLE cover `tools/` and the tests' JavaScript.
 
 What `check` can't see: dynamic reads (`_G[name]`, `getglobal(name)`), values that cross files or functions (a Secure frame or a secret handed to another file, an event name passed to a wrapper), secrets reaching state through a callee, and handlers that aren't function literals. Its guard analysis is per function and doesn't follow loops or `goto`.
 
@@ -70,10 +73,10 @@ What `check` can't see: dynamic reads (`_G[name]`, `getglobal(name)`), values th
 - **SavedVariables** are nil while an addon's files run and restored just before its `ADDON_LOADED`. `h:Reload()` and `h:Relog()` write them the way the client does: numbers, strings, booleans and tables of them, as copies, without cycles, NaN or inf. A relog ends combat and restrictions.
 - **Only real APIs exist:** events, widget methods, and fakes that name real client globals. Reading an undefined global is an error.
 - **A test fails** on any error reported to the client's error handler.
-- **Every widget call is counted,** so tests can assert how much work each event does. Widget state lives beside the widget (`Harness.State(widget)`), so addon fields never collide with it.
-- **Groups and addon messages:** `h:JoinGroup(kind, names)`, `h:AddMember`, `h:RemoveMember` and `h:LeaveGroup` fire the client's group events and give members party or raid tokens (`h:SetUnit` tokens win over them). `C_ChatInfo.SendAddonMessage` checks, in order, the prefix, the message, the chat type, messaging lockdown (encounter, challenge mode, PvP match, restricted map, chat; not combat alone), group membership, then a per-prefix throttle of 10 messages that regains one per second. Sent messages land in `h.addonMessages` with their result, and your own group messages echo back on the next `h:Advance` (`h:Echo(false)` turns that off). `h:ReceiveAddonMessage(prefix, text, channel, sender)` delivers one from someone else. Sender names are always `Name-Realm`.
+- **Every widget call and API call is counted,** so tests can assert how much work each event does (`h:CountCalls(method)`, `h:CountApiCalls(name)`). Widget state lives beside the widget (`Harness.State(widget)`), so addon fields never collide with it. `h.profiler` holds what `C_AddOnProfiler` and `GetAddOnMemoryUsage` answer.
+- **Groups and addon messages:** `h:JoinGroup(kind, names)`, `h:AddMember`, `h:RemoveMember` and `h:LeaveGroup` fire the client's group events and give members party or raid tokens (`h:SetUnit` tokens win over them). `C_ChatInfo.SendAddonMessage` checks, in order, the prefix, the message, the chat type, messaging lockdown (encounter, challenge mode, PvP match, restricted map, chat; not combat alone), group membership, then a per-prefix throttle of 10 messages that regains one per second. Sent messages land in `h.addonMessages` with their result, and your own group messages echo back on the next `h:Advance` (`h:Echo(false)` turns that off). `h:ReceiveAddonMessage(prefix, text, channel, sender)` delivers one from someone else. Names follow Forever, as probed in game: players have a surname (`Harness.DEFAULT_SURNAME` unless a test gives one), `UnitName` returns first name and surname, and senders are "First Last" (`h:FullName`), with "-Realm" only for another realm.
 - **Keyboard:** `h:Key(key, down)` offers a key to keyboard-enabled frames topmost first (strata, then level, then newest). A frame consumes it unless its propagate flag is set after its script runs; unconsumed keys land in `h.propagatedKeys`. `h:WorldClickBlocked()` says whether a mouse-enabled frame covers UIParent.
-- **Guilds:** unit tables and `Harness.new` take `guild`, `guildRank`, `guildRankIndex` and `guildRealm` (nil = the player's realm). `GetGuildInfo` returns name, rank, rank index and another realm's name, and nothing without a guild. GUILD addon messages need the player's guild.
+- **Guilds:** unit tables and `Harness.New` take `guild`, `guildRank`, `guildRankIndex` and `guildRealm` (nil = the player's realm). `GetGuildInfo` returns name, rank, rank index and another realm's name, and nothing without a guild. GUILD addon messages need the player's guild.
 - **Damage meter:** every combat is a `C_DamageMeter` session: Current is the latest and Overall all of them since a reset; Expired stays empty after ordinary fights, as it did in game. `h:MeterFight{ name, duration, sources }` scripts a fight (amounts, spells, deaths with `C_DeathRecap` recaps), then leaves combat, or dies if the player's source died. A recap's events are combat log events like the game's, and a spell's `details.unit` makes that unit the attacker, GUID and all (`GetPlayerInfoByGUID` knows it). In combat every field is secret except the documented never-secret ones.
 - **Frames:** `OnShow`/`OnHide` run when visibility changes, children included. `h:Drag(frame, dx, dy)` runs `OnMouseDown`, `OnDragStart` and `OnDragStop` for a movable, mouse-enabled frame registered for the button; its anchors shift by the drag, where the client re-anchors to the nearest screen corner.
 - **Speech:** `C_VoiceChat.SpeakText` and `C_CombatAudioAlert.SpeakText` land in `h.spoken`; combat audio alerts speak only when the player turned them on (`h.combatAudioAlerts`).
@@ -145,6 +148,8 @@ When the harness has to guess how the client behaves, a probe asks the client. B
 
 `/tlk` (or `/lankrew`) opens settings: the main page holds the Fuck-o-meter, the session journal and debug output, and the Sounds, Controller, Krew, Warband and Scholar's challenge pages sit under it. `/tlk help` lists commands. Any setting can be changed with `/tlk set <setting> <value>` or `/tlk toggle <setting>`.
 
+If something seems off, `/tlk debug status` shows which features are running and any errors caught, `/tlk debug events` what the addon listens to and how often, `/tlk debug cpu` its share of the game's time and memory, and `/tlk debug trace <setting or fact>` prints changes as they happen (see [Diagnostics](docs/Architecture.md#diagnostics)).
+
 ### Fuck-o-meter
 
 A blown-up energy bar stretched across the middle of the screen, shown whenever your power type is energy (rogues, cat-form druids). Toggle it with `/tlk fom`.
@@ -203,7 +208,7 @@ A kill announces one moment: a spree it reaches, else a multi kill, else first b
 
 ### Cards
 
-The journal, the Krew and the Scholar's challenge celebrate with cards at the top of the screen, one at a time. Cards never interrupt a fight: one earned mid-combat appears when combat ends. Hover a card to keep it, click to dismiss it and see the next; otherwise it hides after 12 seconds. At most six wait in line; beyond that new ones are dropped.
+The journal, the Krew, Warband and the Scholar's challenge celebrate (and ask questions) with cards at the top of the screen, one at a time. Cards never interrupt a fight: one earned mid-combat appears when combat ends, and one showing when combat starts steps aside and comes back first when it ends. Hover a card to keep it, click to dismiss it and see the next; otherwise it hides after 12 seconds. At most six wait in line; beyond that new ones are dropped.
 
 ### Session journal
 
@@ -218,7 +223,7 @@ Each card can be switched off in settings. Turning the journal off keeps the pla
 ### Krew
 
 Friends in your group who also run the toolkit share fun moments, each as a card:
-- **Roll call:** when you group up, a card shows who else runs the toolkit. `/tlk krew` lists them.
+- **Roll call:** when you group up, a card shows who else runs the toolkit. `/tlk krew` lists them; someone who leaves the group leaves the list.
 - **Ding:** your level-ups.
 - **Flawless:** your flawless victories (needs the "Flawless victory" sound on).
 - **Kill streaks:** your first blood and sprees, as raid warnings (see [Sounds](#sounds)).
@@ -237,13 +242,15 @@ World PvP for a Krew that takes the war seriously. An account-wide ledger rememb
 | Kind | How someone gets there | What it means |
 | --- | --- | --- |
 | Grudge | They killed one of us. When an enemy player kills you, a card names them and the killing blow ("Slain by Bob. Ambush for 700."): left-click holds the grudge, right-click lets it go. Or `/tlk grudge` on your target or a name. | The Krew tallies their kills of us against ours of them: `Krew 3 : 5 Bob`. |
-| Mark for death | `/tlk mark` on your target or a name. `/tlk unmark` lifts it (they stay a grudge). | The Krew hunts them. Your recent marks reach Krew members who join the group later. |
+| Mark for death | `/tlk mark` on your target or a name. `/tlk unmark` lifts it (they stay a grudge). | The Krew hunts them. Your three most recent marks (and wars) reach Krew members who join the group later, in one message each however many join at once. |
 | Champion | `/tlk glory` on your target or a name. Works on either faction. | Someone the Krew aids. |
 | Guild at war | `/tlk war` on your target (their guild) or `/tlk war <guild name>`. `/tlk peace <guild>` ends it. | Every member counts as an enemy of the Krew, with a tally of kills each way. |
 
-`/tlk ledger` lists everyone and every war, and `/tlk forgive <name>` removes someone. The right-click menu on a player offers the same choices, including war on their guild.
+`/tlk ledger` lists everyone and every war, and `/tlk forgive <name>` removes someone. The right-click menu on a player offers the same choices, including war on their guild. A typed name can be in any case: `/tlk mark cara doe` finds Cara Doe in the ledger or among the enemies you've met, and a guild name finds a guild at war or one you've seen.
 
-**Rivalry records:** every enemy player you meet gets a record: class, level, guild, times seen, where, and the score against them. `/tlk rival <name>` shows it, and tooltips show the score of anyone the Krew has fought. Ledger people are never forgotten; strangers you haven't seen in a long time make room after a thousand records.
+The ledger holds up to 300 people and never forgets anyone on its own. When it's full, a new mark, grudge or champion (yours or the Krew's) is turned away with a message in chat, and nothing is sent, until you forgive someone to make room.
+
+**Rivalry records:** every enemy player you meet gets a record: class, level, guild, times seen, where, and the score against them. `/tlk rival <name>` shows it, and tooltips show the score of anyone the Krew has fought. Ledger people's records are always kept; past a thousand records, the hundred strangers you've seen least recently make room.
 
 **Nameplate badges:** marked enemies wear a skull above their nameplate, grudges a cross, members of a guild at war a square, and champions a star. The ledger is shared, so the whole Krew sees the same badges. They're your own markers: the game doesn't let addons set real raid icons.
 
@@ -252,7 +259,7 @@ World PvP for a Krew that takes the war seriously. An account-wide ledger rememb
 - **Sightings:** when a ledger player's nameplate appears, or you target or mouse over them, a raid warning says so. The Krew hears where you saw them. A champion in a fight asks the Krew for aid. A guild at war showing up in numbers raises one warning, not one per member.
 - **Vengeance:** an honorable kill on a marked or grudge enemy settles the score for everyone, counted once however many of you got credit. Kills of anyone else count quietly in their record.
 - **Rally:** `/tlk rally` calls the Krew to you. They get a raid warning and a map waypoint to your position.
-- **Enemy gatherings:** when five or more enemy players show up on your nameplates within a minute, the Krew gets a card saying how many and where. Clicking it sets a waypoint. That's how to find the other faction's world events.
+- **Enemy gatherings:** when five or more enemy players show up on your nameplates within a minute, the Krew gets a card saying how many and where. Clicking it sets a waypoint. That's how to find the other faction's world events. One report per place every five minutes: once a Krew member has reported a gathering, the rest of the Krew neither sees it again nor reports it themselves.
 
 Tips:
 - Turn on enemy nameplates; sightings and gatherings see what they see.
@@ -265,14 +272,14 @@ The client gives addons no combat log, but Blizzard's death recap names your kil
 
 Math and reading riddles for young players, set up by a parent. It's off by default and set per character, so turn it on for your child's characters only.
 
-- **When:** after a set number of minutes of play (30 by default, 10 to 120) and, optionally, at each level-up. Play time is saved per character, so relogging doesn't skip a riddle.
+- **When:** after a set number of minutes of play (30 by default, 10 to 120) and, optionally, at each level-up. Play time is saved per character, so relogging doesn't skip a riddle. Time AFK, or with both subjects switched off, doesn't count.
 - **How:** the riddle covers the screen and holds the mouse and keyboard until it's solved. Answer with 1-4, a click, or the controller's face buttons. **Gate** mode must be solved; **Gentle** mode offers Skip after one wrong try. A wrong answer shows a hint.
 - **Never in combat:** a riddle waits for the fight to end. One on screen steps aside when a fight starts and comes back after.
-- **The screen:** the Owl Sage asks. The header shows the stars, a bar toward the next rank ("5 more to Journeyman") and the streak. The story sits above the question, which has its own band; numbers and target words are highlighted. For small numbers in the early grades, the riddle is drawn: bags of apples to count, two piles to join, or a pile with some crossed out. The big answers each have their key on a raised keycap. A wrong answer shakes, and the right one turns green while a "+1" rises. **Need a hint?** is free (the streak survives), and **Read aloud** speaks the riddle and its choices with the game's text-to-speech voice.
+- **The screen:** the Owl Sage asks. The header shows the stars, a bar toward the next rank ("5 more to Journeyman") and the streak. The story sits above the question, which has its own band; numbers and target words are highlighted. For small numbers in the early grades, the riddle is drawn with the items it counts: bags of apples, two piles to join, or a pile with some crossed out. The big answers each have their key on a raised keycap. A wrong answer shakes, and the right one turns green while a "+1" rises. **Need a hint?** is free (the streak survives), and **Read aloud** speaks the riddle and its choices with the game's text-to-speech voice.
 - **Controllers and keyboards:** the face buttons answer, the left shoulder asks for the hint, the right shoulder reads aloud, and Back skips (Gentle mode, after a try). On a keyboard it's 1-4, H, R and Esc. Every button shows its key for the device you're using.
 - **Riddles** are written for a chosen grade and adapt within it: every third right answer in a row makes them harder, and two misses on one riddle make them easier. Math and reading alternate, and either can be switched off. Many use the character's own name, class, zone and gold.
 - **Rewards:** a star per riddle, streaks, and scholar ranks (Apprentice, Journeyman, Adept, Sage, Archmage), each with a card.
-- **Parent lock:** `/tlk lock <pin>` (4 to 8 digits) locks every Scholar setting, including the on switch, in slash commands and the settings panel. `/tlk unlock <pin>` unlocks it for the session, and it locks again at the next login. The PIN is saved as a hash, which keeps it from sitting in the file as-is but isn't real security.
+- **Parent lock:** `/tlk lock <pin>` (4 to 8 digits) locks every Scholar setting, including the on switch, in slash commands and the settings panel. `/tlk unlock <pin>` unlocks it for the session, and it locks again at the next login. While locked, the PIN can't be changed; unlock first. After three wrong PINs, unlocking waits a minute, even across a `/reload`. The PIN is saved as a hash, which keeps it from sitting in the file as-is but isn't real security.
 - `/tlk scholar` shows stars and the time to the next riddle. `/tlk puzzle` asks one now.
 
 It's meant to be fun, not a hard limit. A controller's sticks still move the character, and a determined child can disable the addon at character select. For hard limits, use Blizzard's parental controls (play time limits in Battle.net account settings).

@@ -1,7 +1,7 @@
 -- Scholar's challenge: scheduling, the overlay, input capture, rewards and the parent lock.
 
 local function Load(saved)
-    local h = Harness.new({ saved = saved or {} })
+    local h = Harness.New({ saved = saved or {} })
     h:SeedRandom(7)
     local ns = h:LoadAddon("TheLanKrewToolKit")
     return h, ns.Addon
@@ -52,6 +52,19 @@ test("the right answer earns a star, closes the riddle and resets the timer", fu
     eq(addon.State:Get("Scholar.stars"), 1)
     eq(addon.State:Get("Scholar.pending"), false)
     eq(addon.State:Get("Scholar.elapsed"), 0)
+end)
+
+test("turning the challenge off right after a right answer still finishes the riddle", function()
+    local h, addon = LoadKid({ ["Scholar.pending"] = true })
+    for key = 1, 4 do
+        h:Key(tostring(key), true)
+    end
+    eq(addon.State:Get("Scholar.stars"), 1)
+    addon.State:Set("Scholar.enabled", false)
+    eq(addon.State:Get("Scholar.pending"), false, "the solved riddle isn't due again")
+    eq(addon.State:Get("Scholar.elapsed"), 0)
+    addon.State:Set("Scholar.enabled", true)
+    falsy(Showing(h), "no riddle reappears")
 end)
 
 test("a riddle never appears in combat, steps aside when a fight starts, and comes back after", function()
@@ -127,6 +140,94 @@ test("the lock comes back at the next login", function()
     eq(h.ns.Addon.State:Get("Scholar.locked"), true)
 end)
 
+test("while locked, a new PIN can't replace the parent's", function()
+    local h, addon = LoadKid()
+    h:Slash("/tlk lock 2468")
+    h:Slash("/tlk lock 1111")
+    h:Slash("/tlk unlock 1111")
+    eq(addon.State:Get("Scholar.locked"), true, "the child's PIN doesn't unlock")
+    h:Slash("/tlk toggle Scholar.enabled")
+    eq(addon.State:Get("Scholar.enabled"), true, "so Scholar stays on")
+    truthy(addon.State:IsLocked("Scholar.pin"), "the PIN row itself is locked")
+    h:Slash("/tlk unlock 2468")
+    eq(addon.State:Get("Scholar.locked"), false, "the parent's PIN still works")
+    h:Slash("/tlk lock 1357")
+    h:Slash("/tlk unlock 2468")
+    eq(addon.State:Get("Scholar.locked"), true, "unlocked, the parent can change the PIN")
+    h:Slash("/tlk unlock 1357")
+    eq(addon.State:Get("Scholar.locked"), false)
+end)
+
+test("three wrong PINs make unlocking wait a minute, even across a /reload", function()
+    local h, addon = LoadKid()
+    h:Slash("/tlk lock 2468")
+    h:Slash("/tlk unlock 0001")
+    h:Slash("/tlk unlock 0002")
+    h:Reload()
+    h:Slash("/tlk unlock 0003")
+    h:Slash("/tlk unlock 2468")
+    eq(h.ns.Addon.State:Get("Scholar.locked"), true, "the right PIN waits too, so guessing gains nothing")
+    h:Reload()
+    h:Advance(30)
+    h:Slash("/tlk unlock 2468")
+    eq(h.ns.Addon.State:Get("Scholar.locked"), true, "a /reload doesn't end the wait")
+    h:Advance(31)
+    h:Slash("/tlk unlock 2468")
+    eq(h.ns.Addon.State:Get("Scholar.locked"), false, "after a minute the right PIN unlocks")
+end)
+
+test("time AFK doesn't count toward the next riddle", function()
+    local h, addon = LoadKid()
+    h.player.afk = true
+    h:Fire("PLAYER_FLAGS_CHANGED", "player")
+    h:Advance(2 * 3600)
+    falsy(Showing(h))
+    eq(addon.State:Get("Scholar.elapsed"), 0)
+    h.player.afk = false
+    h:Fire("PLAYER_FLAGS_CHANGED", "player")
+    h:Advance(29 * 60)
+    falsy(Showing(h))
+    h:Advance(60)
+    truthy(Showing(h), "play time counts again")
+end)
+
+test("with both subjects off, no riddle comes due and the timer holds", function()
+    local h, addon = LoadKid({ ["Scholar.math"] = false, ["Scholar.reading"] = false })
+    h:Advance(3 * 3600)
+    falsy(Showing(h))
+    eq(addon.State:Get("Scholar.elapsed"), 0, "no time piles up")
+    eq(addon.State:Get("Scholar.pending"), false)
+    addon.State:Set("Scholar.math", true)
+    h:Advance(31 * 60)
+    truthy(Showing(h), "a riddle comes after an interval of play with a subject on")
+end)
+
+test("a /reload during the celebration doesn't ask another riddle", function()
+    local h, addon = LoadKid({ ["Scholar.pending"] = true })
+    for key = 1, 4 do
+        h:Key(tostring(key), true)
+    end
+    truthy(Showing(h), "the celebration is still on screen")
+    eq(h.env.TheLanKrewToolKitCharDB["Scholar.pending"], nil, "the riddle is no longer due in the saved variables")
+    h:Reload()
+    falsy(Showing(h))
+    eq(h.ns.Addon.State:Get("Scholar.stars"), 1)
+end)
+
+test("a fight during the celebration sends it away for good", function()
+    local h, addon = LoadKid({ ["Scholar.pending"] = true })
+    for key = 1, 4 do
+        h:Key(tostring(key), true)
+    end
+    h:EnterCombat()
+    falsy(Showing(h), "steps aside")
+    h:LeaveCombat()
+    falsy(Showing(h), "the solved riddle doesn't come back")
+    h:Advance(2)
+    falsy(Showing(h))
+    eq(addon.State:Get("Scholar.stars"), 1)
+end)
+
 test("stars reach the Krew", function()
     local h, addon = LoadKid({ ["Scholar.pending"] = true })
     h:JoinGroup("party", { "Mom" })
@@ -141,9 +242,7 @@ test("stars reach the Krew", function()
     truthy(shared)
 end)
 
--- The screen ----------------------------------------------------------------------------
-
-local SHARES = {
+local Shares = {
     subject = "math", kind = "math.divide", title = "Fair Shares",
     prompt = "20 carrots are shared equally by 4 hunters. How many carrots does each hunter get?",
     choices = { "9", "6", "5", "4" }, answer = 3, hint = "Think: 4 times what number makes 20?",
@@ -151,10 +250,10 @@ local SHARES = {
 }
 
 local function Screen()
-    local h = Harness.new()
+    local h = Harness.New()
     local ns = h:LoadAddon("TheLanKrewToolKit")
     local view = ns.ScholarView
-    view.Show(SHARES, { stars = 2, rank = "Apprentice", nextRank = "Journeyman", nextAt = 10, progress = 0.2, streak = 2,
+    view.Show(Shares, { stars = 2, rank = "Apprentice", nextRank = "Journeyman", nextAt = 10, progress = 0.2, streak = 2,
         gentle = false, canSpeak = true, keys = { "1", "2", "3", "4" } })
     return h, view, view.Frame()
 end
@@ -196,11 +295,11 @@ end)
 
 test("right and wrong answers look different, and the hint says so", function()
     local h, view, frame = Screen()
-    view.Wrong(1, SHARES.hint, false)
+    view.Wrong(1, Shares.hint, false)
     falsy(frame.Buttons[1]:IsEnabled())
     truthy(Text(frame.Feedback.Text):find("Hint:", 1, true))
     eq(frame.Buttons[1].State, "wrong")
-    view.Correct(3, SHARES.explanation, { stars = 3, rank = "Apprentice", nextRank = "Journeyman", nextAt = 10, progress = 0.3,
+    view.Correct(3, Shares.explanation, { stars = 3, rank = "Apprentice", nextRank = "Journeyman", nextAt = 10, progress = 0.3,
         streak = 3, earned = 1, levelUp = true })
     truthy(Text(frame.Feedback.Text):find("Correct!", 1, true))
     eq(frame.Buttons[3].State, "right")
@@ -227,7 +326,7 @@ end)
 
 test("a right answer raises a +1 and the streak says the riddles got harder", function()
     local h, view, frame = Screen()
-    view.Correct(3, SHARES.explanation, { stars = 3, rank = "Apprentice", nextRank = "Journeyman", nextAt = 10, progress = 0.3,
+    view.Correct(3, Shares.explanation, { stars = 3, rank = "Apprentice", nextRank = "Journeyman", nextAt = 10, progress = 0.3,
         streak = 3, earned = 1, levelUp = true })
     eq(Text(frame.Gain), "+1")
     truthy(frame.Rise:IsPlaying())
@@ -240,7 +339,7 @@ end)
 
 test("a wrong answer shakes", function()
     local h, view, frame = Screen()
-    view.Wrong(2, SHARES.hint, false)
+    view.Wrong(2, Shares.hint, false)
     truthy(frame.Buttons[2].Shake:IsPlaying())
 end)
 
@@ -248,7 +347,7 @@ test("the hint button shows the hint in the footer's place", function()
     local h, view, frame = Screen()
     falsy(frame.Feedback:IsShown())
     truthy(frame.Hint:IsShown())
-    view.Hint(SHARES.hint)
+    view.Hint(Shares.hint)
     truthy(frame.Feedback:IsShown())
     falsy(frame.Hint:IsShown(), "the banner takes the footer's place")
     truthy(Text(frame.Feedback.Text):find("times what number makes", 1, true))
@@ -264,7 +363,7 @@ test("a groups riddle is drawn as bags of items", function()
     view.Show({ subject = "math", kind = "math.groups", title = "Stacks and Stacks",
         prompt = "Pip the gnome fills 5 bags with 6 apples in each bag. How many apples is that?",
         choices = { "35", "29", "30", "25" }, answer = 3, hint = "", explanation = "",
-        picture = { kind = "groups", groups = 5, each = 6 } },
+        picture = { kind = "groups", groups = 5, each = 6, item = "apple" } },
         { stars = 3, rank = "Apprentice", keys = { "1", "2", "3", "4" } })
     local shown = 0
     for _, icon in ipairs(frame.Pictures.Icons) do
@@ -279,8 +378,30 @@ test("a groups riddle is drawn as bags of items", function()
         if card:IsShown() then bags = bags + 1 end
     end
     eq(bags, 5)
-    view.Show(SHARES, { stars = 3, rank = "Apprentice", keys = { "1", "2", "3", "4" } })
+    view.Show(Shares, { stars = 3, rank = "Apprentice", keys = { "1", "2", "3", "4" } })
     falsy(frame.Pictures:IsShown(), "no picture, no picture area")
+end)
+
+test("a picture draws the riddle's own item, whatever words its story uses", function()
+    local h, view, frame = Screen()
+    local function Textures()
+        local seen = {}
+        for _, icon in ipairs(frame.Pictures.Icons) do
+            if icon:IsShown() then seen[Harness.State(icon).texture] = true end
+        end
+        local list = {}
+        for texture in pairs(seen) do list[#list + 1] = texture end
+        return table.concat(list, ",")
+    end
+    local riddle = { subject = "math", kind = "math.add", title = "Add Them Up",
+        prompt = "In Barrow Den, Pip picks 3 mushrooms. Then Pip picks 2 more. How many mushrooms is that?",
+        choices = { "5", "6", "4", "7" }, answer = 1, hint = "", explanation = "",
+        picture = { kind = "join", a = 3, b = 2, item = "mushroom" } }
+    view.Show(riddle, { stars = 3, rank = "Apprentice", keys = { "1", "2", "3", "4" } })
+    eq(Textures(), "Interface\\Icons\\INV_Mushroom_11", "mushrooms, never arrows from \"Barrow\"")
+    riddle.picture.item = "cookie"
+    view.Show(riddle, { stars = 3, rank = "Apprentice", keys = { "1", "2", "3", "4" } })
+    eq(Textures(), "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", "an item without an icon is a star")
 end)
 
 test("taking away crosses out the ones taken", function()
@@ -313,12 +434,10 @@ test("the hint button costs nothing: the streak survives", function()
     truthy(Overlay(h).Feedback:IsShown())
 end)
 
--- Controllers ---------------------------------------------------------------------------
-
 local function PadKid(extra)
     local char = { ["Scholar.enabled"] = true, ["Scholar.pending"] = true }
     for key, value in pairs(extra or {}) do char[key] = value end
-    local h = Harness.new({ saved = { TheLanKrewToolKitCharDB = char } })
+    local h = Harness.New({ saved = { TheLanKrewToolKitCharDB = char } })
     h.labelStyle = "Letters"
     h:SeedRandom(7)
     local ns = h:LoadAddon("TheLanKrewToolKit")
@@ -376,8 +495,6 @@ test("on a keyboard, H asks for the hint and R reads aloud", function()
     eq(#h.spoken, before + 1)
 end)
 
--- Layout ---------------------------------------------------------------------------------
-
 local function Point(region)
     local point, relativeTo, relativePoint, x, y = region:GetPoint(1)
     return { point = point, relativeTo = relativeTo, relativePoint = relativePoint, x = x, y = y }
@@ -396,7 +513,7 @@ end)
 
 test("the feedback banner stops short of the footer's right-hand buttons", function()
     local h, view, frame = Screen()
-    view.Wrong(1, SHARES.hint, true)
+    view.Wrong(1, Shares.hint, true)
     truthy(frame.Skip:IsShown())
     local banner = { frame.Feedback:GetPoint(2) }
     eq(banner[2], frame.Skip, "the banner ends at Skip, the leftmost right-hand button")
@@ -442,8 +559,8 @@ test("dimmed and wrong answers dim their keycaps too", function()
         return Harness.State(button.Keycap).color[1]
     end
     local normal = Red(frame.Buttons[1])
-    view.Wrong(1, SHARES.hint, false)
-    view.Correct(3, SHARES.explanation, { stars = 3, rank = "Apprentice" })
+    view.Wrong(1, Shares.hint, false)
+    view.Correct(3, Shares.explanation, { stars = 3, rank = "Apprentice" })
     truthy(Red(frame.Buttons[1]) < normal, "the wrong answer's keycap dims")
     truthy(Red(frame.Buttons[2]) < normal, "a dimmed answer's keycap dims")
     eq(Red(frame.Buttons[3]), normal, "the right answer's keycap stays bright")

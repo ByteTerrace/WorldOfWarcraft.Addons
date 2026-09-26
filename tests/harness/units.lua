@@ -2,7 +2,8 @@
 -- the player's death, combo points, raid target icons and realms (see wow.lua for the rest).
 --
 -- A unit table (h.player, h:SetTarget, h:SetUnit, h:AddNamePlate, h:SetMouseover) holds:
---   name, realm (nil = the player's realm; UnitName returns name, realm only for another realm),
+--   name, surname (players default to Harness.DEFAULT_SURNAME; UnitName returns name, surname,
+--   as Forever does), realm (nil = the player's realm; only chat senders and GUID lookups show it),
 --   class (the classFile, "WARRIOR"; UnitClass returns className, classFile, classID), level,
 --   race (the raceFile, "Human"; UnitRace returns raceName, raceFile, raceID), faction ("Alliance"
 --   or "Horde"; UnitFactionGroup returns it and its enUS name; nil = none), isPlayer,
@@ -13,7 +14,7 @@
 --   "rare", "trivial" or "minus"; level -1 is a skull-level unit), comboPoints (the player's on
 --   this unit; set through h:SetComboPoints), boss (UnitIsBossMob),
 --   raidTarget (the raid icon, set through h:MarkRaidTarget), and guild, guildRank,
---   guildRankIndex and guildRealm (nil = the player's realm) for a guild member (Harness.new
+--   guildRankIndex and guildRealm (nil = the player's realm) for a guild member (Harness.New
 --   takes the same four for the player).
 -- The secret predicates (secrets.lua) stay authoritative: a player-controlled unit's name, class,
 -- race and GUID are readable; an NPC's identity is secret.
@@ -80,20 +81,20 @@
 --               player's. Guild rosters and PLAYER_GUILD_UPDATE aren't modeled.
 
 Harness.MAX_NAMEPLATES = 40
-local SERVER_ID = 5000
+local ServerId = 5000
 
 -- UnitRace: raceName (enUS), raceFile, raceID, for the races Forever characters can be.
-local RACES = {
+local Races = {
     Human = { "Human", 1 }, Orc = { "Orc", 2 }, Dwarf = { "Dwarf", 3 }, NightElf = { "Night Elf", 4 },
     Scourge = { "Undead", 5 }, Tauren = { "Tauren", 6 }, Gnome = { "Gnome", 7 }, Troll = { "Troll", 8 },
 }
-Harness.RACES = RACES
+Harness.RACES = Races
 
 -- FACTION_ALLIANCE and FACTION_HORDE (GlobalStrings, enUS).
-local FACTIONS = { Alliance = "Alliance", Horde = "Horde" }
-Harness.FACTIONS = FACTIONS
+local Factions = { Alliance = "Alliance", Horde = "Horde" }
+Harness.FACTIONS = Factions
 
--- Unit fields and per-harness unit state, from Harness.new's player spec.
+-- Unit fields and per-harness unit state, from Harness.New's player spec.
 function Harness:InitUnits(player)
     self.player.faction = player.faction or "Alliance"
     self.player.race = player.race or "Human"
@@ -103,16 +104,18 @@ function Harness:InitUnits(player)
     self.guidUnits = {} -- [guid] = the unit table it was given to
 end
 
--- GUIDs ---------------------------------------------------------------------
-
--- A unit's GUID, assigned on first use unless the test gave one.
+-- A unit's GUID, assigned on first use unless the test gave one. A player known only by GUID (a
+-- killer, a victim) is a Forever character too, so it gets the default surname.
 function Harness:GUID(unit)
+    if unit.isPlayer and unit.surname == nil then
+        unit.surname = Harness.DEFAULT_SURNAME
+    end
     if unit.guid == nil then
         self.guidSerial = self.guidSerial + 1
         if unit.isPlayer then
-            unit.guid = ("Player-%d-%08X"):format(SERVER_ID, self.guidSerial)
+            unit.guid = ("Player-%d-%08X"):format(ServerId, self.guidSerial)
         else
-            unit.guid = ("Creature-0-%d-0-1-%d-%010X"):format(SERVER_ID, unit.npcID or 0, self.guidSerial)
+            unit.guid = ("Creature-0-%d-0-1-%d-%010X"):format(ServerId, unit.npcID or 0, self.guidSerial)
         end
     end
     self.guidUnits[unit.guid] = unit
@@ -138,8 +141,6 @@ function Harness:UnitTokenForGUID(guid)
         end
     end
 end
-
--- Nameplates ----------------------------------------------------------------
 
 -- Gives the unit (a unit table, as h:SetUnit takes it) the lowest free nameplateN token, fires
 -- NAME_PLATE_CREATED for a new plate frame, shows the plate, fires NAME_PLATE_UNIT_ADDED(token)
@@ -191,8 +192,6 @@ local function PlateTokenFor(h, unit)
     end
 end
 
--- Mouseover -----------------------------------------------------------------
-
 -- Sets the "mouseover" unit (nil clears it). A unit fires UPDATE_MOUSEOVER_UNIT; clearing fires
 -- nothing, like the client.
 function Harness:SetMouseover(unit)
@@ -201,8 +200,6 @@ function Harness:SetMouseover(unit)
         self:Fire("UPDATE_MOUSEOVER_UNIT")
     end
 end
-
--- Hits ------------------------------------------------------------------------
 
 -- A hit on the player: health drops by amount, then UNIT_HEALTH and UNIT_COMBAT("player", "WOUND",
 -- flagText, amount, schoolMask 1) fire, as the client sends them for a hit (Blizzard's player
@@ -221,16 +218,12 @@ function Harness:HealPlayer(amount)
     self:Fire("UNIT_COMBAT", "player", "HEAL", "", amount, 2)
 end
 
--- Combo points ---------------------------------------------------------------
-
 -- Sets the player's combo points on the current target and fires UNIT_POWER_FREQUENT.
 function Harness:SetComboPoints(count)
     assert(self.target, "SetComboPoints: there's no target to hold them")
     self.target.comboPoints = count
     self:Fire("UNIT_POWER_FREQUENT", "player", "COMBO_POINTS")
 end
-
--- Death ---------------------------------------------------------------------
 
 -- The player dies: PLAYER_DEAD (still in combat, if they were), then combat ends.
 function Harness:Die()
@@ -257,8 +250,6 @@ function Harness:Revive()
     player.dead, player.ghost, player.health = false, false, player.maxHealth
     self:Fire(wasGhost and "PLAYER_UNGHOST" or "PLAYER_ALIVE")
 end
-
--- Raid targets --------------------------------------------------------------
 
 -- Whether the player may set raid target icons: solo and in a party anyone, in a raid the leader
 -- and assistants.
@@ -302,8 +293,6 @@ function Harness:MarkRaidTarget(token, index)
     h:Fire("RAID_TARGET_UPDATE")
 end
 
--- Fakes ---------------------------------------------------------------------
-
 -- The unit fakes, merged into the env (env.lua) before it wraps them.
 function Harness:UnitFakes()
     local h = self
@@ -343,15 +332,15 @@ function Harness:UnitFakes()
         UnitRace = function(u)
             local unit = Unit(u)
             if not unit or unit.race == nil then return end
-            local race = RACES[unit.race]
+            local race = Races[unit.race]
             assert(race, "UnitRace: unknown raceFile " .. tostring(unit.race) .. " (Harness.RACES)")
             return race[1], unit.race, race[2]
         end,
         UnitFactionGroup = function(u)
             local unit = Unit(u)
             if not unit or unit.faction == nil then return end
-            assert(FACTIONS[unit.faction], "UnitFactionGroup: unknown faction " .. tostring(unit.faction))
-            return unit.faction, FACTIONS[unit.faction]
+            assert(Factions[unit.faction], "UnitFactionGroup: unknown faction " .. tostring(unit.faction))
+            return unit.faction, Factions[unit.faction]
         end,
         UnitGUID = function(u)
             local unit = Unit(u)

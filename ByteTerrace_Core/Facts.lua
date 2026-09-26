@@ -3,13 +3,19 @@
 -- reader works from the row. A fact never holds a secret: an adapter whose API can return one
 -- checks issecretvalue and keeps the last known value.
 --
--- Facts are declared before an addon's own modules, so they're enabled first and hold their real
--- value before any other module's rules take their first reading (a /reload in combat must not
--- look like combat starting).
+-- An addon opts in with NewAddOn's facts = { ... }. Facts are declared before its own modules, so
+-- they're enabled first and hold their real value before any other module's rules take their
+-- first reading (a /reload in combat must not look like combat starting).
 --
 --   combat.active  true while the player is in combat. Set on PLAYER_REGEN_DISABLED, before
 --                  InCombatLockdown() turns true.
 --   afk.active     true while the player is flagged AFK.
+--
+-- Demand facts run only while a module that uses them runs (uses = { "target" }), so a fact no
+-- running feature reads registers nothing:
+--   target  what your target is (FactsTarget.lua).
+--   kills   your honorable kills and killing blows (FactsKills.lua).
+--   death   your deaths and who dealt them (FactsDeath.lua).
 
 local ByteTerrace = ByteTerrace
 local InCombatLockdown, issecretvalue = InCombatLockdown, issecretvalue

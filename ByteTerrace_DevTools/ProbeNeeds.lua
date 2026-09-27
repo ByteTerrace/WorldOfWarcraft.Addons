@@ -44,6 +44,14 @@ local function HasRecapEvent(kind)
     return false
 end
 
+-- Whether the damage meter's current session of a type has a source: someone in it.
+local function HasSources(meterType)
+    local current = Enum.DamageMeterSessionType.Current
+    -- secret: only the sources list is read, checked with issecretvalue
+    local sources = C_DamageMeter.GetCombatSessionFromType(current, meterType).combatSources
+    return not issecretvalue(sources) and type(sources) == "table" and sources[1] ~= nil
+end
+
 local Needs = {
     idle = {
         label = "idle",
@@ -193,14 +201,10 @@ local Needs = {
         text = "right after killing a mob that hit you (out of combat, before the next pull)",
         step = 4,
         check = function()
-            if UnitAffectingCombat("player") then
-                return false
-            end
-            local current, damageTaken = Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.DamageTaken
-            -- secret: only the sources list is read, checked with issecretvalue
-            local session = C_DamageMeter.GetCombatSessionFromType(current, damageTaken)
-            local sources = session.combatSources
-            return not issecretvalue(sources) and type(sources) == "table" and sources[1] ~= nil
+            local types = Enum.DamageMeterType
+            -- A fight you were hit in but dealt no damage in (a death on the run) has no enemy to show.
+            return not UnitAffectingCombat("player") and HasSources(types.DamageTaken)
+                and HasSources(types.DamageDone) and HasSources(types.EnemyDamageTaken)
         end,
         setup = function(h)
             h:MeterFight({
@@ -223,9 +227,11 @@ local Needs = {
     },
     twoFights = {
         label = "after two fights",
-        text = "two fights since logging in (kill two mobs)",
+        text = "two fights since logging in (kill two mobs), the latest one you dealt damage in",
         step = 4,
-        check = function() return #C_DamageMeter.GetAvailableCombatSessions() >= 2 end,
+        check = function()
+            return #C_DamageMeter.GetAvailableCombatSessions() >= 2 and HasSources(Enum.DamageMeterType.DamageDone)
+        end,
         setup = function(h)
             h:MeterFight({ duration = 6, sources = { { unit = "player", amounts = { DamageDone = 300 } } } })
             h:MeterFight({ duration = 9, sources = { { unit = "player", amounts = { DamageDone = 700 } } } })

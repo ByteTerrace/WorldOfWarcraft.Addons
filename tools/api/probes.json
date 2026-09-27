@@ -235,7 +235,7 @@
       "result": {
         "partyKill": { "attacker": "you", "attackerKind": "Player", "target": "Creature" },
         "targetDied": true,
-        "unitDied": { "unit": "Creature" }
+        "unitDied": { "unit": "Creature,Player" }
       },
       "context": { "combat": false, "restrictions": "none" }
     },
@@ -381,10 +381,10 @@
         "hasObjectives": true,
         "numFulfilled": "number",
         "numRequired": "number",
-        "objectiveType": "number",
+        "objectiveType": "nil,number",
         "text": "text",
         "type": "text",
-        "types": "item"
+        "types": "item,log"
       },
       "context": { "combat": false, "restrictions": "none" }
     },
@@ -500,7 +500,7 @@
       "result": {
         "actions": "DODGE,HEAL,MISS,PARRY,WOUND",
         "amountInCombat": "number",
-        "flagTexts": "BLOCK_REDUCED,CRITICAL",
+        "flagTexts": "BLOCK_REDUCED,CRITICAL,GLANCING",
         "player": {
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "HEAL": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
@@ -511,7 +511,7 @@
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "MISS": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "PARRY": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
-          "WOUND": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" }
+          "WOUND": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" }
         }
       },
       "context": { "combat": false, "restrictions": "none" }

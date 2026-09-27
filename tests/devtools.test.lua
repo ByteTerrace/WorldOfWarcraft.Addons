@@ -344,3 +344,43 @@ test("chat senders are kept as name shapes, never names", function()
     eq(ns.Probes.Senders.CHAT_MSG_SAY, "Aa Aa-Aa")
     eq(ns.Probes.Senders.CHAT_MSG_CHANNEL, "Aa")
 end)
+
+test("kill events accumulate: a player kill after a mob kill keeps both kinds", function()
+    local h = Load()
+    local me = h:GUID(h.player)
+    h:Fire("PARTY_KILL", me, h:GUID({ name = "Kobold" }))
+    h:Fire("PARTY_KILL", me, h:GUID({ name = "Cara", isPlayer = true }))
+    local kills = h.ns.Probes.Kills
+    eq(kills.partyKill.attacker, "you")
+    eq(kills.partyKill.target, "Creature,Player")
+end)
+
+test("an accumulating probe's record grows across sessions and reloads", function()
+    local record = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },
+        result = { partyKill = { attacker = "pet", attackerKind = "Pet", target = "Creature" }, targetDied = true } }
+    local h = Load({ ByteTerraceDevToolsDB = { probes = { ["kills.seen"] = record } } })
+    h:Fire("PARTY_KILL", h:GUID(h.player), h:GUID({ name = "Cara", isPlayer = true }))
+    h:Fire("CHAT_MSG_SAY", "hi", "Bob")
+    h:Slash("/btdev probe")
+    local result = Records(h)["kills.seen"].result
+    eq(result.partyKill.attacker, "pet,you")
+    eq(result.partyKill.target, "Creature,Player")
+    eq(result.targetDied, true, "kept from the earlier session")
+    h:Reload()
+    h:Fire("CHAT_MSG_CHANNEL", "hi", "Dh Taketwo-Realm")
+    h:Slash("/btdev probe")
+    local senders = Records(h)["names.chatSenders"].result
+    eq(senders.CHAT_MSG_SAY, "Aa", "a reload keeps what the last session heard")
+    eq(senders.CHAT_MSG_CHANNEL, "Aa Aa-Aa")
+end)
+
+test("a fight in which you dealt no damage doesn't count as after a fight", function()
+    local h = Load()
+    local hit = { spellID = 6603, totalAmount = 24, details = { unitName = "Kobold Vermin", classification = "normal", isMob = true } }
+    h:MeterFight({ duration = 6, sources = { { unit = "player", amounts = { DamageDone = 300 } } } })
+    h:MeterFight({ duration = 4, sources = { { unit = "player", spells = { DamageTaken = { hit } } } } })
+    h:Slash("/btdev probe")
+    eq(Records(h)["damageMeter.enemySource"], nil, "no enemy you hit, so no enemy source to describe")
+    eq(Records(h)["damageMeter.afterFight"], nil)
+    eq(Records(h)["damageMeter.typesIdle"], nil, "the latest fight isn't one you fought")
+end)

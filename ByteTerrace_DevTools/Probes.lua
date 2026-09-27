@@ -22,6 +22,9 @@ local addonName, ns = ...
 --     run compares with any other's. The exceptions list what a session happened to show, which
 --     is their point: unitCombat.seen's actions and flags, questLog.objectives' types.
 --   * harness (optional) is the reason the harness can't run this probe at all.
+--   * accumulates (optional) marks a probe whose result lists what sessions happened to show. Its
+--     new result merges into the current record instead of replacing it (Probes.Merge), so each
+--     session, and each /reload, adds to what earlier ones saw.
 --   * version (optional, 1 when absent) goes up whenever the result's shape changes: a record
 --     made by another version answered a different question, so it's no evidence for this one.
 --     Probes.IsCurrent tells them apart; /btdev probe list, the import and the tests ignore it.
@@ -32,9 +35,10 @@ local addonName, ns = ...
 --
 -- UNIT_COMBAT can't be asked for after the fact, so DevTools.lua listens for it from load (for
 -- the player and the target only) and passes each payload to Probes.NoteUnitCombat, which keeps
--- the last payload's shape per unit and action in Probes.UnitCombat; unitCombat.seen records it.
--- The kill events (PARTY_KILL, PLAYER_TARGET_DIED, UNIT_DIED) go to Probes.NoteKill the same
--- way, for kills.seen, and chat events' senders to Probes.NoteSender, for names.chatSenders.
+-- every payload's shape per unit and action, merged, in Probes.UnitCombat; unitCombat.seen
+-- records it. The kill events (PARTY_KILL, PLAYER_TARGET_DIED, UNIT_DIED) go to Probes.NoteKill
+-- the same way, for kills.seen, and chat events' senders to Probes.NoteSender, for
+-- names.chatSenders; each merges what it sees into what it kept.
 --
 -- A record is { build = "1.60.1 (70009)", context = { combat, restrictions }, result, version? }:
 -- the version of the probe that made it (absent for version 1), the build,
@@ -178,6 +182,33 @@ local function Joined(set)
     return table.concat(keys, ",")
 end
 
+-- Two values of the kind a record holds, as one: tables merge key by key, two different strings
+-- become the sorted union of their comma-separated items, two booleans are true if either is,
+-- and otherwise b stands (a when b is nil).
+local function Merge(a, b)
+    if b == nil then
+        return a
+    elseif type(a) == "table" and type(b) == "table" then
+        local merged = {}
+        for key, value in pairs(a) do
+            merged[key] = value
+        end
+        for key, value in pairs(b) do
+            merged[key] = Merge(a[key], value)
+        end
+        return merged
+    elseif type(a) == "string" and type(b) == "string" and a ~= b then
+        local items = {}
+        for item in (a .. "," .. b):gmatch("[^,]+") do
+            items[item] = true
+        end
+        return Joined(items)
+    elseif type(a) == "boolean" and type(b) == "boolean" then
+        return a or b
+    end
+    return b
+end
+
 -- Why a result can't be saved and compared, or nil: only string keys, and strings, booleans,
 -- finite numbers and tables of them.
 local function Problem(value, path)
@@ -253,7 +284,7 @@ Probes.NameShape = NameShape
 --- The shape helpers probes record with (documented above).
 Probes.Marker, Probes.Value, Probes.Shape, Probes.Text = Marker, Value, Shape, Text
 Probes.Byte, Probes.Fields, Probes.FieldShapes, Probes.Same = Byte, Fields, FieldShapes, Same
-Probes.First, Probes.Joined = First, Joined
+Probes.First, Probes.Joined, Probes.Merge = First, Joined, Merge
 
 --- Adds needs ({ [key] = need }); a key that's already defined is an error.
 function Probes.AddNeeds(needs)
@@ -336,9 +367,9 @@ function Probes.NoteUnitCombat(unit, action, flagText, amount, schoolMask)
     end
     local plainAction = not issecretvalue(action) and type(action) == "string" and action ~= ""
     local key = plainAction and action or (issecretvalue(action) and "secret" or Text(action))
-    byAction[key] = {
+    byAction[key] = Merge(byAction[key], {
         action = Text(action), flagText = Text(flagText), amount = Shape(amount), schoolMask = Shape(schoolMask),
-    }
+    })
     if unit == "player" and InCombatLockdown() then
         UnitCombat.amountInCombat = issecretvalue(amount) and "secret" or type(amount)
     end
@@ -379,9 +410,10 @@ end
 function Probes.NoteKill(event, ...)
     if event == "PARTY_KILL" then
         local attacker, target = ...
-        Kills.partyKill = { attacker = Whose(attacker), target = GUIDKind(target), attackerKind = GUIDKind(attacker) }
+        Kills.partyKill = Merge(Kills.partyKill,
+            { attacker = Whose(attacker), target = GUIDKind(target), attackerKind = GUIDKind(attacker) })
     elseif event == "UNIT_DIED" then
-        Kills.unitDied = { unit = GUIDKind((...)) }
+        Kills.unitDied = Merge(Kills.unitDied, { unit = GUIDKind((...)) })
     elseif event == "PLAYER_TARGET_DIED" then
         Kills.targetDied = true
     end
@@ -390,7 +422,7 @@ end
 --- Keeps a chat event's sender shape for names.chatSenders (DevTools.lua passes each one).
 ---@param event string
 function Probes.NoteSender(event, sender)
-    Senders[event] = NameShape(sender)
+    Senders[event] = Merge(Senders[event], NameShape(sender))
 end
 
 --- The needs' texts joined with " + ", or "nothing" for a probe that runs anywhere.

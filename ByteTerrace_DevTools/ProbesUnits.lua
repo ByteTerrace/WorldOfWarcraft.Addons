@@ -254,6 +254,7 @@ Probes.Define({
     {
         name = "unitCombat.seen",
         needs = { "unitCombat" },
+        accumulates = true,
         run = function()
             local function Copy(tbl)
                 local out = {}
@@ -276,6 +277,7 @@ Probes.Define({
         -- are new in the same client.
         name = "kills.seen",
         needs = { "killedMob" },
+        accumulates = true,
         run = function()
             return { partyKill = Kills.partyKill, unitDied = Kills.unitDied, targetDied = Kills.targetDied }
         end,

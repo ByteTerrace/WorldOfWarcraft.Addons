@@ -7,7 +7,8 @@ local addonName, ns = ...
 --                      member names), plus the build it came from, for
 --                      `node tools/tlk.mjs api-sync --globals <that file>` (tools/api/forever.json).
 --   /btdev probe       every calibration probe (Probes.lua and the files it names) whose needs are
---                      met right now, merged into the probes already recorded, for
+--                      met right now, merged into the probes already recorded (an accumulating
+--                      probe's result merges into its record: Probes.lua), for
 --                      `node tools/tlk.mjs probes --import` (tools/api/probes.json). Probes it
 --                      skips are printed with what they need.
 --   /btdev probe list  the probes with no result for this build yet, grouped by what they need,
@@ -159,6 +160,8 @@ local function RunProbes()
                 local previous = db.probes[probe.name]
                 if not Probes.IsCurrent(probe, previous) then
                     previous = nil -- an older version's record answered another question
+                elseif probe.accumulates and previous.build == record.build then
+                    record.result = Probes.Merge(previous.result, record.result)
                 end
                 local differences = previous and Probes.Diff(previous, record) or {}
                 if not previous then

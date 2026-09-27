@@ -81,6 +81,7 @@ Probes.Define({
         -- Krew's messages) and the chat channels say a player's name is.
         name = "names.chatSenders",
         needs = { "heardChat" },
+        accumulates = true,
         run = function()
             local result = {}
             for event, shape in pairs(Senders) do

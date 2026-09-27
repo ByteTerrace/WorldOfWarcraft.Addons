@@ -304,6 +304,7 @@ Probes.Define({
     {
         name = "questLog.objectives",
         needs = { "questLog" },
+        accumulates = true,
         run = function()
             local first, types = nil, {}
             for i = 1, C_QuestLog.GetNumQuestLogEntries() do

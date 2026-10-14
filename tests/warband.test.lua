@@ -292,6 +292,41 @@ test("five enemy players gathering are reported once", function()
     truthy(intel[1]:find("^INTEL:5\tAlliance\t1424\t"), intel[1])
 end)
 
+test("a gathering counts the enemies of one place: moving on starts the count over", function()
+    local h = Grouped()
+    h:AddMap(1424, { name = "Hillsbrad Foothills", mapType = "Zone" })
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Southshore", mapID = 1424, x = 0.5, y = 0.5 })
+    for i = 1, 4 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Darrow Hill", mapID = 1424, x = 0.4, y = 0.4 })
+    h:AddNamePlate(Enemy("Foe5"))
+    h:Advance(3)
+    eq(#Sent(h, "INTEL"), 0, "four at Southshore and one at Darrow Hill aren't five at Darrow Hill")
+end)
+
+test("a reported gathering costs no zone reads while it lasts; the next place is read afresh", function()
+    local h = Grouped()
+    h:AddMap(1424, { name = "Hillsbrad Foothills", mapType = "Zone" })
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Southshore", mapID = 1424, x = 0.5, y = 0.5 })
+    for i = 1, 6 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    h.apiCalls = {}
+    for i = 7, 11 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    eq(h:CountApiCalls("GetSubZoneText") + h:CountApiCalls("GetRealZoneText"), 0, "the place is known")
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Darrow Hill", mapID = 1424, x = 0.4, y = 0.4 })
+    for i = 12, 16 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    h:Advance(3)
+    local intel = Sent(h, "INTEL")
+    eq(#intel, 2)
+    truthy(intel[2]:find("Darrow Hill", 1, true), intel[2])
+end)
+
 test("Krew intel is a card that sets a waypoint on click", function()
     local h = Grouped()
     h:AddMap(1424, { name = "Hillsbrad Foothills", mapType = "Zone" })
@@ -381,6 +416,23 @@ test("a nameplate or mouseover reads the unit once", function()
     h.apiCalls = {}
     h:SetMouseover(Enemy("Cara", { inCombat = true }))
     eq(h:CountApiCalls("UnitName"), 1, "the sighting and the prime suspect share one reading")
+end)
+
+test("mousing over a creature or a friend never asks whether it's fighting", function()
+    local h = Grouped()
+    h.apiCalls = {}
+    h:SetMouseover({ name = "Kobold", canAttack = true, inCombat = true })
+    h:SetMouseover({ name = "Pal", isPlayer = true, playerControlled = true })
+    eq(h:CountApiCalls("UnitAffectingCombat"), 0)
+end)
+
+test("a player's tooltip reuses what the mouseover just read", function()
+    local h = Grouped()
+    h.apiCalls = {}
+    h:SetMouseover(Enemy())
+    h:ShowUnitTooltip("mouseover")
+    eq(h:CountApiCalls("UnitClass"), 1, "one reading")
+    eq(h:CountApiCalls("GetGuildInfo"), 1)
 end)
 
 test("nameplates below a gathering never read the zone", function()

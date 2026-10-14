@@ -9,7 +9,8 @@
 --                               module:Listen(comms, kind, fn) in OnEnable for automatic teardown.
 --
 -- Nothing is sent or received while the module is stopped: its handler and pending send go with
--- it, and the queue empties.
+-- it, and the queue empties. CHAT_MSG_ADDON is registered only while you're in a group, since
+-- nothing outside one can reach a listener: solo, other addons' messages cost nothing.
 --
 -- It plays by Blizzard's addon rules (no "excessive use of the chat system"), so every feature
 -- that talks to the group gets them without having to know them:
@@ -162,16 +163,16 @@ function ByteTerrace.NewComms(module, spec)
     return self
 end
 
---- Starts receiving: registers the prefix and the module's CHAT_MSG_ADDON handler. The module
---- calls it as it starts.
+--- Starts receiving: registers the prefix, and the module's CHAT_MSG_ADDON handler while you're
+--- in a group. The module calls it as it starts.
 function Comms:Open()
     C_ChatInfo.RegisterAddonMessagePrefix(self.m_prefix)
     local me = Names.Mine() -- nil while secret; looked up again then
-    local prefix, listeners = self.m_prefix, self.m_listeners
+    local module, prefix, listeners = self.m_module, self.m_prefix, self.m_listeners
     self.m_open = true
     self.m_session = self.m_session + 1
     local session = self.m_session
-    self.m_module:On("CHAT_MSG_ADDON", function(received, text, channel, sender)
+    local function Receive(received, text, channel, sender)
         -- Every addon's messages arrive here; the prefix test comes first, so theirs cost one check.
         if issecretvalue(received) or received ~= prefix then
             return
@@ -200,11 +201,24 @@ function Comms:Open()
                 end
             end
         end
-    end)
-    self.m_module:On("GROUP_LEFT", function()
+    end
+    local hearing -- the CHAT_MSG_ADDON handle, while you're in a group
+    local function FollowGroup()
+        if Channel() then
+            hearing = hearing or module:On("CHAT_MSG_ADDON", Receive)
+        elseif hearing then
+            module:Off(hearing)
+            hearing = nil
+        end
+    end
+    module:On("GROUP_JOINED", FollowGroup)
+    module:On("GROUP_ROSTER_UPDATE", FollowGroup)
+    module:On("GROUP_LEFT", function()
         DropQueue(self)
+        FollowGroup()
     end)
-    self.m_module:On("ADDON_RESTRICTION_STATE_CHANGED", function(restriction, state)
+    FollowGroup()
+    module:On("ADDON_RESTRICTION_STATE_CHANGED", function(restriction, state)
         -- Activating arrives before InChatMessagingLockdown reflects the restriction.
         if ChatRestrictions[restriction] and state ~= Enum.AddOnRestrictionState.Inactive then
             DropQueue(self)

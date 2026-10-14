@@ -12,7 +12,6 @@
 --                    PARTY_KILL, the event killing-blow addons read since the combat log closed. Its
 --                    GUIDs are secret while unit identity is restricted (in instances); those don't
 --                    count.
---   kills.streak     killing blows since you last died (or since the fact started).
 
 local ByteTerrace = ByteTerrace
 local issecretvalue, type, UnitGUID = issecretvalue, type, UnitGUID
@@ -50,12 +49,11 @@ ByteTerrace.Facts.kills = {
         { name = "honorable", kind = "number", default = 0, persist = false },
         { name = "victim", kind = "string", default = "", persist = false },
         { name = "blows", kind = "number", default = 0, persist = false },
-        { name = "streak", kind = "number", default = 0, persist = false },
     },
     OnEnable = function(module)
         local state = module.Addon.State
         local honorable, victim = module:Id("honorable"), module:Id("victim")
-        local blows, streak = module:Id("blows"), module:Id("streak")
+        local blows = module:Id("blows")
 
         module:On("CHAT_MSG_COMBAT_HONOR_GAIN", function(text)
             local name = not issecretvalue(text) and type(text) == "string" and Victim(text)
@@ -76,11 +74,7 @@ ByteTerrace.Facts.kills = {
             if attackerGUID ~= me and (pet == nil or attackerGUID ~= pet) then
                 return -- a groupmate's blow
             end
-            state:Set(streak, state.Values[streak] + 1)
             state:Set(blows, state.Values[blows] + 1)
-        end)
-        module:On("PLAYER_DEAD", function()
-            state:Set(streak, 0)
         end)
     end,
 }

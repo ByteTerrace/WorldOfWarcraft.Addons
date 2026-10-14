@@ -15,8 +15,9 @@
 --            click to the previous one.
 --   number   "-" and "+" step by the row's step, within its min and max.
 -- Every change goes through State:Set as one batch, so a locked row is refused with a message
--- and keeps its value. A change made anywhere refreshes that row's control while the view shows;
--- a hidden view does no widget work. Hovering a setting shows its description.
+-- and keeps its value. A change made anywhere refreshes that row's control while its page shows;
+-- only the shown page's rows are watched, so a hidden view or page costs nothing and catches up
+-- when it shows. Hovering a setting shows its description.
 --
 -- The view is built the first time a host shows it. The window is sized to the page it shows;
 -- drag it to move it, and the close button or the command hides it.
@@ -43,7 +44,7 @@ local CanvasInset = 16
 
 local ByteTerrace = ByteTerrace
 local CreateFrame, GameTooltip, Settings, UIParent = CreateFrame, GameTooltip, Settings, UIParent
-local ipairs, tostring = ipairs, tostring
+local ipairs, tostring, wipe = ipairs, tostring, wipe
 local floor = math.floor
 
 local SettingsWindow = {}
@@ -104,7 +105,7 @@ end
 ---@return table window
 local function NewSettingsWindow(addon, pages)
     local window = setmetatable({
-        Pages = pages, Controls = {}, m_addon = addon, m_page = 1, m_refreshers = {}, m_containers = {},
+        Pages = pages, Controls = {}, m_addon = addon, m_page = 1, m_rows = {}, m_watchers = {}, m_containers = {},
         m_navButtons = {}, m_heights = {},
     }, SettingsWindow)
     return window
@@ -200,8 +201,11 @@ local function BuildRow(window, row, entry)
     end
 end
 
--- Builds one page's rows in their own container, and returns the container's height.
-local function BuildPage(window, content, page)
+-- Builds page index's rows in their own container, and returns the container's height. Each row
+-- goes in m_rows[index] as { watched = its row and lock ids, refresh }.
+local function BuildPage(window, content, page, index)
+    local rows = {}
+    window.m_rows[index] = rows
     local container = CreateFrame("Frame", nil, content)
     container:SetPoint("TOPLEFT")
     container:SetPoint("TOPRIGHT")
@@ -217,17 +221,11 @@ local function BuildPage(window, content, page)
             row:SetPoint("TOPLEFT", 0, -y)
             row:SetPoint("TOPRIGHT", 0, -y)
             row:SetHeight(RowHeight)
-            local refresh = BuildRow(window, row, entry)
-            window.m_refreshers[#window.m_refreshers + 1] = refresh
             local watched = { entry.id }
             if entry.spec.lockId then
                 watched[2] = entry.spec.lockId
             end
-            window.m_addon.State:Watch(watched, function()
-                if window.View:IsVisible() then
-                    refresh()
-                end
-            end, true)
+            rows[#rows + 1] = { watched = watched, refresh = BuildRow(window, row, entry) }
             y = y + RowHeight
         end
     end
@@ -236,7 +234,25 @@ local function BuildPage(window, content, page)
     return container, y
 end
 
--- Shows page i: its container, its nav button marked, and the window sized to fit.
+-- Watches the shown page's rows while the view shows, refreshing them now: a hidden view, and
+-- every other page, cost nothing when their rows change.
+local function Follow(window)
+    local state, watchers = window.m_addon.State, window.m_watchers
+    for i = 1, #watchers do
+        state:Unwatch(watchers[i])
+    end
+    wipe(watchers)
+    if not window.View:IsVisible() then
+        return
+    end
+    for _, row in ipairs(window.m_rows[window.m_page]) do
+        row.refresh()
+        watchers[#watchers + 1] = state:Watch(row.watched, row.refresh, true)
+    end
+end
+
+-- Shows page i: its container, its nav button marked, the window sized to fit, and its rows
+-- followed.
 local function ShowPage(window, index)
     window.m_page = index
     for i, container in ipairs(window.m_containers) do
@@ -249,6 +265,7 @@ local function ShowPage(window, index)
         local height = window.m_heights[index] > navHeight and window.m_heights[index] or navHeight
         window.Frame:SetHeight(TitleHeight + height + Pad)
     end
+    Follow(window)
 end
 
 -- Builds the view: the page list and every page, on a frame either host can hold.
@@ -256,6 +273,8 @@ local function BuildView(window)
     local view = CreateFrame("Frame", nil, UIParent)
     window.View = view
     view:Hide()
+    view:SetScript("OnShow", function() Follow(window) end)
+    view:SetScript("OnHide", function() Follow(window) end)
     local content = CreateFrame("Frame", nil, view)
     content:SetPoint("TOPLEFT", NavWidth + Pad, 0)
     content:SetPoint("BOTTOMRIGHT")
@@ -264,7 +283,7 @@ local function BuildView(window)
         nav:SetPoint("TOPLEFT", 0, -((i - 1) * NavButtonHeight))
         nav:SetScript("OnClick", function() ShowPage(window, i) end)
         window.m_navButtons[i] = nav
-        window.m_containers[i], window.m_heights[i] = BuildPage(window, content, page)
+        window.m_containers[i], window.m_heights[i] = BuildPage(window, content, page, i)
     end
 end
 
@@ -292,7 +311,7 @@ local function BuildFrame(window)
     frame.Close:SetScript("OnClick", function() window:Hide() end)
 end
 
--- Moves the view into a host (the window or the canvas), refreshes it and shows its page.
+-- Moves the view into a host (the window or the canvas) and shows its page, refreshed.
 local function Present(window, host, page)
     if not window.View then
         BuildView(window)
@@ -309,9 +328,6 @@ local function Present(window, host, page)
             view:SetPoint("TOPLEFT", CanvasInset, -CanvasInset)
             view:SetPoint("BOTTOMRIGHT", -CanvasInset, CanvasInset)
         end
-    end
-    for _, refresh in ipairs(window.m_refreshers) do
-        refresh()
     end
     ShowPage(window, page or window.m_page)
     view:Show()

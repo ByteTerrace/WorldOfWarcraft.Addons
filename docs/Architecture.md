@@ -22,7 +22,7 @@ State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", d
   - A key under a module this load didn't declare is kept, so a module whose file failed to load keeps its settings.
   - Only non-default values are stored, so changing a default takes effect.
 - **Locks.** `lockedBy = "<Module>.<row>"` names a boolean row. While it's true, `State:Set` refuses the locked row, `/set` and `/toggle` print that it's locked, and its settings control reverts. `State:IsLocked(ref)` tells callers ahead of time. Compile refuses a `lockedBy` that doesn't name a boolean row.
-- **Change and publication.** A row changes only if its value at publish differs from its baseline. The baseline is the row's value when the batch first touched it, or, for a watcher registered later in the same batch, its value when that watcher registered. So a watcher never reacts to a write made before it existed.
+- **Change and publication.** A row changes only if its value at publish differs from its baseline. The baseline is the row's value when the batch first touched it, or, for a watcher registered later in the same batch, its value when that watcher registered, until that row's next publish round. So a watcher never reacts to a write made before it existed, and it hears every change after.
   - Each event dispatch, each command run and each `addon:Batch(fn)` is one batch. After the batch, one publication pass runs every watcher whose rows changed, once each, in registration order.
   - Writes made by watchers publish in a further round. A batch still scheduling watchers after 8 rounds is reported instead of looping; its writes still count. Rules that recursively register initial callbacks are bounded too; excess pending rules are removed and reported rather than leaking into the next batch.
   - An unbalanced `EndBatch` is an error.
@@ -31,7 +31,7 @@ State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", d
 - **Settings.** The settings window is generated from labeled persisted rows, in declaration order: a checkbox for booleans, a button that cycles an enum's values, and `-`/`+` steppers for a bounded number. Compile refuses a labeled row with no fitting control.
   - **Pages.** The main page is named by the addon's title. A module with `page = "<name>"` puts its settings on a page of that name; pages appear in the order their first settings are declared, listed down the window's left side.
   - **Sections.** On its page, a module's settings sit under a header: the module's `section`, or else its `label`. A row with `section = "<text>"` starts a new header before that row. A header that would repeat its page's name is left out. `addon.debug` is declared last, under an "Advanced" header, so it closes the main page.
-  - **Hosts.** One view draws the pages, and it moves to whichever host shows it. In Blizzard's settings panel (Esc > Options > AddOns) it's the addon's canvas page. The bare slash command toggles the addon's own window, an ordinary frame, so it opens in combat too and addon code never opens Blizzard's panel. Every change goes through `State:Set`, a locked row is refused with a message, a change made elsewhere refreshes the view, and a hidden view does no widget work.
+  - **Hosts.** One view draws the pages, and it moves to whichever host shows it. In Blizzard's settings panel (Esc > Options > AddOns) it's the addon's canvas page. The bare slash command toggles the addon's own window, an ordinary frame, so it opens in combat too and addon code never opens Blizzard's panel. Every change goes through `State:Set`, a locked row is refused with a message, a change made elsewhere refreshes the page that shows, and only that page's rows are watched, so a hidden view or page costs nothing until it shows.
   - **Controller-safe.** The canvas is marked ignored for the controller UI's navigation (`smartNavigationIgnored`, which covers every child), and the addon registers no Blizzard setting controls. On Forever, controller focus on an addon's control taints what the controller UI remembers, and closing the panel then freezes the client. With the controller UI on, the canvas page is for the mouse, and the window is the way in.
 
 ## Records
@@ -96,7 +96,7 @@ Controller sources are named by position (`gamepad.south`), never by printed let
 - `combat` and `afk` always run: `combat.active`, `afk.active`.
 - `target`, `kills` and `death` are demand facts, running only while a module that uses them runs:
   - `target`: what your target is (`target.serial`, `enemyPlayer`, `formidable`, `alive`, `died`, `duelEnded`). A health event only re-reads whether it lives (one API call); attackability and rank re-read on the events that change them.
-  - `kills`: honorable kills and their victim (`kills.honorable`, `kills.victim`), your world PvP killing blows from `PARTY_KILL` (`kills.blows`) and those since you last died (`kills.streak`). Killing blows with secret GUIDs in instances do not count.
+  - `kills`: honorable kills and their victim (`kills.honorable`, `kills.victim`), and your world PvP killing blows from `PARTY_KILL` (`kills.blows`). Killing blows with secret GUIDs in instances do not count.
   - `death`: your deaths (`death.count`) and your killer from Blizzard's death recap (`death.killer`, `killerKind`, `killerClass`, `killerFaction`, `killerSpell`, `killerDamage`), published with `death.attributed`, which rises once per death even when the killer stays unknown.
 
 ## Group messages
@@ -106,7 +106,7 @@ A module's `comms = { prefix, interval?, queue? }` gives it `module.Comms`: `Sen
 - Your own group only (party, raid, instance chat); received messages must arrive on a group channel.
 - At most one message per `interval` (default 1 second) from a bounded queue (default 8); beyond it messages are dropped. A client throttle keeps the message queued for the next turn.
 - Nothing during chat messaging lockdown. An activating or active Encounter, ChallengeMode, PvPMatch, Map or Chat restriction, or leaving the group, immediately clears the queue and cancels its pending send, even if lockdown ends before the next send deadline. Combat alone and inactive restriction events leave the queue intact. Sending rechecks lockdown.
-- Secret payloads (lockdown) are ignored, and so are your own messages the client echoes. The prefix is tested first, so other addons' messages cost one check.
+- Secret payloads (lockdown) are ignored, and so are your own messages the client echoes. `CHAT_MSG_ADDON` is registered only while you're in a group, and the prefix is tested first, so other addons' messages cost nothing solo and one check grouped.
 - Messages are parsed strictly: an uppercase kind, then tab-separated fields. Scalar fields and dense arrays use one encoder: plain strings, finite numbers and booleans only, without NUL, tab or line break characters inside a field. An empty array sends a bare kind. Secrets, malformed arrays and messages longer than 255 bytes are caller bugs and raise before sending.
 - Nothing is sent or received while the transport is stopped. Listener removal takes effect during the current delivery; additions wait until the next delivery. Stopping or restarting the transport inside a listener ends the old delivery.
 
@@ -141,7 +141,7 @@ Forever runs the Midnight (12.x) API, where combat values such as health and pri
 Performance is judged by load-independent counts, not wall-clock time. The tests assert:
 
 - widget calls per event, such as one `SetValue` per power event and no range update per tick;
-- which events are registered, such as no power events for a class without energy, no usability polling for non-warriors, and no target events once every target sound is switched off;
+- which events are registered, such as no power events for a class without energy, no usability polling for non-warriors or for a warrior without a living enemy player target, and no target events once every target sound is switched off;
 - registration churn, such as one unregister when a module with five handlers stops.
 
 In code:

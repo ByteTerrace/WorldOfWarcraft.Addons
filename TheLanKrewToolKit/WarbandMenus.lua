@@ -92,7 +92,7 @@ local function AddTooltipLines(tooltip)
     if issecretvalue(unit) or not unit then
         return
     end
-    local info = Warband.Identify(unit)
+    local info = Warband.IdentifyNow(unit)
     if not info then
         return
     end

@@ -516,7 +516,8 @@ end
 ---@param puzzle table a puzzle from ns.Puzzles.Generate
 ---@param info table { stars, rank, nextRank?, nextAt?, progress (0 to 1), streak, gentle, canSpeak,
 ---  controller (a controller is connected), keys = { four answer key labels },
----  actions = { hint, speak, skip key labels } }
+---  actions = { hint, speak, skip key labels }, wrong? ([i] = true for answers already missed, which
+---  stay marked and can't be picked), canSkip? (Skip shows) }
 ---@return table frame the full-screen overlay
 function ScholarView.Show(puzzle, info)
     Overlay = Overlay or Create()
@@ -536,8 +537,9 @@ function ScholarView.Show(puzzle, info)
         button.Key:SetText(info.keys[i])
         button.Text:SetFontObject(AnswerFont(choice))
         button.Text:SetText(choice)
-        button:Enable()
-        Paint(button, "normal")
+        local missed = info.wrong and info.wrong[i]
+        button:SetEnabled(not missed)
+        Paint(button, missed and "wrong" or "normal")
     end
     local actions = info.actions or {}
     LabelPill(Overlay.Speak, actions.speak)
@@ -546,7 +548,7 @@ function ScholarView.Show(puzzle, info)
     Overlay.Speak:SetShown(info.canSpeak and true or false)
     Overlay.Feedback:Hide()
     Overlay.Hint:Show()
-    Overlay.Skip:Hide()
+    Overlay.Skip:SetShown(info.canSkip and true or false)
     Layout(story ~= "", puzzle)
     Overlay:Show()
     return Overlay

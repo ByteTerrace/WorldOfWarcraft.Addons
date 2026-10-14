@@ -19,7 +19,6 @@ local addonName, ns = ...
 -- turn the addon off at character select. Blizzard's parental controls (play time limits) are the
 -- place for hard limits; this is meant to be fun.
 
-local CheckSeconds = 15
 local FinishDelay = 1.8
 local Ranks = { { 0, "Apprentice" }, { 10, "Journeyman" }, { 25, "Adept" }, { 50, "Sage" }, { 100, "Archmage" } }
 local AnswerSources = { "gamepad.south", "gamepad.east", "gamepad.west", "gamepad.north" }
@@ -33,9 +32,9 @@ local PinWaitSeconds = 60
 
 local ByteTerrace = ByteTerrace
 local C_Sound, C_TTSSettings, C_VoiceChat, GetMoney = C_Sound, C_TTSSettings, C_VoiceChat, GetMoney
-local GetRealZoneText, GetServerTime, GetTime = GetRealZoneText, GetServerTime, GetTime
+local GetRealZoneText, GetServerTime, GetTime, IsLoggedIn = GetRealZoneText, GetServerTime, GetTime, IsLoggedIn
 local SOUNDKIT, UnitClass, UnitLevel, UnitName = SOUNDKIT, UnitClass, UnitLevel, UnitName
-local issecretvalue, floor, random, byte = issecretvalue, math.floor, math.random, string.byte
+local issecretvalue, wipe, floor, max, random, byte = issecretvalue, wipe, math.floor, math.max, math.random, string.byte
 
 local Addon = ns.Addon
 local Puzzles = ns.Puzzles
@@ -48,10 +47,12 @@ for _, grade in ipairs(Puzzles.Grades) do
     GradeLabels[id] = grade.label
 end
 
--- The riddle on screen (or waiting out a fight) until it's solved or skipped.
-local Current, Wrongs = nil, 0
+-- The riddle on screen (or waiting out a fight) until it's solved or skipped, how many tries
+-- missed, and which answers they picked ([i] = true), so a riddle that comes back keeps them.
+local Current, Wrongs, Missed = nil, 0, {}
 local LastSubject
-local SegmentStart
+local Counting = false -- the play clock runs: no riddle is due, you're not AFK, and a subject is on
+local SegmentStart     -- GetTime() the running stretch of play started at
 local Scholar -- the module, declared at the end
 
 -- Kid-proofing, not security: a small hash so the PIN isn't sitting in the SavedVariables as-is.
@@ -95,6 +96,24 @@ local function Progress(extra)
     return info
 end
 
+-- Seconds of play toward the next riddle, the running stretch included.
+local function Elapsed()
+    local elapsed = Scholar:Get("elapsed")
+    if Counting then
+        elapsed = elapsed + floor(GetTime() - SegmentStart)
+    end
+    return elapsed
+end
+
+-- Saves the running stretch of play into elapsed, keeping its fraction of a second running.
+local function Bank()
+    if Counting then
+        local played = floor(GetTime() - SegmentStart)
+        SegmentStart = SegmentStart + played
+        Scholar:Set("elapsed", Scholar:Get("elapsed") + played)
+    end
+end
+
 -- Whether a controller with printed button names is connected.
 local function UsingController()
     return ByteTerrace.Input.LabelStyle() ~= "Generic"
@@ -120,6 +139,7 @@ end
 local function Open()
     local frame = ScholarView.Show(Current, Progress({
         gentle = Scholar:Get("mode") == "gentle", canSpeak = true, controller = UsingController(),
+        wrong = Missed, canSkip = Scholar:Get("mode") == "gentle" and Wrongs > 0,
         keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) },
         actions = { hint = ActionLabel("hint"), speak = ActionLabel("speak"), skip = ActionLabel("skip") },
     }))
@@ -158,10 +178,6 @@ local function Context()
     }
 end
 
-local function HasSubject()
-    return Scholar:Get("math") or Scholar:Get("reading")
-end
-
 -- The next riddle, alternating subjects when both are on; nil when neither is.
 local function NextPuzzle()
     local subjects = {}
@@ -189,9 +205,11 @@ end
 local function Finish(solved)
     local before = Scholar:Get("stars")
     Current, Wrongs = nil, 0
+    wipe(Missed)
     Close()
     Scholar:Set("solved", false)
     Scholar:Set("elapsed", 0)
+    SegmentStart = GetTime()
     Scholar:Set("pending", false)
     if solved and Rank(before - 1) ~= Rank(before) then
         ns.Cards.Show({ icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.LFG_REWARDS,
@@ -223,6 +241,7 @@ local function Choose(i)
         Scholar:After(FinishDelay, function() Finish(true) end)
     else
         Wrongs = Wrongs + 1
+        Missed[i] = true
         Scholar:Set("streak", 0)
         if Wrongs == 2 and Scholar:Get("level") > 1 then
             Scholar:Set("level", Scholar:Get("level") - 1)
@@ -299,6 +318,8 @@ local Rows = {
     -- The parent's PIN (a hash; 0 = none), account-wide, and whether settings are locked right now.
     { name = "pin", kind = "number", default = 0, lockedBy = LockedBy },
     { name = "locked", kind = "boolean", default = false, persist = false },
+    -- The parent unlocked this session: saved, so a /reload keeps it; the next login locks again.
+    { name = "unlocked", kind = "boolean", default = false },
     -- Wrong unlock PINs since the last wait, and the server time unlocking waits until. Saved, so a
     -- /reload doesn't buy more tries.
     { name = "pinMisses", kind = "number", default = 0 },
@@ -308,7 +329,7 @@ local Rows = {
 local Commands = {
     { name = "status", slash = "scholar", label = "Show Scholar stars and the next riddle", run = function()
         local stars = Scholar:Get("stars")
-        local left = Scholar:Get("interval") * 60 - Scholar:Get("elapsed")
+        local left = Scholar:Get("interval") * 60 - Elapsed()
         local minutes = left > 0 and math.ceil(left / 60) or 0
         Addon:Print(("Stars: %d (%s). Next riddle in about %d min."):format(stars, Rank(stars), minutes))
     end },
@@ -319,10 +340,12 @@ local Commands = {
         if Scholar:Get("locked") then
             Addon:Print("Scholar settings are locked. Unlock them first to change the PIN.")
         elseif Scholar:Get("pin") ~= 0 and not pin then
+            Scholar:Set("unlocked", false)
             Scholar:Set("locked", true)
             Addon:Print("Scholar settings locked.")
         elseif ValidPin(pin) then
             Scholar:Set("pin", PinHash(pin))
+            Scholar:Set("unlocked", false)
             Scholar:Set("locked", true)
             Addon:Print("Scholar settings locked. Unlock with " .. Addon.Slash[1] .. " unlock <pin>.")
         else
@@ -339,6 +362,7 @@ local Commands = {
             Addon:Print("Usage: " .. Addon.Slash[1] .. " unlock <pin>.")
         elseif PinHash(pin) == Scholar:Get("pin") then
             Scholar:Set("pinMisses", 0)
+            Scholar:Set("unlocked", true)
             Scholar:Set("locked", false)
             Addon:Print("Scholar settings unlocked for this session.")
         elseif Scholar:Get("pinMisses") + 1 >= MaxPinMisses then
@@ -378,23 +402,49 @@ Scholar = Addon:Module("Scholar", {
     commands = Commands,
     bindings = Bindings,
     OnEnable = function(module)
-        module:Set("locked", module:Get("pin") ~= 0)
-        SegmentStart = GetTime()
-
-        -- Count play time toward the next riddle, leaving out time AFK or with no subject to ask.
-        module:Every(CheckSeconds, function()
-            local now = GetTime()
-            local played = floor(now - SegmentStart)
-            SegmentStart = now
-            if module:Get("afk.active") or not HasSubject() then
-                return
-            end
-            local elapsed = module:Get("elapsed") + played
-            module:Set("elapsed", elapsed)
-            if elapsed >= module:Get("interval") * 60 then
-                module:Set("pending", true)
+        -- A parent's unlock lasts the session: a /reload keeps it, while a new login or switching
+        -- the challenge back on mid-session locks again.
+        if IsLoggedIn() then
+            module:Set("unlocked", false)
+        end
+        module:Set("locked", module:Get("pin") ~= 0 and not module:Get("unlocked"))
+        module:On("PLAYER_ENTERING_WORLD", function(isInitialLogin)
+            if isInitialLogin then
+                module:Set("unlocked", false)
+                module:Set("locked", module:Get("pin") ~= 0)
             end
         end)
+        local pending, solved, combat = module:Id("pending"), module:Id("solved"), module:Id("combat.active")
+        local afk, mathOn, readingOn = module:Id("afk.active"), module:Id("math"), module:Id("reading")
+
+        -- The play clock counts toward the next riddle while none is due, you're not AFK and a
+        -- subject is on. It writes nothing while it runs: one timer fires when the interval is up,
+        -- and play is saved when the clock stops, at logout and as the module stops.
+        local due
+        local function Schedule()
+            module:Cancel(due)
+            due = nil
+            if Counting then
+                due = module:After(max(module:Get("interval") * 60 - Elapsed(), 0), function()
+                    Bank()
+                    module:Set("pending", true)
+                end)
+            end
+        end
+        module:Rule({
+            reads = { pending, afk, mathOn, readingOn }, initial = true,
+            when = function(state)
+                return not state.Values[pending] and not state.Values[afk]
+                    and (state.Values[mathOn] or state.Values[readingOn])
+            end,
+            changed = function(counting)
+                Bank()
+                Counting, SegmentStart = counting, GetTime()
+                Schedule()
+            end,
+        })
+        module:Watch({ "interval", "elapsed" }, Schedule, true)
+        module:On("PLAYER_LOGOUT", Bank)
 
         module:On("PLAYER_LEVEL_UP", function()
             if module:Get("onLevelUp") then
@@ -404,7 +454,6 @@ Scholar = Addon:Module("Scholar", {
 
         -- A riddle shows when one is due (or celebrating) and there's no fight; a fight sends it
         -- away until it ends. A celebration a fight cut short doesn't come back: Finish ends it.
-        local pending, solved, combat = module:Id("pending"), module:Id("solved"), module:Id("combat.active")
         module:Rule({
             reads = { pending, solved, combat }, initial = true,
             when = function(state)
@@ -431,6 +480,9 @@ Scholar = Addon:Module("Scholar", {
             Finish(true) -- its celebration timer stops with the module; the rank card still shows
         end
         Current, Wrongs = nil, 0
+        wipe(Missed)
         Close()
+        Bank()
+        Counting = false
     end,
 })

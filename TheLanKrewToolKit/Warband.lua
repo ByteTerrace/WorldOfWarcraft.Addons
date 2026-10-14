@@ -27,6 +27,7 @@ local addonName, ns = ...
 --   Describe, Subject       "Bob Doe (60 Rogue)"; the player a command's argument is about
 --   Remember, CountDeath    update a rivalry record; count a Krew member's death to someone
 --   TakeFoe                 the prime suspect when you die
+--   IdentifyNow(unit)       Identify, reusing this frame's reading of the same player (tooltips)
 --   Labels, Icons, Order    each standing's display name, raid-target icon and sort rank
 --   Mark, HoldGrudge, Glory, Forgive, DeclareWar, MakePeace   the ledger and war actions (the
 --                           first three answer false when the full ledger refused a newcomer)
@@ -67,6 +68,7 @@ local Icons = {
 local Order = { mark = 1, grudge = 2, war = 3, glory = 4 }
 
 local GetServerTime, GetTime, SOUNDKIT = GetServerTime, GetTime, SOUNDKIT
+local Names = ByteTerrace.Names
 local UnitAffectingCombat, UnitExists = UnitAffectingCombat, UnitExists
 local tostring, wipe = tostring, wipe
 
@@ -82,9 +84,11 @@ local WarbandModule
 local Ledger, Wars, People -- the module's collections, bound when it's declared
 local LastAlert, LastShared, LastKill = {}, {}, {} -- [key] = GetTime() of the last alert, Krew report, counted kill
 local LastGuildAlert = {} -- [guild key] = GetTime()
-local Gathering = {}      -- [key] = GetTime() of a hostile player's nameplate
+local Gathering = {}      -- [key] = GetTime() of a hostile player's nameplate, in the place you're in
 local LastIntel = {}      -- [zone .. "/" .. subZone] = GetTime() of the last report, yours or the Krew's
 local LastFoe             -- the info of the hostile player you last targeted, plus its time
+local LastSeen, LastSeenAt -- the last player unit Seen read, and the GetTime() it was read at
+local PlaceZone, PlaceSubZone -- Here(), read once per place: zone changes and loading screens forget it
 local LastRally           -- GetTime() of your last rally call
 
 --- A person's standing with the Krew: their ledger kind, else "war" when their guild is at war
@@ -291,6 +295,14 @@ local function MakePeace(guild)
     Addon:Print("The Krew made peace with <" .. GuildName(guild) .. ">.")
 end
 
+-- Where you are (Here), read once per place while Warband runs.
+local function Place()
+    if not PlaceZone then
+        PlaceZone, PlaceSubZone = Here()
+    end
+    return PlaceZone, PlaceSubZone
+end
+
 --- The Krew was just told about key (a SIGHT message): you don't report them again for
 --- SightCooldown seconds.
 ---@param key string
@@ -331,7 +343,7 @@ local function AlertFor(key, status, info, unit)
     if WarbandModule:Get("shareSightings") and (status ~= "glory" or fighting)
         and not (LastShared[key] and now - LastShared[key] < SightCooldown) then
         LastShared[key] = now
-        local zone, subZone = Here()
+        local zone, subZone = Place()
         Krew:Send("SIGHT", { key, zone, subZone, fighting and "1" or "0" })
     end
 end
@@ -368,15 +380,27 @@ local function CountGathering(info)
     if count < IntelThreshold then
         return
     end
-    local zone, subZone = Here()
+    local zone, subZone = Place()
     if FreshGathering(zone, subZone) then
         local mapID, x, y = Position()
         Krew:Send("INTEL", { tostring(count), info.faction, tostring(mapID or 0), tostring(x or 0), tostring(y or 0), zone, subZone })
     end
 end
 
+--- What the client lets addons know about a player unit (Identify), reusing Seen's reading of the
+--- same player in the same frame: a mouseover's tooltip follows its UPDATE_MOUSEOVER_UNIT.
+---@param unit string
+---@return table? info
+local function IdentifyNow(unit)
+    if LastSeen and LastSeenAt == GetTime() and Names.OfUnit(unit) == LastSeen.key then
+        return LastSeen
+    end
+    return Identify(unit)
+end
+
 -- A player unit came into view: a nameplate (plate), your target, or mouseover. It's read once, for
--- the badges (Warband.OnPlate) and the prime suspect too (suspect: a hostile player you engage).
+-- the badges (Warband.OnPlate) and the prime suspect too (suspect: a hostile player you engage;
+-- "fighting" for one that's in combat, asked only of a hostile player).
 local function Seen(unit, plate, suspect)
     local info = Identify(unit)
     if plate and Warband.OnPlate then
@@ -385,8 +409,12 @@ local function Seen(unit, plate, suspect)
     if not info then
         return
     end
+    LastSeen, LastSeenAt = info, GetTime()
     local key, hostile = info.key, Hostile(unit)
     if hostile then
+        if suspect == "fighting" then
+            suspect = UnitAffectingCombat(unit)
+        end
         if suspect then
             info.time = GetTime()
             LastFoe = info
@@ -404,7 +432,7 @@ local function Seen(unit, plate, suspect)
     end
     local now = GetServerTime()
     if not People:Has(key) or now - People:Field(key, "seen") >= SeenWriteInterval then
-        Remember(key, info, { seen = now, zone = (Here()), sightings = People:Field(key, "sightings") + 1 })
+        Remember(key, info, { seen = now, zone = (Place()), sightings = People:Field(key, "sightings") + 1 })
     end
     if status then
         AlertFor(key, status, info, unit)
@@ -506,13 +534,13 @@ local function Rally()
     end
     LastRally = now
     local mapID, x, y = Position()
-    local zone, subZone = Here()
+    local zone, subZone = Place()
     Krew:Send("RALLY", { tostring(mapID or 0), tostring(x or 0), tostring(y or 0), zone, subZone }, true)
     Addon:Print("Rally call sent to the Krew.")
 end
 
 Warband.Status, Warband.Score, Warband.Known, Warband.TakeFoe = Status, Score, Known, TakeFoe
-Warband.Describe, Warband.Subject = Describe, Subject
+Warband.Describe, Warband.Subject, Warband.IdentifyNow = Describe, Subject, IdentifyNow
 Warband.Remember, Warband.CountDeath = Remember, CountDeath
 Warband.Labels, Warband.Icons, Warband.Order = Labels, Icons, Order
 Warband.Mark, Warband.HoldGrudge, Warband.Glory, Warband.Forgive = Mark, HoldGrudge, Glory, Forgive
@@ -638,9 +666,18 @@ WarbandModule = Addon:Module("Warband", {
                 Seen("target", false, true)
             end
         end)
+        -- A gathering is in one place: enemies seen before you moved on don't count toward the next.
+        local function MovedOn()
+            PlaceZone, PlaceSubZone = nil, nil
+            wipe(Gathering)
+        end
+        module:On("ZONE_CHANGED", MovedOn)
+        module:On("ZONE_CHANGED_INDOORS", MovedOn)
+        module:On("ZONE_CHANGED_NEW_AREA", MovedOn)
+        module:On("PLAYER_ENTERING_WORLD", MovedOn)
         module:On("UPDATE_MOUSEOVER_UNIT", function()
             if UnitExists("mouseover") then
-                Seen("mouseover", false, UnitAffectingCombat("mouseover"))
+                Seen("mouseover", false, "fighting")
             end
         end)
         Warband.EnableMessages()
@@ -651,7 +688,7 @@ WarbandModule = Addon:Module("Warband", {
     OnDisable = function()
         Warband.DisableMenus()
         Warband.DisableMessages()
-        LastFoe = nil
+        LastFoe, LastSeen, PlaceZone, PlaceSubZone = nil, nil, nil, nil
         wipe(Gathering)
     end,
 })

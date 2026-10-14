@@ -179,6 +179,29 @@ test("a badge leaves with its nameplate and a recycled plate doesn't keep it", f
     falsy(badge:IsVisible(), "a stranger on the recycled plate wears no badge")
 end)
 
+test("a creature's nameplate costs the badges nothing", function()
+    local h = Load()
+    h.apiCalls = {}
+    local plate = h:AddNamePlate({ name = "Kobold", canAttack = true })
+    h:RemoveNamePlate(plate)
+    eq(h:CountApiCalls("C_NamePlate.GetNamePlateForUnit"), 0)
+end)
+
+test("a ledger change repaints the badges on screen without reading anyone again", function()
+    local h = Load()
+    local plates = {}
+    for i = 1, 10 do
+        plates[i] = h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    h.apiCalls = {}
+    h:Slash("/tlk mark Foe3 Doe")
+    eq(h:CountApiCalls("UnitClass"), 0, "no plate is read again")
+    eq(h:CountApiCalls("C_NamePlate.GetNamePlateForUnit"), 0)
+    local badge = Badge(h, plates[3])
+    truthy(badge and badge:IsShown(), "the marked one wears the skull")
+    eq(Badge(h, plates[4]), nil, "the others wear nothing")
+end)
+
 test("badges switched off leave no badge and no events", function()
     local h, addon = Load()
     addon.State:Set("Badges.enabled", false)

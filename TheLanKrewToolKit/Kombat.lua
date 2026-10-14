@@ -217,10 +217,28 @@ Addon:Module("Finish", {
             state:Set(points, not issecretvalue(count) and count or 0)
         end
 
+        -- Execute's usability only matters while an enemy player target lives; SPELL_UPDATE_USABLE
+        -- fires on every rage change, so it's heard only then.
         if executeName then
-            module:On("SPELL_UPDATE_USABLE", Update)
-            module:On("UPDATE_SHAPESHIFT_FORM", Update)
-            module:On("UNIT_HEALTH", Update, "target")
+            local usable
+            module:Rule({
+                reads = { enemy, alive }, initial = true,
+                when = function(current) return current.Values[enemy] and current.Values[alive] end,
+                changed = function(hunting)
+                    if hunting and not usable then
+                        usable = {
+                            module:On("SPELL_UPDATE_USABLE", Update),
+                            module:On("UPDATE_SHAPESHIFT_FORM", Update),
+                            module:On("UNIT_HEALTH", Update, "target"),
+                        }
+                    elseif not hunting and usable then
+                        for i = 1, #usable do
+                            module:Off(usable[i])
+                        end
+                        usable = nil
+                    end
+                end,
+            })
         end
         if combo then
             module:On("UNIT_POWER_FREQUENT", ReadPoints, "player")

@@ -353,6 +353,7 @@ test("switched-off sounds cost nothing: their events unregister", function()
     local h, addon = Load({ classFile = "WARRIOR", powerType = 1 })
     addon.State:Set("Warband.enabled", false) -- Warband watches targets too
     truthy(Registered(addon, "PLAYER_TARGET_CHANGED"))
+    h:SetTarget(EnemyPlayer()) -- usability is only heard with an enemy player target
     addon.State:Set("Kombat.finishHim", false)
     truthy(Registered(addon, "SPELL_UPDATE_USABLE"), "fatality still needs to know finishing range")
     addon.State:Set("Kombat.fatality", false)
@@ -487,20 +488,43 @@ test("card toggles and the module switch are honored", function()
     falsy(Registered(addon, "QUEST_TURNED_IN"))
 end)
 
+-- Targets a player of your faction who then becomes attackable: a duel starts.
+local function StartDuel(h)
+    local rival = EnemyPlayer({ canAttack = false })
+    h:SetTarget(rival)
+    rival.canAttack = true
+    h:Fire("UNIT_FLAGS", "target")
+    return rival
+end
+
 test("a duel won without taking a hit is a flawless victory", function()
     local h = Load()
     h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
-    local rival = EnemyPlayer()
-    h:SetTarget(rival)
+    StartDuel(h)
     h:EnterCombat()
     h:Fire("DUEL_FINISHED")
     eq(Played(h, "FlawlessVictory.ogg"), 1)
 end)
 
+test("a duel that isn't with your target wins nothing, and its kill still counts", function()
+    local h = Load()
+    h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
+    h:AddMedia(MediaPath .. "SuperbVictory.ogg")
+    local enemy = EnemyPlayer()
+    h:SetTarget(enemy)
+    h:EnterCombat()
+    h:Fire("DUEL_FINISHED") -- a duel request declined nearby
+    eq(Played(h, "FlawlessVictory.ogg"), 0, "no duel with your target")
+    h:HitPlayer(10)
+    enemy.dead = true
+    h:Fire("UNIT_HEALTH", "target")
+    eq(Played(h, "SuperbVictory.ogg"), 1, "the real kill")
+end)
+
 test("a duel lost by fleeing out of bounds isn't a victory", function()
     local h = Load()
     h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
-    h:SetTarget(EnemyPlayer())
+    StartDuel(h)
     h:EnterCombat()
     h:Fire("DUEL_OUTOFBOUNDS")
     h:Fire("DUEL_FINISHED")

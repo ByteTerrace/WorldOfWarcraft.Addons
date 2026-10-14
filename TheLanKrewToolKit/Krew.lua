@@ -37,7 +37,7 @@ for i = 1, 40 do
 end
 
 local GetNumGroupMembers, GetTime, IsInGroup, IsInRaid, SOUNDKIT = GetNumGroupMembers, GetTime, IsInGroup, IsInRaid, SOUNDKIT
-local pairs, tonumber, type, wipe = pairs, tonumber, type, wipe
+local next, pairs, tonumber, type, wipe = next, pairs, tonumber, type, wipe
 local concat, sort = table.concat, table.sort
 
 local Addon = ns.Addon
@@ -104,7 +104,11 @@ local function SayHello()
 end
 
 -- Drops Krew members who left the group. While any member's name is unreadable, nobody is dropped.
+-- With no Krew members there's no one to drop, and no name to read.
 local function Prune()
+    if next(Members) == nil then
+        return
+    end
     wipe(Present)
     local raid, count = IsInRaid(), GetNumGroupMembers()
     local units = raid and RaidUnits or PartyUnits

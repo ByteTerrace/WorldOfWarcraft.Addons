@@ -87,6 +87,32 @@ test("a rule registered while deferred rules take their first verdict gets its o
     eq(lateRuns, 1)
 end)
 
+test("a watcher registered mid-batch hears a row return to the value it registered with", function()
+    local h, addon = NewAddOn()
+    addon:Module("M", { toggle = false, state = { { name = "n", kind = "number", default = 0, persist = false } } })
+    Start(h)
+    local state = addon.State
+    local moved, seen, bounced = false, {}, false
+    state:Watch({ "M.n" }, function(s)
+        if s:Get("M.n") == 1 and not moved then
+            moved = true
+            s:Set("M.n", 2)
+        end
+    end, true)
+    state:BeginBatch()
+    state:Set("M.n", 1)
+    state:Watch({ "M.n" }, function(s) seen[#seen + 1] = s:Get("M.n") end, true)
+    state:Watch({ "M.n" }, function(s)
+        if s:Get("M.n") == 2 and not bounced then
+            bounced = true
+            s:Set("M.n", 1)
+        end
+    end, true)
+    state:EndBatch()
+    eq(state:Get("M.n"), 1)
+    eq(table.concat(seen, ","), "2,1", "it hears the row move off its baseline, and back")
+end)
+
 test("stopping a module from its own OnDisable stops it once and releases each dependency once", function()
     local h, addon = NewAddOn()
     local fact = addon:Module("Fact", { toggle = false, demand = true })

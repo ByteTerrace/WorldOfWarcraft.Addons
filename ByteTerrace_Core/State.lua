@@ -33,8 +33,9 @@
 --
 -- A row changes only if its value at publish differs from its baseline: its value when the batch
 -- first touched it, or, for a watcher registered later in the same batch, its value when that
--- watcher registered. So writing a value and writing it back notifies no one, and a watcher never
--- reacts to a write made before it existed. A rule registered inside a batch takes its first
+-- watcher registered, until that row's next publish round. So writing a value and writing it back
+-- notifies no one, a watcher never reacts to a write made before it existed, and it hears every
+-- change after. A rule registered inside a batch takes its first
 -- verdict when that batch publishes, so what modules do while starting can't depend on the order
 -- they were declared in. Watchers run in registration order, once per publish however many of
 -- their rows changed. Their writes publish in a further round; a batch still scheduling watchers
@@ -162,12 +163,14 @@ local function ModuleOf(name)
     return type(name) == "string" and name:match("^([^.]+)%.") or nil
 end
 
--- A watcher is due for row id if the row's value differs from that watcher's baseline.
+-- A watcher is due for row id if the row's value differs from that watcher's baseline. A baseline
+-- answers only the round that settles its row: after that, the round's original is what's news.
 local function Due(watcher, id, value)
     local baseline = watcher.baseline
     if baseline then
         local base = baseline[id]
         if base ~= nil then
+            baseline[id] = nil
             return base ~= value
         end
     end
@@ -196,6 +199,7 @@ local function Settle(self, list, stamp)
                     local watcher = watchers[j]
                     if watcher.stamp ~= stamp and Due(watcher, id, value) then
                         watcher.stamp = stamp
+                        watcher.baseline = nil -- running, it reads every row as it stands
                         count = count + 1
                         scheduled[count] = watcher
                     end

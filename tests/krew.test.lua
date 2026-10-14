@@ -225,6 +225,28 @@ test("someone who leaves the group leaves the Krew", function()
     eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe")
 end)
 
+test("addon messages are only heard in a group: solo, every other addon's chatter costs nothing", function()
+    local h, addon = Load()
+    local frame = addon.Events.Frame
+    falsy(frame:IsEventRegistered("CHAT_MSG_ADDON"), "solo")
+    h:JoinGroup("party", { "Bob" })
+    truthy(frame:IsEventRegistered("CHAT_MSG_ADDON"), "grouped")
+    h:LeaveGroup()
+    falsy(frame:IsEventRegistered("CHAT_MSG_ADDON"), "solo again")
+end)
+
+test("a roster change reads no names while no one in the group is in the Krew", function()
+    local h = Load()
+    local names = {}
+    for i = 1, 19 do
+        names[i] = "Raider" .. i
+    end
+    h:JoinGroup("raid", names)
+    h.apiCalls = {}
+    h:AddMember("Latecomer")
+    eq(h:CountApiCalls("UnitName"), 0)
+end)
+
 test("levels and stars from the Krew are whole numbers written in digits", function()
     local h = Load()
     h:JoinGroup("party", { "Bob" })

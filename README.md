@@ -290,3 +290,7 @@ Math and reading riddles for young players, set up by a parent. It's off by defa
 - `/tlk scholar` shows stars and the time to the next riddle. `/tlk puzzle` asks one now.
 
 It's meant to be fun, not a hard limit. A controller's sticks still move the character, and a determined child can disable the addon at character select. For hard limits, use Blizzard's parental controls (play time limits in Battle.net account settings).
+
+## License
+
+Dual-licensed under [Apache-2.0](LICENSE-APACHE-2.0.txt) or [MIT](LICENSE-MIT.txt), at your option.

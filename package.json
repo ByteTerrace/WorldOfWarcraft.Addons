@@ -1,6 +1,7 @@
 {
   "name": "byteterrace-wow-addons",
   "private": true,
+  "license": "Apache-2.0 OR MIT",
   "type": "module",
   "description": "ByteTerrace World of Warcraft addons: tooling (check, test, deploy, package, api-sync).",
   "engines": {

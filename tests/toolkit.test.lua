@@ -87,6 +87,14 @@ test("fuck-o-meter shows for energy users and passes secret energy straight to t
     eq(Harness.State(meter.Bar).calls.SetMinMaxValues, nil, "range isn't touched on power ticks")
 end)
 
+test("fuck-o-meter centers its name on the bar, with the energy at the right end", function()
+    local h = Load({ classFile = "ROGUE", powerType = 3 })
+    local meter = h.env.TheLanKrewToolKitFuckOMeter
+    eq(meter.Label:GetText(), "FUCK-O-METER")
+    eq((meter.Label:GetPoint(1)), "CENTER")
+    eq((meter.Value:GetPoint(1)), "RIGHT")
+end)
+
 test("fuck-o-meter ignores other power types and stays unregistered for non-energy users", function()
     local h, addon = Load({ classFile = "DRUID", powerType = 0 })
     addon.State:Set("Kombat.comboPoints", false) -- combo point callouts listen to power too

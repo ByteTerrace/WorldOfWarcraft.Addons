@@ -59,7 +59,10 @@
 --               GetComboPoints(unit, target) answers the target unit's comboPoints when unit is
 --               the player, else 0. h:SetComboPoints(n) sets them on the current target and fires
 --               UNIT_POWER_FREQUENT("player", "COMBO_POINTS"). [G] Points stay on the unit they
---               were built on: retargeting shows the new target's (usually 0).
+--               were built on: retargeting shows the new target's (usually 0). [D] When they move
+--               to another unit they keep their count and no power event fires, only
+--               COMBO_TARGET_CHANGED (Blizzard's Forever TargetBoundComboPointBar listens for it);
+--               h:MoveComboPoints(unit) moves them.
 --   GUIDs       [D] "Player-<server>-<id>" and "Creature-0-<server>-0-<zone>-<npcID>-<spawn>"
 --               (the UnitGUID page's format). [G] The ids are deterministic stand-ins.
 --               UnitTokenFromGUID answers the first token that names the unit, in the order
@@ -221,8 +224,20 @@ end
 -- Sets the player's combo points on the current target and fires UNIT_POWER_FREQUENT.
 function Harness:SetComboPoints(count)
     assert(self.target, "SetComboPoints: there's no target to hold them")
-    self.target.comboPoints = count
+    if self.comboHolder and self.comboHolder ~= self.target then
+        self.comboHolder.comboPoints = 0
+    end
+    self.target.comboPoints, self.comboHolder = count, self.target
     self:Fire("UNIT_POWER_FREQUENT", "player", "COMBO_POINTS")
+end
+
+-- Moves the player's combo points, with their count, to another unit and fires
+-- COMBO_TARGET_CHANGED (no power event).
+function Harness:MoveComboPoints(unit)
+    local holder = assert(self.comboHolder, "MoveComboPoints: no unit holds combo points")
+    unit.comboPoints, holder.comboPoints = holder.comboPoints, 0
+    self.comboHolder = unit
+    self:Fire("COMBO_TARGET_CHANGED")
 end
 
 -- The player dies: PLAYER_DEAD (still in combat, if they were), then combat ends.

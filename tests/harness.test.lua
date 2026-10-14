@@ -146,7 +146,7 @@ test("addon code is tainted: a secret argument is refused unless the API allows 
     throws(function() h.env.UnitClass(health) end, "SecretArguments AllowedWhenUntainted")
     throws(function() h.env.GetMoney(health) end, "missing, so NotAllowed")
     local frame = h.env.CreateFrame("Frame")
-    throws(function() frame:SetFrameStrata(health) end, "NotAllowed")
+    throws(function() frame:DesaturateHierarchy(health) end, "NotAllowed")
     truthy(h.env.issecretvalue(health), "issecretvalue takes it by reference")
     local text = frame:CreateFontString()
     text:SetText(health) -- AllowedWhenTainted

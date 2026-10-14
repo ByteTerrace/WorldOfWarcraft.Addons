@@ -207,7 +207,8 @@ Addon:Module("Finish", {
         end
 
         -- Combo points sit on the target (Blizzard's ComboFrame reads GetComboPoints("player",
-        -- "target") on UNIT_POWER_FREQUENT and PLAYER_TARGET_CHANGED).
+        -- "target") on UNIT_POWER_FREQUENT and PLAYER_TARGET_CHANGED). Points that move to
+        -- another unit keep their count and fire only COMBO_TARGET_CHANGED.
         local function ReadPoints(_, powerType)
             if powerType and powerType ~= "COMBO_POINTS" then
                 return -- a druid's mana or energy tick
@@ -224,6 +225,7 @@ Addon:Module("Finish", {
         if combo then
             module:On("UNIT_POWER_FREQUENT", ReadPoints, "player")
             module:On("PLAYER_TARGET_CHANGED", ReadPoints)
+            module:On("COMBO_TARGET_CHANGED", ReadPoints)
             ReadPoints()
         end
         module:Watch({ enemy, alive, serial, points }, Update)

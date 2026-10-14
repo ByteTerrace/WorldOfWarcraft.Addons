@@ -8,8 +8,8 @@ local addonName, ns = ...
 -- secrets) and are never compared or computed with.
 -- Power events are registered only while the meter is visible.
 --
--- The meter frame is the global TheLanKrewToolKitFuckOMeter; its Bar and Value regions hold the
--- energy.
+-- The meter frame is the global TheLanKrewToolKitFuckOMeter: its name (Label) centered on the
+-- bar, and the energy in Bar and in Value at the bar's right end.
 
 local Energy = Enum.PowerType.Energy
 local Height = 64
@@ -43,9 +43,10 @@ local function CreateMeter()
     frame.Bar = bar
 
     local label = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-    label:SetPoint("LEFT", 16, 0)
+    label:SetPoint("CENTER")
     label:SetText("FUCK-O-METER")
     label:SetTextColor(1, 1, 1)
+    frame.Label = label
 
     local value = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     value:SetPoint("RIGHT", -16, 0)

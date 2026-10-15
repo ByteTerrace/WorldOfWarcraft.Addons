@@ -146,3 +146,13 @@ local function MakeSecure()
 end
 local Shapes = { Show = function(value) return value end }
 print(MakeSecure, Shapes.Show(1))
+
+-- A lockdown test kept in a local of the same function guards just as well.
+local function KeptGuard()
+    local inCombat = InCombatLockdown()
+    if inCombat then
+        return
+    end
+    C_AuctionHouse.PlaceBid(1, 1)
+end
+print(KeptGuard)

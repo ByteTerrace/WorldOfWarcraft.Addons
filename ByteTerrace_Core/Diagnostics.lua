@@ -13,11 +13,13 @@
 --   debug cpu           the client's addon profiler for this addon: time per frame (recent,
 --                       session, peak, encounter), its share of the game's time, the frames it took
 --                       over 1 to 100 ms, and its memory. Blizzard's AddOn list shows the same.
+--                       The framework's own work counts under ByteTerrace_Core, shown after it.
 --   debug reset         zeroes the event, publish and watcher counts.
 --
 -- The counts it reads are always kept: an integer increment per dispatch and per publish.
 
 local MaxLines = 40
+local CoreName = "ByteTerrace_Core" -- the framework's addon: its dispatch and publishes are counted there
 
 local ByteTerrace = ByteTerrace
 local C_AddOnProfiler, Enum, GetAddOnMemoryUsage = C_AddOnProfiler, Enum, GetAddOnMemoryUsage
@@ -98,7 +100,9 @@ local function EventsReport(addon)
             print(("  ... and %d more"):format(#names - MaxLines))
             break
         end
-        local filter = registrations[event] ~= "all" and (" [" .. registrations[event]:gsub("|$", "") .. "]") or ""
+        -- "player|target": a raw "|" would start one of chat's escape codes.
+        local units = registrations[event] ~= "all" and (registrations[event]:gsub("|$", ""):gsub("|", ", "))
+        local filter = units and (" [" .. units .. "]") or ""
         print(("  %s%s: %d, %s"):format(event, filter, counts[event] or 0, Plural(events:HandlerCount(event), "handler")))
     end
     local stateCounts = addon.State.Counts
@@ -139,20 +143,23 @@ local function Trace(addon, text)
         addon.Slash and addon.Slash[1] or ""))
 end
 
+-- An addon's time per frame for metric, and its share as Blizzard's AddOn list computes it: its
+-- time against the game's time outside other addons.
+local function Share(name, metric)
+    local mine = C_AddOnProfiler.GetAddOnMetric(name, metric)
+    local total = C_AddOnProfiler.GetApplicationMetric(metric) - C_AddOnProfiler.GetOverallMetric(metric) + mine
+    return ("%.3f ms (%.2f%%)"):format(mine, total > 0 and mine / total * 100 or 0)
+end
+
 local function Cpu(addon)
-    if not C_AddOnProfiler.IsEnabled() then
+    local name, profiling = addon.Name, C_AddOnProfiler.IsEnabled()
+    if not profiling then
         addon:Print("The client's addon profiler is off.")
     else
-        local metrics, name = Enum.AddOnProfilerMetric, addon.Name
-        local function Share(metric)
-            local mine = C_AddOnProfiler.GetAddOnMetric(name, metric)
-            -- Blizzard's AddOn list: this addon's time against the game's time outside other addons.
-            local total = C_AddOnProfiler.GetApplicationMetric(metric) - C_AddOnProfiler.GetOverallMetric(metric) + mine
-            return ("%.3f ms (%.2f%%)"):format(mine, total > 0 and mine / total * 100 or 0)
-        end
-        addon:Print("Time per frame: recent " .. Share(metrics.RecentAverageTime) .. ", session "
-            .. Share(metrics.SessionAverageTime) .. ", peak " .. Share(metrics.PeakTime) .. ", encounters "
-            .. Share(metrics.EncounterAverageTime) .. ".")
+        local metrics = Enum.AddOnProfilerMetric
+        addon:Print("Time per frame: recent " .. Share(name, metrics.RecentAverageTime) .. ", session "
+            .. Share(name, metrics.SessionAverageTime) .. ", peak " .. Share(name, metrics.PeakTime) .. ", encounters "
+            .. Share(name, metrics.EncounterAverageTime) .. ".")
         local over = {}
         for _, limit in ipairs({ 1, 5, 10, 50, 100 }) do
             over[#over + 1] = ("%d ms: %d"):format(limit, C_AddOnProfiler.GetAddOnMetric(name, metrics["CountTimeOver" .. limit .. "Ms"]))
@@ -160,7 +167,12 @@ local function Cpu(addon)
         print("  Frames over " .. concat(over, ", "))
     end
     UpdateAddOnMemoryUsage()
-    print(("  Memory: %.0f KB"):format(GetAddOnMemoryUsage(addon.Name)))
+    print(("  Memory: %.0f KB"):format(GetAddOnMemoryUsage(name)))
+    -- The framework's dispatch, publishes and records run in ByteTerrace_Core, counted there.
+    if name ~= CoreName then
+        local time = profiling and (" recent " .. Share(CoreName, Enum.AddOnProfilerMetric.RecentAverageTime) .. ",") or ""
+        print(("  %s, shared by every ByteTerrace addon:%s %.0f KB"):format(CoreName, time, GetAddOnMemoryUsage(CoreName)))
+    end
 end
 
 --- The debug command: no argument toggles debug output; otherwise a report (see the file header).

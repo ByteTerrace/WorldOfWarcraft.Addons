@@ -11,3 +11,7 @@ C_ChatInfo.SendAddonMessage("Prefix1", "HI", "PARTY") -- !
 PlaySoundFile("Interface\AddOns\FrameworkAddon\Media\Hi.ogg") -- !
 local NewTimer = C_Timer.NewTimer -- !
 print(addonName, ns, ByteTerrace, NewTimer, C_Timer) -- the namespace itself is fine
+C_ChatInfo.SendAddonMessageLogged("Prefix1", "HI", "PARTY") -- !
+Frame:RegisterEvent("CHAT_MSG_ADDON_LOGGED") -- !
+Settings.RegisterVerticalLayoutCategory("Mine") -- !
+Settings.RegisterCanvasLayoutCategory(Frame, "Mine") -- !

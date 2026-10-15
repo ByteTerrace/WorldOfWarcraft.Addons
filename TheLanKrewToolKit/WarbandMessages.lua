@@ -5,21 +5,22 @@ local addonName, ns = ...
 --
 -- Messages from the Krew only update the collections, show an alert or card, and (a rally, with
 -- rallyWaypoint on) set a map waypoint; none acts on your behalf, and none is heard while Warband
--- is off. A Krew member who joins (HELLO) hears your SyncCount most recent marks and wars once per
--- group; a burst of joins gets one sync.
+-- is off. Every hello (a Krew member joining, coming back, or reloading, and the replies to yours)
+-- brings your SyncCount most recent marks and wars; a burst of hellos gets one sync, and what a
+-- member already knows changes nothing for them.
 --
 -- What it sets on ns.Warband, for Warband.lua's OnEnable and OnDisable:
---   Warband.EnableMessages()    forgets who heard your marks and wars when you leave the group
---   Warband.DisableMessages()   forgets them, and the pending sync, when Warband stops
+--   Warband.EnableMessages()    listens for the Krew's messages
+--   Warband.DisableMessages()   forgets the pending sync when Warband stops
 
 local MaxIntel = 999          -- the largest gathering accepted from a message
 local SyncCount = 3           -- your own marks (and wars) shared with Krew members who join
 local SyncAge = 7 * 24 * 3600 -- seconds: older marks and wars aren't shared with one who joins
-local SyncDelay = 2           -- seconds that gather a burst of joining Krew members into one sync
+local SyncDelay = 2           -- seconds that gather a burst of hellos into one sync
 
 local GetServerTime, SOUNDKIT = GetServerTime, SOUNDKIT
 local ipairs = ipairs
-local sort, wipe = table.sort, wipe
+local sort = table.sort
 
 local Warband = ns.Warband
 local MyKey, GuildName, ValidKey, ValidGuildKey = Warband.MyKey, Warband.GuildName, Warband.ValidKey, Warband.ValidGuildKey
@@ -33,11 +34,10 @@ local Addon = ns.Addon
 local Krew, ShowCard, Alert = ns.Krew, ns.Cards.Show, ns.Cards.Alert
 local WarbandModule, Ledger, Wars = Warband.Module, Warband.Ledger, Warband.Wars
 
-local Synced = {} -- [sender] = true once a Krew member who joined has heard your marks and wars
-local SyncTimer   -- pending timer that answers a burst of joins with one sync
+local SyncTimer -- pending timer that answers a burst of hellos with one sync
 
 -- Your most recent marks and wars (SyncCount of each, within SyncAge), for the Krew members who
--- joined in the last SyncDelay seconds: one sync per burst of joins, not one per member.
+-- said hello in the last SyncDelay seconds: one sync per burst, not one per member.
 local function Sync()
     SyncTimer = nil
     local me, now = MyKey(), GetServerTime()
@@ -66,11 +66,8 @@ local function Sync()
     end
 end
 
---- Owns the Warband message subscriptions and forgets group sync on leaving. Called by OnEnable.
+--- Owns the Warband message subscriptions. Called by OnEnable.
 function Warband.EnableMessages()
-    WarbandModule:On("GROUP_LEFT", function()
-        wipe(Synced)
-    end)
     WarbandModule:Listen(Krew, "GRUDGE", function(sender, fields)
         local info = InfoFrom(fields)
         if not info then
@@ -112,8 +109,9 @@ function Warband.EnableMessages()
         if not info then
             return
         end
+        local known = Status(info.key) == "glory"
         Remember(info.key, info)
-        if SetKind(info.key, "glory", sender) then
+        if SetKind(info.key, "glory", sender) and not known then
             ShowCard({ icon = "Interface\\Icons\\Achievement_PVP_H_01", sound = SOUNDKIT.LFG_REWARDS,
                 title = "A champion of the Krew", body = sender .. " granted glory to " .. Describe(info.key) .. ". Aid them when you see them." })
         end
@@ -187,19 +185,14 @@ function Warband.EnableMessages()
             onClick = WarbandModule:Callback(SetWaypoint, mapID, x, y) })
     end)
 
-    WarbandModule:Listen(Krew, "HELLO", function(sender)
-        if Synced[sender] then
-            return
-        end
-        Synced[sender] = true
+    WarbandModule:Listen(Krew, "HELLO", function()
         if not SyncTimer then
             SyncTimer = WarbandModule:After(SyncDelay, Sync)
         end
     end)
 end
 
---- Forgets group sync and the pending timer; OnDisable calls it after subscriptions are removed.
+--- Forgets the pending sync; OnDisable calls it after subscriptions are removed.
 function Warband.DisableMessages()
     SyncTimer = nil -- the module's timers stop with it
-    wipe(Synced)
 end

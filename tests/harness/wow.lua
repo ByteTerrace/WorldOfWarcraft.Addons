@@ -35,7 +35,7 @@
 --   * Enemy players, nameplates, mouseover, death, raid icons and guilds (units.lua); location,
 --     maps, waypoints, honor and raid warnings (world.lua); right-click and context menus, class
 --     colors and the unit tooltip (ui.lua); Blizzard's damage meter and death recaps (meter.lua);
---     spoken alerts and text to speech (speech.lua).
+--     spoken alerts and text to speech (speech.lua); the quest log and quest dialogs (quests.lua).
 --   * Every combat is a damage meter session: h:EnterCombat starts one, h:LeaveCombat ends it.
 --   * Calibration probes (probes.lua): Harness.RunProbe runs a ByteTerrace_DevTools probe the way
 --     /btdev probe does in game and compares it with the client's record (Harness.OBSERVED_PROBES).
@@ -274,6 +274,7 @@ function Harness.New(player)
     h:InitWorld(player)       -- units, maps, waypoints, honor, raid notices (units.lua, world.lua)
     h:InitMeter()             -- damage meter sessions and death recaps (meter.lua)
     h:InitSpeech(player)      -- h.spoken and the speech settings (speech.lua)
+    h:InitQuests()            -- the quest log and quest dialogs (quests.lua)
     h.env = h:BuildEnvironment()
     Harness.created[#Harness.created + 1] = h
     return h
@@ -666,7 +667,9 @@ function Harness:Restart(isInitialLogin, isReloadingUi, whileAway)
     end
     local order, main = self.loadOrder, self.mainAddon
     self.frames, self.widgets, self.timers, self.loaded, self.loadOrder, self.declared = {}, {}, {}, {}, {}, {}
-    self.loggedIn, self.ns = false, nil
+    -- The quest dialog closes with the old UI, and its giver with it.
+    self.loggedIn, self.ns, self.questDialog = false, nil, nil
+    self.units.questnpc, self.units.npc = nil, nil
     self.settings, self.settingsOrder, self.settingsPages, self.category = {}, nil, {}, nil
     self.prefixes, self.prefixOrder = {}, {}
     self.env = self:BuildEnvironment()
@@ -686,7 +689,9 @@ end
 
 -- Logs out, waits serverSecondsLater (default 60) and logs back in: PLAYER_ENTERING_WORLD(true, false).
 -- Logging out ends combat, lockdown and every restriction, and clears the damage meter's sessions
--- and recaps. whileAway(h), if given, runs while logged out, after the time has passed.
+-- and recaps. A fresh login has no target, focus, mouseover or nameplates, and no combo points
+-- (the pet and the group stay). whileAway(h), if given, runs while logged out, after the time has
+-- passed.
 function Harness:Relog(serverSecondsLater, whileAway)
     local seconds = serverSecondsLater or 60
     self:Restart(true, false, function()
@@ -696,6 +701,12 @@ function Harness:Relog(serverSecondsLater, whileAway)
         end
         self.restrictionStates = {}
         self:InitMeter()
+        self.target, self.comboHolder = nil, nil
+        for token in pairs(self.units) do
+            if token ~= "pet" then
+                self.units[token] = nil
+            end
+        end
         self.serverTime = self.serverTime + seconds
         self.time = self.time + seconds
         if whileAway then
@@ -716,7 +727,7 @@ function Harness:Gamepad(key, down)
         local state = Harness.State(frame)
         local handler = state.scripts[script]
         if state.gamepadButtons and self:IsVisibleWidget(frame) and handler then
-            handler(frame, key)
+            self:Protect(handler, frame, key)
             return
         end
     end

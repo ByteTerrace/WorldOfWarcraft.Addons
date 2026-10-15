@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { repoRoot } from "../tools/lib/repo.mjs";
 import { loadApi, runChecks } from "../tools/verbs/check.mjs";
-import { MIN_GLOBALS, readGlobals, serialize } from "../tools/verbs/api-sync.mjs";
+import { MIN_DOC_FUNCTIONS, MIN_GLOBALS, readDocs, readGlobals, serialize } from "../tools/verbs/api-sync.mjs";
 import { compareTargets, normalizeTarget, selectAddons } from "../tools/verbs/deploy.mjs";
 import { planPackage } from "../tools/verbs/package.mjs";
 import { PROBES_PATH, luaLiteral, readRecords, serializeProbes } from "../tools/lib/probes.mjs";
@@ -27,6 +27,8 @@ const UNDECLARED = (name) => `GLOBAL write to undeclared global ${name} (declare
 const INTO = (name) => `GLOBAL assignment into client global ${name}; annotate "-- global: <why>" if intended`;
 const B = "BadAddon/Bad.lua";
 const B2 = "BadAddon/Bad2.lua";
+const B3 = "BadAddon/Bad3.lua";
+const FORBIDDEN = (name) => `PROTECTED ${name} is forbidden to addon code at any time (in-game evidence in tools/api/forbidden.json)`;
 const BS = "BadAddon/BadStyle.lua";
 const BANNER = "COMMENT banner divider: let the code's structure and doc comments do that work";
 const DEBT = (marker) => `COMMENT debt marker "${marker}": do the work, or say what's true today`;
@@ -42,6 +44,7 @@ const EXPECTED = [
     "BadAddon/BadAddon_Camelot.toc:1: TOC dependency MissingAddon is not an addon in this repository",
     "BadAddon/BadAddon_Camelot.toc:1: TOC dependency AlsoMissing is not an addon in this repository",
     "BadAddon/BadAddon_Camelot.toc:1: TOC dependency ThirdMissing is not an addon in this repository",
+    "BadAddon/BadAddon_Camelot.toc:1: TOC lists Bad3.lua twice, so the client would run it twice",
     "BadAddon/BadAddon_Camelot.toc:1: TOC lists Missing.lua, which does not exist",
     "BadAddon/Orphan.lua:1: TOC not listed in BadAddon_Camelot.toc",
     `${B}:5: EVENT unknown event NOT_A_REAL_EVENT`,
@@ -114,6 +117,19 @@ const EXPECTED = [
     `${B2}:91: SECRET cur holds UnitPower's result; the annotation on line 90 covers the call, not this use, which errors on a secret: check issecretvalue before it, or annotate "-- secret: <why>"`,
     `${B2}:94: EVENT COMBAT_LOG_EVENT_UNFILTERED is restricted to Blizzard's code; registering it is refused (ADDON_ACTION_FORBIDDEN)`,
     `${B2}:95: PROTECTED SettingsPanel:OpenToCategory is forbidden to addon code at any time (in-game evidence in tools/api/forbidden.json); no combat guard helps, so don't call it`,
+    `${B3}:4: EVENT unknown event NOT_A_REAL_EVENT_X`,
+    `${B3}:5: EVENT COMBAT_LOG_EVENT_UNFILTERED is restricted to Blizzard's code; registering it is refused (ADDON_ACTION_FORBIDDEN)`,
+    `${B3}:6: ${FORBIDDEN("SettingsPanel:Open")}; no combat guard helps, so don't call it`,
+    `${B3}:7: ${FORBIDDEN("SettingsPanel:Open")}; no combat guard helps, so don't call it`,
+    `${B3}:8: ${FORBIDDEN("SettingsPanel:Open")}; don't take it as a value`,
+    `${B3}:9: ${FORBIDDEN("SetRaidTarget")}; don't take it as a value`,
+    `${B3}:10: MEMBER C_GamePad.NotARealFunction is not in the API snapshot`,
+    `${B3}:13: SECRET CHAT_MSG_AFK payload parameter text can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`,
+    `${B3}:19: SECRET CHAT_MSG_AFK payload parameter said can be secret (SecretInChatMessagingLockdown); ${SECRET_PAYLOAD}`,
+    `${B3}:25: SECRET Health holds UnitHealth's result; the annotation on line 24 covers the call, not this use, which errors on a secret: check issecretvalue before it, or annotate "-- secret: <why>"`,
+    `${B3}:30: SECRET :GetText() can return a secret (Text aspect); ${SECRET_CALL}`,
+    `${B3}:32: ${BLOCKED(":SetPoint()", "protected method on a Secure frame")}`,
+    `${B3}:38: ${BLOCKED("C_AuctionHouse.PlaceBid", "HasRestrictions")}`,
     // Naming and comments (GoodAddon/GoodStyle.lua holds the allowed constructs).
     `${BS}:3: NAMING constant 'MAX_ITEMS' should be PascalCase (MaxItems)`,
     `${BS}:4: NAMING file-level local 'itemCount' should be PascalCase (ItemCount)`,
@@ -129,12 +145,17 @@ const EXPECTED = [
     `${BS}:21: ${BANNER}`,
     `${BS}:22: ${DEBT("TODO")}`,
     `${BS}:23: ${DEBT("for now")}`,
+    `${BS}:26: NAMING local 'BAD_VALUE' should be camelCase (badValue)`,
     `${FW}:7: FRAMEWORK C_Timer.After belongs to the framework; ${TIMERS}`,
     `${FW}:8: FRAMEWORK C_Timer.NewTicker belongs to the framework; ${TIMERS}`,
     `${FW}:9: FRAMEWORK CHAT_MSG_ADDON belongs to the framework; ${COMMS}`,
     `${FW}:10: FRAMEWORK C_ChatInfo.SendAddonMessage belongs to the framework; ${COMMS}`,
     `${FW}:11: FRAMEWORK PlaySoundFile belongs to the framework; use a sound bank (ByteTerrace.NewSoundBank)`,
     `${FW}:12: FRAMEWORK C_Timer.NewTimer belongs to the framework; ${TIMERS}`,
+    `${FW}:14: FRAMEWORK C_ChatInfo.SendAddonMessageLogged belongs to the framework; ${COMMS}`,
+    `${FW}:15: FRAMEWORK CHAT_MSG_ADDON_LOGGED belongs to the framework; ${COMMS}`,
+    `${FW}:16: FRAMEWORK Settings.RegisterVerticalLayoutCategory belongs to the framework; use declared rows: the framework generates the settings panel`,
+    `${FW}:17: FRAMEWORK Settings.RegisterCanvasLayoutCategory belongs to the framework; use declared rows: the framework generates the settings panel`,
 ];
 
 function assertSame(actual, expected) {
@@ -159,12 +180,12 @@ async function withTemp(fn) {
 }
 
 // A minimal DevTools dump with `count` function globals plus a nested Enum table.
-function writeDump(path, count) {
+function writeDump(path, count, skipped = "") {
     const rows = [];
     for (let i = 0; i < count; i++) rows.push(`["Global${i}"] = { ["type"] = "function" },`);
     rows.push(`["Enum"] = { ["type"] = "table", ["members"] = { "PowerType" }, ["tables"] = { ["PowerType"] = { "Energy", "Mana" } } },`);
     rows.push(`["SlashCmdList"] = { ["type"] = "table", ["members"] = { "BYTETERRACEDEVTOOLS", "HELP" } },`);
-    writeFileSync(path, `ByteTerraceDevToolsDB = { ["build"] = { ["build"] = "1", ["version"] = "1.60.1" }, ["globals"] = {\n${rows.join("\n")}\n} }\n`);
+    writeFileSync(path, `ByteTerraceDevToolsDB = { ["build"] = { ["build"] = "1", ["version"] = "1.60.1" }, ${skipped}["globals"] = {\n${rows.join("\n")}\n} }\n`);
 }
 
 function tlk(args) {
@@ -219,6 +240,28 @@ export const tests = [
         },
     },
     {
+        name: "api-sync refuses docs that can't be the full documentation, rather than empty the rules",
+        run: async () => withTemp(async (dir) => {
+            let message = "";
+            await readDocs(dir).catch((error) => { message = error.message; });
+            assert(message.includes(`well over ${MIN_DOC_FUNCTIONS}`), `an empty folder: ${message}`);
+            const result = tlk(["api-sync", "--docs", dir, "--out", join(dir, "never-written.json")]);
+            assert(result.status === 1 && result.stderr.includes("refusing partial docs"), `${result.status} ${result.stderr}`);
+        }),
+    },
+    {
+        name: "api-sync warns when the dump left out names another addon set",
+        run: async () => withTemp(async (dir) => {
+            const dump = join(dir, "dump.lua");
+            writeDump(dump, MIN_GLOBALS, `["skipped"] = { ["SomeOtherAddon"] = 12, ["ByteTerrace_Core"] = 3 }, `);
+            const { skipped } = await readGlobals(dump);
+            assert(skipped.SomeOtherAddon === 12 && skipped.ByteTerrace_Core === 3, JSON.stringify(skipped));
+            const result = tlk(["api-sync", "--globals", dump, "--out", join(dir, "forever.json")]);
+            assert(result.status === 0 && result.stderr.includes("other addons set (SomeOtherAddon: 12)"), result.stderr);
+            assert(!result.stderr.includes("ByteTerrace_Core:"), "this repository's own are expected");
+        }),
+    },
+    {
         name: "api-sync reads nested members and writes one entry per line",
         run: async () => withTemp(async (dir) => {
             const dump = join(dir, "dump.lua");
@@ -243,6 +286,12 @@ export const tests = [
             assert(hang.status === 1, `hang exits non-zero (got ${hang.status})`);
             assert(/FAIL hang\.test\.lua: timed out after 1s/.test(hang.stdout), hang.stdout);
             assert(/\b2 passed, 1 failed/.test(hang.stdout), hang.stdout);
+            const typo = tlk(["test", "tests/facts.test.lua", "tests/nope.test.lua"]);
+            assert(typo.status === 1 && typo.stdout.includes("No test file named nope.test.lua"), `a missing file fails: ${typo.stdout}`);
+            const either = tlk(["test", "--dir", join(FIXTURES, "runner"), "no such test", "passes"]);
+            assert(either.status === 0 && /\b1 passed, 0 failed/.test(either.stdout), `any filter matching counts: ${either.stdout}`);
+            const timeout = tlk(["test", "--timeout", "abc"]);
+            assert(timeout.status === 2 && timeout.stderr.includes("--timeout must be a positive number"), `${timeout.status} ${timeout.stderr}`);
         },
     },
     {
@@ -299,6 +348,9 @@ export const tests = [
             assert(errors(undefined, tracked.filter((f) => f !== "Kit/Main.lua"), []).includes("Kit/Main.lua is listed in the TOC but not committed"), "uncommitted TOC file");
             assert(errors(undefined, tracked, ["Core/Main.lua"]).includes("Core/Main.lua has uncommitted changes"), "dirty shipped folder");
             assert(errors(undefined, tracked, ["Dev/Main.lua"]) === "", "a dirty dev folder doesn't matter");
+            const withDev = [addon("Lib", [], { "X-DevOnly": "" }), addon("App", ["Lib"])];
+            const devErrors = planPackage(withDev, undefined, ["Lib/Lib_Camelot.toc", "Lib/Main.lua", "App/App_Camelot.toc", "App/Main.lua"], []).errors.join(" | ");
+            assert(devErrors.includes("App depends on Lib, which the package leaves out"), `a bare X-DevOnly still keeps Lib out, and App can't ship without it: ${devErrors}`);
             all.push(addon("Other"));
             assert(errors(undefined, tracked.concat("Other/Other_Camelot.toc", "Other/Main.lua"), []).includes("one addon nothing else in it depends on"), "two tops can't name it");
         },
@@ -363,6 +415,28 @@ export const tests = [
         }),
     },
     {
+        name: "probes --import merges an accumulating probe's record into the saved one, never shrinking it",
+        run: async () => withTemp(async (dir) => {
+            const out = join(dir, "probes.json");
+            const context = { combat: false, restrictions: "none" };
+            writeFileSync(out, serializeProbes({ build: "1.60.1 (70009)", probes: {
+                "names.chatSenders": { context, result: { CHAT_MSG_SAY: "Aa,Aa Aa" } },
+            } }));
+            const saved = join(dir, "senders.lua");
+            writeFileSync(saved, [
+                "ByteTerraceDevToolsDB = { probes = {",
+                '    ["names.chatSenders"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },',
+                '        result = { CHAT_MSG_SAY = "Aa", CHAT_MSG_CHANNEL = { secret = true, type = "string" } } },',
+                "} }",
+            ].join("\n"));
+            const run = tlk(["probes", "--import", saved, "--out", out]);
+            assert(run.status === 0, `${run.stdout}${run.stderr}`);
+            const result = JSON.parse(readFileSync(out, "utf8")).probes["names.chatSenders"].result;
+            assert(result.CHAT_MSG_SAY === "Aa,Aa Aa", `what earlier sessions saw stays: ${JSON.stringify(result)}`);
+            assert(result.CHAT_MSG_CHANNEL?.secret === true, `and the new session's adds: ${JSON.stringify(result)}`);
+        }),
+    },
+    {
         name: "probes --import refuses broken records, drops unknown probes and keeps strings intact",
         run: async () => withTemp(async (dir) => {
             const out = join(dir, "probes.json");
@@ -403,7 +477,11 @@ export const tests = [
             const records = await readRecords(saved);
             assert(records["tts.voices"].build === "1.60.1 (70009)", "readRecords returns every record as saved");
             const literal = luaLiteral({ b: "x\ty", a: { c: true, d: 1.5 } });
-            assert(literal === '{["a"]={["c"]=true,["d"]=1.5},["b"]="x\\9y"}', literal);
+            assert(literal === '{["a"]={["c"]=true,["d"]=1.5},["b"]="x\\009y"}', literal);
+            // An escape is always three digits, so a digit after it can't join it.
+            for (const [text, expected] of [["line\n2", '"line\\0102"'], ['say "5"', '"say \\0345\\034"'], ["a\\9", '"a\\0929"']]) {
+                assert(luaLiteral(text) === expected, `${JSON.stringify(text)}: ${luaLiteral(text)}`);
+            }
         }),
     },
     {
@@ -456,7 +534,8 @@ export const tests = [
             assert(run.status === 1, `a mismatch exits 1 (got ${run.status}): ${run.stdout}${run.stderr}`);
             assert(/chatTypeInfo\.raidWarning +anywhere +match\n {4}both +\{b=0 g=72 hasMetatable=true r=255 sticky=0\}/.test(run.stdout), run.stdout);
             assert(/damageMeter\.available +anywhere +mismatch\n {4}client +\{failureReason=disabled isAvailable=false\}.*\n {4}harness +\{failureReason="" isAvailable=true\}/.test(run.stdout), run.stdout);
-            assert(/quest\.offer +quest offer open +harness can't set up/.test(run.stdout), run.stdout);
+            assert(/quest\.offer +quest offer open +pending/.test(run.stdout), run.stdout);
+            assert(/bags\.firstItem +item in backpack +harness can't set up/.test(run.stdout), run.stdout);
             const [, pending, total] = /To do in game: (\d+) of (\d+) probes need a result\./.exec(run.stdout) ?? [];
             assert(Number(total) - Number(pending) === 2, run.stdout);
         }),

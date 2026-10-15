@@ -14,7 +14,10 @@
 -- observed, differences }: gap is why the harness can't run the probe (a need it can't recreate);
 -- problem is why the run failed (a setup that doesn't meet its need, an error, an unsaveable
 -- result, errors reported to the client); differences (Probes.Diff of the observed and the
--- harness's { context, result }) is set when the client's record exists.
+-- harness's { context, result }) is set when the client's record exists. An accumulating probe's
+-- record merges what every session showed, so one harness run can't equal it: the harness may
+-- show only what the client did, so its result is compared merged into the record
+-- (Probes.Merge), and anything the client never showed is a difference.
 
 Harness.OBSERVED_PROBES = type(__probes) == "string" and assert(loadstring("return " .. __probes))()
     or { build = "", probes = {} }
@@ -51,8 +54,9 @@ function Harness.RunProbe(name)
     run.problem = h:UnexpectedErrors()
     run.record = record
     if run.observed then
+        local result = probe.accumulates and Probes.Merge(run.observed.result, record.result) or record.result
         run.differences = Probes.Diff({ context = run.observed.context, result = run.observed.result },
-            { context = record.context, result = record.result })
+            { context = record.context, result = result })
     end
     return run
 end

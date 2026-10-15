@@ -197,3 +197,57 @@ test("the window can be dragged by its frame", function()
     local _, _, _, movedX, movedY = window.Frame:GetPoint(1)
     truthy(movedX ~= x or movedY ~= y, "it moved")
 end)
+
+test("the view moving into Blizzard's panel closes the window rather than leaving it empty", function()
+    local _, addon = NewAddOn()
+    local window = addon.SettingsWindow
+    window:Show()
+    window.Canvas:Show()
+    falsy(window:IsShown(), "no empty window over the panel")
+    truthy(window.Controls[addon.State:Id("Meter.enabled")]:IsVisible(), "the panel shows the settings")
+end)
+
+test("closing the window while Blizzard's panel shows gives the panel its view back", function()
+    local _, addon = NewAddOn()
+    local window = addon.SettingsWindow
+    window.Canvas:Show()
+    window:Show()
+    window:Hide()
+    local box = window.Controls[addon.State:Id("Meter.enabled")]
+    truthy(box:IsVisible(), "not a blank page")
+    eq(window.View:GetParent(), window.Canvas)
+end)
+
+test("number steppers stay on the row's grid and inside its bounds, whatever the bounds", function()
+    local h = Harness.New()
+    h:LoadFiles("ByteTerrace_Core")
+    h.declared.TestDB = true
+    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", title = "Test App", savedVariable = "TestDB", slash = { "/test" } })
+    addon:Module("M", { toggle = false, state = {
+        { name = "share", kind = "number", default = 0.8, min = 0, max = 1, step = 0.4, label = "Share" },
+        { name = "free", kind = "number", default = 2, min = 0.5, max = 2.5, label = "Free" },
+    } })
+    h:Fire("ADDON_LOADED", "TestApp")
+    local window, state = addon.SettingsWindow, addon.State
+    window:Show()
+    window.Controls[state:Id("M.share")].Plus:Click()
+    eq(state:Get("M.share"), 0.8, "1.2 would pass max: the last step on the grid is 0.8")
+    local free = window.Controls[state:Id("M.free")]
+    free.Plus:Click()
+    eq(state:Get("M.free"), 2.5, "no step: up to max")
+    free.Minus:Click()
+    free.Minus:Click()
+    eq(state:Get("M.free"), 0.5, "and down to min, on no grid")
+    free.Plus:Click()
+    eq(state:Get("M.free"), 1.5)
+end)
+
+test("a module whose page is the addon's own title joins the main page", function()
+    local h = Harness.New()
+    h:LoadFiles("ByteTerrace_Core")
+    h.declared.TestDB = true
+    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", title = "Test App", savedVariable = "TestDB", slash = { "/test" } })
+    addon:Module("M", { label = "M", page = "Test App" })
+    h:Fire("ADDON_LOADED", "TestApp")
+    eq(#addon.SettingsWindow.Pages, 1)
+end)

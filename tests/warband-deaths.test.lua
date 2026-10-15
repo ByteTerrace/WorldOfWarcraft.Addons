@@ -184,6 +184,38 @@ test("a recap that comes too late is set aside, not given to your next death", f
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0)
 end)
 
+test("a death inside the late window takes its own recap, not the death before's", function()
+    local h, addon = Grouped()
+    h:EnterCombat()
+    h:Fire("PLAYER_DEAD")
+    h:Advance(3) -- the first death gives up: unknown
+    h:Advance(7)
+    h:Fire("PLAYER_DEAD") -- a second death, still in the first one's late window
+    h:MeterAdd(KilledBy(Enemy("Bob")))   -- the first death's recap, late
+    h:MeterAdd(KilledBy(Enemy("Alice"))) -- the second death's
+    eq(addon.State:Get("death.attributed"), 2)
+    eq(addon.State:Get("death.killer"), "Alice Doe")
+    eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0, "the late recap counts for no one")
+    h:LeaveCombat()
+    h:Fire("PLAYER_DEAD") -- a fall, with no recap of its own
+    h:Advance(3)
+    eq(addon.State:Get("death.attributed"), 3)
+    eq(addon.State:Get("death.killer"), "", "nobody's recap is left over for it")
+end)
+
+test("two deaths before either recap lands each get their own killer, in order", function()
+    local h, addon = Grouped()
+    local killers = {}
+    addon.State:Watch({ "death.attributed" }, function(state) killers[#killers + 1] = state:Get("death.killer") end, true)
+    h:EnterCombat()
+    h:Fire("PLAYER_DEAD")
+    h:Advance(1)
+    h:Fire("PLAYER_DEAD")
+    h:MeterAdd(KilledBy(Enemy("Bob")))
+    h:MeterAdd(KilledBy(Enemy("Alice")))
+    eq(table.concat(killers, ","), "Bob Doe,Alice Doe")
+end)
+
 test("an attacker the recap hides is unknown: the card asks about the suspect", function()
     local h, addon = Grouped()
     local bob = Enemy("Bob")

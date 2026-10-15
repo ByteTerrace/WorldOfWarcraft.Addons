@@ -38,7 +38,6 @@ local concat = table.concat
 
 local SoundBank = {}
 SoundBank.__index = SoundBank
-ByteTerrace.SoundBank = SoundBank
 
 local function FileName(sound, variant)
     return variant == 1 and sound.file or (sound.file .. variant)

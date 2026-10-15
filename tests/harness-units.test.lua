@@ -410,3 +410,22 @@ test("GetPlayerInfoByGUID knows the player units a test made, and nothing else",
     eq(env.GetPlayerInfoByGUID(env.UnitGUID("target")), nil, "a creature")
     eq(env.GetPlayerInfoByGUID("Player-5000-DEADBEEF"), nil, "a GUID the client never saw")
 end)
+
+test("a relog starts with no target, focus, mouseover, nameplates or combo points; a reload drops the quest giver", function()
+    local h = Harness.New()
+    h:LoadAddon("ByteTerrace_DevTools")
+    h:SetTarget({ name = "Bob", isPlayer = true, canAttack = true })
+    h:SetUnit("focus", { name = "Cara", isPlayer = true })
+    h:SetMouseover({ name = "Dan", isPlayer = true })
+    h:AddNamePlate({ name = "Kobold", canAttack = true })
+    h:SetComboPoints(3)
+    h:OfferQuest({ title = "Wolves" }, "Eagan Peltskinner")
+    h:Reload()
+    falsy(h.env.UnitExists("questnpc"), "the dialog closed with the old UI, and its giver with it")
+    truthy(h.env.UnitExists("target"), "a /reload keeps the world")
+    h:Relog()
+    for _, unit in ipairs({ "target", "focus", "mouseover", "nameplate1" }) do
+        falsy(h.env.UnitExists(unit), unit .. " after a fresh login")
+    end
+    eq(h.env.GetComboPoints("player", "target"), 0)
+end)

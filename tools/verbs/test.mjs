@@ -4,11 +4,12 @@
 // timeout counts from when the worker finishes its setup (Lua VM, snapshot, harness, test file),
 // which has its own, generous limit (SETUP_MS), so load on the machine can't fail a quick test.
 //
-//   node tools/tlk.mjs test [filter | test files...] [--timeout <seconds>] [--dir <folder>]
+//   node tools/tlk.mjs test [filters... | test files...] [--timeout <seconds>] [--dir <folder>]
 //
-// Test file paths (tests/krew.test.lua) run exactly those files. Otherwise the filter is a
-// substring of "<file> > <test name>"; only matching tests run. A filter or file list that
-// matches nothing fails the run. Besides the files, the run checks that every harness fake
+// Test file paths (tests/krew.test.lua) run exactly those files, and one that doesn't exist
+// fails the run. Otherwise each filter is a substring of "<file> > <test name>"; the tests
+// matching any of them run. Filters or files that match nothing fail the run, and so does a
+// --timeout that isn't a positive number of seconds. Besides the files, the run checks that every harness fake
 // names a global the client dump has ("harness > every fake names a real client global").
 //
 // A Lua test file calls test(name, fn). Assertions: eq(actual, expected, message),
@@ -60,11 +61,21 @@ const display = (name) => (/[\x00-\x1f]/.test(name) ? JSON.stringify(name) : nam
 export async function run(values, positionals) {
     const isFile = (arg) => /\.test\.(lua|mjs)$/.test(arg);
     const only = new Set(positionals.filter(isFile).map((arg) => arg.replaceAll("\\", "/").split("/").pop()));
-    const filter = positionals.find((arg) => !isFile(arg)) ?? null;
+    const filters = positionals.filter((arg) => !isFile(arg));
+    const filter = filters.length ? filters : null;
     const timeoutMs = Number(values.timeout) * 1000;
+    if (!(timeoutMs > 0)) {
+        console.error(`--timeout must be a positive number of seconds (got "${values.timeout}")`);
+        return 2;
+    }
     const dir = values.dir ? resolve(values.dir) : join(repoRoot, "tests");
-    const files = readdirSync(dir).filter((f) => (f.endsWith(".test.lua") || f.endsWith(".test.mjs"))
-        && (only.size === 0 || only.has(f))).sort();
+    const present = readdirSync(dir).filter((f) => f.endsWith(".test.lua") || f.endsWith(".test.mjs"));
+    const missing = [...only].filter((file) => !present.includes(file));
+    if (missing.length) {
+        console.log(`No test file named ${missing.join(", ")}.`);
+        return 1;
+    }
+    const files = present.filter((f) => only.size === 0 || only.has(f)).sort();
     const jobs = [...(only.size === 0 ? [{ kind: "fakes", label: FAKES_JOB, filter }] : []), ...files.map((file) => ({
         kind: file.endsWith(".mjs") ? "mjs" : "lua", label: file, file: join(dir, file), filter,
     }))];
@@ -104,7 +115,7 @@ export async function run(values, positionals) {
         }
     });
     if ((filter || only.size > 0) && matched === 0) {
-        console.log(`No test matches "${filter ?? [...only].join(" ")}".`);
+        console.log(`No test matches "${filter ? filters.join("\" or \"") : [...only].join(" ")}".`);
         return 1;
     }
     console.log(`${passed} passed, ${failed} failed${pending ? `, ${pending} pending` : ""}`);

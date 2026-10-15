@@ -1,18 +1,26 @@
 local addonName, ns = ...
 
--- Scholar's challenge: math and reading riddles for young players, set up by a parent.
+-- Scholar's challenge: riddles for young players about their own quests, and math and reading,
+-- set up by a parent.
 --
 -- Off by default and per character: a parent turns it on for a child's character, picks a grade,
 -- and can lock the settings with a PIN (/tlk lock 1234; /tlk unlock 1234 for the session). While
 -- locked the PIN can't be changed, and after three wrong PINs unlocking waits a minute.
 --
+--   What     quest riddles are preferred: two in a row, then math or reading takes a turn. A quest
+--            riddle asks about one the player was shown (accepted, or turned in): the newest not
+--            asked about since, else an older one for review (QuestBook.lua remembers,
+--            ScholarQuests.lua asks). It's an open-book test: the quest book on the riddle screen
+--            shows the quest as the player saw it. With only quest riddles on and no quest yet, a
+--            riddle that comes due waits for one.
 --   When     every N minutes of play (saved per character, so relogging doesn't skip one), and
---            optionally at each level-up. Time AFK, or with both subjects off, doesn't count.
+--            optionally at each level-up. Time AFK, or with every subject off, doesn't count.
 --   Where    a riddle covers the screen and holds the mouse and keyboard until it's solved; in
 --            Gentle mode a Skip appears after one try. Never during combat: a riddle waits for the
 --            fight to end, and one on screen steps aside if a fight starts and comes back after.
---   How      answer with 1-4, a click, or the controller's face buttons; Need a hint? is H or the
---            left shoulder, Read aloud is R or the right shoulder, Skip is Esc or Back.
+--   How      answer with 1-4, a click, or the controller's face buttons; Need a hint? (the quest
+--            book, on a quest riddle) is H or the left shoulder, Read aloud is R or the right
+--            shoulder, Skip is Esc or Back.
 --   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the grade.
 --
 -- Limits, honestly: a controller's sticks still move the character, and a determined child can
@@ -20,6 +28,7 @@ local addonName, ns = ...
 -- place for hard limits; this is meant to be fun.
 
 local FinishDelay = 1.8
+local QuestShare = 2 -- quest riddles in a row before math or reading takes a turn
 local Ranks = { { 0, "Apprentice" }, { 10, "Journeyman" }, { 25, "Adept" }, { 50, "Sage" }, { 100, "Archmage" } }
 local AnswerSources = { "gamepad.south", "gamepad.east", "gamepad.west", "gamepad.north" }
 local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NUMPAD2 = 2, NUMPAD3 = 3, NUMPAD4 = 4 }
@@ -34,10 +43,11 @@ local ByteTerrace = ByteTerrace
 local C_Sound, C_TTSSettings, C_VoiceChat, GetMoney = C_Sound, C_TTSSettings, C_VoiceChat, GetMoney
 local GetRealZoneText, GetServerTime, GetTime, IsLoggedIn = GetRealZoneText, GetServerTime, GetTime, IsLoggedIn
 local SOUNDKIT, UnitClass, UnitLevel, UnitName = SOUNDKIT, UnitClass, UnitLevel, UnitName
-local issecretvalue, wipe, floor, max, random, byte = issecretvalue, wipe, math.floor, math.max, math.random, string.byte
+local issecretvalue, wipe, floor, max, min, random, byte = issecretvalue, wipe, math.floor, math.max, math.min, math.random, string.byte
 
 local Addon = ns.Addon
 local Puzzles = ns.Puzzles
+local QuestBook = ns.QuestBook
 local ScholarView = ns.ScholarView
 
 local GradeValues, GradeLabels = {}, {}
@@ -142,6 +152,7 @@ local function Open()
         wrong = Missed, canSkip = Scholar:Get("mode") == "gentle" and Wrongs > 0,
         keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) },
         actions = { hint = ActionLabel("hint"), speak = ActionLabel("speak"), skip = ActionLabel("skip") },
+        book = Current.book ~= nil,
     }))
     frame:EnableKeyboard(true)
     frame:SetPropagateKeyboardInput(false) -- protected: Open only runs out of combat (see the combat rule)
@@ -178,8 +189,42 @@ local function Context()
     }
 end
 
--- The next riddle, alternating subjects when both are on; nil when neither is.
+-- Whether any subject is on.
+local function HasSubject()
+    return Scholar:Get("math") or Scholar:Get("reading") or Scholar:Get("quests")
+end
+
+-- A riddle about a quest the player was shown, in QuestBook's order (fresh ones first, then the
+-- rest for review), or nil when none is recorded. A quest no question fits counts as asked.
+local function QuestPuzzle()
+    local known, byKey = QuestBook.All(), {}
+    for _, record in ipairs(known) do
+        byKey[record.key] = record
+    end
+    for _, key in ipairs(QuestBook.Order()) do
+        local puzzle = Puzzles.Generate({ subject = "quest", random = random, quest = byKey[key], known = known })
+        if puzzle then
+            puzzle.questKey = key
+            return puzzle
+        end
+        QuestBook.Asked(key)
+    end
+    return nil
+end
+
+-- The next riddle. Quest riddles are preferred: QuestShare of them in a row, then math or reading
+-- takes a turn (alternating when both are on), whenever any of those is on. nil when there's
+-- nothing to ask.
 local function NextPuzzle()
+    local others = Scholar:Get("math") or Scholar:Get("reading")
+    if Scholar:Get("quests") and (Scholar:Get("questRun") < QuestShare or not others) then
+        local puzzle = QuestPuzzle()
+        if puzzle then
+            Scholar:Set("questRun", min(Scholar:Get("questRun") + 1, QuestShare))
+            return puzzle
+        end
+    end
+    Scholar:Set("questRun", 0)
     local subjects = {}
     if Scholar:Get("math") then
         subjects[#subjects + 1] = "math"
@@ -204,6 +249,9 @@ end
 -- Ends the riddle, solved (after its celebration) or skipped; either way the timer starts over.
 local function Finish(solved)
     local before = Scholar:Get("stars")
+    if Current and Current.questKey then
+        QuestBook.Asked(Current.questKey)
+    end
     Current, Wrongs = nil, 0
     wipe(Missed)
     Close()
@@ -229,6 +277,9 @@ local function Choose(i)
         Scholar:Set("solved", true)
         Scholar:Set("pending", false)
         Scholar:Set("elapsed", 0)
+        if Current.questKey then
+            QuestBook.Asked(Current.questKey) -- answered: a /reload in the celebration doesn't ask it again
+        end
         local streak = Scholar:Get("streak") + 1
         Scholar:Set("streak", streak)
         Scholar:Set("stars", Scholar:Get("stars") + 1)
@@ -264,8 +315,11 @@ local function Speak()
     end
 end
 
+-- Need a hint? shows the hint; on a quest riddle it opens (or closes) the quest book instead.
 local function Hint()
-    if Current and not Scholar:Get("solved") then
+    if Current and Current.book then
+        ScholarView.ToggleBook()
+    elseif Current and not Scholar:Get("solved") then
         ScholarView.Hint(Current.hint)
     end
 end
@@ -298,6 +352,11 @@ local Rows = {
     { name = "reading", kind = "boolean", default = true, label = "Reading riddles", scope = "character",
         lockedBy = LockedBy,
         description = "Rhymes, spelling, word scrambles, vocabulary and short stories, by grade." },
+    { name = "quests", kind = "boolean", default = true, label = "Quest riddles", scope = "character",
+        lockedBy = LockedBy,
+        description = "Questions about the quests your child accepts and turns in: who, where, what they asked, "
+            .. "and their text. Two of every three riddles are about quests, the newest first, then older ones for "
+            .. "review; the quest book on the riddle screen holds every answer." },
     { name = "interval", kind = "number", default = 30, min = 10, max = 120, step = 5,
         label = "Minutes between riddles", description = "Minutes of play between riddles.", scope = "character",
         lockedBy = LockedBy, section = "When" },
@@ -307,12 +366,14 @@ local Rows = {
         valueLabels = { gate = "Solve to keep playing", gentle = "Gentle (Skip after one try)" },
         label = "Riddle style", description = "Whether a riddle must be solved, or can be skipped after one try.",
         scope = "character", lockedBy = LockedBy },
-    -- Progress, per character. elapsed is seconds of play toward the next riddle.
+    -- Progress, per character. elapsed is seconds of play toward the next riddle; questRun the quest
+    -- riddles asked since math or reading last took a turn.
     { name = "stars", kind = "number", default = 0, scope = "character" },
     { name = "streak", kind = "number", default = 0, scope = "character" },
     { name = "level", kind = "number", default = 1, min = 1, max = 3, scope = "character" },
     { name = "elapsed", kind = "number", default = 0, scope = "character" },
     { name = "pending", kind = "boolean", default = false, scope = "character" },
+    { name = "questRun", kind = "number", default = 0, min = 0, step = 1, scope = "character" },
     -- The riddle on screen was just solved: its celebration holds the screen until Finish.
     { name = "solved", kind = "boolean", default = false, persist = false },
     -- The parent's PIN (a hash; 0 = none), account-wide, and whether settings are locked right now.
@@ -393,14 +454,15 @@ end
 Scholar = Addon:Module("Scholar", {
     label = "Scholar's challenge",
     page = "Scholar's challenge",
-    description = "Math and reading riddles for young players, every so often and at level-ups. "
-        .. "Per character; off unless a parent turns it on.",
+    description = "Riddles for young players about their own quests, and math and reading, every so often and "
+        .. "at level-ups. Per character; off unless a parent turns it on.",
     default = false,
     scope = "character",
     lockedBy = LockedBy,
     state = Rows,
     commands = Commands,
     bindings = Bindings,
+    uses = { "QuestBook" },
     OnEnable = function(module)
         -- A parent's unlock lasts the session: a /reload keeps it, while a new login or switching
         -- the challenge back on mid-session locks again.
@@ -416,6 +478,7 @@ Scholar = Addon:Module("Scholar", {
         end)
         local pending, solved, combat = module:Id("pending"), module:Id("solved"), module:Id("combat.active")
         local afk, mathOn, readingOn = module:Id("afk.active"), module:Id("math"), module:Id("reading")
+        local questsOn = module:Id("quests")
 
         -- The play clock counts toward the next riddle while none is due, you're not AFK and a
         -- subject is on. It writes nothing while it runs: one timer fires when the interval is up,
@@ -432,10 +495,10 @@ Scholar = Addon:Module("Scholar", {
             end
         end
         module:Rule({
-            reads = { pending, afk, mathOn, readingOn }, initial = true,
+            reads = { pending, afk, mathOn, readingOn, questsOn }, initial = true,
             when = function(state)
                 return not state.Values[pending] and not state.Values[afk]
-                    and (state.Values[mathOn] or state.Values[readingOn])
+                    and (state.Values[mathOn] or state.Values[readingOn] or state.Values[questsOn])
             end,
             changed = function(counting)
                 Bank()
@@ -466,14 +529,26 @@ Scholar = Addon:Module("Scholar", {
                     Current = Current or NextPuzzle()
                     if Current then
                         Open()
-                    else
-                        module:Set("pending", false) -- no subject enabled
-                    end
+                    elseif not HasSubject() then
+                        module:Set("pending", false)
+                    end -- else it waits for a quest to ask about
                 else
                     Close()
                 end
             end,
         })
+        -- A riddle that came due with nothing to ask waits: a new quest, or a subject switched on,
+        -- gives it one.
+        module:Watch({ "QuestBook.quests", mathOn, readingOn, questsOn }, function(state)
+            if state.Values[pending] and not Current and not state.Values[solved] and not state.Values[combat] then
+                Current = NextPuzzle()
+                if Current then
+                    Open()
+                elseif not HasSubject() then
+                    module:Set("pending", false)
+                end
+            end
+        end, true)
     end,
     OnDisable = function(module)
         if module:Get("solved") then

@@ -6,6 +6,8 @@ local addonName, ns = ...
 --
 -- A tier (t) scales difficulty inside a grade band: 1 is easiest. Story and sentence templates
 -- use {hero} and {place}; the defaults beside them fill in when the player's context doesn't.
+-- Quest riddles (ScholarQuests.lua) ask about the player's own quests, in the words below; their
+-- banks are wrong answers to mix in when the player's own quests don't give three.
 
 ns.ScholarWords = {
     -- Puzzle kinds per subject and grade.
@@ -108,6 +110,14 @@ ns.ScholarWords = {
         ["reading.vocab"] = { "Word Wizard", "The Vocabulary Vault", "Words of Wisdom" },
         ["reading.blank"] = { "Fill the Blank", "The Missing Word", "Finish the Sentence" },
         ["reading.story"] = { "Story Time with the Owl Sage", "Tales of Azeroth", "A Riddle from the Owl Sage" },
+        ["quest.giver"] = { "Who Sent You?", "Remember Your Quest", "The Quest Giver" },
+        ["quest.ender"] = { "Mission Accomplished", "Who Was Waiting?", "Quest Complete!" },
+        ["quest.place"] = { "Where It Began", "Remember the Road", "Map of Memories" },
+        ["quest.endPlace"] = { "Journey's End", "Where You Finished", "Back to the Map" },
+        ["quest.count"] = { "Count Your Quest", "How Many Again?", "Quest Arithmetic" },
+        ["quest.objective"] = { "Your Orders", "What Was the Task?", "Read Your Quest" },
+        ["quest.title"] = { "Name That Quest", "Quest Log Quiz", "Which Quest Was It?" },
+        ["quest.blank"] = { "The Quest Text", "Every Word Counts", "Read It Closely" },
     },
 
     -- Puzzle text. {name} is filled from the puzzle's variables. In word problems a number {a}
@@ -400,6 +410,67 @@ ns.ScholarWords = {
             prompt = "{story}\n{question}",
             hint = "Read the story again slowly. The answer is hiding in there!", explain = "You found it: {answer}.",
         },
+    },
+
+    -- Quest riddle text. {title} is the quest's title; the quest book holds every answer.
+    quest = {
+        giver = {
+            prompt = "Who gave you the quest \"{title}\"?",
+            hint = "Open the quest book: it says who sent you.", explain = "{answer} gave you \"{title}\".",
+        },
+        ender = {
+            prompt = "Who did you turn in the quest \"{title}\" to?",
+            hint = "Open the quest book: it says who you reported to.", explain = "You turned in \"{title}\" to {answer}.",
+        },
+        place = {
+            prompt = "Where were you when you took the quest \"{title}\"?",
+            hint = "Open the quest book: it says where it began.", explain = "You took \"{title}\" in {answer}.",
+        },
+        endPlace = {
+            prompt = "Where did you turn in the quest \"{title}\"?",
+            hint = "Open the quest book: it says where you finished.", explain = "You turned it in at {answer}.",
+        },
+        count = {
+            prompt = "The quest \"{title}\" asked for \"{objective}\". How many?",
+            hint = "Open the quest book and read the objectives.", explain = "It asked for {answer}: {objective}.",
+        },
+        objective = {
+            prompt = "What did the quest \"{title}\" ask you to do?",
+            hint = "Open the quest book and read the objectives.", explain = "\"{title}\" asked for: {answer}.",
+        },
+        title = {
+            prompt = "{giver} gave you a quest. Which one?",
+            hint = "Open the quest book: it names who gave you this one.", explain = "{giver} gave you \"{answer}\".",
+        },
+        blank = {
+            prompt = "From the quest \"{title}\":\n\"{sentence}\"\nWhich word is missing?",
+            hint = "Open the quest book and find that sentence.", explain = "The quest says: \"{filled}\"",
+        },
+    },
+    -- Plausible quest givers, quest titles, objectives and places (never a whole zone, which could be
+    -- true of the right place too) for wrong answers.
+    questPlaces = {
+        "Northshire Abbey", "Goldshire", "Fargodeep Mine", "Jasperlode Mine", "Eastvale Logging Camp",
+        "Valley of Trials", "Razor Hill", "Brill", "Kharanos", "Shadowglen", "Camp Narache", "Sentinel Hill",
+    },
+    questNames = {
+        "Marshal Dughan", "Deputy Willem", "Marshal McBride", "Brother Paxton", "Eagan Peltskinner",
+        "Innkeeper Farley", "Farmer Saldean", "Gryan Stoutmantle", "Captain Grayson", "Guard Thomas",
+    },
+    questTitles = {
+        "Kobold Camp Cleanup", "Wolves Across the Border", "The Fargodeep Mine", "Report to Goldshire",
+        "The Jasperlode Mine", "A Threat Within", "Lost Necklace", "Bounty on Murlocs",
+    },
+    questObjectives = {
+        "Kobold Vermin slain", "Tough Wolf Meat", "Kobold Candle", "Gold Dust", "Murloc Fin", "Linen Cloth",
+        "Red Burlap Bandana", "Report to Marshal Dughan",
+    },
+    -- Words too plain to blank out of a quest's text.
+    stopWords = {
+        about = true, after = true, again = true, around = true, before = true, being = true, below = true,
+        could = true, every = true, first = true, little = true, never = true, other = true, should = true,
+        since = true, their = true, there = true, these = true, thing = true, those = true, through = true,
+        ["until"] = true, where = true, which = true, ["while"] = true, would = true, yourself = true,
     },
 
     -- Reading banks for kindergarten and grade 1.

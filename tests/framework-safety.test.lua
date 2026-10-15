@@ -244,3 +244,112 @@ test("a file that errors while loading costs no saved settings: the client loads
     eq(ns.Addon.State:Get("Good.n"), 4)
     eq(h.env.HalfDB["Broken.flag"], true, "the broken file's module keeps its settings")
 end)
+
+test("a watcher registered mid-batch hears a row move back to the value the batch started from", function()
+    local h, addon = NewAddOn()
+    addon:Module("M", { toggle = false, state = { { name = "n", kind = "number", default = 0, persist = false } } })
+    Start(h)
+    local state, seen = addon.State, {}
+    state:BeginBatch()
+    state:Set("M.n", 1)
+    state:Watch({ "M.n" }, function(s) seen[#seen + 1] = s:Get("M.n") end)
+    state:Set("M.n", 0)
+    state:EndBatch()
+    eq(table.concat(seen, ","), "1,0", "it saw 1, so 0 is news to it")
+end)
+
+test("a count that went up, down and up again across a registration still counts as rising", function()
+    local h, addon = NewAddOn()
+    local m = addon:Module("M", { toggle = false, state = { { name = "count", kind = "number", default = 0, persist = false } } })
+    Start(h)
+    local state, rises = addon.State, 0
+    state:BeginBatch()
+    state:Set("M.count", 1)
+    m:OnIncrease("count", function() rises = rises + 1 end)
+    state:Set("M.count", 0)
+    state:EndBatch()
+    state:Set("M.count", 1)
+    eq(rises, 1)
+end)
+
+test("a rule registered in a batch's last publish round still takes its first verdict", function()
+    local h, addon = NewAddOn()
+    addon:Module("M", { toggle = false, state = { { name = "n", kind = "number", default = 0, persist = false } } })
+    Start(h)
+    local state, verdicts = addon.State, 0
+    state:Watch({ "M.n" }, function(s)
+        local n = s:Get("M.n")
+        if n < 8 then
+            s:Set("M.n", n + 1)
+        elseif verdicts == 0 then
+            s:Rule({ reads = { "M.n" }, initial = true, when = function() return true end,
+                changed = function() verdicts = verdicts + 1 end })
+        end
+    end, true)
+    state:Set("M.n", 1)
+    eq(verdicts, 1, "the batch settled: nothing to report")
+end)
+
+test("an extra EndBatch in a watcher is refused and leaves publishing intact", function()
+    local h, addon = NewAddOn()
+    addon:Module("M", { toggle = false, state = {
+        { name = "a", kind = "number", default = 0, persist = false },
+        { name = "b", kind = "number", default = 0, persist = false },
+    } })
+    Start(h)
+    local state, heard = addon.State, 0
+    state:Watch({ "M.a" }, function(s) s:EndBatch() end, true)
+    state:Watch({ "M.b" }, function() heard = heard + 1 end, true)
+    h:ExpectErrors("EndBatch without BeginBatch")
+    state:Set("M.a", 1)
+    state:Set("M.b", 1)
+    eq(heard, 1, "later writes still publish")
+end)
+
+test("a demand module stopping can't be acquired as if it were running", function()
+    local h, addon = NewAddOn()
+    local other
+    local fact = addon:Module("Fact", { toggle = false, demand = true, OnDisable = function() other:SetEnabled(true) end })
+    addon:Module("User", { label = "User", uses = { "Fact" } })
+    other = addon:Module("Other", { label = "Other", default = false, uses = { "Fact" } })
+    Start(h)
+    addon.State:Set("User.enabled", false)
+    falsy(other.Enabled and not fact:IsRunning(), "Other never runs on a stopped Fact")
+    eq(fact.Users, other.Enabled and 1 or 0, "and the count stays honest")
+end)
+
+test("a keep function that errors while a collection loads costs the addon nothing but that answer", function()
+    local saved = { ["M.people"] = { a = { seen = 1 }, b = { seen = 2 }, c = { seen = 3 } } }
+    local h, addon = NewAddOn(saved)
+    addon:Module("M", { toggle = false, records = { { name = "people", limit = 2, evict = "seen",
+        keep = function() error("keep broke") end,
+        fields = { { name = "seen", kind = "number", default = 0 } } } } })
+    h:ExpectErrors("keep broke", "keep broke", "keep broke") -- asked once per record
+    Start(h)
+    truthy(addon.Started)
+    eq(addon.Modules.M.Records.people:Count(), 2)
+end)
+
+test("enum values must be strings, and value labels must name them", function()
+    for _, row in ipairs({
+        { name = "mode", kind = "string", default = "a", values = { "a", true } },
+        { name = "mode", kind = "string", default = "a", values = { "a", "b" }, valueLabels = { c = "C" } },
+    }) do
+        local h, addon = NewAddOn()
+        addon:Module("M", { toggle = false, state = { row } })
+        h:ExpectErrors("M.mode")
+        Start(h)
+        falsy(addon.Started)
+    end
+end)
+
+test("a module's errors for an unknown row point at the module's caller", function()
+    local h, addon = NewAddOn()
+    local m = addon:Module("M", { toggle = false })
+    Start(h)
+    for _, call in ipairs({ function() m:Get("typo") end, function() m:Set("typo", 1) end }) do
+        local ok, err = pcall(call)
+        falsy(ok)
+        falsy(tostring(err):find("Module.lua", 1, true), tostring(err))
+    end
+end)

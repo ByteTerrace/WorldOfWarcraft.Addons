@@ -2,7 +2,10 @@ local addonName, ns = ...
 
 -- Krew: share fun moments with friends in your group who also run the toolkit.
 --
---   Hello      when you group up, Krew members greet each other; a card shows who's here.
+--   Hello      when you group up (or /reload in a group), you say hello once: "HELLO:<version>\t0".
+--              Each hello that isn't a reply gets one reply ("...\t1") within ReplyDelay, a burst
+--              of them one between them, and a reply gets none, so two Krews never ping-pong. A
+--              card shows who's here.
 --   Ding       your level-ups appear as a card for the rest of the Krew.
 --   Flawless   so do your flawless victories (Victory.flawlessWins, Kombat.lua).
 --   Scholar    and the riddles a young scholar solves (Scholar.stars).
@@ -18,6 +21,7 @@ local addonName, ns = ...
 -- ns.KrewFields cleans the fields of received messages for every feature that listens:
 --   CleanText(text)         a zone, subzone or name to show, or "".
 --   CleanCount(text, max)   a whole number from 1 to max written in digits, or nil.
+--   MaxLevel                the highest level a message may carry.
 -- Neither passes a "|" or a control character: someone else's message never puts a link,
 -- texture or color on your screen.
 --
@@ -25,7 +29,7 @@ local addonName, ns = ...
 -- Krew on the next roster update.
 
 local Prefix = "TLKKrew1"
-local HelloCooldown = 30
+local ReplyDelay = 1 -- seconds that gather a burst of hellos into one reply
 local RollCallDelay = 2
 local MaxText = 60     -- longest text accepted from a message
 local MaxLevel = 200   -- the highest level accepted from a message
@@ -36,7 +40,7 @@ for i = 1, 40 do
     PartyUnits[i], RaidUnits[i] = "party" .. i, "raid" .. i
 end
 
-local GetNumGroupMembers, GetTime, IsInGroup, IsInRaid, SOUNDKIT = GetNumGroupMembers, GetTime, IsInGroup, IsInRaid, SOUNDKIT
+local GetNumGroupMembers, IsInGroup, IsInRaid, SOUNDKIT = GetNumGroupMembers, IsInGroup, IsInRaid, SOUNDKIT
 local next, pairs, tonumber, type, wipe = next, pairs, tonumber, type, wipe
 local concat, sort = table.concat, table.sort
 
@@ -47,7 +51,8 @@ local ShowCard = ns.Cards.Show
 local Members = {} -- [name] = true for group members running the toolkit
 local Present = {} -- scratch: [name] = true for the group's members, while pruning Members
 local RollCallTimer -- pending timer that merges a burst of hellos into one card
-local LastHello = -HelloCooldown
+local ReplyTimer    -- pending timer that answers a burst of hellos with one reply
+local Said = false  -- you said hello to this group
 local Krew, Messages -- the module, and its Comms (ns.Krew)
 
 --- A text field from a message (a zone, a subzone, a name), or "" when it's missing, longer than
@@ -92,14 +97,16 @@ local function ShowRollCall()
     end
 end
 
-local function SendHello()
-    LastHello = GetTime()
-    Messages:Send("HELLO", Addon.Version or "?")
+local function SendHello(reply)
+    Messages:Send("HELLO", { Addon.Version or "?", reply and "1" or "0" })
 end
 
+-- Says hello to this group, once; a group the messages can't reach yet (lockdown) waits for the
+-- next roster update.
 local function SayHello()
-    if GetTime() - LastHello >= HelloCooldown then
-        SendHello()
+    if not Said and Messages:Ready() then
+        Said = true
+        SendHello(false)
     end
 end
 
@@ -130,16 +137,20 @@ local function Prune()
 end
 
 local function Listen(module)
-    module:Listen(Messages, "HELLO", function(sender)
-        if Members[sender] then
-            return
+    module:Listen(Messages, "HELLO", function(sender, fields)
+        if not Members[sender] then
+            Members[sender] = true
+            if Krew:Get("hello") then
+                Krew:Cancel(RollCallTimer)
+                RollCallTimer = Krew:After(RollCallDelay, ShowRollCall)
+            end
         end
-        Members[sender] = true
-        if Krew:Get("hello") then
-            Krew:Cancel(RollCallTimer)
-            RollCallTimer = Krew:After(RollCallDelay, ShowRollCall)
+        if fields[2] ~= "1" and not ReplyTimer then
+            ReplyTimer = Krew:After(ReplyDelay, function()
+                ReplyTimer = nil
+                SendHello(true)
+            end)
         end
-        SendHello() -- new senders learn about us; Members prevents ping-pong
     end)
 
     module:Listen(Messages, "DING", function(sender, fields)
@@ -196,6 +207,7 @@ Krew = Addon:Module("Krew", {
         end)
         module:On("GROUP_LEFT", function()
             wipe(Members)
+            Said = false
         end)
         module:On("PLAYER_LEVEL_UP", function(level)
             if module:Get("shareDings") then
@@ -219,9 +231,10 @@ Krew = Addon:Module("Krew", {
     end,
     OnDisable = function()
         wipe(Members)
-        RollCallTimer = nil -- the module's timers stop with it
+        Said = false
+        RollCallTimer, ReplyTimer = nil, nil -- the module's timers stop with it
     end,
 })
 Messages = Krew.Comms
 ns.Krew = Messages
-ns.KrewFields = { CleanText = CleanText, CleanCount = CleanCount }
+ns.KrewFields = { CleanText = CleanText, CleanCount = CleanCount, MaxLevel = MaxLevel }

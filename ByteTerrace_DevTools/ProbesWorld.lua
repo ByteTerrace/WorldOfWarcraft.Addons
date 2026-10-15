@@ -329,6 +329,29 @@ Probes.Define({
         end,
     },
     {
+        -- Where objective texts put their count: "leading" ("0/8 Wolf Pelt"), "trailing" ("Wolf
+        -- Pelt: 0/8") or "none", over every objective in the log.
+        name = "questLog.countForm",
+        needs = { "questLog" },
+        accumulates = true,
+        run = function()
+            local forms = {}
+            for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+                local info = C_QuestLog.GetInfo(i)
+                if info and not info.isHeader then
+                    for _, objective in ipairs(C_QuestLog.GetQuestObjectives(info.questID) or {}) do
+                        local text = objective.text
+                        if not issecretvalue(text) and type(text) == "string" then
+                            forms[text:find("^%d+/%d+ ") and "leading" or text:find(": %d+/%d+$") and "trailing"
+                                or "none"] = true
+                        end
+                    end
+                end
+            end
+            return { forms = Joined(forms) }
+        end,
+    },
+    {
         name = "questLog.text",
         needs = { "questLog" },
         run = function()

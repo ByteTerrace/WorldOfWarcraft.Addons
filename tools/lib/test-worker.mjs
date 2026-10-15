@@ -5,6 +5,7 @@
 //   { kind: "lua", file, filter }   a tests/*.test.lua file in a fresh Lua 5.1 VM with the harness
 //   { kind: "mjs", file, filter }   a tests/*.test.mjs module exporting tests = [{ name, run }]
 //   { kind: "fakes", filter }       every harness fake names a global (or member) the client dump has
+// filter is a list of filters (see matches), or null for every test.
 
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
@@ -68,7 +69,8 @@ const PRELUDE = `
     end
 `;
 
-const matches = (filter, label, name) => !filter || `${label} > ${name}`.includes(filter);
+// A job's filters are substrings of "<file> > <test name>"; a test matching any of them runs.
+const matches = (filters, label, name) => !filters?.length || filters.some((filter) => `${label} > ${name}`.includes(filter));
 
 // Undoes the prelude's escape(): \\ \t \r \n.
 const unescape = (text) => text.replace(/\\(.)/g, (_, c) => ({ t: "\t", r: "\r", n: "\n" })[c] ?? c);

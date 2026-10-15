@@ -26,12 +26,18 @@ const FRAMEWORK_CALLS = {
     "C_Timer.NewTimer": TIMERS,
     "C_Timer.NewTicker": TIMERS,
     "C_ChatInfo.SendAddonMessage": COMMS,
+    "C_ChatInfo.SendAddonMessageLogged": COMMS,
     "C_ChatInfo.RegisterAddonMessagePrefix": COMMS,
     PlaySoundFile: "a sound bank (ByteTerrace.NewSoundBank)",
     "Settings.RegisterProxySetting": SETTINGS,
+    "Settings.RegisterAddOnSetting": SETTINGS,
     "Settings.RegisterAddOnCategory": SETTINGS,
+    "Settings.RegisterVerticalLayoutCategory": SETTINGS,
+    "Settings.RegisterCanvasLayoutCategory": SETTINGS,
 };
-const FRAMEWORK_EVENTS = { CHAT_MSG_ADDON: COMMS };
+const FRAMEWORK_EVENTS = { CHAT_MSG_ADDON: COMMS, CHAT_MSG_ADDON_LOGGED: COMMS };
+// Script handlers that receive an event payload.
+const EVENT_SCRIPTS = new Set(["SetScript", "HookScript"]);
 
 export const callBase = (node) => (node?.type === "CallExpression" || node?.type === "StringCallExpression" || node?.type === "TableCallExpression") ? node.base : null;
 export const callArgs = (node) => node.type === "CallExpression" ? node.arguments : node.type === "StringCallExpression" ? [node.argument] : [node.arguments];
@@ -80,15 +86,38 @@ export function checkLua(file, text, context, report) {
         secretCheck: (call) => testedBinding(call, "issecretvalue"),
         accessCheck: (call) => (hasCanAccess ? testedBinding(call, "canaccessvalue") : null),
         lockdownCheck: (call) => path(callBase(call)) === "InCombatLockdown",
+        stableBinding: (identifier) => {
+            const binding = identifier?.type === "Identifier" && scope.bindingOf(identifier);
+            return binding && !binding.reassigned ? binding : null;
+        },
         exits: (call) => path(callBase(call)) === "error",
     });
 
-    // A method call's name, for `obj:M()` and for `obj.M(...)` when obj.M isn't a client API path.
+    // The member a call base names: `obj:M`, `obj.M` or `obj["M"]`; null otherwise.
+    const memberName = (base) => {
+        if (base?.type === "MemberExpression") return base.identifier.name;
+        if (base?.type === "IndexExpression") return stringValue(base.index);
+        return null;
+    };
+    // A method call's name, for `obj:M()`, and for `obj.M(...)` and `obj["M"](...)` when that isn't a
+    // client API path.
     const methodName = (base) => {
-        if (base?.type !== "MemberExpression") return null;
-        if (base.indexer === ":") return base.identifier.name;
+        const member = memberName(base);
+        if (member === null) return null;
+        if (base.indexer === ":") return member;
         const name = path(base);
-        return name && (api.functions[name] || isClient(name)) ? null : base.identifier.name;
+        return name && (api.functions[name] || isClient(name)) ? null : member;
+    };
+    // The event argument of an event method call: the first, or the second when a `.` or `[]` call
+    // passes its receiver first (frame.RegisterEvent(frame, "EVENT")).
+    const eventArgument = (base, args) => (base.indexer !== ":" && isMethodCall(base, args) ? args[1] : args[0]);
+    // A forbidden function or method a path names: "SetRaidTarget", or "SettingsPanel:Open" for the
+    // path "SettingsPanel.Open"; null otherwise.
+    const forbiddenPath = (name) => {
+        if (!name || !api.forbiddenFunctions) return null;
+        if (api.forbiddenFunctions.has(name)) return name;
+        const asMethod = name.replace(/\.([^.]+)$/, ":$1");
+        return asMethod !== name && api.forbiddenFunctions.has(asMethod) ? asMethod : null;
     };
 
     // Pre-pass: guard arguments, aspects this file's setters can make secret, receivers' events,
@@ -137,7 +166,7 @@ export function checkLua(file, text, context, report) {
             for (const aspect of (method && api.aspectSetters.get(method)) ?? []) setAspects.add(aspect);
             if (method === "RegisterEvent" || method === "RegisterUnitEvent") {
                 const key = receiverKey(base.base);
-                const event = eventName(args[0]);
+                const event = eventName(eventArgument(base, args));
                 if (key && event) (registered.get(key) ?? registered.set(key, new Set()).get(key)).add(event);
             }
             if (maySecure(node)) {
@@ -162,32 +191,45 @@ export function checkLua(file, text, context, report) {
     //   X:RegisterEvent("EVENT", function(event, payload...)) (callback-style event registries)
     //   frame:SetScript("OnEvent", function(self, event, payload...)) for the events this file
     //   registers on that frame.
+    // A vararg handler's payload is read from `...`: `local a, b = ...` at the top of its body binds
+    // a and b to the payload fields `...` starts at.
     const payloadParams = new Map(); // binding -> { event, flags }
+    const markParameter = (identifier, index, events) => {
+        for (const event of events) {
+            const entry = api.eventEntries[event];
+            if (!entry?.secret?.length) continue;
+            const types = entry.Payload ?? [];
+            const kind = types[index] ?? types[types.length - 1];
+            if (!kind || UNIT_TYPES.has(kind)) continue;
+            payloadParams.set(scope.bindingOf(identifier), { event, flags: entry.secret });
+            return;
+        }
+    };
     const markPayload = (fn, events, offset) => {
         fn.parameters.forEach((parameter, i) => {
-            if (parameter.type !== "Identifier" || i < offset) return;
-            for (const event of events) {
-                const entry = api.eventEntries[event];
-                if (!entry?.secret?.length) continue;
-                const types = entry.Payload ?? [];
-                const kind = types[i - offset] ?? types[types.length - 1];
-                if (!kind || UNIT_TYPES.has(kind)) continue;
-                payloadParams.set(scope.bindingOf(parameter), { event, flags: entry.secret });
-                return;
+            if (i < offset) return;
+            if (parameter.type === "Identifier") {
+                markParameter(parameter, i - offset, events);
+            } else if (parameter.type === "VarargLiteral") {
+                for (const statement of fn.body) {
+                    if (statement.type !== "LocalStatement" || statement.init.length !== 1 || statement.init[0].type !== "VarargLiteral") continue;
+                    statement.variables.forEach((variable, k) => markParameter(variable, i - offset + k, events));
+                }
             }
         });
     };
     walk(ast.body, (node) => {
         const base = callBase(node);
-        const method = base?.type === "MemberExpression" ? base.identifier.name : null;
+        const method = memberName(base);
         if (!method) return;
         const args = callArgs(node);
-        const fn = args[1]?.type === "FunctionDeclaration" ? args[1] : null;
+        const receiverFirst = base.indexer !== ":" && isMethodCall(base, args) ? 1 : 0;
+        const fn = args[1 + receiverFirst]?.type === "FunctionDeclaration" ? args[1 + receiverFirst] : null;
         if (!fn) return;
         if (method === "On" || method === "RegisterEvent") {
-            const event = eventName(args[0]);
+            const event = eventName(args[receiverFirst]);
             if (event) markPayload(fn, [event], method === "On" ? 0 : 1);
-        } else if (method === "SetScript" && stringValue(args[0]) === "OnEvent") {
+        } else if (EVENT_SCRIPTS.has(method) && stringValue(args[receiverFirst]) === "OnEvent") {
             markPayload(fn, [...(registered.get(receiverKey(base.base)) ?? [])], 2);
         }
     });
@@ -297,12 +339,19 @@ export function checkLua(file, text, context, report) {
             const name = path(base);
             const method = methodName(base);
 
+            // A client table's method called with `:` exists in the snapshot (C_GamePad:Nope()).
+            if (base.type === "MemberExpression" && base.indexer === ":") {
+                const table = path(base.base);
+                const missing = table && isClient(table) && unknownMember(api, `${table}.${base.identifier.name}`);
+                if (missing) report(file, line(node), "MEMBER", `${missing} is not in the API snapshot`);
+            }
+
             // Events.
-            if (base.type === "MemberExpression" && EVENT_METHODS.has(base.identifier.name)) {
-                const event = eventName(args[0]);
+            if (EVENT_METHODS.has(memberName(base))) {
+                const event = eventName(eventArgument(base, args));
                 if (event && /^[A-Z][A-Z0-9_]+$/.test(event) && !api.events.has(event)) {
                     report(file, line(node), "EVENT", `unknown event ${event}`);
-                } else if (event && REGISTERING_METHODS.has(base.identifier.name) && api.eventEntries[event]?.HasRestrictions) {
+                } else if (event && REGISTERING_METHODS.has(memberName(base)) && api.eventEntries[event]?.HasRestrictions) {
                     report(file, line(node), "EVENT", `${event} is restricted to Blizzard's code; registering it is refused (ADDON_ACTION_FORBIDDEN)`);
                 }
                 if (framework && FRAMEWORK_EVENTS[event]) {
@@ -349,8 +398,10 @@ export function checkLua(file, text, context, report) {
             }
 
             // Protected calls: a forbidden function fails at any time; the rest need a combat guard.
-            // A forbidden method is recorded as "Global:Method" (SettingsPanel:OpenToCategory).
-            const methodPath = method && base.indexer === ":" && path(base.base) ? `${path(base.base)}:${method}` : null;
+            // A forbidden method is recorded as "Global:Method" (SettingsPanel:OpenToCategory), and
+            // counts called with `:`, or with `.` or `[]` passing its receiver first.
+            const member = memberName(base);
+            const methodPath = member && isMethodCall(base, args) && path(base.base) ? `${path(base.base)}:${member}` : null;
             const forbiddenName = api.forbiddenFunctions?.has(name) ? name : api.forbiddenFunctions?.has(methodPath) ? methodPath : null;
             const forbiddenReason = forbiddenName ? api.forbiddenFunctions.get(forbiddenName) : null;
             if (forbiddenReason && !annotated("protected", line(node))) {
@@ -379,6 +430,17 @@ export function checkLua(file, text, context, report) {
             const isTarget = parent?.type === "AssignmentStatement" && parent.variables.includes(node);
             if (!isCallBase && !partOfChain && !isName && !isDeclaration && !isTest && !isTarget) {
                 const name = path(node);
+                // A forbidden or protected function taken as a value (an alias, pcall's argument)
+                // is called where no gate looks.
+                // A local alias was reported where it was made; a name the client lacks is MEMBER's.
+                const viaAlias = (node.type === "Identifier" && scope.bindingOf(node)) || (name && isClient(name) && unknownMember(api, name));
+                const forbiddenValue = !viaAlias && forbiddenPath(name);
+                const protectedValue = !viaAlias && !forbiddenValue && name && api.protectedFunctions.has(name) ? name : null;
+                if ((forbiddenValue || protectedValue) && !annotated("protected", line(node))) {
+                    report(file, line(node), "PROTECTED", forbiddenValue
+                        ? `${forbiddenValue} is forbidden to addon code at any time (${api.forbiddenFunctions.get(forbiddenValue)}); don't take it as a value`
+                        : `${protectedValue} can be blocked during combat lockdown (${api.protectedFunctions.get(protectedValue)}) and is passed as a value, so its calls skip the combat guard; annotate "-- protected: <why>"`);
+                }
                 const flags = name ? api.functions[name]?.secret : null;
                 // A never-reassigned local alias of a function is followed to its calls.
                 const aliasIndex = parent?.type === "LocalStatement" ? parent.init.indexOf(node) : -1;
@@ -405,15 +467,18 @@ export function checkLua(file, text, context, report) {
     // or keys a table with it is reported unless a guard dominates it or it carries its own
     // annotation. Passing it on, storing it and indexing it (a structure's fields) are left to the
     // harness, whose secrets throw on indexing.
+    // Assigned to an existing local, the uses that count are those after the assignment.
     function annotatedMisuse(call, parent, label) {
-        if (parent?.type !== "LocalStatement") return;
+        if (parent?.type !== "LocalStatement" && parent?.type !== "AssignmentStatement") return;
         const index = parent.init.indexOf(call);
         if (index < 0) return;
         const targets = index === parent.init.length - 1 ? parent.variables.slice(index) : [parent.variables[index]];
+        const after = parent.type === "AssignmentStatement" ? line(call) : 0;
         for (const target of targets) {
-            const binding = target && scope.bindingOf(target);
+            const binding = target?.type === "Identifier" && scope.bindingOf(target);
             if (!binding) continue;
             for (const ref of scope.references(binding)) {
+                if (line(ref) <= after || (parents.get(ref)?.type === "AssignmentStatement" && parents.get(ref).variables.includes(ref))) continue;
                 const refParent = parents.get(ref);
                 const passed = refParent && callBase(refParent) && callBase(refParent) !== ref && callArgs(refParent).includes(ref);
                 if (passed || guardArguments.has(ref) || facts.factsAt(ref).has(binding) || annotated("secret", line(ref))) continue;
@@ -480,8 +545,9 @@ export function checkLua(file, text, context, report) {
         return "unknown";
     }
 
-    // A `.` call is a method call only when it passes its receiver first (frame.Show(frame));
-    // Probes.Show(value) is a plain function that happens to share a method's name.
+    // A `.` or `[]` call is a method call only when it passes its receiver first
+    // (frame.Show(frame), frame["Show"](frame)); Probes.Show(value) is a plain function that happens
+    // to share a method's name.
     function isMethodCall(base, args) {
         if (base.indexer === ":") return true;
         const receiver = base.base, first = args[0];

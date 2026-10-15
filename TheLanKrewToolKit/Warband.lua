@@ -13,8 +13,8 @@ local addonName, ns = ...
 --
 -- What it does with them:
 --   Sightings  when a ledger player or a member of a guild at war shows up (nameplate, target or
---              mouseover), a raid warning says so and the Krew hears where. A champion in a fight
---              asks for aid. Nameplate badges (WarbandBadges.lua) and the nearby-enemies window
+--              mouseover), a raid warning says so; for a mark or grudge the Krew hears where, and
+--              a champion in a fight asks the Krew for aid. Nameplate badges (WarbandBadges.lua) and the nearby-enemies window
 --              (WarbandRadar.lua) show the same standing.
 --   Vengeance  an honorable kill on a marked or grudge enemy settles the score, for everyone.
 --   Grudges    WarbandDeaths.lua names who killed you and offers to hold a grudge.
@@ -461,7 +461,7 @@ local function CountKill(key)
         return false
     end
     LastKill[key] = now
-    People:Set(key, { kills = People:Field(key, "kills") + 1, seen = GetServerTime() })
+    Remember(key, nil, { kills = People:Field(key, "kills") + 1, seen = GetServerTime() }) -- room made in one trim
     local guild = People:Field(key, "guild")
     if guild ~= "" and Wars:Has(guild) then
         Wars:Set(guild, { kills = Wars:Field(guild, "kills") + 1 })
@@ -601,8 +601,10 @@ WarbandModule = Addon:Module("Warband", {
         { name = "unmark", slash = "unmark", label = "Lift a mark for death", run = function(arg)
             local subject = Subject(arg)
             local key = subject and subject.key
-            if not key or Status(key) ~= "mark" then
+            if not key then
                 return Usage("unmark")
+            elseif Status(key) ~= "mark" then
+                return Addon:Print(key .. " isn't marked for death.")
             end
             Ledger:Set(key, { kind = "grudge" })
             Krew:Send("UNMARK", key)
@@ -628,11 +630,12 @@ WarbandModule = Addon:Module("Warband", {
         end },
         { name = "forgive", slash = "forgive", label = "Remove someone from your ledger", run = function(arg)
             local subject = Subject(arg)
-            local key = subject and Ledger:Has(subject.key) and subject.key
-            if not key then
+            if not subject then
                 return Usage("forgive")
+            elseif not Ledger:Has(subject.key) then
+                return Addon:Print(subject.key .. " isn't on the ledger.")
             end
-            Forgive(key)
+            Forgive(subject.key)
         end },
         { name = "war", slash = "war", label = "Declare war on your target's guild (or a guild by name), with the Krew", run = function(arg)
             local guild = GuildSubject(arg)

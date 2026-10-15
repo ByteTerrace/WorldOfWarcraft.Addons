@@ -1,7 +1,9 @@
-// Static gates over every addon. Each finding is `path:line: RULE message`; any finding fails.
+// Static gates over every addon. Each finding is `path:line: RULE message`; any finding fails. A
+// method call counts in each form it takes: obj:M(), and obj.M(obj) or obj["M"](obj) passing its
+// receiver first.
 //
 //   PARSE     every .lua parses as Lua 5.1.
-//   TOC       the TOC lists every .lua in the addon folder and only files that exist; every
+//   TOC       the TOC lists every .lua in the addon folder, once, and only files that exist; every
 //             dependency (## Dependencies, ## RequiredDeps, ## Dep*) is an addon here; ## Interface
 //             (a comma-separated list) includes the installed Forever client's; a top-level folder
 //             with a .toc but no <Name>_Camelot.toc is reported (the client won't load it).
@@ -15,7 +17,8 @@
 //             SlashCmdList and StaticPopupDialogs registries excepted), and so is a CreateFrame
 //             name literal that collides with a client global.
 //   MEMBER    every static member chain rooted at a client global exists in the snapshot, through
-//             local aliases and string-literal indexes: C_GamePad.SetVibration, Enum.PowerType.Energy.
+//             local aliases and string-literal indexes: C_GamePad.SetVibration, Enum.PowerType.Energy;
+//             and so does a client table's method called with `:` (C_GamePad:SetVibration()).
 //   EVENT     an event name passed to On / RegisterEvent / RegisterUnitEvent / Fire / ... is a real
 //             event, whether a literal or a file-level constant local.
 //   SECRET    a call to a function that can return a secret is annotated `-- secret: <why>`, sits
@@ -29,20 +32,25 @@
 //             tainted code; an anchoring getter (GetWidth, GetStringHeight, ...) when the file
 //             calls any such setter, since any secret aspect can make anchoring secret. So a file
 //             that never feeds secrets to widgets can read its frames' sizes and ids. In a handler
-//             passed as a function literal to On / RegisterEvent / SetScript("OnEvent"), a
-//             parameter carrying a non-unit field of a secret-flagged event's payload can't be
-//             compared, computed with, indexed, called or branched on without such a guard.
-//   PROTECTED a function forbidden to addon code (IsProtectedFunction, tools/api/forbidden.json) is
-//             never called. A call to a restricted function (HasRestrictions), a HasRestrictions
+//             passed as a function literal to On / RegisterEvent / SetScript("OnEvent") /
+//             HookScript("OnEvent"), a parameter carrying a non-unit field of a secret-flagged
+//             event's payload (or a local the handler's `...` fills at its top) can't be compared,
+//             computed with, indexed, called or branched on without such a guard. An annotated call
+//             assigned to an existing local covers the call, not that local's later uses.
+//   PROTECTED a function forbidden to addon code (tools/api/forbidden.json) is never called nor taken
+//             as a value, and a protected global (IsProtectedFunction) taken as a value needs
+//             `-- protected: <why>`: calls through the value skip the guard. A call to a restricted function (HasRestrictions), a HasRestrictions
 //             method on any receiver, or a protected method on a frame from a Secure template
 //             (followed through locals, aliases and fields; in a file that creates a Secure frame,
 //             any receiver not proven non-Secure) is dominated by an InCombatLockdown() test whose
-//             branch returns, sits in a `not InCombatLockdown()` branch, or is annotated
+//             branch returns (directly, or through a never-reassigned local of the same function
+//             holding its result), sits in a `not InCombatLockdown()` branch, or is annotated
 //             `-- protected: <why>`. A closure doesn't inherit its definer's guard.
 //
 //   FRAMEWORK in an addon built on ByteTerrace_Core, no call to a client API the framework owns
-//             (C_Timer's timers, addon message sending and prefixes, PlaySoundFile, settings
-//             registration), nor one taken as a value, and no handler for CHAT_MSG_ADDON: the framework's versions own their
+//             (C_Timer's timers, addon message sending, logged too, and prefixes, PlaySoundFile,
+//             settings and settings-category registration), nor one taken as a value, and no handler
+//             for CHAT_MSG_ADDON or CHAT_MSG_ADDON_LOGGED: the framework's versions own their
 //             lifetime and the client's rules, and a second implementation is a defect.
 //
 //   An annotation is a `--` line comment on the construct's line, or alone on the line above.
@@ -53,7 +61,7 @@
 //             too: MaxQueue, never MAX_QUEUE), including a local declared ahead and given a function
 //             later; locals inside functions, loops and branches, parameters and loop variables are
 //             camelCase. An alias keeps the name of what it aliases (local floor = math.floor),
-//             `local addonName, ns = ...` is exempt, and so are metamethods (__index).
+//             a file's own `local addonName, ns = ...` is exempt, and so are metamethods (__index).
 //   COMMENT   no banner dividers (four or more of - = * # _ ~) and no debt markers (TODO, FIXME,
 //             HACK, XXX, KLUDGE, REVISIT in capitals, or "for now"), as Puck's comment-smell gate.
 //   LENGTH    no file exceeds MAX_LINES.
@@ -78,7 +86,6 @@ export const options = {
 };
 
 const MAX_LINES = 800;
-// Blizzard Lua functions that call a restricted C function (Blizzard_Settings.lua).
 
 export function loadApi(path = join(repoRoot, "tools", "api", "forever.json")) {
     const snapshot = JSON.parse(readFileSync(path, "utf8"));
@@ -206,8 +213,11 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
             if (!byName.has(dependency)) report(tocPath, 1, "TOC", `dependency ${dependency} is not an addon in this repository`);
         }
         const onDisk = readdirSync(dir, { recursive: true }).map(toPosix).filter((f) => f.endsWith(".lua"));
+        const listed = new Set();
         for (const file of files) {
-            if (!existsSync(join(dir, file))) report(tocPath, 1, "TOC", `lists ${file}, which does not exist`);
+            if (listed.has(file)) report(tocPath, 1, "TOC", `lists ${file} twice, so the client would run it twice`);
+            else if (!existsSync(join(dir, file))) report(tocPath, 1, "TOC", `lists ${file}, which does not exist`);
+            listed.add(file);
         }
         for (const file of onDisk) {
             if (!files.includes(file)) report(join(dir, file), 1, "TOC", `not listed in ${addon.name}_Camelot.toc`);
@@ -219,7 +229,7 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
         for (const dependency of dependencies) for (const name of exported.get(dependency) ?? []) known.add(name);
 
         const writes = [];
-        for (const file of files.filter((f) => f.endsWith(".lua") && existsSync(join(dir, f)))) {
+        for (const file of [...listed].filter((f) => f.endsWith(".lua") && existsSync(join(dir, f)))) {
             const path = join(dir, file);
             const text = readFileSync(path, "utf8");
             checkStyle(text, path, report);

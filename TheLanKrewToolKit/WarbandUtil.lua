@@ -3,7 +3,7 @@ local addonName, ns = ...
 -- WarbandUtil: Warband's pure helpers over the WoW API. It creates ns.Warband, the table the
 -- Warband files share; Warband.lua adds the collections, the standing rules and the ledger actions.
 --
---   Identity   KeyOf, MyKey, Identify, Hostile, GuildKey, GuildName
+--   Identity   KeyOf, MyKey, Identify, Hostile, GuildName
 --   Messages   ValidKey, ValidGuildKey, CleanClass, CleanLevel, CleanFaction, InfoFields, InfoFrom
 --              (text and counts go through ns.KrewFields, Krew.lua)
 --   Places     Here, Where, Position, SetWaypoint
@@ -16,7 +16,6 @@ local addonName, ns = ...
 -- Valid or Clean function before use, and none of them passes a "|": someone else's message never
 -- puts a link, texture or color on your screen.
 
-local MaxLevel = 200 -- the highest level accepted from a message
 local Factions = { Alliance = true, Horde = true }
 
 local Names = ByteTerrace.Names
@@ -24,7 +23,7 @@ local C_Map, C_SuperTrack = C_Map, C_SuperTrack
 local GetGuildInfo, GetNormalizedRealmName, GetRealZoneText, GetSubZoneText, UiMapPoint = GetGuildInfo, GetNormalizedRealmName, GetRealZoneText, GetSubZoneText, UiMapPoint
 local UnitClass, UnitFactionGroup, UnitIsEnemy, UnitIsPlayer, UnitLevel = UnitClass, UnitFactionGroup, UnitIsEnemy, UnitIsPlayer, UnitLevel
 local issecretvalue, floor, ipairs, tonumber, tostring, type = issecretvalue, math.floor, ipairs, tonumber, tostring, type
-local CleanText, CleanCount = ns.KrewFields.CleanText, ns.KrewFields.CleanCount
+local CleanText, CleanCount, MaxLevel = ns.KrewFields.CleanText, ns.KrewFields.CleanCount, ns.KrewFields.MaxLevel
 
 local function MyRealm()
     return GetNormalizedRealmName() or ""
@@ -260,15 +259,25 @@ local function Position()
     return mapID, floor(x * 10000 + 0.5), floor(y * 10000 + 0.5)
 end
 
---- Sets and tracks a map waypoint from message fields (see Position). Refuses fields out of range
---- and maps that take no waypoint.
----@param mapID string|number
----@param x string|number
----@param y string|number
+-- A message field that's a whole number from 0 to max written in digits only (no sign, exponent,
+-- hex, fraction or "inf"), as a number; nil otherwise.
+local function Digits(text, max)
+    if type(text) ~= "string" or #text > 9 or not text:find("^%d+$") then
+        return nil
+    end
+    local n = tonumber(text)
+    return n <= max and n or nil
+end
+
+--- Sets and tracks a map waypoint from message fields (see Position): each a whole number in
+--- digits, the position 0 to 10000. Refuses anything else and maps that take no waypoint.
+---@param mapID string
+---@param x string
+---@param y string
 ---@return boolean set
 local function SetWaypoint(mapID, x, y)
-    mapID, x, y = tonumber(mapID), tonumber(x), tonumber(y)
-    if not (mapID and mapID > 0 and x and y and x >= 0 and x <= 10000 and y >= 0 and y <= 10000) then
+    mapID, x, y = Digits(mapID, 999999999), Digits(x, 10000), Digits(y, 10000)
+    if not (mapID and mapID > 0 and x and y) then
         return false
     end
     if not C_Map.CanSetUserWaypointOnMap(mapID) then
@@ -280,9 +289,8 @@ local function SetWaypoint(mapID, x, y)
 end
 
 ns.Warband = {
-    KeyOf = KeyOf, MyKey = MyKey, Identify = Identify, Hostile = Hostile, GuildKey = GuildKey,
-    GuildName = GuildName, ValidKey = ValidKey, ValidGuildKey = ValidGuildKey, CleanClass = CleanClass,
-    CleanLevel = CleanLevel, CleanFaction = CleanFaction, InfoFields = InfoFields, InfoFrom = InfoFrom,
+    KeyOf = KeyOf, MyKey = MyKey, Identify = Identify, Hostile = Hostile, GuildName = GuildName,
+    ValidKey = ValidKey, ValidGuildKey = ValidGuildKey, CleanClass = CleanClass, CleanLevel = CleanLevel, CleanFaction = CleanFaction, InfoFields = InfoFields, InfoFrom = InfoFrom,
     Here = Here, Where = Where, Position = Position, SetWaypoint = SetWaypoint,
     Typed = Typed, PlayerNamed = PlayerNamed, GuildNamed = GuildNamed,
 }

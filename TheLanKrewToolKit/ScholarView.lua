@@ -12,6 +12,8 @@ local addonName, ns = ...
 --   answers   a 2 x 2 grid of big answers, each with its key (1-4 or a controller face button) on a
 --             raised keycap at its edge; hover glows, a wrong answer turns red and shakes, the right
 --             one turns green and a "+1" rises from the star counter
+--   book      on a quest riddle, Need a hint? is the quest book: it puts the quest's text, as the
+--             player saw it, in the story's place, and closes again the same way
 --   footer    Need a hint? and how to answer; feedback (the hint, or the working) replaces it in
 --             place, so the panel never jumps. Every button names its key: the controller's
 --             buttons when one is connected (face buttons answer, shoulders ask for the hint and read
@@ -34,6 +36,7 @@ local CircleMask = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local RightIcon = "Interface\\RAIDFRAME\\ReadyCheck-Ready"
 local SpeakerIcon = "Interface\\Common\\VoiceChat-Speaker"
 local NumberColor = "|cffffd100"
+local SubjectLabels = { math = "MATH", reading = "READING", quest = "QUEST" }
 local WordColor = "|cff7fe0ff"
 
 local CreateFrame = CreateFrame
@@ -394,8 +397,9 @@ local function Create()
     return frame
 end
 
--- The footer row: help on the left (Need a hint?, or the feedback banner in its place), Skip and
--- Read aloud on the right. The banner stretches to whichever right-hand button comes first.
+-- The footer row: help on the left (Need a hint?, or the feedback banner in its place; on a quest
+-- riddle the quest book stays, with the banner beside it), Skip and Read aloud on the right. The
+-- banner stretches to whichever right-hand button comes first.
 function PlaceFooter()
     local y = Overlay.FooterTop
     Overlay.Hint:ClearAllPoints()
@@ -413,7 +417,11 @@ function PlaceFooter()
     end
     local banner = Overlay.Feedback
     banner:ClearAllPoints()
-    banner:SetPoint("TOPLEFT", Pad, -y)
+    if Overlay.Hint:IsShown() then
+        banner:SetPoint("TOPLEFT", Overlay.Hint, "TOPRIGHT", 10, 8)
+    else
+        banner:SetPoint("TOPLEFT", Pad, -y)
+    end
     if leftmost then
         banner:SetPoint("TOPRIGHT", leftmost, "TOPLEFT", -10, 8)
     else
@@ -479,7 +487,9 @@ local function ShowFeedback(text, good)
     banner:SetBackdropBorderColor(edge[1], edge[2], edge[3])
     banner.Text:SetText(text)
     banner:Show()
-    Overlay.Hint:Hide()
+    -- On a quest riddle the hint is the quest book, which stays a click away beside the banner.
+    local book = Overlay.m_puzzle and Overlay.m_puzzle.book
+    Overlay.Hint:SetShown(book ~= nil)
     PlaceFooter()
 end
 
@@ -517,12 +527,13 @@ end
 ---@param info table { stars, rank, nextRank?, nextAt?, progress (0 to 1), streak, gentle, canSpeak,
 ---  controller (a controller is connected), keys = { four answer key labels },
 ---  actions = { hint, speak, skip key labels }, wrong? ([i] = true for answers already missed, which
----  stay marked and can't be picked), canSkip? (Skip shows) }
+---  stay marked and can't be picked), canSkip? (Skip shows), book? (Need a hint? is the quest book,
+---  puzzle.book's text) }
 ---@return table frame the full-screen overlay
 function ScholarView.Show(puzzle, info)
     Overlay = Overlay or Create()
-    local subject = puzzle.subject == "reading" and "reading" or "math"
-    Overlay.Tag:SetText(("%s%s|r  %s-  %s|r"):format(Hex(Palette[subject]), subject == "reading" and "READING" or "MATH",
+    local subject = SubjectLabels[puzzle.subject] and puzzle.subject or "math"
+    Overlay.Tag:SetText(("%s%s|r  %s-  %s|r"):format(Hex(Palette[subject]), SubjectLabels[subject],
         Hex(Palette.muted), puzzle.title))
     ShowProgress(info)
     local shown, clue = DisplayPrompt(puzzle)
@@ -530,6 +541,7 @@ function ScholarView.Show(puzzle, info)
     Overlay.Clue:SetText(clue and Emphasize(clue) or "")
     Overlay.Clue:SetShown(clue ~= nil)
     Overlay.Story:SetText(Emphasize(story))
+    Overlay.m_puzzle, Overlay.m_story, Overlay.m_bookOpen = puzzle, story, false
     Overlay.Question:SetFontObject(#question <= 44 and "Game30Font" or "Game24Font")
     Overlay.Question:SetText(Emphasize(question))
     for i, button in ipairs(Overlay.Buttons) do
@@ -543,6 +555,7 @@ function ScholarView.Show(puzzle, info)
     end
     local actions = info.actions or {}
     LabelPill(Overlay.Speak, actions.speak)
+    Overlay.Hint.m_text = info.book and "Quest book" or "Need a hint?"
     LabelPill(Overlay.Hint, actions.hint)
     LabelPill(Overlay.Skip, actions.skip)
     Overlay.Speak:SetShown(info.canSpeak and true or false)
@@ -552,6 +565,25 @@ function ScholarView.Show(puzzle, info)
     Layout(story ~= "", puzzle)
     Overlay:Show()
     return Overlay
+end
+
+--- Opens the quest book in the story's place, or closes it again: the quest's text, as the player
+--- saw it, holds every answer to a quest riddle.
+function ScholarView.ToggleBook()
+    local puzzle = Overlay and Overlay.m_puzzle
+    if not (puzzle and puzzle.book) then
+        return
+    end
+    Overlay.m_bookOpen = not Overlay.m_bookOpen
+    local story = Overlay.m_bookOpen and puzzle.book or Overlay.m_story
+    Overlay.Story:SetText(Emphasize(story))
+    Layout(story ~= "", puzzle)
+end
+
+--- Whether the quest book is open.
+---@return boolean
+function ScholarView.BookOpen()
+    return Overlay ~= nil and Overlay.m_bookOpen == true
 end
 
 --- Shows the hint in the footer's place (no penalty; asking for help is part of learning).

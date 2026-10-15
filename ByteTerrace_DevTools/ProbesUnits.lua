@@ -10,7 +10,7 @@ local Classifications = {
 }
 
 local Probes = ns.Probes
-local Value, Shape, Joined = Probes.Value, Probes.Shape, Probes.Joined
+local Value, Shape, Joined, JoinSets = Probes.Value, Probes.Shape, Probes.Joined, Probes.JoinSets
 local NamePlateToken = Probes.NamePlateToken
 local UnitCombat, Kills = Probes.UnitCombat, Probes.Kills
 
@@ -148,6 +148,12 @@ Probes.Define({
         run = function() return Identity("target", true) end,
     },
     {
+        -- Whether a dungeon's Map restriction alone hides an NPC's identity, as an encounter's does.
+        name = "unitIdentity.npcTargetRestrictedMap",
+        needs = { "restrictedMap", "npcTarget" },
+        run = function() return Identity("target", true) end,
+    },
+    {
         name = "unitIdentity.enemyPlayer",
         needs = { "idle", "enemyPlayer" },
         run = function() return Identity("target", false) end,
@@ -252,20 +258,22 @@ Probes.Define({
         run = function() return NamePlateShape(true) end,
     },
     {
+        -- An enemy hunter's Feign Death: whether the client says they're feigning, or only that
+        -- they're dead (FactsTarget.lua takes a death that isn't a feign for a kill).
+        name = "feign.enemyHunter",
+        needs = { "enemyHunterFeigning" },
+        run = function()
+            return { feigning = Value(UnitIsFeignDeath("target")), dead = Value(UnitIsDeadOrGhost("target")) }
+        end,
+    },
+    {
         name = "unitCombat.seen",
         needs = { "unitCombat" },
         accumulates = true,
         run = function()
-            local function Copy(tbl)
-                local out = {}
-                for key, value in pairs(tbl) do
-                    out[key] = value
-                end
-                return out
-            end
             local units = UnitCombat.units
             return {
-                player = Copy(units.player), target = Copy(units.target), actions = Joined(UnitCombat.actions),
+                player = JoinSets(units.player), target = JoinSets(units.target), actions = Joined(UnitCombat.actions),
                 flagTexts = Joined(UnitCombat.flagTexts),
                 amountInCombat = UnitCombat.amountInCombat,
             }
@@ -279,7 +287,10 @@ Probes.Define({
         needs = { "killedMob" },
         accumulates = true,
         run = function()
-            return { partyKill = Kills.partyKill, unitDied = Kills.unitDied, targetDied = Kills.targetDied }
+            return {
+                partyKill = Kills.partyKill and JoinSets(Kills.partyKill), unitDied = Kills.unitDied and JoinSets(Kills.unitDied),
+                targetDied = Kills.targetDied,
+            }
         end,
     },
 })

@@ -478,6 +478,76 @@ test("counts from the Krew are whole numbers in digits; text holds no control ch
     truthy(Notices(h):find("needs the Krew at somewhere!", 1, true), Notices(h))
 end)
 
+test("a Krew member who leaves and comes back hears the marks placed while they were away", function()
+    local h = Load()
+    h:JoinGroup("party", { "Mom", "Dad" })
+    h:Echo(false)
+    h:Advance(2)
+    Receive(h, "Mom", "HELLO", "0.1.0", "0")
+    h:Advance(5)
+    h:RemoveMember("Mom")
+    h:Slash("/tlk mark Bob Doe")
+    h:AddMember("Mom")
+    h:Advance(3)
+    local before = #Sent(h, "MARK")
+    Receive(h, "Mom", "HELLO", "0.1.0", "0")
+    h:Advance(5)
+    eq(#Sent(h, "MARK"), before + 1)
+end)
+
+test("a raid's worth of Krew members joining at once still hears every mark and war", function()
+    local h = Load()
+    local names = { "Mom", "Dad", "Sis", "Bro", "Aunt", "Uncle" }
+    h:JoinGroup("raid", names)
+    h:Echo(false)
+    for _, name in ipairs({ "Bob", "Cara", "Dan" }) do
+        h:Slash("/tlk mark " .. name .. " Doe")
+    end
+    for _, guild in ipairs({ "Red", "Blue", "Gold" }) do
+        h:Slash("/tlk war " .. guild)
+    end
+    h:Advance(20)
+    local marks, wars = #Sent(h, "MARK"), #Sent(h, "WAR")
+    for _, name in ipairs(names) do
+        Receive(h, name, "HELLO", "0.1.0", "0")
+    end
+    h:Advance(30)
+    eq(#Sent(h, "MARK"), marks + 3, "the queue has room: one reply, not one per hello")
+    eq(#Sent(h, "WAR"), wars + 3)
+end)
+
+test("a champion granted glory again shows no second card", function()
+    local h = Grouped()
+    Receive(h, "Mom", "GLORY", Key(h, "Bob"), "ROGUE", "60", "Alliance")
+    local _, card = Card(h)
+    h:Click(card, "RightButton")
+    Receive(h, "Mom", "GLORY", Key(h, "Bob"), "ROGUE", "60", "Alliance")
+    eq(Card(h), nil)
+end)
+
+test("a rally's map and position are whole numbers in digits, or no waypoint", function()
+    local h = Grouped()
+    h:AddMap(1424, { name = "Hillsbrad Foothills", mapType = "Zone" })
+    for _, fields in ipairs({ { "0x590", "5000", "5000" }, { "1424", "5e3", "5000" }, { "1424", "inf", "5000" },
+        { "1424", "50.5", "5000" }, { "1424", "-1", "5000" } }) do
+        Receive(h, "Mom", "RALLY", fields[1], fields[2], fields[3], "Hillsbrad Foothills", "")
+        eq(h.waypoint, nil, table.concat(fields, ","))
+    end
+    Receive(h, "Mom", "RALLY", "1424", "0", "10000", "Hillsbrad Foothills", "")
+    eq(h.waypoint and h.waypoint.uiMapID, 1424, "the edges are fine")
+end)
+
+test("a kill of a stranger with the rivalry records full makes room in one trim, not one scan per kill", function()
+    local h, addon = Grouped()
+    local people = People(addon)
+    for i = 1, 1000 do
+        people:Set("Stranger" .. i .. " Doe", { seen = i })
+    end
+    h:HonorKill("Newcomer Doe", "Private", 10)
+    eq(people:Count(), 901, "the hundred seen longest ago made room together")
+    truthy(people:Has("Newcomer Doe"))
+end)
+
 test("a burst of Krew members joining hears your marks and wars once; a new group hears them again", function()
     local h = Load()
     h:JoinGroup("party", { "Mom", "Dad", "Sis", "Bro" })
@@ -508,4 +578,13 @@ test("a menu whose surname is secret offers nothing", function()
     local h = Load()
     local menu = h:OpenMenu("MENU_UNIT_PLAYER", { which = "PLAYER", name = "Cara", surname = Secret("Other") })
     eq(menu:Find("Grant glory"), nil)
+end)
+
+test("unmarking someone unmarked, or forgiving a stranger, says so rather than how to type it", function()
+    local h = Grouped()
+    h:Slash("/tlk grudge Bob Doe")
+    h:Slash("/tlk unmark Bob Doe")
+    eq(h.printed[#h.printed]:match("Bob Doe isn't marked for death%."), "Bob Doe isn't marked for death.")
+    h:Slash("/tlk forgive Cara Doe")
+    eq(h.printed[#h.printed]:match("Cara Doe isn't on the ledger%."), "Cara Doe isn't on the ledger.")
 end)

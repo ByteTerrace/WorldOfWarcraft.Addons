@@ -480,9 +480,10 @@ function Harness:BuildEnvironment()
     fakes.SettingsPanel.OpenToCategory = function()
         h:BlockAction("ADDON_ACTION_FORBIDDEN", "SettingsPanel:OpenToCategory")
     end
-    -- units.lua, world.lua, ui.lua, meter.lua and speech.lua; a name defined twice is a harness bug.
+    -- units.lua, world.lua, ui.lua, meter.lua, speech.lua and quests.lua; a name defined twice is a harness bug.
     local sources = {
         h:UnitFakes(), h:WorldFakes(fakes.UIParent), h:InterfaceFakes(fakes.UIParent), h:MeterFakes(), h:SpeechFakes(),
+        h:QuestFakes(fakes.UIParent),
     }
     for _, more in ipairs(sources) do
         for name, value in pairs(more) do

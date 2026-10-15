@@ -123,7 +123,22 @@ local function Validate(name, spec, problems)
     if spec.values then
         spec.valueSet = {}
         for _, value in ipairs(spec.values) do
-            spec.valueSet[value] = true
+            if type(value) ~= "string" or issecretvalue(value) then
+                AddProblem("values must be strings")
+            else
+                spec.valueSet[value] = true
+            end
+        end
+    end
+    if spec.valueLabels ~= nil then
+        if type(spec.valueLabels) ~= "table" or not spec.valueSet then
+            AddProblem("valueLabels needs values, and labels them by value")
+        else
+            for value, text in pairs(spec.valueLabels) do
+                if not spec.valueSet[value] or type(text) ~= "string" then
+                    AddProblem("valueLabels must label values with text: " .. tostring(value))
+                end
+            end
         end
     end
     if spec.persist == nil then
@@ -178,11 +193,14 @@ local function Due(watcher, id, value)
 end
 
 -- One round's bookkeeping: bumps versions of rows that really changed and schedules their due
--- watchers (each once). Returns how many it scheduled.
+-- watchers (each once). A row back at the value the batch found it with changed for no one but a
+-- watcher registered in between, whose baseline differs: it's due too. Returns how many it
+-- scheduled.
 local function Settle(self, list, stamp)
     local values, original, isTouched = self.Values, self.m_original, self.m_isTouched
     local versions, watchersByRow = self.m_versions, self.m_watchersByRow
     local scheduled, count, traced = self.m_scheduled, 0, self.m_traced
+    local baselines = #self.m_baselined > 0
     for i = 1, #list do
         local id = list[i]
         list[i] = nil
@@ -205,10 +223,39 @@ local function Settle(self, list, stamp)
                     end
                 end
             end
+        elseif baselines and watchersByRow[id] then
+            local watchers = watchersByRow[id]
+            for j = 1, #watchers do
+                local watcher = watchers[j]
+                local base = watcher.baseline and watcher.baseline[id]
+                if base ~= nil then
+                    watcher.baseline[id] = nil
+                    if base ~= value and watcher.stamp ~= stamp then
+                        watcher.stamp = stamp
+                        watcher.baseline = nil
+                        count = count + 1
+                        scheduled[count] = watcher
+                    end
+                end
+            end
         end
         original[id] = nil
     end
     return count
+end
+
+-- Gives the rules registered since the last pass (by the batch, or by a watcher) their first
+-- verdict, from the state as it stands. A rule one of them registers waits for the next pass.
+local function TakeVerdicts(self)
+    local deferred = self.m_deferred
+    self.m_deferred, self.m_spareDeferred = self.m_spareDeferred, deferred
+    for i = 1, #deferred do
+        local watcher = deferred[i]
+        deferred[i] = nil
+        if watcher.active then
+            SafeCall(watcher.fn, self)
+        end
+    end
 end
 
 -- Insertion sort by registration sequence: the scheduled list is short.
@@ -225,28 +272,19 @@ end
 
 local function Publish(self)
     self.m_batchDepth = self.m_batchDepth + 1
+    self.m_publishing = self.m_publishing + 1
     local counts = self.Counts
     counts.publishes = counts.publishes + 1
 
     local scheduled = self.m_scheduled
     for _ = 1, MaxPublishRounds do
-        local deferred = self.m_deferred
         -- Rules registered during the batch (or by a watcher last round) take their first verdict
-        -- from the state as it stands, before this round's changes are delivered.
-        -- A rule registered by one of these goes to the fresh list and takes its verdict next pass.
+        -- before this round's changes are delivered.
         for _ = 1, MaxPublishRounds do
-            if #deferred == 0 then
+            if #self.m_deferred == 0 then
                 break
             end
-            self.m_deferred, self.m_spareDeferred = self.m_spareDeferred, deferred
-            for i = 1, #deferred do
-                local watcher = deferred[i]
-                deferred[i] = nil
-                if watcher.active then
-                    SafeCall(watcher.fn, self)
-                end
-            end
-            deferred = self.m_deferred
+            TakeVerdicts(self)
         end
         local list = self.m_touchedList
         if #list == 0 then
@@ -266,6 +304,10 @@ local function Publish(self)
         end
     end
 
+    -- A rule the last round's watchers registered still gets its first verdict.
+    if #self.m_deferred > 0 then
+        TakeVerdicts(self)
+    end
     local unsettled = self.m_touchedList
     if #unsettled > 0 then
         -- Out of rounds. The leftover writes still count (versions move); only a batch that would
@@ -299,6 +341,7 @@ local function Publish(self)
         baselined[i].baseline = nil
         baselined[i] = nil
     end
+    self.m_publishing = self.m_publishing - 1
     self.m_batchDepth = self.m_batchDepth - 1
 end
 
@@ -377,6 +420,7 @@ function ByteTerrace.NewState(addon)
         m_spareDeferred = {},  -- the other half of that double buffer
         m_seq = 0,
         m_stamp = 0,
+        m_publishing = 0,      -- publishes in progress: each holds one batch level EndBatch can't close
     }, State)
 end
 
@@ -579,9 +623,10 @@ function State:BeginBatch()
     self.m_batchDepth = self.m_batchDepth + 1
 end
 
---- Closes a batch. An EndBatch without a BeginBatch is an error.
+--- Closes a batch. An EndBatch without a BeginBatch is an error, including one a watcher calls
+--- beyond its own BeginBatch: it can't close the publish that runs it.
 function State:EndBatch()
-    if self.m_batchDepth <= 0 then
+    if self.m_batchDepth <= self.m_publishing then
         error(self.m_addon.Name .. ": EndBatch without BeginBatch", 2)
     end
     self.m_batchDepth = self.m_batchDepth - 1

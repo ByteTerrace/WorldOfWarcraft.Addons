@@ -46,7 +46,6 @@ local function Enable(module)
     return module.Enabled
 end
 
-
 --- Creates a module object; AddOn:Module declares everything else.
 ---@param addon table the owning AddOn
 ---@param name string
@@ -71,8 +70,9 @@ end
 --- A row's id, from its name (resolved once and cached) or an id passed straight through. An
 --- unknown row is an error.
 ---@param row integer|string
+---@param level integer? the error level for a caller that wraps Id (1, the default, is Id's caller)
 ---@return integer
-function Module:Id(row)
+function Module:Id(row, level)
     if type(row) == "number" then
         return row
     end
@@ -80,7 +80,7 @@ function Module:Id(row)
     if not id then
         id = self.Addon.State.Ids[self:RowName(row)]
         if not id then
-            error(self.Addon.Name .. ": unknown state row " .. self:RowName(row), 2)
+            error(self.Addon.Name .. ": unknown state row " .. self:RowName(row), (level or 1) + 1)
         end
         self.m_ids[row] = id
     end
@@ -90,19 +90,19 @@ end
 --- A row's value.
 ---@param row integer|string relative to the module unless it contains "."
 function Module:Get(row)
-    return self.Addon.State.Values[self:Id(row)]
+    return self.Addon.State.Values[self:Id(row, 2)]
 end
 
 --- Writes a row through State:Set; errors point at the caller.
 ---@param row integer|string
 function Module:Set(row, value)
-    self.Addon.State:Set(self:Id(row), value, 2)
+    self.Addon.State:Set(self:Id(row, 2), value, 2)
 end
 
 --- Flips a boolean row.
 ---@param row integer|string
 function Module:Toggle(row)
-    self.Addon.State:Toggle(self:Id(row), 2)
+    self.Addon.State:Toggle(self:Id(row, 2), 2)
 end
 
 --- Whether the module can accept work; OnDisable and dependency teardown are already stopped.
@@ -146,11 +146,12 @@ end
 
 --- Resolves a list of rows to ids.
 ---@param rows (integer|string)[]
+---@param level integer? as for Id
 ---@return integer[]
-function Module:ResolveRows(rows)
+function Module:ResolveRows(rows, level)
     local ids = {}
     for i, row in ipairs(rows) do
-        ids[i] = self:Id(row)
+        ids[i] = self:Id(row, (level or 1) + 1)
     end
     return ids
 end
@@ -163,7 +164,7 @@ end
 function Module:Watch(rows, fn, skipInitial)
     self:CheckRunning()
     local state = self.Addon.State
-    local watcher = state:Watch(self:ResolveRows(rows), fn, true)
+    local watcher = state:Watch(self:ResolveRows(rows, 2), fn, true)
     self.m_watchers[#self.m_watchers + 1] = watcher
     if not skipInitial then
         SafeCall(fn, state) -- ownership precedes a callback that may stop this module
@@ -178,7 +179,7 @@ end
 ---@param fn fun(state: table, count: number, previous: number)
 ---@return table watcher
 function Module:OnIncrease(row, fn)
-    local id = self:Id(row)
+    local id = self:Id(row, 2)
     local last = self.Addon.State.Values[id]
     return self:Watch({ id }, function(state)
         local count, previous = state.Values[id], last
@@ -194,7 +195,7 @@ end
 ---@return table watcher
 function Module:Rule(spec)
     self:CheckRunning()
-    local state, reads = self.Addon.State, self:ResolveRows(spec.reads)
+    local state, reads = self.Addon.State, self:ResolveRows(spec.reads, 2)
     state:BeginBatch()
     local watcher = state:Rule({
         reads = reads, when = spec.when, changed = spec.changed, initial = spec.initial,
@@ -295,13 +296,15 @@ local function ResetRuntime(module)
     end
 end
 
---- Starts a demand module for one more user.
+--- Starts a demand module for one more user. Answers whether it runs: not while it's stopping,
+--- so a user started from its OnDisable doesn't run on it.
+---@return boolean
 function Module:Acquire()
     self.Users = self.Users + 1
     if self.Users == 1 then
         self:SetEnabled(true)
     end
-    return self.Enabled
+    return self:IsRunning()
 end
 
 --- Releases one user of a demand module; the last one stops it.
@@ -352,6 +355,7 @@ function Module:SetEnabled(enabled)
     if spec.OnDisable then
         SafeCall(spec.OnDisable, self)
     end
+    addon.Input:Release(self) -- its maps, even when OnDisable failed to give the controller back
     for timer in pairs(self.m_timers) do
         self.m_timers[timer] = nil
         timer:Cancel()

@@ -31,15 +31,26 @@ function git(args) {
 
 // What ships and under which name, or why it can't: { addons, name, version, errors }.
 // tracked: the repo paths committed at HEAD; dirty: repo paths with uncommitted changes.
+// Whether an addon is development only: its TOC has ## X-DevOnly, empty or with any value but a
+// false one, so a bare "## X-DevOnly:" line still keeps it out.
+const isDevOnly = (addon) => addon.metadata["X-DevOnly"] !== undefined && !/^(false|0|no)$/i.test(addon.metadata["X-DevOnly"].trim());
+
 export function planPackage(all, names, tracked, dirty) {
     const errors = [];
     const unknown = (names ?? []).filter((name) => !all.some((addon) => addon.name === name));
     if (unknown.length) {
         return { addons: [], errors: [`Unknown addon(s): ${unknown.join(", ")}.`] };
     }
-    const addons = names ? selectAddons(all, names) : all.filter((addon) => !addon.metadata["X-DevOnly"]);
+    const addons = names ? selectAddons(all, names) : all.filter((addon) => !isDevOnly(addon));
     for (const addon of addons) {
-        if (addon.metadata["X-DevOnly"]) errors.push(`${addon.name} is ## X-DevOnly and never ships.`);
+        if (isDevOnly(addon)) errors.push(`${addon.name} is ## X-DevOnly and never ships.`);
+    }
+    // A shipped addon whose dependency stays behind wouldn't load for the player.
+    const shipped = new Set(addons.map((addon) => addon.name));
+    for (const addon of addons) {
+        for (const dependency of addon.dependencies) {
+            if (!shipped.has(dependency)) errors.push(`${addon.name} depends on ${dependency}, which the package leaves out.`);
+        }
     }
     const needed = new Set(addons.flatMap((addon) => addon.dependencies));
     const tops = addons.filter((addon) => !needed.has(addon.name));

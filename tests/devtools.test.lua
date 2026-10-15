@@ -274,8 +274,9 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
     end
     table.sort(registered)
     eq(table.concat(registered, " "), "CHAT_MSG_ADDON() CHAT_MSG_CHANNEL() CHAT_MSG_GUILD() CHAT_MSG_PARTY() "
-        .. "CHAT_MSG_RAID() CHAT_MSG_SAY() CHAT_MSG_WHISPER() CHAT_MSG_YELL() PARTY_KILL() PLAYER_TARGET_DIED() "
-        .. "UNIT_COMBAT(player,target) UNIT_DIED()", "the chat senders, UNIT_COMBAT for two units, and the kill events")
+        .. "CHAT_MSG_RAID() CHAT_MSG_SAY() CHAT_MSG_WHISPER() CHAT_MSG_YELL() DAMAGE_METER_COMBAT_SESSION_UPDATED() PARTY_KILL() "
+        .. "PLAYER_DEAD() PLAYER_TARGET_DIED() UNIT_COMBAT(player,target) UNIT_DIED()",
+        "the chat senders, UNIT_COMBAT for two units, the kill events, and deaths with the meter's updates")
     h:Fire("UNIT_COMBAT", "target", "WOUND", "CRITICAL", 42, 1)
     h:Fire("UNIT_COMBAT", "target", "DODGE", "", 0, 1)
     h:Slash("/btdev probe")
@@ -289,8 +290,7 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
     eq(result.target.WOUND.flagText, "text")
     eq(result.target.WOUND.amount, "number")
     eq(result.target.DODGE.flagText, "empty")
-    eq(result.player.WOUND.amount.secret, true, "a secret amount is recorded as its marker")
-    eq(result.player.WOUND.amount.type, "number")
+    eq(result.player.WOUND.amount, "secret", "a secret amount is recorded as secret")
     eq(result.player.WOUND.schoolMask, "number")
 end)
 
@@ -329,7 +329,7 @@ test("kill events are kept for kills.seen: whose blow, and what died", function(
     h:Fire("PARTY_KILL", h:GUID(pet), h:GUID({ name = "Kobold" }))
     h:Fire("UNIT_DIED", h:GUID({ name = "Kobold" }))
     h:Fire("PLAYER_TARGET_DIED")
-    local kills = h.ns.Probes.Kills
+    local kills = h.ns.Probes.ByName["kills.seen"].run()
     eq(kills.partyKill.attacker, "pet")
     eq(kills.partyKill.target, "Creature")
     eq(kills.unitDied.unit, "Creature")
@@ -341,8 +341,9 @@ test("chat senders are kept as name shapes, never names", function()
     local ns = h:LoadAddon("ByteTerrace_DevTools")
     h:Fire("CHAT_MSG_SAY", "hello", "Dh Taketwo-Realm")
     h:Fire("CHAT_MSG_CHANNEL", "hi", "Bob")
-    eq(ns.Probes.Senders.CHAT_MSG_SAY, "Aa Aa-Aa")
-    eq(ns.Probes.Senders.CHAT_MSG_CHANNEL, "Aa")
+    local senders = ns.Probes.ByName["names.chatSenders"].run()
+    eq(senders.CHAT_MSG_SAY, "Aa Aa-Aa")
+    eq(senders.CHAT_MSG_CHANNEL, "Aa")
 end)
 
 test("kill events accumulate: a player kill after a mob kill keeps both kinds", function()
@@ -350,7 +351,7 @@ test("kill events accumulate: a player kill after a mob kill keeps both kinds", 
     local me = h:GUID(h.player)
     h:Fire("PARTY_KILL", me, h:GUID({ name = "Kobold" }))
     h:Fire("PARTY_KILL", me, h:GUID({ name = "Cara", isPlayer = true }))
-    local kills = h.ns.Probes.Kills
+    local kills = h.ns.Probes.ByName["kills.seen"].run()
     eq(kills.partyKill.attacker, "you")
     eq(kills.partyKill.target, "Creature,Player")
 end)
@@ -360,6 +361,7 @@ test("an accumulating probe's record grows across sessions and reloads", functio
         result = { partyKill = { attacker = "pet", attackerKind = "Pet", target = "Creature" }, targetDied = true } }
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["kills.seen"] = record } } })
     h:Fire("PARTY_KILL", h:GUID(h.player), h:GUID({ name = "Cara", isPlayer = true }))
+    h:Fire("PLAYER_TARGET_DIED")
     h:Fire("CHAT_MSG_SAY", "hi", "Bob")
     h:Slash("/btdev probe")
     local result = Records(h)["kills.seen"].result
@@ -383,4 +385,79 @@ test("a fight in which you dealt no damage doesn't count as after a fight", func
     eq(Records(h)["damageMeter.enemySource"], nil, "no enemy you hit, so no enemy source to describe")
     eq(Records(h)["damageMeter.afterFight"], nil)
     eq(Records(h)["damageMeter.typesIdle"], nil, "the latest fight isn't one you fought")
+end)
+
+test("a secret never erases what was seen before it, nor what's seen after", function()
+    local h = Load()
+    local Probes = h.ns.Probes
+    local marker = Probes.Marker(Secret("x"))
+    eq(Probes.Merge("Aa", marker), "Aa,secret")
+    eq(Probes.Merge(marker, "Aa"), "Aa,secret")
+    eq(Probes.Merge("Aa,Aa Aa", "Aa"), "Aa,Aa Aa")
+    h:Fire("CHAT_MSG_SAY", "hi", "Bob")
+    h:Fire("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
+    h:Fire("CHAT_MSG_SAY", "hi", "Dh Taketwo")
+    eq(Probes.ByName["names.chatSenders"].run().CHAT_MSG_SAY, "Aa,Aa Aa,secret")
+end)
+
+test("a saved accumulating record keeps its items when a session saw a secret", function()
+    local record = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },
+        result = { CHAT_MSG_SAY = "Aa,Aa Aa" } }
+    local h = Load({ ByteTerraceDevToolsDB = { probes = { ["names.chatSenders"] = record } } })
+    h:Fire("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
+    h:Slash("/btdev probe")
+    eq(Records(h)["names.chatSenders"].result.CHAT_MSG_SAY, "Aa,Aa Aa,secret")
+end)
+
+test("a name's shape keeps no digits: realms like Area 52 compare with any other", function()
+    local h = Load()
+    eq(h.ns.Probes.NameShape("Dh Taketwo-Area 52"), "Aa Aa-Aa 0")
+end)
+
+test("a recap comparison that met a secret isn't a match", function()
+    local h = Load()
+    DieToDamage(h, { Hit(133, "Fireball") })
+    local recap = h.env.C_DeathRecap
+    local getEvents = recap.GetRecapEvents
+    rawset(recap, "GetRecapEvents", function(id)
+        local events = getEvents(id)
+        if id == nil and events[1] then
+            events[1].timestamp = Secret(events[1].timestamp)
+        end
+        return events
+    end)
+    eq(h.ns.Probes.ByName["deathRecap.latest"].run().sameAsMeter, "secret")
+end)
+
+test("another player's kill doesn't count as a mob you killed yourself", function()
+    local h = Load()
+    local Probes = h.ns.Probes
+    h:Fire("PARTY_KILL", h:GUID({ name = "Mom", isPlayer = true }), h:GUID({ name = "Kobold" }))
+    h:Fire("PLAYER_TARGET_DIED")
+    falsy((Probes.Check(Probes.ByName["kills.seen"])), "someone else's blow")
+    h:Fire("PARTY_KILL", h:GUID(h.player), h:GUID({ name = "Kobold" }))
+    truthy((Probes.Check(Probes.ByName["kills.seen"])), "yours")
+end)
+
+test("/btdev probe lists only what's still to do, and a new context alone isn't news", function()
+    local h = Load()
+    h:Slash("/btdev probe")
+    h:EnterCombat()
+    local from = #h.printed + 1
+    h:Slash("/btdev probe")
+    local text = Printed(h, from)
+    falsy(text:find("changed at context", 1, true), "combat context alone: " .. text)
+    falsy(text:find("classColors", 1, true), "an answered probe isn't listed again: " .. text)
+end)
+
+test("the meter's updates in the seconds after your death are kept by type, for damageMeter.afterDeath", function()
+    local h = Load()
+    local types = h.env.Enum.DamageMeterType
+    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageDone, 1) -- no death yet: not kept
+    h:Fire("PLAYER_DEAD")
+    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.Deaths, 1)
+    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", Secret(types.DamageTaken), 1)
+    h:Advance(6)
+    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.HealingDone, 1) -- too long after
+    eq(h.ns.Probes.ByName["damageMeter.afterDeath"].run().types, "Deaths,secret")
 end)

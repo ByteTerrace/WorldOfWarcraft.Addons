@@ -72,7 +72,8 @@ export function checkStyleRules(file, text, report) {
 
     const naming = (node, name, rule, what) => {
         if (!rule.test(name)) {
-            const hint = rule === CAMEL ? name[0].toLowerCase() + name.slice(1) : pascalHint(name);
+            const pascal = pascalHint(name);
+            const hint = rule === CAMEL ? pascal[0].toLowerCase() + pascal.slice(1) : pascal;
             report(file, node.loc.start.line, "NAMING", `${what} '${name}' should be ${rule === CAMEL ? "camelCase" : "PascalCase"}${hint && hint !== name ? ` (${hint})` : ""}`);
         }
     };
@@ -80,10 +81,12 @@ export function checkStyleRules(file, text, report) {
     const { scope, bindings } = functionBindings(ast);
     walk(ast.body, (node, ancestors) => {
         if (node.type === "LocalStatement") {
-            const vararg = node.init.length === 1 && node.init[0].type === "VarargLiteral";
+            // The file's own header, `local addonName, ns = ...`, keeps the client's names.
+            const header = node.init.length === 1 && node.init[0].type === "VarargLiteral" && isFileLevel(ancestors)
+                && node.variables.every((variable, i) => variable.name === ["addonName", "ns"][i]);
             node.variables.forEach((variable, i) => {
                 const name = variable.name;
-                if (vararg || isAlias(name, node.init[i])) return;
+                if (header || isAlias(name, node.init[i])) return;
                 if (node.init[i]?.type === "FunctionDeclaration" || bindings.has(scope.bindingOf(variable))) {
                     naming(variable, name, PASCAL, "function");
                 } else if (!isFileLevel(ancestors)) {

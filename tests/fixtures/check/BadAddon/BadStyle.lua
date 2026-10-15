@@ -22,3 +22,8 @@ function later() end -- !
 -- TODO: count the handlers -- !
 -- Good enough for now -- !
 print(MAX_ITEMS, itemCount, helper, Tally, later)
+local function Unpack(...)
+    local BAD_VALUE = ... -- !
+    return BAD_VALUE
+end
+print(Unpack)

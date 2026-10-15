@@ -81,12 +81,13 @@ export function serializeProbes(snapshot) {
     return `{\n  "build": ${JSON.stringify(build)},\n  "probes": ${probes}\n}\n`;
 }
 
-// A Lua string literal: printable ASCII as is, everything else as a decimal escape.
+// A Lua string literal: printable ASCII as is, everything else as a three-digit decimal escape,
+// so a digit that follows one can't be read as part of it ("\0102" is a newline, then "2").
 function luaString(text) {
     let out = "\"";
     for (const byte of Buffer.from(text, "utf8")) {
         const c = String.fromCharCode(byte);
-        out += byte >= 32 && byte < 127 && c !== "\"" && c !== "\\" ? c : `\\${byte}`;
+        out += byte >= 32 && byte < 127 && c !== "\"" && c !== "\\" ? c : `\\${String(byte).padStart(3, "0")}`;
     }
     return out + "\"";
 }
@@ -162,7 +163,8 @@ export async function readRecords(file) {
 }
 
 // The probe definitions, in run order: [{ name, needs (the needs' texts joined with " + "), labels
-// (their short labels, or "anywhere"), harnessGap (why the harness can't run it, or ""), version }].
+// (their short labels, or "anywhere"), harnessGap (why the harness can't run it, or ""), version,
+// accumulates (its result lists what sessions showed) }].
 // The probe files run in plain Lua: at load they only define data and functions.
 export async function readDefinitions(files = probeFiles()) {
     const lua = await createLua();
@@ -178,17 +180,38 @@ export async function readDefinitions(files = probeFiles()) {
             local lines = {}
             for i, probe in ipairs(ns.Probes.List) do
                 lines[i] = table.concat({ probe.name, ns.Probes.NeedsText(probe), ns.Probes.NeedsLabel(probe),
-                    ns.Probes.HarnessGap(probe) or "", ns.Probes.Version(probe) }, "\\t")
+                    ns.Probes.HarnessGap(probe) or "", ns.Probes.Version(probe), probe.accumulates and "1" or "" }, "\\t")
             end
             return table.concat(lines, "\\n")
         `);
         return encoded.split("\n").filter(Boolean).map((line) => {
-            const [name, needs, labels, harnessGap, version] = line.split("\t");
-            return { name, needs, labels, harnessGap, version: Number(version) };
+            const [name, needs, labels, harnessGap, version, accumulates] = line.split("\t");
+            return { name, needs, labels, harnessGap, version: Number(version), accumulates: accumulates === "1" };
         });
     } finally {
         lua.global.close();
     }
+}
+
+// Two values of the kind a record holds, as one, the way Probes.Merge (ByteTerrace_DevTools)
+// merges an accumulating probe's sessions: a string meets a string or a secret's marker as the
+// sorted union of their comma-separated items (the marker as "secret"), objects merge key by key,
+// two booleans are true if either is, and otherwise b stands (a when b is undefined).
+export function mergeResults(a, b) {
+    if (b === undefined) return a;
+    const item = (value) => (value && typeof value === "object" && value.secret === true ? "secret" : value);
+    const [itemA, itemB] = [item(a), item(b)];
+    if ((typeof a === "string" || typeof b === "string") && typeof itemA === "string" && typeof itemB === "string") {
+        if (itemA === itemB) return itemB;
+        return [...new Set((itemA + "," + itemB).split(",").filter(Boolean))].sort().join(",");
+    }
+    if (a && b && typeof a === "object" && typeof b === "object") {
+        const merged = { ...a };
+        for (const [key, value] of Object.entries(b)) merged[key] = mergeResults(a[key], value);
+        return merged;
+    }
+    if (typeof a === "boolean" && typeof b === "boolean") return a || b;
+    return b;
 }
 
 // Whether a record was made by the definition's current version of the probe (Probes.IsCurrent):

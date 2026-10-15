@@ -11,7 +11,7 @@ local addonName, ns = ...
 -- "Aa", so "Dh Taketwo-Realm" records as "Aa Aa-Aa" and no character's name reaches the file.
 
 local Probes = ns.Probes
-local Value, NameShape, Senders = Probes.Value, Probes.NameShape, Probes.Senders
+local Value, NameShape, Senders, JoinSets = Probes.Value, Probes.NameShape, Probes.Senders, Probes.JoinSets
 
 -- Every return of a name API, as name shapes: { "Aa", "Aa" } for (name, surname).
 local function Returns(...)
@@ -82,12 +82,6 @@ Probes.Define({
         name = "names.chatSenders",
         needs = { "heardChat" },
         accumulates = true,
-        run = function()
-            local result = {}
-            for event, shape in pairs(Senders) do
-                result[event] = shape
-            end
-            return result
-        end,
+        run = function() return JoinSets(Senders) end,
     },
 })

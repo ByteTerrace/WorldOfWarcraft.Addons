@@ -253,6 +253,16 @@ Probes.Define({
         run = function() return RecapSpellShapes("SPELL_DAMAGE") end,
     },
     {
+        -- Which damage meter updates follow a death: whether the death fact could listen for the
+        -- Deaths type alone while it waits for your recap (FactsDeath.lua reads on every update).
+        name = "damageMeter.afterDeath",
+        needs = { "diedToMob", "deathWatched" },
+        accumulates = true,
+        run = function()
+            return { types = next(Probes.AfterDeath.types) and Joined(Probes.AfterDeath.types) or "none" }
+        end,
+    },
+    {
         -- Blizzard's death popup asks for the recap with no ID (GameDialogDefs.lua): your latest.
         name = "deathRecap.latest",
         needs = { "diedToMob" },
@@ -264,8 +274,18 @@ Probes.Define({
             local result = { hasLatest = Value(C_DeathRecap.HasRecapEvents()), latest = Shape(latest) }
             if blow and not issecretvalue(recapID) and type(recapID) == "number" and recapID ~= 0 then
                 local byID = First(C_DeathRecap.GetRecapEvents(recapID))
-                result.sameAsMeter = byID ~= nil and Same(blow.timestamp, byID.timestamp)
-                    and Same(blow.sourceName, byID.sourceName) and Same(blow.amount, byID.amount)
+                -- false when a plain field differs, else "secret" when one couldn't be compared.
+                local same = byID ~= nil
+                for _, field in ipairs(byID and { "timestamp", "sourceName", "amount" } or {}) do
+                    local verdict = Same(blow[field], byID[field])
+                    if verdict == false then
+                        same = false
+                        break
+                    elseif verdict == "secret" then
+                        same = "secret"
+                    end
+                end
+                result.sameAsMeter = same
             end
             return result
         end,

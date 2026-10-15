@@ -6,8 +6,8 @@ local addonName, ns = ...
 --
 -- This file is the probe engine: the shape helpers probes record with, running and recording a
 -- probe, and comparing records. ProbeNeeds.lua defines the situations probes need
--- (Probes.AddNeeds); ProbesWorld.lua, ProbesUnits.lua and ProbesCombat.lua define the probes
--- (Probes.Define), in the order they run and print.
+-- (Probes.AddNeeds); ProbesWorld.lua, ProbesUnits.lua, ProbesCombat.lua and ProbesNames.lua define
+-- the probes (Probes.Define), in the order they run and print.
 --
 -- A probe is { name, needs = { need key, ... }, run, harness }:
 --   * needs names needs: the situation the probe must run in. Each need has a short label for
@@ -19,8 +19,9 @@ local addonName, ns = ...
 --   * run returns the result: a table with string keys whose values are strings, booleans,
 --     finite numbers or such tables. Results describe shapes (a type, an empty string, a color's
 --     bytes), never data that differs between characters, targets or sessions, so any player's
---     run compares with any other's. The exceptions list what a session happened to show, which
---     is their point: unitCombat.seen's actions and flags, questLog.objectives' types.
+--     run compares with any other's. The exceptions are the accumulating probes below, which list
+--     what sessions happened to show (unitCombat.seen, kills.seen, names.chatSenders,
+--     questLog.objectives, questLog.countForm): that's their point.
 --   * harness (optional) is the reason the harness can't run this probe at all.
 --   * accumulates (optional) marks a probe whose result lists what sessions happened to show. Its
 --     new result merges into the current record instead of replacing it (Probes.Merge), so each
@@ -35,10 +36,13 @@ local addonName, ns = ...
 --
 -- UNIT_COMBAT can't be asked for after the fact, so DevTools.lua listens for it from load (for
 -- the player and the target only) and passes each payload to Probes.NoteUnitCombat, which keeps
--- every payload's shape per unit and action, merged, in Probes.UnitCombat; unitCombat.seen
--- records it. The kill events (PARTY_KILL, PLAYER_TARGET_DIED, UNIT_DIED) go to Probes.NoteKill
--- the same way, for kills.seen, and chat events' senders to Probes.NoteSender, for
--- names.chatSenders; each merges what it sees into what it kept.
+-- the shapes of every payload per unit and action in Probes.UnitCombat; unitCombat.seen records
+-- them. The kill events (PARTY_KILL, PLAYER_TARGET_DIED, UNIT_DIED) go to Probes.NoteKill the same
+-- way, for kills.seen, chat events' senders to Probes.NoteSender, for names.chatSenders, and your
+-- deaths and the damage meter's updates to Probes.NoteDeath and NoteMeterUpdate, for
+-- damageMeter.afterDeath. Each
+-- keeps sets of the shapes it saw (a secret is "secret"), joined when its probe runs, so a shape
+-- seen before costs a table lookup: these run on every chat message and every hit.
 --
 -- A record is { build = "1.60.1 (70009)", context = { combat, restrictions }, result, version? }:
 -- the version of the probe that made it (absent for version 1), the build,
@@ -60,23 +64,31 @@ local Steps = {
     "later, outside a starting zone",
 }
 
+-- Seconds after your death in which the damage meter's updates count for damageMeter.afterDeath.
+local AfterDeathSeconds = 5
+
 local Probes = {}
 
 -- The needs by key, and the probes in run order and by name, as the other probe files add them.
 local Needs, List, ByName = {}, {}, {}
 
--- The UNIT_COMBAT payloads seen since load (Probes.NoteUnitCombat): units[unit][action] is the
--- last payload's shape (a secret action keys "secret"); actions and flagTexts are the plain
--- strings seen, as sets; amountInCombat is the last amount on you in combat: its type, or
--- "secret".
+-- The UNIT_COMBAT payloads seen since load (Probes.NoteUnitCombat): units[unit][action] holds a
+-- set per payload field (action, flagText, amount, schoolMask) of the shapes seen (a secret
+-- action keys "secret"); actions and flagTexts are the plain strings seen, as sets;
+-- amountInCombat is the last amount on you in combat: its type, or "secret".
 local UnitCombat = { units = { player = {}, target = {} }, actions = {}, flagTexts = {} }
 
--- The kill events seen since load (Probes.NoteKill): the last PARTY_KILL's and UNIT_DIED's
--- payload described (whose blow, what kind of unit), and whether PLAYER_TARGET_DIED fired.
+-- The kill events seen since load (Probes.NoteKill): sets of whose blow and what kind of unit,
+-- for PARTY_KILL (partyKill = { attacker, target, attackerKind }) and UNIT_DIED (unitDied =
+-- { unit }), each nil until its event fires; and whether PLAYER_TARGET_DIED fired.
 local Kills = { partyKill = nil, unitDied = nil, targetDied = false }
 
--- The last sender's name shape per chat event since load (Probes.NoteSender).
+-- The set of sender name shapes per chat event since load (Probes.NoteSender).
 local Senders = {}
+
+-- Your last death since load (GetTime(), or nil) and the set of DamageMeterType names the meter
+-- updated in the AfterDeathSeconds after each death (Probes.NoteDeath, NoteMeterUpdate).
+local AfterDeath = { diedAt = nil, types = {} }
 
 --- The marker a secret is recorded as.
 local function Marker(value)
@@ -99,15 +111,16 @@ local function Shape(value)
     return type(value)
 end
 
---- A name's shape: each run of letters (accented ones too) becomes "Aa", so "Dh Taketwo-Realm"
---- is "Aa Aa-Aa"; "empty", the type name, or the marker for a secret otherwise. No name survives.
+--- A name's shape: each run of letters (accented ones too) becomes "Aa" and each run of digits
+--- "0", so "Dh Taketwo-Area 52" is "Aa Aa-Aa 0"; "empty", the type name, or the marker for a
+--- secret otherwise. No name survives.
 local function NameShape(value)
     if issecretvalue(value) then
         return Marker(value)
     elseif type(value) ~= "string" then
         return type(value)
     end
-    return value == "" and "empty" or (value:gsub("[%a\128-\255]+", "Aa"))
+    return value == "" and "empty" or (value:gsub("[%a\128-\255]+", "Aa"):gsub("%d+", "0"))
 end
 
 --- "text", "empty" or the type name for a text an API returns, or the marker for a secret.
@@ -182,12 +195,32 @@ local function Joined(set)
     return table.concat(keys, ",")
 end
 
--- Two values of the kind a record holds, as one: tables merge key by key, two different strings
--- become the sorted union of their comma-separated items, two booleans are true if either is,
--- and otherwise b stands (a when b is nil).
+-- A value as an item of a string union: a secret's marker is "secret".
+local function Item(value)
+    if type(value) == "table" and value.secret == true then
+        return "secret"
+    end
+    return value
+end
+
+-- Two values of the kind a record holds, as one: a string meets a string or a secret's marker as
+-- the sorted union of their comma-separated items (the marker as "secret", so neither side is
+-- lost), tables merge key by key, two booleans are true if either is, and otherwise b stands (a
+-- when b is nil).
 local function Merge(a, b)
     if b == nil then
         return a
+    end
+    local itemA, itemB = Item(a), Item(b)
+    if (type(a) == "string" or type(b) == "string") and type(itemA) == "string" and type(itemB) == "string" then
+        if itemA == itemB then
+            return itemB
+        end
+        local items = {}
+        for item in (itemA .. "," .. itemB):gmatch("[^,]+") do
+            items[item] = true
+        end
+        return Joined(items)
     elseif type(a) == "table" and type(b) == "table" then
         local merged = {}
         for key, value in pairs(a) do
@@ -197,12 +230,6 @@ local function Merge(a, b)
             merged[key] = Merge(a[key], value)
         end
         return merged
-    elseif type(a) == "string" and type(b) == "string" and a ~= b then
-        local items = {}
-        for item in (a .. "," .. b):gmatch("[^,]+") do
-            items[item] = true
-        end
-        return Joined(items)
     elseif type(a) == "boolean" and type(b) == "boolean" then
         return a or b
     end
@@ -279,6 +306,10 @@ Probes.Kills = Kills
 
 --- The chat senders seen, by event (Probes.NoteSender).
 Probes.Senders = Senders
+
+--- Your last death and the meter's updates after deaths (Probes.NoteDeath), and how long after a
+--- death they count.
+Probes.AfterDeath, Probes.AfterDeathSeconds = AfterDeath, AfterDeathSeconds
 Probes.NameShape = NameShape
 
 --- The shape helpers probes record with (documented above).
@@ -357,19 +388,40 @@ function Probes.Step(probe)
     return step
 end
 
---- Keeps a UNIT_COMBAT payload's shape for unitCombat.seen (DevTools.lua passes every payload for
---- the player and the target): the last one per unit and action, and the plain action and flag
---- strings seen. Payloads for other units are ignored.
+-- A payload field's shape as a set item: "secret", or its Text ("text", "empty", a type name).
+local function Token(value)
+    return issecretvalue(value) and "secret" or Text(value)
+end
+
+-- Adds item to the set kept under key in sets, making the set the first time.
+local function Note(sets, key, item)
+    local set = sets[key]
+    if not set then
+        set = {}
+        sets[key] = set
+    end
+    set[item] = true
+end
+
+--- Keeps a UNIT_COMBAT payload's shapes for unitCombat.seen (DevTools.lua passes every payload for
+--- the player and the target): per unit and action, each field's shapes, and the plain action and
+--- flag strings seen. Payloads for other units are ignored.
 function Probes.NoteUnitCombat(unit, action, flagText, amount, schoolMask)
     local byAction = not issecretvalue(unit) and UnitCombat.units[unit]
     if not byAction then
         return
     end
     local plainAction = not issecretvalue(action) and type(action) == "string" and action ~= ""
-    local key = plainAction and action or (issecretvalue(action) and "secret" or Text(action))
-    byAction[key] = Merge(byAction[key], {
-        action = Text(action), flagText = Text(flagText), amount = Shape(amount), schoolMask = Shape(schoolMask),
-    })
+    local key = plainAction and action or Token(action)
+    local fields = byAction[key]
+    if not fields then
+        fields = {}
+        byAction[key] = fields
+    end
+    Note(fields, "action", Token(action))
+    Note(fields, "flagText", Token(flagText))
+    Note(fields, "amount", issecretvalue(amount) and "secret" or type(amount))
+    Note(fields, "schoolMask", issecretvalue(schoolMask) and "secret" or type(schoolMask))
     if unit == "player" and InCombatLockdown() then
         UnitCombat.amountInCombat = issecretvalue(amount) and "secret" or type(amount)
     end
@@ -410,10 +462,13 @@ end
 function Probes.NoteKill(event, ...)
     if event == "PARTY_KILL" then
         local attacker, target = ...
-        Kills.partyKill = Merge(Kills.partyKill,
-            { attacker = Whose(attacker), target = GUIDKind(target), attackerKind = GUIDKind(attacker) })
+        Kills.partyKill = Kills.partyKill or {}
+        Note(Kills.partyKill, "attacker", Whose(attacker))
+        Note(Kills.partyKill, "target", GUIDKind(target))
+        Note(Kills.partyKill, "attackerKind", GUIDKind(attacker))
     elseif event == "UNIT_DIED" then
-        Kills.unitDied = Merge(Kills.unitDied, { unit = GUIDKind((...)) })
+        Kills.unitDied = Kills.unitDied or {}
+        Note(Kills.unitDied, "unit", GUIDKind((...)))
     elseif event == "PLAYER_TARGET_DIED" then
         Kills.targetDied = true
     end
@@ -422,7 +477,44 @@ end
 --- Keeps a chat event's sender shape for names.chatSenders (DevTools.lua passes each one).
 ---@param event string
 function Probes.NoteSender(event, sender)
-    Senders[event] = Merge(Senders[event], NameShape(sender))
+    Note(Senders, event, issecretvalue(sender) and "secret" or NameShape(sender))
+end
+
+--- Notes your death (DevTools.lua passes PLAYER_DEAD): the meter's updates count for a while.
+function Probes.NoteDeath()
+    AfterDeath.diedAt = GetTime()
+end
+
+--- Notes a damage meter update (DevTools.lua passes DAMAGE_METER_COMBAT_SESSION_UPDATED's type)
+--- shortly after your death: its DamageMeterType's name, "secret", or "unknown".
+function Probes.NoteMeterUpdate(meterType)
+    local diedAt = AfterDeath.diedAt
+    if not diedAt or GetTime() - diedAt > AfterDeathSeconds then
+        return
+    end
+    local name = "secret"
+    if not issecretvalue(meterType) then
+        name = "unknown"
+        for key, value in pairs(Enum.DamageMeterType) do
+            if value == meterType then
+                name = key
+            end
+        end
+    end
+    AfterDeath.types[name] = true
+end
+
+--- Shape sets (Note's) as a record holds them: each set joined by commas, a table of sets
+--- likewise, key by key.
+---@param sets table
+---@return table
+function Probes.JoinSets(sets)
+    local out = {}
+    for key, set in pairs(sets) do
+        local _, first = next(set)
+        out[key] = type(first) == "table" and Probes.JoinSets(set) or Joined(set)
+    end
+    return out
 end
 
 --- The needs' texts joined with " + ", or "nothing" for a probe that runs anywhere.
@@ -479,8 +571,12 @@ end
 ---@return table? record { build, context, result, version? }
 ---@return string? problem
 function Probes.Record(probe)
-    local context = Probes.Context()
-    local ok, result = pcall(probe.run)
+    local ok, context = pcall(Probes.Context)
+    if not ok then
+        return nil, tostring(context)
+    end
+    local result
+    ok, result = pcall(probe.run)
     if not ok then
         return nil, tostring(result)
     end

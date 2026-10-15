@@ -54,7 +54,7 @@ test("loads cleanly and builds its settings window, organized into pages and sec
         "Warband: [Warband (world PvP)] Warband.enabled Warband.alerts Warband.shareSightings"
             .. " Warband.deathPrompt Warband.rallyWaypoint Warband.intel"
             .. " [Nameplate badges] Badges.enabled [Nearby enemies window] Radar.enabled Radar.share",
-        "Scholar's challenge: Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading"
+        "Scholar's challenge: Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading Scholar.quests"
             .. " [When] Scholar.interval Scholar.onLevelUp Scholar.mode",
     }
     local window = addon.SettingsWindow

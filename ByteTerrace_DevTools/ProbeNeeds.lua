@@ -7,7 +7,7 @@ local addonName, ns = ...
 -- NamePlateToken and FirstBagItem are shared with the probes that read the same things.
 
 local Probes = ns.Probes
-local UnitCombat, Kills = Probes.UnitCombat, Probes.Kills
+local UnitCombat, Kills, AfterDeath = Probes.UnitCombat, Probes.Kills, Probes.AfterDeath
 
 --- The nameplate token of a non-player unit on screen that the player can attack (enemy true) or
 --- can't (enemy false), or nil.
@@ -62,6 +62,15 @@ local Needs = {
         end,
         setup = function() end,
     },
+    restrictedMap = {
+        label = "restricted map",
+        text = "out of combat in a dungeon, between pulls (the Map restriction alone)",
+        step = 6,
+        check = function()
+            return not InCombatLockdown() and not UnitAffectingCombat("player") and Probes.Restrictions() == "Map"
+        end,
+        setup = function(h) h:SetRestriction("Map", true) end,
+    },
     enUS = {
         label = "enUS client",
         text = "an English (enUS) client",
@@ -84,7 +93,12 @@ local Needs = {
         text = "at least one quest in your quest log",
         step = 1,
         check = function() return select(2, C_QuestLog.GetNumQuestLogEntries()) > 0 end,
-        harness = "the harness doesn't model the quest log (C_QuestLog)",
+        setup = function(h)
+            h:AutoAcceptQuest({ title = "Kobold Camp Cleanup", header = "Elwynn Forest", objectives = {
+                { text = "Gold Dust", required = 4, type = "item" },
+                { text = "Report to Marshal McBride", required = 1, type = "log" },
+            } })
+        end,
     },
     bagItem = {
         label = "item in backpack",
@@ -114,14 +128,20 @@ local Needs = {
         text = "a quest offer open (talk to a quest giver and open a quest you haven't accepted)",
         step = 2,
         check = function() return QuestFrameDetailPanel:IsVisible() end,
-        harness = "the harness doesn't model quest dialogs",
+        setup = function(h)
+            h:OfferQuest({ title = "Wolves Across the Border", text = "The wolves grow bolder each night.",
+                goal = "Bring 8 Tough Wolf Meat to Eagan Peltskinner." }, "Eagan Peltskinner")
+        end,
     },
     questTurnIn = {
         label = "quest turn-in open",
         text = "a quest turn-in open (the reward panel, before you click Complete Quest)",
         step = 2,
         check = function() return QuestFrameRewardPanel:IsVisible() end,
-        harness = "the harness doesn't model quest dialogs",
+        setup = function(h)
+            local id = h:AutoAcceptQuest({ title = "Report to Goldshire" })
+            h:OpenTurnIn(id, "Marshal Dughan", "Ah, you made it.")
+        end,
     },
     friendlyNamePlate = {
         label = "friendly nameplate",
@@ -171,11 +191,7 @@ local Needs = {
             if not UnitAffectingCombat("player") then
                 return false
             end
-            local current, damageDone = Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.DamageDone
-            -- secret: only the sources list is read, checked with issecretvalue
-            local session = C_DamageMeter.GetCombatSessionFromType(current, damageDone)
-            local sources = session.combatSources
-            return not issecretvalue(sources) and type(sources) == "table" and sources[1] ~= nil
+            return HasSources(Enum.DamageMeterType.DamageDone)
         end,
         setup = function(h)
             h:EnterCombat()
@@ -193,7 +209,7 @@ local Needs = {
         label = "killed a mob",
         text = "a mob you targeted and killed yourself since logging in (type it after the kill)",
         step = 4,
-        check = function() return Kills.partyKill ~= nil end,
+        check = function() return Kills.partyKill ~= nil and Kills.partyKill.attacker.you == true and Kills.targetDied end,
         harness = "the harness doesn't raise kill events from fights",
     },
     afterFight = {
@@ -236,6 +252,29 @@ local Needs = {
             h:MeterFight({ duration = 6, sources = { { unit = "player", amounts = { DamageDone = 300 } } } })
             h:MeterFight({ duration = 9, sources = { { unit = "player", amounts = { DamageDone = 700 } } } })
         end,
+    },
+    deathWatched = {
+        label = "a death watched",
+        text = ("a death since DevTools loaded, over %d seconds ago (die, wait, then type it)"):format(Probes.AfterDeathSeconds),
+        step = 5,
+        check = function()
+            return AfterDeath.diedAt ~= nil and GetTime() - AfterDeath.diedAt > Probes.AfterDeathSeconds
+        end,
+        setup = function(h) h:Advance(Probes.AfterDeathSeconds + 1) end,
+    },
+    enemyHunterFeigning = {
+        label = "enemy hunter feigning",
+        text = "target a hunter of the other faction while they Feign Death",
+        step = 6,
+        check = function()
+            local _, class = UnitClass("target")
+            if issecretvalue(class) or class ~= "HUNTER" or not UnitIsPlayer("target") or not UnitCanAttack("player", "target") then
+                return false
+            end
+            local dead, feigning = UnitIsDeadOrGhost("target"), UnitIsFeignDeath("target")
+            return (not issecretvalue(dead) and dead == true) or (not issecretvalue(feigning) and feigning == true)
+        end,
+        harness = "only the client can say what it reports for an enemy's Feign Death",
     },
     diedToMob = {
         label = "killed by a mob",

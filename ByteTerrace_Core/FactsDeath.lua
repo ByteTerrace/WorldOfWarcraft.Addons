@@ -23,8 +23,10 @@
 -- covers camelot: Forever's TOCs add [ExcludeLoadGameType camelot] wherever mainline shouldn't.
 -- An attacker the recap hides (hideCaster, which Blizzard's recap window honors) is unknown. The
 -- recap may land a moment after PLAYER_DEAD, so the fact looks again on the meter's updates and at
--- RecapRetries, at most RecapWait seconds; a recap that comes later (within LateWait) is set aside,
--- so the next death doesn't take it for its own.
+-- RecapRetries, at most RecapWait seconds, then publishes the death as unknown. Recap IDs rise
+-- with each death, so deaths take the new recaps in order: each new ID, oldest first, belongs to
+-- the oldest death still owed one. A death that gave up still takes its recap if it comes within
+-- LateWait, and sets it aside, so a later death never takes another death's recap.
 
 local RecapWait = 3 -- seconds to wait for the damage meter to record your death
 local LateWait = 30 -- seconds after that in which a late recap is still your last death's
@@ -40,6 +42,7 @@ local ByteTerrace = ByteTerrace
 local C_DamageMeter, C_DeathRecap, Enum = C_DamageMeter, C_DeathRecap, Enum
 local GetPlayerInfoByGUID, issecretvalue, UnitGUID = GetPlayerInfoByGUID, issecretvalue, UnitGUID
 local floor, ipairs, max, type = math.floor, ipairs, math.max, type
+local remove, sort = table.remove, table.sort
 
 local function Plain(value, kind)
     if issecretvalue(value) or type(value) ~= kind then
@@ -48,30 +51,39 @@ local function Plain(value, kind)
     return value
 end
 
--- The recap ID of your newest death in one meter session type, or 0.
-local function NewestDeathIn(sessionType)
+-- Adds the recap IDs of your deaths above after in one meter session type to found ([id] = true).
+local function DeathsIn(sessionType, after, found)
     local session = C_DamageMeter.GetCombatSessionFromType(sessionType, Enum.DamageMeterType.Deaths)
     if issecretvalue(session) or type(session) ~= "table" then
-        return 0
+        return
     end
-    local sources = Plain(session.combatSources, "table")
-    local newest = 0
-    for _, source in ipairs(sources or {}) do
+    for _, source in ipairs(Plain(session.combatSources, "table") or {}) do
         local id = Plain(source.deathRecapID, "number")
-        if Plain(source.isLocalPlayer, "boolean") and id and id > newest then
-            newest = id
+        if Plain(source.isLocalPlayer, "boolean") and id and id > after then
+            found[id] = true
         end
     end
-    return newest
+end
+
+-- The recap IDs of your deaths in the damage meter above after, oldest first.
+local function DeathsAfter(after)
+    local found, list = {}, {}
+    if C_DamageMeter.IsDamageMeterAvailable() then
+        local types = Enum.DamageMeterSessionType
+        DeathsIn(types.Current, after, found)
+        DeathsIn(types.Overall, after, found)
+    end
+    for id in pairs(found) do
+        list[#list + 1] = id
+    end
+    sort(list)
+    return list
 end
 
 -- The recap ID of your newest death in the damage meter, or 0.
 local function NewestDeath()
-    if not C_DamageMeter.IsDamageMeterAvailable() then
-        return 0
-    end
-    local types = Enum.DamageMeterSessionType
-    return max(NewestDeathIn(types.Current), NewestDeathIn(types.Overall))
+    local list = DeathsAfter(0)
+    return list[#list] or 0
 end
 
 -- What the killing blow of a recap says about your killer: { name, kind, class, faction, spell,
@@ -120,28 +132,12 @@ ByteTerrace.Facts.death = {
     OnEnable = function(module)
         local state = module.Addon.State
         local count = module:Id("count")
-        local handled = NewestDeath() -- the highest recap ID already attributed (or there at start)
-        local waitHandle -- the meter-update handler while a death waits for its recap
-        local waitTimer  -- gives up after RecapWait, then stops setting a late recap aside after LateWait
-        local retries = {}
-        local late = false -- the wait gave up: a recap that arrives now is a published death's
+        local handled = NewestDeath() -- the highest recap ID a death took (or there at start)
+        local owed = {} -- the deaths still owed a recap, oldest first: { number, gaveUp, settled, timers }
+        local waitHandle -- the meter-update handler while any death is owed a recap
 
-        local function StopWaiting()
-            late = false
-            if waitHandle then
-                module:Off(waitHandle)
-                waitHandle = nil
-            end
-            module:Cancel(waitTimer)
-            waitTimer = nil
-            for i = #retries, 1, -1 do
-                module:Cancel(retries[i])
-                retries[i] = nil
-            end
-        end
-
-        -- Publishes the killer of your latest death (nil: unknown).
-        local function Attribute(killer)
+        -- Publishes the killer of death number (nil: unknown).
+        local function Attribute(number, killer)
             killer = killer or {}
             module:Set("killer", killer.name or "")
             module:Set("killerKind", killer.kind or "")
@@ -149,46 +145,64 @@ ByteTerrace.Facts.death = {
             module:Set("killerFaction", killer.faction or "")
             module:Set("killerSpell", killer.spell or "")
             module:Set("killerDamage", killer.damage or 0)
-            module:Set("attributed", state.Values[count])
+            module:Set("attributed", number)
         end
 
-        -- Attributes the death once the meter holds a recap newer than the last one; a late one
-        -- only moves handled past it.
+        -- A death stops being owed a recap: its timers go, and the meter handler with the last one.
+        local function Settle(death)
+            death.settled = true
+            for i = #owed, 1, -1 do
+                if owed[i] == death then
+                    remove(owed, i)
+                end
+            end
+            for _, timer in ipairs(death.timers) do
+                module:Cancel(timer)
+            end
+            if #owed == 0 and waitHandle then
+                module:Off(waitHandle)
+                waitHandle = nil
+            end
+        end
+
+        -- Gives each new recap, oldest first, to the oldest death owed one; a death that gave up
+        -- takes it without a word. A recap no death is owed (none waiting) only moves handled.
         local function TryRecap()
-            local id = NewestDeath()
-            if id <= handled then
-                return false
+            for _, id in ipairs(DeathsAfter(handled)) do
+                handled = id
+                local death = owed[1]
+                if death then
+                    Settle(death)
+                    if not death.gaveUp then
+                        Attribute(death.number, Killer(id))
+                    end
+                end
             end
-            handled = id
-            local wasLate = late
-            StopWaiting()
-            if not wasLate then
-                Attribute(Killer(id))
-            end
-            return true
         end
 
         module:On("PLAYER_DEAD", function()
-            StopWaiting()
-            state:Set(count, state.Values[count] + 1)
-            if TryRecap() then
-                return
+            local number = state.Values[count] + 1
+            state:Set(count, number)
+            local death = { number = number, gaveUp = false, timers = {} }
+            owed[#owed + 1] = death
+            TryRecap()
+            if death.settled then
+                return -- its recap was already there
             end
-            waitHandle = module:On("DAMAGE_METER_COMBAT_SESSION_UPDATED", TryRecap)
+            waitHandle = waitHandle or module:On("DAMAGE_METER_COMBAT_SESSION_UPDATED", TryRecap)
             for i, delay in ipairs(RecapRetries) do
-                retries[i] = module:After(delay, TryRecap)
+                death.timers[i] = module:After(delay, TryRecap)
             end
-            waitTimer = module:After(RecapWait, function()
-                late = true
-                -- The meter handler stays: a recap landing late must be set aside before the next
-                -- death, which could otherwise take it for its own.
-                waitTimer = module:After(LateWait, StopWaiting)
-                Attribute(nil)
+            death.timers[#death.timers + 1] = module:After(RecapWait, function()
+                death.gaveUp = true
+                Attribute(number, nil)
+                -- Still owed: a recap landing late is this death's, set aside, not the next one's.
+                death.timers[#death.timers + 1] = module:After(LateWait, function() Settle(death) end)
             end)
         end)
         -- After a /reload, deaths already in the session aren't new.
         module:On("PLAYER_ENTERING_WORLD", function()
-            if not waitHandle then
+            if #owed == 0 then
                 handled = max(handled, NewestDeath())
             end
         end)

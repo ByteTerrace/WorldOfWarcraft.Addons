@@ -142,10 +142,14 @@ end
 -- Makes the env's math.random (and random) deterministic from seed n: the harness's own linear
 -- congruential generator (Numerical Recipes' 32-bit constants), independent of Lua's global
 -- math.random state, so the same seed gives the same sequence in every test. Before the first
--- SeedRandom, math.random is Lua's own. An addon's local copy of math.random follows too.
+-- SeedRandom, math.random is Lua's own. An addon's local copy of math.random follows too. The
+-- seed is stirred by two steps first: a raw seed's first value hardly moves from one seed to the
+-- next (seeds 1 to 20 all start near 0.24), so a loop over seeds would see one first draw.
 function Harness:SeedRandom(n)
     assert(type(n) == "number", "SeedRandom: the seed must be a number")
     self.rng = math.floor(n) % 4294967296
+    self:NextRandom()
+    self:NextRandom()
 end
 
 -- The generator's next value in [0, 1).

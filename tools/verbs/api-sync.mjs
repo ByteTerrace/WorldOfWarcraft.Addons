@@ -42,6 +42,9 @@ export const options = {
 
 // A real client exposes tens of thousands of globals; anything far smaller is a broken dump.
 export const MIN_GLOBALS = 10000;
+// Blizzard's generated docs document over 5000 functions; a folder with far fewer is the wrong one,
+// or a partial checkout, and would silently stop the SECRET and PROTECTED rules from firing.
+export const MIN_DOC_FUNCTIONS = 2000;
 
 const CAPTURE = `
     local captured, names = {}, setmetatable({}, { __mode = "k" })
@@ -139,6 +142,7 @@ const ENCODE = `
     return table.concat(lines, "\\n")
 `;
 
+// Throws on a folder that can't be the full documentation (see MIN_DOC_FUNCTIONS).
 export async function readDocs(dir) {
     const lua = await createLua();
     try {
@@ -148,13 +152,17 @@ export async function readDocs(dir) {
         }
         const encoded = await lua.doString(ENCODE);
         const docs = { functions: {}, events: {}, methods: {}, enums: {} };
-        for (const line of encoded.split("\n")) {
+        for (const line of encoded.split("\n").filter(Boolean)) {
             const [kind, name, method, json] = line.split("\t");
             const entry = JSON.parse(json);
             if (kind === "F") docs.functions[name] = entry;
             else if (kind === "E") docs.events[name] = entry;
             else if (kind === "N") docs.enums[name] = entry;
             else (docs.methods[name] ??= {})[method] = entry;
+        }
+        const count = Object.keys(docs.functions).length;
+        if (count < MIN_DOC_FUNCTIONS) {
+            throw new Error(`${dir}: only ${count} documented functions (Blizzard_APIDocumentationGenerated has well over ${MIN_DOC_FUNCTIONS}); refusing partial docs`);
         }
         return docs;
     } finally {
@@ -195,6 +203,11 @@ export async function readGlobals(file) {
                 return table.concat(out, "\\31")
             end
             lines[1] = tostring(db.build.version) .. " (" .. tostring(db.build.build) .. ")"
+            for addon, count in pairs(type(db.skipped) == "table" and db.skipped or {}) do
+                if clean(addon) and type(count) == "number" then
+                    lines[#lines + 1] = "S\t" .. addon .. "\t" .. tostring(count)
+                end
+            end
             for name, entry in pairs(db.globals) do
                 if clean(name) then
                     if type(entry) ~= "table" or type(entry.type) ~= "string" then
@@ -214,8 +227,13 @@ export async function readGlobals(file) {
         const [build, ...rows] = encoded.split("\n");
         const globals = {};
         const members = {};
+        const skipped = {};
         for (const row of rows) {
             const [kind, name, type, list] = row.split("\t");
+            if (kind === "S") {
+                skipped[name] = Number(type);
+                continue;
+            }
             if (kind === "G") globals[name] = type;
             if (list) members[name] = list.split("\x1f").sort();
         }
@@ -223,7 +241,7 @@ export async function readGlobals(file) {
         if (count < MIN_GLOBALS) {
             throw new Error(`${file}: only ${count} globals (a real client has well over ${MIN_GLOBALS}); refusing a partial dump`);
         }
-        return { build, globals, members };
+        return { build, globals, members, skipped };
     } finally {
         lua.global.close();
     }
@@ -276,7 +294,6 @@ export function serialize(snapshot) {
         + "}\n";
 }
 
-
 export async function run(values) {
     if (!values.docs && !values.globals) {
         console.error("api-sync needs --docs and/or --globals.");
@@ -298,7 +315,13 @@ export async function run(values) {
         }
     }
     if (values.docs) {
-        const docs = await readDocs(values.docs);
+        let docs;
+        try {
+            docs = await readDocs(values.docs);
+        } catch (error) {
+            console.error(`api-sync: ${error.message}`);
+            return 1;
+        }
         snapshot.functions = sortKeys(docs.functions);
         snapshot.events = sortKeys(docs.events);
         snapshot.methods = sortKeys(Object.fromEntries(Object.entries(docs.methods).map(([k, v]) => [k, sortKeys(v)])));
@@ -309,6 +332,13 @@ export async function run(values) {
     }
     if (dump) {
         const addons = findAddons();
+        // The dump leaves out every name an addon touched. This repository's are expected; another
+        // addon's may have replaced a client global, which the snapshot then lacks.
+        const others = Object.entries(dump.skipped).filter(([addon]) => !addons.some((a) => a.name === addon));
+        if (others.length) {
+            console.warn(`api-sync: warning: the dump skipped names other addons set (${others.map(([a, n]) => `${a}: ${n}`).join(", ")}); `
+                + "a client global one of them replaced isn't in the snapshot. Dump with only ByteTerrace addons enabled.");
+        }
         const dropped = Object.keys(dump.globals).filter((name) => isRepoOwned(name, addons));
         for (const name of dropped) {
             delete dump.globals[name];

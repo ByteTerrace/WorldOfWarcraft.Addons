@@ -8,5 +8,7 @@
 
 Bad.lua
 Bad2.lua
+Bad3.lua
+Bad3.lua
 BadStyle.lua
 Missing.lua

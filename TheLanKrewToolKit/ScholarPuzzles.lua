@@ -1,10 +1,11 @@
 local addonName, ns = ...
 
--- Scholar puzzles: math and reading questions for kids, kindergarten to grade 6. Pure: no UI, no
--- WoW API, and no randomness but options.random, so the same options and random sequence give the
--- same puzzle. Every puzzle's text and the word banks live in ScholarWords.lua (ns.ScholarWords),
--- which loads first. The generators live in ScholarMath.lua and ScholarReading.lua, which load
--- after this file and register themselves in Kit.Generators.
+-- Scholar puzzles: math and reading questions for kids, kindergarten to grade 6, and questions about
+-- their own quests. Pure: no UI, no WoW API, and no randomness but options.random, so the same
+-- options and random sequence give the same puzzle. Every puzzle's text and the word banks live in ScholarWords.lua (ns.ScholarWords),
+-- which loads first. The generators live in ScholarMath.lua, ScholarReading.lua and
+-- ScholarQuests.lua, which load after this file and register themselves in Kit.Generators; the
+-- "quest" subject asks through Kit.AskQuest (ScholarQuests.lua) about one of the player's quests.
 --
 --   ns.Puzzles.Grades     { id, label } from { 0, "Kindergarten" } to { 6, "Grade 6" }, in order.
 --   ns.Puzzles.Generate   see Generate below.
@@ -251,12 +252,15 @@ end
 
 --- Generates a puzzle. A personalized puzzle that runs over a length limit is rebuilt without the
 --- context. Bad options (no random, an unknown subject) raise an error; grade and level are read
---- as numbers and clamped.
----@param options table subject ("math" | "reading"), grade (0..6), level (1..3, easiest first),
---- random (function(m, n) returning an integer from m to n) and an optional context { name, class,
---- level, zone, copper } of plain values
----@return table puzzle { subject, kind, title, prompt, choices (4 distinct strings), answer (1..4),
---- hint, explanation }, plus value, expression, remainder and terms on math puzzles
+--- as numbers and clamped. A quest puzzle ignores grade and level, and is nil when no question
+--- fits the quest.
+---@param options table subject ("math" | "reading" | "quest"), grade (0..6), level (1..3, easiest
+--- first), random (function(m, n) returning an integer from m to n), an optional context { name,
+--- class, level, zone, copper } of plain values, and for "quest" the quest (a QuestBook record)
+--- and known (every record)
+---@return table? puzzle { subject, kind, title, prompt, choices (4 distinct strings), answer (1..4),
+--- hint, explanation }, plus value, expression, remainder and terms on math puzzles and book (the
+--- quest book's text) on quest puzzles
 local function Generate(options)
     if type(options) ~= "table" or type(options.random) ~= "function" then
         error("ScholarPuzzles.Generate: options.random must be a function", 2)
@@ -264,15 +268,22 @@ local function Generate(options)
     if not ScholarWords then
         error("ScholarPuzzles.Generate: ScholarWords.lua must load before ScholarPuzzles.lua (see the TOC)", 2)
     end
-    local kinds = ScholarWords.kinds[options.subject]
-    if not kinds then
-        error("ScholarPuzzles.Generate: unknown subject " .. tostring(options.subject), 2)
-    end
     local state = {
         roll = options.random, subject = options.subject,
         grade = Clamp(options.grade, 0, 6, 0), level = Clamp(options.level, 1, 3, 1),
         context = SafeContext(options.context),
     }
+    if options.subject == "quest" then
+        local AskQuest = ns.Puzzles.Kit.AskQuest
+        if not AskQuest then
+            error("ScholarPuzzles.Generate: ScholarQuests.lua must load after ScholarPuzzles.lua (see the TOC)", 2)
+        end
+        return AskQuest(state, options.quest, options.known)
+    end
+    local kinds = ScholarWords.kinds[options.subject]
+    if not kinds then
+        error("ScholarPuzzles.Generate: unknown subject " .. tostring(options.subject), 2)
+    end
     local kind = Pick(state, kinds[state.grade])
     local generator = Generators[kind]
     if not generator then
@@ -289,6 +300,6 @@ end
 
 local Kit = {
     Pick = Pick, Chance = Chance, Shuffle = Shuffle, Trim = Trim, Fill = Fill, Count = Count, Coins = Coins,
-    Vars = Vars, Finish = Finish, WrongNumbers = WrongNumbers, Words = ScholarWords, Generators = Generators,
+    Vars = Vars, Finish = Finish, WrongNumbers = WrongNumbers, Fits = Fits, Words = ScholarWords, Generators = Generators,
 }
 ns.Puzzles = { Grades = Grades, Generate = Generate, Kit = Kit }

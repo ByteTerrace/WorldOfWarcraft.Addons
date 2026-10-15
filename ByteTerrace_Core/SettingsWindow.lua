@@ -45,7 +45,7 @@ local CanvasInset = 16
 local ByteTerrace = ByteTerrace
 local CreateFrame, GameTooltip, Settings, UIParent = CreateFrame, GameTooltip, Settings, UIParent
 local ipairs, tostring, wipe = ipairs, tostring, wipe
-local floor = math.floor
+local floor, max, min = math.floor, math.max, math.min
 
 local SettingsWindow = {}
 SettingsWindow.__index = SettingsWindow
@@ -85,18 +85,24 @@ local function StepEnum(spec, value, delta)
     return spec.values[1]
 end
 
--- A number stepped by the row's step, kept within its bounds.
+-- A number one step from value. With a step, it moves along the row's grid (multiples of step
+-- from min) and stops at the last grid value inside the bounds, so State always admits it;
+-- without one it moves by 1 and stops at min and max.
 local function StepNumber(spec, value, delta)
-    local step = spec.step or 1
-    local stepped = value + delta * step
-    if spec.min and stepped < spec.min then
-        stepped = spec.min
+    local low, high, step = spec.min, spec.max, spec.step
+    if not step then
+        local stepped = value + delta
+        return (low and stepped < low and low) or (high and stepped > high and high) or stepped
     end
-    if spec.max and stepped > spec.max then
-        stepped = spec.max
+    local base = low or 0
+    local index = floor((value - base) / step + 0.5) + delta
+    if high then
+        index = min(index, floor((high - base) / step + 1e-9))
     end
-    local base = spec.min or 0
-    return base + floor((stepped - base) / step + 0.5) * step
+    if low then
+        index = max(index, 0)
+    end
+    return base + index * step
 end
 
 --- Creates the window; its frame is built the first time it shows.
@@ -311,13 +317,17 @@ local function BuildFrame(window)
     frame.Close:SetScript("OnClick", function() window:Hide() end)
 end
 
--- Moves the view into a host (the window or the canvas) and shows its page, refreshed.
+-- Moves the view into a host (the window or the canvas) and shows its page, refreshed. The window
+-- the view leaves closes, rather than standing empty.
 local function Present(window, host, page)
     if not window.View then
         BuildView(window)
     end
     local view = window.View
     if window.m_host ~= host then
+        if window.m_host == window.Frame and window.Frame then
+            window.Frame:Hide()
+        end
         window.m_host = host
         view:SetParent(host)
         view:ClearAllPoints()
@@ -355,10 +365,13 @@ function SettingsWindow:Show(page)
     self.Frame:Show()
 end
 
---- Hides the window.
+--- Hides the window. When Blizzard's panel shows the canvas, the view goes back to it.
 function SettingsWindow:Hide()
     if self.Frame then
         self.Frame:Hide()
+    end
+    if self.Canvas and self.Canvas:IsVisible() and self.m_host ~= self.Canvas then
+        Present(self, self.Canvas)
     end
 end
 

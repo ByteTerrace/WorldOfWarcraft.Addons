@@ -17,7 +17,8 @@ local addonName, ns = ...
 -- From load it also listens for UNIT_COMBAT on the player and the target, for the unitCombat.seen
 -- probe (Probes.NoteUnitCombat keeps the payloads' shapes), for the kill events, for
 -- kills.seen (Probes.NoteKill), and for chat events' senders, for names.chatSenders
--- (Probes.NoteSender keeps their shapes, never the names).
+-- (Probes.NoteSender keeps their shapes, never the names), and for your deaths and the damage
+-- meter's updates after them, for damageMeter.afterDeath (Probes.NoteDeath, NoteMeterUpdate).
 --
 -- Only the client's own names are dumped. A global or table member any addon set is tainted by
 -- that addon (issecurevariable), so it's counted under `skipped` instead, per addon: other addons'
@@ -147,29 +148,36 @@ local function RunProbes()
     local db = Database()
     db.probes = type(db.probes) == "table" and db.probes or {}
     local recorded, added, changed, skipped, failed = 0, 0, 0, {}, 0
+    local build = Probes.Build()
     for _, probe in ipairs(Probes.List) do
         local met, unmet = Probes.Check(probe)
+        local saved = db.probes[probe.name]
         if not met then
-            AddToGroup(skipped, probe, unmet)
+            -- Only probes still without a result for this build are left to do.
+            if not (Probes.IsCurrent(probe, saved) and saved.build == build) then
+                AddToGroup(skipped, probe, unmet)
+            end
         else
             local record, problem = Probes.Record(probe)
             if not record then
                 failed = failed + 1
                 Say(("probe %s failed: %s"):format(probe.name, problem))
             else
-                local previous = db.probes[probe.name]
+                local previous = saved
                 if not Probes.IsCurrent(probe, previous) then
                     previous = nil -- an older version's record answered another question
                 elseif probe.accumulates and previous.build == record.build then
                     record.result = Probes.Merge(previous.result, record.result)
                 end
-                local differences = previous and Probes.Diff(previous, record) or {}
+                -- A changed answer is news; a new context alone (combat now, idle before) is saved
+                -- without a word, so it doesn't bury the answers that did change.
+                local differences = previous and Probes.Diff(previous.result, record.result) or {}
                 if not previous then
                     added = added + 1
                 elseif #differences > 0 then
                     changed = changed + 1
                     for _, difference in ipairs(differences) do
-                        Say(("probe %s changed at %s: was %s, now %s"):format(probe.name, difference.path,
+                        Say(("probe %s changed at result.%s: was %s, now %s"):format(probe.name, difference.path,
                             Probes.Show(difference.a), Probes.Show(difference.b)))
                     end
                 end
@@ -247,6 +255,18 @@ ChatListener:SetScript("OnEvent", function(_, event, ...)
     else
         local _, author = ...
         Probes.NoteSender(event, author)
+    end
+end)
+
+-- Your deaths and the damage meter's updates after them, for damageMeter.afterDeath, from load.
+local MeterListener = CreateFrame("Frame")
+MeterListener:RegisterEvent("PLAYER_DEAD")
+MeterListener:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED")
+MeterListener:SetScript("OnEvent", function(_, event, meterType)
+    if event == "PLAYER_DEAD" then
+        Probes.NoteDeath()
+    else
+        Probes.NoteMeterUpdate(meterType)
     end
 end)
 

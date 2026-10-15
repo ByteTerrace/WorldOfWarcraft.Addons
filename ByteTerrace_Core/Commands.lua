@@ -70,7 +70,10 @@ function Commands:Compile()
             problems[#problems + 1] = name .. ": needs a label"
         end
         local word = spec.slash
-        if word ~= nil then
+        if word ~= nil and spec.held then
+            -- Slash text only ever presses: a held command would never hear up or cancel.
+            problems[#problems + 1] = name .. ": a held command can't have a slash word"
+        elseif word ~= nil then
             if type(word) ~= "string" or word ~= word:lower() or word:find("%s") then
                 problems[#problems + 1] = name .. ": slash word '" .. tostring(word) .. "' must be lowercase with no spaces"
             elseif bySlash[word] then
@@ -95,6 +98,14 @@ function Commands:Id(name)
         error(self.m_addon.Name .. ": unknown command " .. tostring(name), 2)
     end
     return id
+end
+
+--- The module a command belongs to, or nil for the addon's own (help, settings, debug...).
+---@param id integer
+---@return table? module
+function Commands:ModuleOf(id)
+    local spec = self.m_specs[id]
+    return spec and spec.module
 end
 
 --- Runs a command as one state batch.

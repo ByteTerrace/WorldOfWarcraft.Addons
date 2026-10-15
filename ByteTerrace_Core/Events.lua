@@ -57,37 +57,9 @@ local function Wanted(list)
     return unit1 .. "|" .. (unit2 or ""), unit1, unit2, filtered
 end
 
-local function Rebuild(self, event)
-    local list, copy = self.m_handlers[event], {}
-    if list then
-        for i = 1, #list do
-            if not list[i].dead then
-                copy[#copy + 1] = list[i]
-            end
-        end
-    end
-    self.m_handlers[event] = #copy > 0 and copy or nil
-    self:Refresh(event)
-end
-
---- Creates an addon's dispatcher and its frame.
----@param addon table the owning AddOn, whose state batches each dispatch
-function ByteTerrace.NewEvents(addon)
-    local self = setmetatable({
-        Counts = {}, m_addon = addon, m_handlers = {}, m_registered = {}, m_filtered = {},
-    }, Events)
-    local frame = CreateFrame("Frame")
-    frame:SetScript("OnEvent", function(_, event, ...)
-        self:Dispatch(event, ...)
-    end)
-    self.Frame = frame
-    return self
-end
-
---- Brings an event's client registration in line with what its handlers want, touching it only
---- when that changed.
----@param event string
-function Events:Refresh(event)
+-- Brings an event's client registration in line with what its handlers want, touching it only
+-- when that changed.
+local function Refresh(self, event)
     local key, unit1, unit2, filtered = Wanted(self.m_handlers[event])
     self.m_filtered[event] = filtered
     if key == self.m_registered[event] then
@@ -106,6 +78,33 @@ function Events:Refresh(event)
     self.m_registered[event] = key
 end
 
+local function Rebuild(self, event)
+    local list, copy = self.m_handlers[event], {}
+    if list then
+        for i = 1, #list do
+            if not list[i].dead then
+                copy[#copy + 1] = list[i]
+            end
+        end
+    end
+    self.m_handlers[event] = #copy > 0 and copy or nil
+    Refresh(self, event)
+end
+
+--- Creates an addon's dispatcher and its frame.
+---@param addon table the owning AddOn, whose state batches each dispatch
+function ByteTerrace.NewEvents(addon)
+    local self = setmetatable({
+        Counts = {}, m_addon = addon, m_handlers = {}, m_registered = {}, m_filtered = {},
+    }, Events)
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", function(_, event, ...)
+        self:Dispatch(event, ...)
+    end)
+    self.Frame = frame
+    return self
+end
+
 --- Adds a handler. An event the client refuses (an unknown name) is an error and leaves no trace.
 ---@param event string
 ---@param fn function receives the event payload
@@ -122,11 +121,11 @@ function Events:On(event, fn, unit)
     local handle = { event = event, fn = fn, unit = unit }
     copy[#copy + 1] = handle
     self.m_handlers[event] = copy
-    local ok, err = pcall(self.Refresh, self, event)
+    local ok, err = pcall(Refresh, self, event)
     if not ok then
         self.m_handlers[event] = list
-        pcall(self.Refresh, self, event)
-        error(err, 2)
+        pcall(Refresh, self, event)
+        error(err, 0) -- the client's message already says where
     end
     return handle
 end

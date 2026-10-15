@@ -9,6 +9,8 @@
 //   if not issecretvalue(x) then <here> end      x is safe in the branch
 //   issecretvalue(x) or x > 1                    x is safe in the right operand (and/or short-circuit)
 //   if InCombatLockdown() then ... return end    not in lockdown after the if
+//   local inCombat = InCombatLockdown()           the same, tested through a never-reassigned local
+//   if inCombat then return end                   of the same function (its value is this run's)
 //
 // A test whose result is discarded (`local _ = InCombatLockdown()`) decides nothing. After an
 // if, a fact holds only if it holds at the end of every branch that falls through. Loop bodies
@@ -20,6 +22,7 @@
 //   secretCheck(call)   -> binding | null   issecretvalue(<binding>): true means secret
 //   accessCheck(call)   -> binding | null   canaccessvalue(<binding>): true means not secret
 //   lockdownCheck(call) -> boolean          InCombatLockdown()
+//   stableBinding(id)   -> binding | null   the never-reassigned local an identifier names
 //   exits(call)         -> boolean          a call that never returns (error(...))
 // }
 
@@ -42,6 +45,10 @@ function intersect(a, b) {
 
 export function flow(ast, tests) {
     const at = new Map();
+    // The locals of the function being walked that hold its own InCombatLockdown() result. A
+    // nested function starts with none: it runs later, when lockdown may have changed.
+    let lockdownLocals = new Set();
+    const keptLockdown = (node) => node?.type === "Identifier" && lockdownLocals.has(tests.stableBinding(node));
 
     // Facts that hold when node evaluates truthy (whenTrue) or falsy (whenFalse).
     function whenTrue(node) {
@@ -67,12 +74,16 @@ export function flow(ast, tests) {
             if (binding) return new Set([binding]);
             if (tests.lockdownCheck(node)) return new Set([NOT_LOCKDOWN]);
         }
+        if (keptLockdown(node)) return new Set([NOT_LOCKDOWN]);
         return EMPTY;
     }
 
     function fn(node, facts) {
         if (node.identifier && node.identifier.type !== "Identifier") expr(node.identifier, facts);
+        const outer = lockdownLocals;
+        lockdownLocals = new Set();
         block(node.body, new Set([...facts].filter((key) => key !== NOT_LOCKDOWN)));
+        lockdownLocals = outer;
     }
 
     function expr(node, facts) {
@@ -136,6 +147,10 @@ export function flow(ast, tests) {
         switch (node.type) {
             case "LocalStatement":
                 node.init.forEach((init) => expr(init, facts));
+                node.variables.forEach((variable, i) => {
+                    const binding = isCall(node.init[i]) && tests.lockdownCheck(node.init[i]) && tests.stableBinding(variable);
+                    if (binding) lockdownLocals.add(binding);
+                });
                 return facts;
             case "AssignmentStatement":
                 node.init.forEach((init) => expr(init, facts));

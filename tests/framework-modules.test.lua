@@ -283,6 +283,8 @@ test("debug events counts dispatches per registered event; reset zeroes them", f
     addon:Module("M", { label = "M", OnEnable = function(module)
         module:On("PLAYER_TARGET_CHANGED", function() end)
         module:On("UNIT_HEALTH", function() end, "player")
+        module:On("UNIT_POWER_FREQUENT", function() end, "player")
+        module:On("UNIT_POWER_FREQUENT", function() end, "target")
     end })
     Start(h)
     for _ = 1, 3 do
@@ -292,6 +294,7 @@ test("debug events counts dispatches per registered event; reset zeroes them", f
     local text = Printed(h)
     truthy(text:find("PLAYER_TARGET_CHANGED: 3, 1 handler", 1, true), text)
     truthy(text:find("UNIT_HEALTH [player]: 0, 1 handler", 1, true), text)
+    truthy(text:find("UNIT_POWER_FREQUENT [player, target]: 0, 2 handlers", 1, true), "no raw | for chat to read as an escape: " .. text)
     h:Slash("/test debug reset")
     eq(addon.Events.Counts.PLAYER_TARGET_CHANGED, nil)
     eq(addon.State.Counts.publishes, 0)
@@ -328,6 +331,8 @@ test("debug cpu reads the client's addon profiler and memory", function()
     h.profiler.application[metric.RecentAverageTime] = 10
     h.profiler.overall[metric.RecentAverageTime] = 1
     h.profiler.memory.TestApp = 321
+    h.profiler.addons.ByteTerrace_Core = { [metric.RecentAverageTime] = 0.25 }
+    h.profiler.memory.ByteTerrace_Core = 64
     h.printed = {}
     h:Slash("/test debug cpu")
     local text = Printed(h)
@@ -335,6 +340,8 @@ test("debug cpu reads the client's addon profiler and memory", function()
     truthy(text:find("recent 0.500 ms (5.26%)", 1, true), text)
     truthy(text:find("5 ms: 2", 1, true), text)
     truthy(text:find("Memory: 321 KB", 1, true), text)
+    truthy(text:find("ByteTerrace_Core, shared by every ByteTerrace addon: recent 0.250 ms", 1, true), text)
+    truthy(text:find("64 KB", 1, true), text)
     eq(h.memoryUpdates, 2)
 end)
 

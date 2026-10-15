@@ -13,7 +13,8 @@
 --
 -- Fields are declared like rows (kind, default, values, min / max / step) and every write goes
 -- through the same admission check, so a record never holds a secret, a NaN or an off-enum value.
--- Keys are plain strings of 1 to MaxKeyLength characters. A collection is usable once its addon
+-- Keys are plain strings of 1 to MaxKeyLength bytes. A keep function that errors protects nothing:
+-- its error reaches the error handler, and loading goes on. A collection is usable once its addon
 -- has loaded; earlier use is an error.
 --
 -- A collection is also a runtime number row of the same name: its version, which moves on every
@@ -31,7 +32,7 @@ local MaxKeyLength = 64
 local FieldPattern = "^%a[%w_]*$"
 
 local ByteTerrace = ByteTerrace
-local Refuse = ByteTerrace.Refuse
+local Refuse, SafeCall = ByteTerrace.Refuse, ByteTerrace.SafeCall
 local issecretvalue = issecretvalue
 local ipairs, next, pairs, tostring, type = ipairs, next, pairs, tostring, type
 local sort = table.sort
@@ -49,6 +50,13 @@ local function Loaded(self)
         error(self.m_addon.Name .. ": records " .. self.Name .. " used before the addon loaded", 3)
     end
     return self.m_store
+end
+
+-- Whether keep protects key. keep is the feature's code, so an error in it reaches the error
+-- handler and the key isn't protected: a broken keep can't stop the addon loading.
+local function Kept(keep, key)
+    local ok, kept = SafeCall(keep, key)
+    return ok and kept and true or false
 end
 
 local function Bump(self)
@@ -214,15 +222,14 @@ function Records:Keys()
 end
 
 --- The key with the lowest evict field (ties by key, so eviction is deterministic), skipping
---- keys Keep protects unless includeKept.
----@param includeKept boolean?
+--- keys Keep protects.
 ---@return string? key nil when every key is kept
-function Records:EvictionCandidate(includeKept)
-    local store, evict, keep = Loaded(self), self.m_evict, not includeKept and self.Keep
+function Records:EvictionCandidate()
+    local store, evict, keep = Loaded(self), self.m_evict, self.Keep
     local default = evict and self.m_fields[evict].default
     local best, bestValue
     for key, record in pairs(store) do
-        if not (keep and keep(key)) then
+        if not (keep and Kept(keep, key)) then
             local value = evict and record[evict]
             if value == nil then
                 value = default or 0
@@ -244,7 +251,7 @@ function Records:EvictionOrder()
     local keys, kept, value = {}, {}, {}
     for key, record in pairs(store) do
         keys[#keys + 1] = key
-        kept[key] = keep ~= nil and keep(key) and true or false
+        kept[key] = keep ~= nil and Kept(keep, key)
         local field = evict and record[evict]
         value[key] = field == nil and default or field
     end

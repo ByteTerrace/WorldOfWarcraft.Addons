@@ -160,3 +160,12 @@ test("SeedRandom makes math.random deterministic, even through an addon's local 
     eq(other.env.math.random(1, 1000000), (function() h:SeedRandom(42); return h.env.math.random(1, 1000000) end)(),
         "independent of Lua's global random state")
 end)
+
+test("an error in a gamepad handler reaches the error handler, like a key handler's", function()
+    local h = Harness.New()
+    local frame = h.env.CreateFrame("Frame")
+    frame:EnableGamePadButton(true)
+    frame:SetScript("OnGamePadButtonDown", function() error("pad broke") end)
+    h:ExpectErrors("pad broke")
+    h:Gamepad("PAD1", true)
+end)

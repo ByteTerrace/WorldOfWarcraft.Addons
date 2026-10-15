@@ -15,15 +15,18 @@
 //                                                 ByteTerrace_DevTools no longer defines, or made
 //                                                 by another version of its probe.
 //
-// An import replaces each imported probe's record, keeps the others, and drops records of probes
-// that no longer exist or were made by another version of their probe (Probes.lua's header). A record that isn't { build, context = { combat, restrictions }, result }
-// is refused.
+// An import replaces each imported probe's record (an accumulating probe's merges into the saved
+// record from the same build, as /btdev probe merges sessions, so a fresh session never shrinks
+// it), keeps the others, and drops records of probes that no longer exist or were made by another
+// version of their probe (Probes.lua's header). A record that isn't { build, context = { combat,
+// restrictions }, result } is refused.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadSnapshot, withHarness } from "../lib/harness.mjs";
 import {
-    ENCODE_JSON, PROBES_PATH, buildNumber, buildOf, isCurrent, readDefinitions, readProbes, readRecords, serializeProbes, stableJson,
+    ENCODE_JSON, PROBES_PATH, buildNumber, buildOf, isCurrent, mergeResults, readDefinitions, readProbes, readRecords, serializeProbes,
+    stableJson,
 } from "../lib/probes.mjs";
 import { repoRoot } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, findForeverInstall } from "../lib/wow.mjs";
@@ -99,7 +102,9 @@ function compact(value) {
     return typeof value === "string" && /^[^\s={}"]+$/.test(value) ? value : JSON.stringify(value);
 }
 
-// Every probe run in the harness (Harness.RunProbe): { [name]: { gap, problem, context, result } }.
+// Every probe run in the harness (Harness.RunProbe): { [name]: { gap, problem, context, result, differs } }.
+// differs is RunProbe's verdict against the client's record, which merges an accumulating probe's
+// sessions, so a harness answer that shows less than every session did still matches.
 async function harnessAnswers(definitions, probesPath) {
     return withHarness(loadSnapshot(), async (lua) => {
         await lua.doString(ENCODE_JSON);
@@ -112,6 +117,7 @@ async function harnessAnswers(definitions, probesPath) {
                 out[name] = {
                     gap = run.gap, problem = run.problem,
                     context = record and record.context, result = record and record.result,
+                    differs = run.differences ~= nil and #run.differences > 0,
                 }
             end
             return __encodeJson(out, "report")
@@ -135,7 +141,7 @@ async function report(values, definitions) {
         if (answer.gap) status = "harness can't set up";
         else if (answer.problem) status = "harness error";
         else if (!observed) status = "pending";
-        else status = stableJson(client) === stableJson(harness) ? "match" : "mismatch";
+        else status = answer.differs ? "mismatch" : "match";
         return { definition, observed, answer, client, harness, status };
     });
     const nameWidth = Math.max(5, ...definitions.map((definition) => definition.name.length));
@@ -189,6 +195,9 @@ async function importRecords(values, positionals, definitions) {
             console.log(`Kept ${name}: the file's record is from ${record.build}, older than ${previous.build}`);
             continue;
         }
+        if (defined.get(name).accumulates && previous && previous.build === record.build && isCurrent(defined.get(name), previous)) {
+            clean.result = mergeResults(previous.result, clean.result);
+        }
         counts[!previous ? "new" : stableJson(previous) === stableJson(clean) ? "unchanged" : "changed"]++;
         snapshot.probes[name] = clean;
     }
@@ -232,8 +241,9 @@ function checkRecords(values, definitions) {
 }
 
 export async function run(values, positionals) {
-    const definitions = await readDefinitions();
+    let definitions;
     try {
+        definitions = await readDefinitions();
         if (values.import) return await importRecords(values, positionals, definitions);
     } catch (error) {
         console.error(`probes: ${error.message}`);

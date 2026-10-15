@@ -6,12 +6,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createLua } from "./lua.mjs";
 import { PROBES_PATH, luaLiteral, readProbes } from "./probes.mjs";
-import { readForbidden } from "./repo.mjs";
-import { findAddons, repoRoot, splitList } from "./repo.mjs";
+import { findAddons, readForbidden, repoRoot, splitList } from "./repo.mjs";
 
 const HARNESS_FILES = [
     "wow.lua", "secrets.lua", "widgets.lua", "input.lua", "group.lua", "units.lua", "world.lua", "ui.lua", "meter.lua",
-    "speech.lua", "env.lua", "probes.lua",
+    "speech.lua", "quests.lua", "env.lua", "probes.lua",
 ];
 
 // The snapshot crosses into Lua as text, one entry per line (converting ~7000 JS objects into

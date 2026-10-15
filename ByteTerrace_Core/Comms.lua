@@ -16,9 +16,11 @@
 -- that talks to the group gets them without having to know them:
 --   * Your own group only (party, raid, instance chat), never whispers, public channels or
 --     visible chat; received messages must arrive on a group channel too.
---   * At most one message per interval (default 1 second) from a small bounded queue (default 8):
---     beyond it messages are dropped, never retried forever. When the client answers with a
---     throttle, the message stays queued for the next turn.
+--   * At most one message per interval (default and least 1 second: the client regains one
+--     message a second per prefix, so a faster transport only meets its throttle) from a small
+--     bounded queue (default 8): beyond it messages are dropped, never retried forever. When the
+--     client answers with a throttle, the message stays queued for the next turn.
+--   * A number field goes as tostring writes it; one that wouldn't read back as itself is refused.
 --   * Nothing during chat messaging lockdown (encounters, Mythic+, PvP matches). The queue is
 --     dropped then, and when you leave your group: what it held would be stale later.
 --   * A payload that arrives secret (lockdown) is ignored, as boss mods do; so are your own
@@ -28,6 +30,7 @@
 
 local MaxMessage = 255 -- bytes: the client's limit for one addon message
 local MaxPrefix = 16   -- bytes: the client's limit for a prefix
+local MinInterval = 1 -- seconds: the client regains one message a second per prefix
 local Separator = "\t"
 local GroupChannels = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
 local ChatRestrictions = {
@@ -39,7 +42,7 @@ local ChatRestrictions = {
 }
 
 local ByteTerrace = ByteTerrace
-local SafeCall = ByteTerrace.SafeCall
+local Report, SafeCall = ByteTerrace.Report, ByteTerrace.SafeCall
 local Names = ByteTerrace.Names
 local C_ChatInfo, Enum, GetTime = C_ChatInfo, Enum, GetTime
 local IsInGroup, IsInRaid, LE_PARTY_CATEGORY_INSTANCE = IsInGroup, IsInRaid, LE_PARTY_CATEGORY_INSTANCE
@@ -87,21 +90,26 @@ local function ValidKind(kind)
     return not issecretvalue(kind) and type(kind) == "string" and kind:find("^%u+$") ~= nil
 end
 
--- Both scalar and array fields use this path before any concatenation or string conversion.
-local function EncodeField(value)
+-- Both scalar and array fields use this path before any concatenation or string conversion. A
+-- number goes as tostring writes it (%.14g), so one that wouldn't read back as itself (a large
+-- ID, 0.1 + 0.2) is refused: send it as a string.
+local function EncodeField(value, addonName)
     if issecretvalue(value) then
-        error("message field cannot hold a secret value", 3)
+        error(addonName .. ": message field cannot hold a secret value", 3)
     end
     local kind = type(value)
     if kind ~= "string" and kind ~= "number" and kind ~= "boolean" then
-        error("message field must be a string, number or boolean", 3)
+        error(addonName .. ": message field must be a string, number or boolean", 3)
     end
     if kind == "number" and (value ~= value or value == huge or value == -huge) then
-        error("message field must be finite", 3)
+        error(addonName .. ": message field must be finite", 3)
     end
     local text = tostring(value)
+    if kind == "number" and tonumber(text) ~= value then
+        error(addonName .. ": message field number " .. text .. " doesn't survive as text; send it as a string", 3)
+    end
     if text:find("[%z\t\r\n]") then
-        error("message field holds a NUL, tab or line break", 3)
+        error(addonName .. ": message field holds a NUL, tab or line break", 3)
     end
     return text
 end
@@ -148,8 +156,8 @@ function ByteTerrace.NewComms(module, spec)
     if type(prefix) ~= "string" or #prefix < 1 or #prefix > MaxPrefix or prefix:find("[%z\t\r\n]") then
         problems[#problems + 1] = ("prefix must be a string of 1 to %d bytes"):format(MaxPrefix)
     end
-    if type(interval) ~= "number" or interval ~= interval or interval <= 0 or interval == huge then
-        problems[#problems + 1] = "interval must be a positive number of seconds"
+    if type(interval) ~= "number" or interval ~= interval or interval < MinInterval or interval == huge then
+        problems[#problems + 1] = ("interval must be at least %d second: the client regains one message a second"):format(MinInterval)
     end
     if type(queue) ~= "number" or queue < 1 or queue % 1 ~= 0 then
         problems[#problems + 1] = "queue must be a positive whole number"
@@ -166,7 +174,12 @@ end
 --- Starts receiving: registers the prefix, and the module's CHAT_MSG_ADDON handler while you're
 --- in a group. The module calls it as it starts.
 function Comms:Open()
-    C_ChatInfo.RegisterAddonMessagePrefix(self.m_prefix)
+    -- Registered once per UI session: after a restart of the module it's a duplicate, which is fine.
+    local result, results = C_ChatInfo.RegisterAddonMessagePrefix(self.m_prefix), Enum.RegisterAddonMessagePrefixResult
+    if result ~= results.Success and result ~= results.DuplicatePrefix then
+        local reason = result == results.MaxPrefixes and "MaxPrefixes" or "InvalidPrefix"
+        Report(("%s: message prefix %s can't be registered: %s"):format(self.m_module.Addon.Name, self.m_prefix, reason))
+    end
     local me = Names.Mine() -- nil while secret; looked up again then
     local module, prefix, listeners = self.m_module, self.m_prefix, self.m_listeners
     self.m_open = true
@@ -259,13 +272,13 @@ function Comms:Send(kind, fields, urgent)
             error(addonName .. ": message fields must be a dense array", 2)
         end
         for i = 1, #fields do
-            encoded[i] = EncodeField(fields[i])
+            encoded[i] = EncodeField(fields[i], addonName)
         end
         if count > 0 then
             text = kind .. ":" .. concat(encoded, Separator)
         end
     elseif fields ~= nil then
-        text = kind .. ":" .. EncodeField(fields)
+        text = kind .. ":" .. EncodeField(fields, addonName)
     end
     if #text > MaxMessage then
         error(("%s: message %s is longer than %d bytes"):format(addonName, kind, MaxMessage), 2)

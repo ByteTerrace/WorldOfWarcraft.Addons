@@ -648,7 +648,7 @@
       "build": "1.60.1 (70009)"
     },
     "units.secretTokenInAuraEvent": {
-      "result": { "Combat": "player" },
+      "result": { "Combat": "player", "none": "player" },
       "context": { "combat": true, "restrictions": "Combat" }
     },
     "xp.player": {

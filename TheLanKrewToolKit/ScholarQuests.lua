@@ -17,13 +17,12 @@ local addonName, ns = ...
 
 local MaxTitle = 60
 local MaxLine = 40      -- the longest choice, as ScholarPuzzles allows
-local MaxText = 1200
 local MinSentence, MaxSentence = 30, 140
 local MinWord, MaxWord = 5, 12
 
 local ipairs, pairs, select, tostring, type = ipairs, pairs, select, tostring, type
 local concat = table.concat
-local find, gmatch, gsub, lower, sub = string.find, string.gmatch, string.gsub, string.lower, string.sub
+local find, gmatch, gsub, lower = string.find, string.gmatch, string.gsub, string.lower
 
 local Kit = ns.Puzzles.Kit
 local Words = Kit.Words
@@ -46,7 +45,7 @@ local function Body(text)
     if type(text) ~= "string" then
         return ""
     end
-    return sub(gsub(gsub(text, "[|{}\\]", ""), "[%z\1-\9\11-\31]", ""), 1, MaxText)
+    return (gsub(gsub(text, "[|{}\\]", ""), "[%z\1-\9\11-\31]", ""))
 end
 
 -- A record as the riddles read it: { title, giver, place, zone, ender, endPlace, endZone, turnedIn,

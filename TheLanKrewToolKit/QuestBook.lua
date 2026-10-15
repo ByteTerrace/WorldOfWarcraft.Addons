@@ -19,12 +19,11 @@ local addonName, ns = ...
 --   ns.QuestBook.All()        every record, as copies with their key, newest first
 --
 -- Records are QuestBook.quests, keyed by the quest ID as text, up to Limit of them (the oldest
--- seen go first). Texts keep their line breaks and lose the client's escape codes (a link keeps
--- its text, a texture goes); objectives lose their counts ("0/8 Wolf Pelt" is "Wolf Pelt", with
+-- seen go first). Texts are whole, keep their line breaks and lose the client's escape codes (a
+-- link keeps its text, a texture goes); objectives lose their counts ("0/8 Wolf Pelt" is "Wolf Pelt", with
 -- 8 its required count).
 
 local Limit = 30
-local MaxText = 1200    -- characters kept of a quest's text
 local MaxLine = 120     -- characters kept of a title, name, place, goal or objective
 local MaxObjectives = 3
 
@@ -42,8 +41,8 @@ local TurnIn -- what the open reward panel showed: { id, title, ender, reward }
 
 -- A text the client gave, plain: "" for a secret or a non-string; its escape codes undone (a
 -- link keeps its text, a texture goes, |n is a line break), other control characters but line
--- breaks removed, trimmed, and cut to length characters, at the last whole sentence (else word)
--- that fits.
+-- breaks removed and trimmed. With length (a one-line field), it's cut to length characters, at
+-- the last whole sentence (else word) that fits; a quest's text is kept whole, as the log shows it.
 local function Plain(text, length)
     if issecretvalue(text) or type(text) ~= "string" then
         return ""
@@ -52,7 +51,7 @@ local function Plain(text, length)
     text = gsub(gsub(gsub(text, "|c%x%x%x%x%x%x%x%x", ""), "|r", ""), "|", "")
     text = gsub(gsub(text, "\r", ""), "[%z\1-\9\11-\31]", "")
     text = gsub(gsub(text, "^%s+", ""), "%s+$", "")
-    if #text <= length then
+    if not length or #text <= length then
         return text
     end
     -- Too long: it ends at the last whole sentence that fits, else the last whole word.
@@ -99,7 +98,7 @@ end
 -- quest.offerIdentity and quest.turnInIdentity).
 local function OnOffer()
     Offer = {
-        id = GetQuestID(), title = Plain(GetTitleText(), MaxLine), text = Plain(GetQuestText(), MaxText),
+        id = GetQuestID(), title = Plain(GetTitleText(), MaxLine), text = Plain(GetQuestText()),
         goal = Plain(GetObjectiveText(), MaxLine), giver = NameOf("questnpc"),
     }
 end
@@ -119,7 +118,7 @@ local function OnAccepted(questID)
             text, goal = GetQuestLogQuestText(index)
         end
         values.title = Plain(C_QuestLog.GetTitleForQuestID(questID), MaxLine)
-        values.text, values.goal = Plain(text, MaxText), Plain(goal, MaxLine)
+        values.text, values.goal = Plain(text), Plain(goal, MaxLine)
     end
     if values.title == "" then
         return -- nothing to name it by
@@ -129,7 +128,7 @@ end
 
 local function OnTurnInPanel()
     TurnIn = { id = GetQuestID(), title = Plain(GetTitleText(), MaxLine), ender = NameOf("questnpc"),
-        reward = Plain(GetRewardText(), MaxText) }
+        reward = Plain(GetRewardText()) }
 end
 
 local function OnTurnedIn(questID)

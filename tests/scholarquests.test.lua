@@ -273,15 +273,16 @@ test("the quest book opens in the riddle's place with the quest's text, and clos
     falsy(ns.ScholarView.BookOpen())
 end)
 
-test("a quest text longer than the book keeps ends at its last whole sentence", function()
-    local h, addon = LoadKid()
+test("a long quest's text is kept whole, as the quest log shows it, through to the book", function()
+    local h, addon, ns = LoadKid()
     local sentence = "The wolves grow bolder every night, and the farmers lie awake listening. "
-    local long = { id = 35, title = "Long Nights", header = "Elwynn Forest", text = sentence:rep(20) .. "Help us.",
+    local long = { id = 35, title = "Long Nights", header = "Elwynn Forest", text = sentence:rep(30) .. "Help us.",
         goal = "Bring wolf meat.", objectives = {} }
     Accept(h, long)
-    local text = Quests(addon):Field("35", "text")
-    truthy(#text <= 1200 and #text > 1100, "as much as fits: " .. #text)
-    eq(text:sub(-#"listening."), "listening.", "a whole sentence, not a word cut off")
+    eq(Quests(addon):Field("35", "text"), long.text, "every word of it")
+    local shown = Watch(ns)
+    h:Slash("/tlk puzzle")
+    truthy(shown[1].book:find("Help us.", 1, true), "the book ends as the quest does")
 end)
 
 test("a quest book too long for the screen turns its pages, and the riddle always fits on screen", function()
@@ -290,7 +291,7 @@ test("a quest book too long for the screen turns its pages, and the riddle alway
         .. "The world needs more of us restless souls, seeking fortune and glory. "
     local long = {
         id = 34, title = "The Great Outdoors", header = "Tirisfal Glades",
-        text = paragraph:rep(6) .. "Have a seat near the fire and get comfortable.",
+        text = paragraph:rep(9) .. "Have a seat near the fire and get comfortable.",
         goal = "Sit near Eleanor's Basic Campfire and wait until you receive the Boosted Rest buff.",
         objectives = { { text = "Sit near the campfire", required = 1 }, { text = "Gain the Boosted Rest buff", required = 1 } },
     }

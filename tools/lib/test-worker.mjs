@@ -6,14 +6,16 @@
 //                                   a tests/*.test.lua file in a fresh Lua 5.1 VM with the harness;
 //                                   with coverage, the addons' files load instrumented and the
 //                                   message also carries coverage: the statements its tests ran
-//                                   in them (see tools/lib/coverage.mjs)
+//                                   in them (see tools/lib/coverage.mjs); use(name) in it runs
+//                                   the kits/<name>.lua beside it once and returns its result:
+//                                   the helpers test files share
 //   { kind: "mjs", file, filter }   a tests/*.test.mjs module exporting tests = [{ name, run }]
 //   { kind: "fakes", filter }       every harness fake names a global (or member) the client dump has,
 //                                   and every fake function is one an addon calls
 // filter is a list of filters (see matches), or null for every test.
 
-import { existsSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
 import { COVERAGE_LUA, createCoverage } from "./coverage.mjs";
@@ -37,6 +39,16 @@ const PRELUDE = `
         local ok, err = pcall(fn)
         if ok then error((message or "expected an error"), 2) end
         if pattern and not tostring(err):find(pattern) then error("error " .. show(err) .. " does not match " .. show(pattern), 2) end
+    end
+    -- use(name) runs kits/<name>.lua (beside the test file) once and returns what it returns.
+    local kits = {}
+    function use(name)
+        if kits[name] == nil then
+            local source = __kits[name]
+            if not source then error("no test kit kits/" .. tostring(name) .. ".lua", 2) end
+            kits[name] = assert(loadstring(source, "@kits/" .. name .. ".lua"))()
+        end
+        return kits[name]
     end
     -- pending(reason) ends a test that can't decide anything yet: it neither passes nor fails.
     local PendingMeta = {}
@@ -80,6 +92,14 @@ const PRELUDE = `
     end
 `;
 
+// The test kits beside a test folder (kits/*.lua), by name: their sources.
+function readKits(dir) {
+    const kits = join(dir, "kits");
+    if (!existsSync(kits)) return {};
+    return Object.fromEntries(readdirSync(kits).filter((file) => file.endsWith(".lua"))
+        .map((file) => [file.slice(0, -4), readFileSync(join(kits, file), "utf8")]));
+}
+
 // A job's filters are substrings of "<file> > <test name>"; a test matching any of them runs.
 const matches = (filters, label, name) => !filters?.length || filters.some((filter) => `${label} > ${name}`.includes(filter));
 
@@ -95,6 +115,7 @@ async function runLua(job, snapshot) {
     let coverage = "";
     const counter = job.coverage ? createCoverage() : null;
     const results = await withHarness(snapshot, async (lua) => {
+        lua.ctx.__kits = readKits(dirname(job.file));
         await lua.doString(PRELUDE);
         if (counter) {
             lua.ctx.__instrument = (source, chunkName) => counter.instrument(source, chunkName);

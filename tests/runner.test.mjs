@@ -58,4 +58,13 @@ export const tests = [
             assert(/\b3 passed, 0 failed, 1 pending/.test(run.stdout), run.stdout);
         },
     },
+    {
+        name: "a test file's use(name) runs the kit beside it once and returns its helpers",
+        run: async () => {
+            const run = tlk(["test", "--dir", join(FIXTURES, "runner-kits")]);
+            assert(run.status === 0, `kits pass (got ${run.status}): ${run.stdout}`);
+            // The fixture's three tests and the runner's two fakes checks.
+            assert(/\b5 passed, 0 failed/.test(run.stdout), run.stdout);
+        },
+    },
 ];

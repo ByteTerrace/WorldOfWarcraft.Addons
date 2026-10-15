@@ -3,7 +3,9 @@
 //
 //   node tools/tlk.mjs check [--quiet] [--wow-root <path>]           static gates over every addon
 //   node tools/tlk.mjs test [filter | files...] [--timeout <s>] [--dir <folder>] [--coverage] behavioral tests in real Lua 5.1
+//   node tools/tlk.mjs clones [paths...] [--min-tokens <n>] [--min-statements <n>] [--json]   duplicated code
 //   node tools/tlk.mjs deploy [--unlink] [--no-test] [--addon <name>]... [--wow-root <path>] [--flavor <_folder_>]
+//   node tools/tlk.mjs format [paths...] [--check] [--only <pass,...>]    the Lua's one canonical form
 //   node tools/tlk.mjs package [--addon <name>]... [--no-test]            the zip players install, in dist/
 //   node tools/tlk.mjs api-sync [--docs <Blizzard_APIDocumentationGenerated dir>] [--globals <dump>]
 //   node tools/tlk.mjs api-sync --latest [--source <wow-ui-source checkout | file>]   is the snapshot's build the newest?
@@ -19,7 +21,9 @@ import { repoRoot } from "./lib/repo.mjs";
 const verbs = {
     "api-sync": () => import("./verbs/api-sync.mjs"),
     check: () => import("./verbs/check.mjs"),
+    clones: () => import("./verbs/clones.mjs"),
     deploy: () => import("./verbs/deploy.mjs"),
+    format: () => import("./verbs/format.mjs"),
     package: () => import("./verbs/package.mjs"),
     probes: () => import("./verbs/probes.mjs"),
     test: () => import("./verbs/test.mjs"),

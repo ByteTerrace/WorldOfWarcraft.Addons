@@ -1,0 +1,267 @@
+// The format verb's own tests (tools/lib/format-lua.mjs, tools/verbs/format.mjs): each pass's
+// rewrite, what each declines, the fixed point, and the verb's --check and write modes. The
+// repository's own files are held to it by check's FORMAT rule.
+
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { FormatError, PASSES, formatLua } from "../tools/lib/format-lua.mjs";
+import { assert, withTemp } from "../tools/lib/test-support.mjs";
+import { formatRepository } from "../tools/verbs/format.mjs";
+
+const lua = (...lines) => `${lines.join("\n")}\n`;
+
+// Formats source with the given passes (all by default) and compares with expected.
+function formats(source, expected, passes = PASSES) {
+    const actual = formatLua(source, passes);
+    assert(actual === expected, `expected:\n${expected}\nactual:\n${actual}`);
+    assert(formatLua(actual, passes) === actual, `not a fixed point:\n${actual}`);
+}
+
+export const tests = [
+    {
+        name: "format parenthesizes binary and logical expressions except where something delimits them",
+        run: () => {
+            formats(lua(
+                "local visible = UnitPowerType(\"player\") == Energy",
+                "local color = PowerBarColor and PowerBarColor.ENERGY or { r = 1 }",
+                "local total = a + b + c",
+                "if a == nil or a == \"ENERGY\" then return a .. b .. c end",
+                "while i < n and i > 0 and ok do i = i - 1 end",
+                "print(a + b, t[i + 1], not (a and b), -x, #list)",
+                "for i = 1, n - 1 do end",
+                "local kept = (a + b) * 2",
+            ), lua(
+                "local visible = (UnitPowerType(\"player\") == Energy)",
+                "local color = ((PowerBarColor and PowerBarColor.ENERGY) or { r = 1 })",
+                "local total = ((a + b) + c)",
+                "if (a == nil) or (a == \"ENERGY\") then return (a .. b .. c) end",
+                "while (i < n) and (i > 0) and ok do i = (i - 1) end",
+                "print(a + b, t[i + 1], not (a and b), -x, #list)",
+                "for i = 1, n - 1 do end",
+                "local kept = ((a + b) * 2)",
+            ), ["paren-clarity"]);
+        },
+    },
+    {
+        name: "format sorts a table constructor's named fields alphabetically, ignoring case, when no value has a side effect",
+        run: () => {
+            formats(lua(
+                "local insets = { left = 4, right = 4, top = 4, bottom = 4 }",
+                "local spec = { label = \"x\", OnEnable = function() end, commands = {} }",
+                "local called = { b = Next(), a = 1 }",
+                "local mixed = { b = 1, \"two\", a = 3 }",
+                "local twice = { b = 1, a = 2, b = 3 }",
+                "local nested = { z = { y = 1, x = 2 }, a = 0 }",
+            ), lua(
+                "local insets = { bottom = 4, left = 4, right = 4, top = 4 }",
+                "local spec = { commands = {}, label = \"x\", OnEnable = function() end }",
+                "local called = { b = Next(), a = 1 }",
+                "local mixed = { b = 1, \"two\", a = 3 }",
+                "local twice = { b = 1, a = 2, b = 3 }",
+                "local nested = { a = 0, z = { x = 2, y = 1 } }",
+            ), ["init-order"]);
+        },
+    },
+    {
+        // A comment between fields would end up describing whichever field moved under it.
+        name: "format leaves a table constructor with a comment between its fields as written",
+        run: () => {
+            const source = lua("local t = {", "    -- the second", "    b = 2,", "    a = 1,", "}");
+            formats(source, source, ["init-order"]);
+            formats(lua("local t = {", "    b = function()", "        -- inside a value moves with it", "    end,", "    a = 1,", "}"),
+                lua("local t = {", "    a = 1,", "    b = function()", "        -- inside a value moves with it", "    end,", "}"), ["init-order"]);
+        },
+    },
+    {
+        name: "format keeps a vertical constructor one field to a line and packs a packed one up to 120 columns",
+        run: () => {
+            formats(lua(
+                "Module(\"X\", {",
+                "    label = \"X\",",
+                "    OnEnable = function(module)",
+                "        module:On(\"PLAYER_LOGIN\", Start)",
+                "    end,",
+                "    description = \"Does x.\",",
+                "})",
+            ), lua(
+                "Module(\"X\", {",
+                "    description = \"Does x.\",",
+                "    label = \"X\",",
+                "    OnEnable = function(module)",
+                "        module:On(\"PLAYER_LOGIN\", Start)",
+                "    end,",
+                "})",
+            ), ["init-order"]);
+            formats(lua(
+                "local spec = { name = \"toggle\", slash = \"fom\", label = \"Toggle the fuck-o-meter\", always = true,",
+                "    run = Toggle, description = \"Shows or hides the fuck-o-meter, an obnoxiously wide bar.\" }",
+            ), lua(
+                "local spec = { always = true, description = \"Shows or hides the fuck-o-meter, an obnoxiously wide bar.\",",
+                "    label = \"Toggle the fuck-o-meter\", name = \"toggle\", run = Toggle, slash = \"fom\" }",
+            ), ["init-order"]);
+        },
+    },
+    {
+        name: "format ends a multi-line table constructor's last field with a comma",
+        run: () => {
+            formats(lua("local t = {", "    1,", "    2 -- the last", "}", "local u = { 1, 2 }"),
+                lua("local t = {", "    1,", "    2, -- the last", "}", "local u = { 1, 2 }"), ["trailing-comma"]);
+        },
+    },
+    {
+        // A value that reads a name the run declares keeps its side of that declaration: after it
+        // when it read the local, before it when it read the global of that name.
+        name: "format sorts a file-level run of locals by name without changing what any value reads",
+        run: () => {
+            formats(lua(
+                "local Height = 64",
+                "local Energy = Enum.PowerType.Energy",
+                "local Ease = Enum.StatusBarInterpolation.ExponentialEaseOut",
+                "",
+                "local Warband = ns.Warband",
+                "local MyKey = Warband.MyKey",
+                "local Alpha = 1",
+                "",
+                "local Zeta = Ceil",
+                "local Ceil = 2",
+                "local Beta = Rows()",
+                "local Alpha2 = 1",
+                "local Late = 1",
+                "-- a comment line ends a run",
+                "local Early = 1",
+                "local Fn = function() end",
+                "local Abc = 1",
+            ), lua(
+                "local Ease = Enum.StatusBarInterpolation.ExponentialEaseOut",
+                "local Energy = Enum.PowerType.Energy",
+                "local Height = 64",
+                "",
+                "local Alpha = 1",
+                "local Warband = ns.Warband",
+                "local MyKey = Warband.MyKey",
+                "",
+                "local Zeta = Ceil",
+                "local Ceil = 2",
+                "local Beta = Rows()",
+                "local Alpha2 = 1",
+                "local Late = 1",
+                "-- a comment line ends a run",
+                "local Early = 1",
+                "local Fn = function() end",
+                "local Abc = 1",
+            ), ["local-order"]);
+        },
+    },
+    {
+        name: "format sorts a file-level local's names and values together",
+        run: () => {
+            formats(lua("local UnitPower, CreateFrame = UnitPower, CreateFrame", "local b, a = f()"),
+                lua("local CreateFrame, UnitPower = CreateFrame, UnitPower", "local b, a = f()"), ["alias-order"]);
+        },
+    },
+    {
+        name: "format puts one blank line between a run of locals and the next statement, unless a comment leads it",
+        run: () => {
+            formats(lua(
+                "local function Run()",
+                "    local a = 1",
+                "    local b = 2",
+                "    Use(a, b)",
+                "    local c = 3",
+                "",
+                "",
+                "    return c",
+                "end",
+                "local function Other()",
+                "    local d = 1",
+                "    -- the comment owns its placement",
+                "    return d",
+                "end",
+                "local function Inline() local e = 1; return e end",
+            ), lua(
+                "local function Run()",
+                "    local a = 1",
+                "    local b = 2",
+                "",
+                "    Use(a, b)",
+                "    local c = 3",
+                "",
+                "    return c",
+                "end",
+                "local function Other()",
+                "    local d = 1",
+                "    -- the comment owns its placement",
+                "    return d",
+                "end",
+                "local function Inline() local e = 1; return e end",
+            ), ["decl-spacing"]);
+        },
+    },
+    {
+        name: "format sets file-level functions apart with one blank line, before their leading comment",
+        run: () => {
+            formats(lua(
+                "local Max = 1",
+                "-- Says hello.",
+                "local function Hello() end",
+                "local function World() end",
+                "",
+                "",
+                "",
+                "Module(\"X\", {})",
+            ), lua(
+                "local Max = 1",
+                "",
+                "-- Says hello.",
+                "local function Hello() end",
+                "",
+                "local function World() end",
+                "",
+                "Module(\"X\", {})",
+            ), ["member-spacing"]);
+        },
+    },
+    {
+        name: "format keeps at most one blank line in a row, outside long strings",
+        run: () => {
+            formats(lua("", "local a = 1", "", "", "", "local b = [[", "", "", "]]"),
+                lua("local a = 1", "", "local b = [[", "", "", "]]"), ["blank-lines"]);
+        },
+    },
+    {
+        name: "format merges two double-quoted literals on one line, unless that changes an escape",
+        run: () => {
+            formats(lua("local a = \"one \" .. \"two\"", "local b = \"\\1\" .. \"2\"", "local c = \"split \"", "    .. \"lines\""),
+                lua("local a = \"one two\"", "local b = \"\\1\" .. \"2\"", "local c = \"split \"", "    .. \"lines\""), ["string-merge"]);
+        },
+    },
+    {
+        name: "format refuses source that doesn't parse",
+        run: () => {
+            let error;
+            try {
+                formatLua("local = 1\n");
+            } catch (caught) {
+                error = caught;
+            }
+            assert(error instanceof FormatError && error.message.startsWith("doesn't parse"), String(error));
+        },
+    },
+    {
+        name: "format --check names a file's first unformatted line and writes nothing; without it, the file is written byte for byte",
+        run: () => withTemp((dir) => {
+            const file = join(dir, "Main.lua");
+            // "–" is UTF-8 in the file: it must come back as the same bytes.
+            const source = lua("-- Main: a dash – here.", "", "local a = 1", "print(a == 1)");
+            writeFileSync(file, source);
+            const checked = formatRepository({ files: [file], check: true, root: dir });
+            assert(checked.findings.length === 1 && checked.findings[0].path === "Main.lua" && checked.findings[0].line === 4,
+                JSON.stringify(checked.findings));
+            assert(readFileSync(file, "utf8") === source, "check wrote the file");
+            const written = formatRepository({ files: [file], root: dir });
+            assert(written.findings.length === 0 && written.changed.join() === "Main.lua", JSON.stringify(written));
+            assert(readFileSync(file, "utf8") === lua("-- Main: a dash – here.", "", "local a = 1", "", "print(a == 1)"), readFileSync(file, "utf8"));
+            assert(formatRepository({ files: [file], check: true, root: dir }).findings.length === 0, "formatted twice");
+        }),
+    },
+];

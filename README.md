@@ -26,11 +26,15 @@ Requires Node.js 22+. Every operation is a verb on one CLI:
 ```powershell
 npm ci                             # once, and after package-lock.json changes (tlk says when)
 node tools/tlk.mjs check           # static gates
+node tools/tlk.mjs format          # rewrite the Lua to its one form (--check only reports)
+node tools/tlk.mjs clones          # structurally identical Lua, heaviest first (Puck's clone scan)
 node tools/tlk.mjs test            # behavioral tests in real Lua 5.1 (filters or test files narrow it)
 node tools/tlk.mjs test --coverage # the same, then which addon statements the Lua tests reached
 node tools/tlk.mjs deploy          # check and test, then junction-link every addon (--no-test skips tests)
 node tools/tlk.mjs package         # check and test, then zip the committed addons for players, in dist/
 ```
+
+`clones` lists function bodies, and blocks of four or more statements outside a copied function, that match token for token once names and literals are set aside (30 tokens or more; `--min-tokens` and `--min-statements` change that). It reports and gates nothing: which copies to merge is review.
 
 `package` ships every addon without `## X-DevOnly` (DevTools has it) as committed at HEAD, so it refuses uncommitted changes in a shipped folder and a shipped addon whose dependency stays behind, and players' own sounds, which git ignores, never ship. The zip is named after the addon nothing else depends on, with its `## Version`, and extracts straight into `Interface\AddOns`. Its players' guide is [TheLanKrewToolKit/README.txt](TheLanKrewToolKit/README.txt).
 
@@ -73,11 +77,11 @@ Turn on Lua error popups in game once: `/console scriptErrors 1`.
 | FRAMEWORK | An addon that depends on `ByteTerrace_Core` doesn't call a client API the framework owns (`C_Timer`'s timers, addon message sending (logged too) and prefixes, `PlaySoundFile`, settings and settings-category registration), take one as a value, or handle `CHAT_MSG_ADDON` or `CHAT_MSG_ADDON_LOGGED`: module timers, comms and the sound bank handle timers, messages and sounds; settings come from declared rows, drawn in the addon's own window. |
 | LENGTH / STYLE | 800-line ceiling; LF, final newline, no tabs, no trailing whitespace. |
 
-NAMING, COMMENT, HYGIENE, LENGTH and STYLE also cover the tests' Lua (`tests/*.test.lua` and `tests/harness`, not the deliberately bad `tests/fixtures`); LENGTH and STYLE cover `tools/` and the tests' JavaScript.
+NAMING, COMMENT, HYGIENE, LENGTH and STYLE also cover the tests' Lua (`tests/*.test.lua`, `tests/kits` and `tests/harness`, not the deliberately bad `tests/fixtures`); LENGTH and STYLE cover `tools/` and the tests' JavaScript.
 
 What `check` can't see: dynamic reads (`_G[name]`, `getglobal(name)`), values that cross files or functions (a Secure frame or a secret handed to another file, an event name passed to a wrapper), secrets reaching state through a callee, and handlers that aren't function literals. Its guard analysis is per function and doesn't follow loops or `goto`.
 
-`test` runs `tests/*.test.lua` in real Lua 5.1 (WebAssembly) against a fake Forever client (`tests/harness`). Each file runs in its own worker with a timeout that starts after the worker's setup. Files start longest first, by their last whole run's time (kept in `node_modules/.cache`). The fake is strict:
+`test` runs `tests/*.test.lua` in real Lua 5.1 (WebAssembly) against a fake Forever client (`tests/harness`). Each file runs in its own worker with a timeout that starts after the worker's setup. Files start longest first, by their last whole run's time (kept in `node_modules/.cache`). Helpers more than one test file needs live in a kit: `tests/kits/<name>.lua` returns a table of them, and `use("<name>")` in a test file runs it once and returns it. The fake is strict:
 
 - **Secret values** are opaque and throw on comparison, arithmetic, length, indexing, `tonumber` and `print`. As in the client, concatenation, `tostring` and `format` (including `("%d"):format(x)`) accept them and return secret strings; a precision on `%s` is refused. Lua can't catch what the client refuses of a boolean test (a secret boolean), `== plainValue`, a secret compared with itself, or a secret table key; the SECRET rule covers those.
 - **When values are secret** follows each flag's predicate under a restriction model: combat, encounter, challenge mode, PvP match, restricted map and chat lockdown. Some predicates follow Blizzard's documented text, others are conservative fallbacks where the docs are silent (`SecretReturns`, anchoring, threat, unknown flags); `tests/harness/secrets.lua` lists which. Some flags depend on the unit (player-controlled, in your group). A unit the test hasn't set (`h:SetUnit` for pet, focus, party, mouseover and nameplates) doesn't exist, so it isn't secret.

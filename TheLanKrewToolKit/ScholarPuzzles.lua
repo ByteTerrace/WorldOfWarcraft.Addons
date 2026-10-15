@@ -22,7 +22,7 @@ local Factions = { Alliance = true, Horde = true }
 local MaxChoice, MaxPrompt = 40, 240
 
 local error, ipairs, pairs, tonumber, tostring, type = error, ipairs, pairs, tonumber, tostring, type
-local find, gsub, lower, upper = string.find, string.gsub, string.lower, string.upper
+local find, gmatch, gsub, lower, upper = string.find, string.gmatch, string.gsub, string.lower, string.upper
 local floor, max, min = math.floor, math.max, math.min
 local insert = table.insert
 
@@ -130,10 +130,11 @@ local function Arrange(state, correct, wrongs)
     local seen, pool = { [lower(Trim(correct))] = true }, {}
 
     for _, wrong in ipairs(wrongs) do
-        local key = lower(Trim(wrong))
+        local text = (((type(wrong) == "table") and wrong[1]) or wrong)
+        local key = lower(Trim(text))
 
         if (key ~= "") and not seen[key] then
-            seen[key], pool[#pool + 1] = true, wrong
+            seen[key], pool[#pool + 1] = true, { text, (((type(wrong) == "table") and wrong.why) or nil) }
         end
     end
 
@@ -141,11 +142,16 @@ local function Arrange(state, correct, wrongs)
         error("ScholarPuzzles: too few distractors for " .. correct)
     end
 
-    local answer, choices = state.roll(1, 4), Shuffle(state, pool)
+    local answer, picked = state.roll(1, 4), Shuffle(state, pool)
 
-    insert(choices, answer, correct)
+    insert(picked, answer, { correct })
+    local choices, whys = {}, {}
 
-    return { choices[1], choices[2], choices[3], choices[4] }, answer
+    for i = 1, 4 do
+        choices[i], whys[i] = picked[i][1], picked[i][2]
+    end
+
+    return choices, answer, whys
 end
 
 --- Returns text, trimmed, when it's plain and at most maxLength long: no control characters, escape codes or template
@@ -154,6 +160,34 @@ local function Clean(text, maxLength)
     text = (((type(text) == "string") and Trim(text)) or "")
 
     return (((text ~= "") and (#text <= maxLength) and not find(text, "[%c|{}\\]") and text) or nil)
+end
+
+-- Whether a hint template gives the answer away on its own: it names a variable the prompt doesn't show whose value is
+-- the answer, or the answer is a number the filled hint names and the filled prompt doesn't. A hint may say anything
+-- the riddle already shows, even when it equals the answer ("count back 2" when 4 - 2 is asked), and a word of its own
+-- that happens to be the answer ("picture the word" when the answer is "the").
+local function GivesAway(template, prompt, vars, correct)
+    if not template then
+        return false
+    end
+
+    if tonumber(correct) and Mentions(Fill(template, vars), correct) and not Mentions(Fill(prompt, vars), correct) then
+        return true
+    end
+
+    local shown = {}
+
+    for name in gmatch(prompt, "{(%w+)}") do
+        shown[name] = true
+    end
+
+    for name in gmatch(template, "{(%w+)}") do
+        if not shown[name] and (vars[name] ~= nil) and (lower(Trim(tostring(vars[name]))) == lower(Trim(correct))) then
+            return true
+        end
+    end
+
+    return false
 end
 
 --- Word problem variables: a copy of vars plus {Hero} (first mention), {hero}, {place}, {item} and {items}. Each number
@@ -233,25 +267,46 @@ end
 --- vars.report) becomes the puzzle's value; vars.r and vars.terms its remainder and terms. A hint that would give the
 --- answer away is replaced by a stock one.
 local function Finish(state, kind, text, vars, correct, wrongs)
-    local choices, answer = Arrange(state, correct, wrongs)
+    local choices, answer, whys = Arrange(state, correct, wrongs)
+    local promptText = (text.prompt or Pick(state, text.prompts))
     local hint = Fill(text.hint, vars)
 
-    if Mentions(hint, correct) then
+    if GivesAway(text.hint, promptText, vars, correct) then
         hint = ScholarWords.hintFallback
     end
 
+    -- A wrong choice without its own why gets the kind's, which may name it as {choice}.
+    for i, choice in ipairs(choices) do
+        if (i ~= answer) and not whys[i] and text.wrong then
+            local named = setmetatable({ choice = choice }, { __index = vars })
+
+            whys[i] = Fill(text.wrong, named)
+        end
+    end
+
     local title = Pick(state, ScholarWords.titles[kind])
-    local prompt = Fill(text.prompt or Pick(state, text.prompts), vars)
+    local prompt = Fill(promptText, vars)
+    local step = (text.step and Fill(text.step, vars))
 
     return {
-        answer = answer, choices = choices,
-        explanation = (Fill(text.explain, vars) .. " " .. Pick(state, ScholarWords.praise)),
-        expression = (text.expr and Fill(text.expr, vars)), hint = hint, kind = kind,
+        answer = answer,
+        choices = choices,
+        explanation = Fill(text.explain, vars),
+        expression = (text.expr and Fill(text.expr, vars)),
+        hint = hint,
+        kind = kind,
         picture = (((state.grade <= 3) and Pictures[kind] and (type(vars.a) == "number") and (type(vars.b) == "number")
             and Pictures[kind](vars, Counted(prompt, vars))) or nil),
-        prompt = prompt, remainder = vars.r, speech = (text.speech and Fill(text.speech, vars)), subject = state.subject,
-        terms = vars.terms, title = title,
+        praise = ((text.praise and Fill(text.praise, vars)) or Pick(state, ScholarWords.praise)),
+        prompt = prompt,
+        remainder = vars.r,
+        speech = (text.speech and Fill(text.speech, vars)),
+        step = ((((step ~= nil) and not GivesAway(text.step, promptText, vars, correct)) and step) or nil),
+        subject = state.subject,
+        terms = vars.terms,
+        title = title,
         value = (vars.report or vars.v),
+        whys = whys,
     }
 end
 
@@ -331,33 +386,90 @@ local function Kinds(subject, grade, canHear)
     return out
 end
 
---- Three distinct plausible wrong numbers from lo to hi: the shuffled candidates first, then near misses. lo defaults
---- to 1 (0 when value is 0); hi to the larger of value * 2 and value + 10, and never less than lo + 6.
+--- Three distinct plausible wrong numbers from lo to hi, and each one's why (or nil). A candidate is a number or { n,
+--- why = text, required = true }: required ones always come first (the misconception a riddle exists to catch), then
+--- the other candidates and near misses, chosen so the answer's rank among the four values is uniform: it isn't the
+--- middle one more often than chance. lo defaults to 1 (0 when value is 0); hi to twice value or value plus 10,
+--- whichever is larger, and never less than lo plus 6.
+---@return number[] wrongs
+---@return table whys by index into wrongs
 local function WrongNumbers(state, value, candidates, lo, hi)
     lo = (lo or (((value > 0) and 1) or 0))
     hi = max(hi or max(value * 2, value + 10), lo + 6)
-    local out, seen = {}, { [value] = true }
+    local out, whys, seen = {}, {}, { [value] = true }
+    local required, optional = {}, {}
 
-    local function Add(n)
-        if (#out < 3) and (n == floor(n)) and (n >= lo) and (n <= hi) and not seen[n] then
-            seen[n] = true
-            out[#out + 1] = n
+    for _, candidate in ipairs(candidates) do
+        local entry = (((type(candidate) == "table") and candidate) or { candidate })
+
+        if entry.required then
+            required[#required + 1] = entry
+        else
+            optional[#optional + 1] = entry
         end
     end
 
-    for _, n in ipairs(Shuffle(state, candidates)) do
-        Add(n)
+    local function Allowed(n)
+        return ((n == floor(n)) and (n >= lo) and (n <= hi) and not seen[n])
     end
 
-    local step, down = 1, Chance(state, 2)
-
-    while #out < 3 do
-        Add((down and (value - step)) or (value + step))
-        Add((down and (value + step)) or (value - step))
-        step = (step + 1)
+    local function Add(n, why)
+        if (#out < 3) and Allowed(n) then
+            seen[n] = true
+            out[#out + 1] = n
+            whys[#out] = why
+        end
     end
 
-    return out
+    for _, entry in ipairs(required) do
+        Add(entry[1], entry.why)
+    end
+
+    -- How many of the four values sit below the answer: 0 to 3, each as likely, as far as lo and hi allow.
+    local below, above = 0, 0
+
+    for _, n in ipairs(out) do
+        if n < value then below = (below + 1) else above = (above + 1) end
+    end
+
+    local wantBelow = max(state.roll(0, 3), below)
+
+    if (wantBelow - below) > max(0, value - lo) then
+        wantBelow = (below + max(0, value - lo))
+    end
+
+    local function Wanted(n)
+        if n < value then
+            return (below < wantBelow)
+        end
+
+        return (above < (3 - wantBelow))
+    end
+
+    local function Take(n, why)
+        if Allowed(n) and Wanted(n) and (#out < 3) then
+            if n < value then below = (below + 1) else above = (above + 1) end
+
+            Add(n, why)
+        end
+    end
+
+    for _, entry in ipairs(Shuffle(state, optional)) do
+        Take(entry[1], entry.why)
+    end
+
+    for step = 1, (hi - lo) + 1 do
+        Take(value - step)
+        Take(value + step)
+    end
+
+    -- The bounds left too little room on one side: any fitting near miss.
+    for step = 1, (hi - lo) + 1 do
+        Add(value - step)
+        Add(value + step)
+    end
+
+    return out, whys
 end
 
 local Kit = {

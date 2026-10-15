@@ -149,15 +149,15 @@ local function Report(name, sections, misses)
     return lines
 end
 
--- How likely a skill is to come next: a new one and a due one first, the lower its box the likelier; one in box 3 or
--- above that isn't due yet sits out.
+-- How likely a skill is to come next: a due one first, the lower its box the likelier (a missed one, in box 1,
+-- outweighs a new one), then a new one; one in box 3 or above that isn't due yet sits out.
 local function Weight(record, count)
     if record.asked == 0 then
         return 6
     end
 
     if record.due <= count then
-        return (2 + (Boxes - record.box))
+        return (2 + (2 * (Boxes - record.box)))
     end
 
     return (((record.box <= 2) and 1) or 0)

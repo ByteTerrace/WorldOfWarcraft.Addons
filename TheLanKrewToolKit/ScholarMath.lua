@@ -70,8 +70,10 @@ local function Numeric(state, kind, key, vars, wrong, options)
     local format = (options.format or tostring)
     local wrongs = {}
 
-    for i, n in ipairs(WrongNumbers(state, vars.v, wrong, options.lo, options.hi)) do
-        wrongs[i] = format(n)
+    local numbers, whys = WrongNumbers(state, vars.v, wrong, options.lo, options.hi)
+
+    for i, n in ipairs(numbers) do
+        wrongs[i] = { format(n), why = whys[i] }
     end
 
     return Finish(state, kind, Words.math[key], Vars(state, vars), format(vars.v), wrongs)

@@ -498,7 +498,7 @@ end)
 test("right and wrong answers look different, and the hint says so", function()
     local _, view, frame = Screen()
 
-    view.Wrong(1, Shares.hint, false)
+    view.Wrong(1, nil, "Hint", Shares.hint, false)
     falsy(frame.Buttons[1]:IsEnabled())
     truthy(Text(frame.Feedback.Text):find("Hint:", 1, true))
     eq(frame.Buttons[1].State, "wrong")
@@ -552,7 +552,7 @@ end)
 test("a wrong answer shakes", function()
     local _, view, frame = Screen()
 
-    view.Wrong(2, Shares.hint, false)
+    view.Wrong(2, nil, "Hint", Shares.hint, false)
     truthy(frame.Buttons[2].Shake:IsPlaying())
 end)
 
@@ -578,7 +578,7 @@ test("an answer glows under the mouse, a missed one doesn't, and so do the foote
     eq(Border(frame.Hint), gold)
     h:Hover(frame.Hint, false)
     eq(Border(frame.Hint), edge)
-    view.Wrong(2, Shares.hint, false)
+    view.Wrong(2, nil, "Hint", Shares.hint, false)
     h:Hover(frame.Buttons[2], true)
     eq(frame.Buttons[2].State, "wrong", "a missed answer stays marked")
 end)
@@ -588,7 +588,7 @@ test("the hint button shows the hint in the footer's place", function()
 
     falsy(frame.Feedback:IsShown())
     truthy(frame.Hint:IsShown())
-    view.Hint(Shares.hint)
+    view.Hint("Hint", Shares.hint)
     truthy(frame.Feedback:IsShown())
     falsy(frame.Hint:IsShown(), "the banner takes the footer's place")
     truthy(Text(frame.Feedback.Text):find("times what number makes", 1, true))
@@ -796,7 +796,7 @@ end)
 test("the feedback banner stops short of the footer's right-hand buttons", function()
     local _, view, frame = Screen()
 
-    view.Wrong(1, Shares.hint, true)
+    view.Wrong(1, nil, "Hint", Shares.hint, true)
     truthy(frame.Skip:IsShown())
     local banner = { frame.Feedback:GetPoint(2) }
 
@@ -823,7 +823,7 @@ test("an unscramble shows its letters as tiles, not in the question text", funct
     falsy(Text(frame.Story):find("R O F", 1, true), "the letters aren't repeated in the text")
     truthy(Text(frame.Clue):find("Clue: Lots and lots of trees.", 1, true), "the clue sits under the tiles")
     falsy(Text(frame.Story):find("Clue:", 1, true))
-    view.Wrong(1, "Clue: Lots and lots of trees.", false)
+    view.Wrong(1, nil, "Hint", "Clue: Lots and lots of trees.", false)
     falsy(Text(frame.Feedback.Text):find("Clue:", 1, true), "no \"Hint: Clue:\"")
 
     view.Show({ answer = 1, choices = { "4", "5", "3", "6" }, explanation = "", hint = "", kind = "math.count",
@@ -865,7 +865,7 @@ test("dimmed and wrong answers dim their keycaps too", function()
 
     local normal = Red(frame.Buttons[1])
 
-    view.Wrong(1, Shares.hint, false)
+    view.Wrong(1, nil, "Hint", Shares.hint, false)
     view.Correct(3, Shares.explanation, { rank = "Apprentice", stars = 3 })
     truthy(Red(frame.Buttons[1]) < normal, "the wrong answer's keycap dims")
     truthy(Red(frame.Buttons[2]) < normal, "a dimmed answer's keycap dims")

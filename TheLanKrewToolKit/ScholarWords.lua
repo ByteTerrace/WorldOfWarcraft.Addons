@@ -77,9 +77,17 @@ ns.ScholarWords = {
     },
     ratioGroups = { { "gnomes", "goblins" }, { "owls", "ravens" }, { "dwarves", "elves" }, { "red kites", "blue kites" } },
 
+    -- Praise for a first-try right on a kind with no praise of its own: it names the careful work, never the child.
     praise = {
-        "Great job!", "You got it!", "Well done, hero!", "The Owl Sage is proud of you!", "Brilliant!",
-        "Nicely done!", "Way to go!", "Hoot hoot, hooray!", "Your brain is mighty!", "Fantastic thinking!",
+        "You read it carefully and worked it out.", "Step by step, that's how scholars do it.",
+        "You checked it, and it was right.", "Careful thinking found that one.", "You took your time, and it paid off.",
+        "That's solid work, hero.",
+    },
+    -- Praise for a right answer after a miss: it names the not giving up.
+    persistence = {
+        "You kept trying and found it.", "A miss, then the answer: that's how heroes learn.",
+        "You stuck with it, and now you know it.", "Mistakes teach, and you learned from yours.",
+        "You didn't give up. The Owl Sage noticed.",
     },
     hintFallback = "Take a slow breath and try once more. Heroes learn step by step!",
     titles = {

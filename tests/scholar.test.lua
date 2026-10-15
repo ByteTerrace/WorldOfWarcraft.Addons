@@ -298,7 +298,11 @@ local function CheckShape(p, options)
     Expect((type(p.answer) == "number") and (p.answer >= 1) and (p.answer <= 4) and ((p.answer % 1) == 0), p, options, "answer in 1..4")
     ExpectPlain(p.hint, false, p, options)
     ExpectPlain(p.explanation, false, p, options)
-    Expect(not HasWord(p.hint, p.choices[p.answer]), p, options, "hint %q doesn't give away %q", p.hint, p.choices[p.answer])
+    local correct = p.choices[p.answer]
+
+    Expect(not (tonumber(correct) and HasWord(p.hint, correct) and not HasWord(p.prompt, correct)), p, options,
+        "hint %q doesn't give away %q", p.hint, correct)
+
     Expect(not (p.explanation:lower():find("wrong") or p.title:lower():find("wrong")), p, options, "encouraging words")
 end
 

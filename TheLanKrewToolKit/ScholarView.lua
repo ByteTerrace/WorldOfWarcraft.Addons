@@ -305,6 +305,8 @@ local function Paint(button, state)
         background, edge, mark = Palette.rightFill, Palette.good, RightIcon
     elseif state == "dim" then
         edge, text, key = Palette.dimEdge, Palette.muted, Palette.muted
+    elseif state == "reveal" then
+        background, edge = Palette.rightFill, Palette.gold
     end
 
     BackdropColors(button, background, edge)
@@ -768,8 +770,8 @@ end
 
 --- Shows the hint in the footer's place (no penalty; asking for help is part of learning).
 ---@param hint string
-function ScholarView.Hint(hint)
-    ShowFeedback(NumberColor .. "Hint:|r  " .. Emphasize(HintText(hint)), false, "Hint: " .. HintText(hint))
+function ScholarView.Hint(label, hint)
+    ShowFeedback(NumberColor .. label .. ":|r  " .. Emphasize(HintText(hint)), false, (label .. ": " .. HintText(hint)))
 end
 
 --- Sets the handlers the screen calls back: choose(i) for an answer clicked, skip() for Skip, hint() for Need a hint?,
@@ -834,7 +836,7 @@ function ScholarView.Show(puzzle, info)
         local missed = (info.wrong and info.wrong[i])
 
         button:SetEnabled(not missed)
-        Paint(button, (missed and "wrong") or "normal")
+        Paint(button, (missed and "wrong") or ((info.reveal == i) and "reveal") or "normal")
     end
 
     local actions = (info.actions or {})
@@ -901,7 +903,7 @@ end
 ---@param i integer
 ---@param hint string
 ---@param canSkip boolean
-function ScholarView.Wrong(i, hint, canSkip)
+function ScholarView.Wrong(i, why, label, hint, canSkip, reveal)
     local button = Overlay.Buttons[i]
 
     button:Disable()
@@ -909,8 +911,14 @@ function ScholarView.Wrong(i, hint, canSkip)
     button.Shake:Stop()
     button.Shake:Play()
 
-    ShowFeedback("|cffff665aNot quite.|r  " .. NumberColor .. "Hint:|r  " .. Emphasize(HintText(hint)), false,
-        "Not quite. Hint: " .. HintText(hint))
+    if reveal then
+        Paint(Overlay.Buttons[reveal], "reveal")
+    end
+
+    local because = ((why and (Emphasize(why) .. "  ")) or "")
+
+    ShowFeedback((((("|cffff665aNot quite.|r  " .. because) .. NumberColor) .. label) .. ":|r  ") .. Emphasize(HintText(hint)),
+        false, ("Not quite. " .. ((why and (why .. " ")) or "")) .. label .. ": " .. HintText(hint))
 
     if canSkip then
         Overlay.Skip:Show()

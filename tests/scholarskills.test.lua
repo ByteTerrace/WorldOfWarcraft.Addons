@@ -120,6 +120,14 @@ test("a math riddle's missed first try is recorded and brings its skill back as 
     eq(miss.kind, missed.kind)
     eq(miss.right, missed.choices[missed.answer])
     truthy(miss.prompt ~= "", "it keeps the question")
+
+    -- The grade's other skills rest (mastered, not due), so only the missed one is due.
+    for _, kind in ipairs(ns.Puzzles.Kinds("math", 2, true)) do
+        if kind ~= missed.kind then
+            skills:Set(kind, { asked = 3, box = 5, due = 99, firstTry = 3, recent = "111" })
+        end
+    end
+
     eq(Solve(_, shown).kind, missed.kind, "the missed skill comes right back")
 end)
 

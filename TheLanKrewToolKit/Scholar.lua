@@ -98,6 +98,7 @@ local Puzzles = ns.Puzzles
 local QuestBook = ns.QuestBook
 local ScholarView = ns.ScholarView
 local Skills = ns.ScholarSkills
+local Words = ns.ScholarWords
 
 local GradeLabels, GradeValues = {}, {}
 
@@ -189,12 +190,24 @@ local function HasSubject()
     return (Scholar:Get("math") or Scholar:Get("reading") or Scholar:Get("quests"))
 end
 
--- Need a hint? shows the hint; on a quest riddle it opens (or closes) the quest book instead.
+-- Need a hint? shows the hint; on a quest riddle it opens (or closes) the quest book instead. The rung of the hint
+-- ladder the riddle is on, after Wrongs wrong tries: the strategy, then a worked first step, then the answer with its
+-- working, whose button glows (its index is the third return).
+local function Help()
+    if Wrongs >= 3 then
+        return "Here's how", Current.explanation, Current.answer
+    elseif (Wrongs == 2) and Current.step then
+        return "Try this", Current.step
+    end
+
+    return "Hint", Current.hint
+end
+
 local function Hint()
     if Current and Current.book then
         ScholarView.ToggleBook()
     elseif Current and not Scholar:Get("solved") then
-        ScholarView.Hint(Current.hint)
+        ScholarView.Hint(Help())
     end
 end
 
@@ -447,7 +460,10 @@ local function Choose(i)
             end
         end
 
-        ScholarView.Correct(i, Current.explanation, Progress({ earned = 1, levelUp = levelUp }))
+        -- Praise names the strategy on a first try, and the persistence after a miss.
+        local praise = (((Wrongs == 0) and Current.praise) or Words.persistence[random(1, #Words.persistence)])
+
+        ScholarView.Correct(i, (Current.explanation .. " " .. praise), Progress({ earned = 1, levelUp = levelUp }))
         C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LIST_COMPLETE)
         Scholar:After(FinishDelay, function() Finish(true) end)
     else
@@ -463,7 +479,9 @@ local function Choose(i)
             Scholar:Set(levelRow, Scholar:Get(levelRow) - 1)
         end
 
-        ScholarView.Wrong(i, Current.hint, Scholar:Get("mode") == "gentle")
+        local label, help, reveal = Help()
+
+        ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("mode") == "gentle", reveal)
     end
 end
 
@@ -508,7 +526,7 @@ local function Open()
         actions = { hint = ActionLabel("hint"), skip = ActionLabel("skip"), speak = ActionLabel("speak") },
         book = (Current.book ~= nil), canSkip = ((Scholar:Get("mode") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
         controller = UsingController(), gentle = (Scholar:Get("mode") == "gentle"),
-        keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, wrong = Missed,
+        keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, reveal = (select(3, Help())), wrong = Missed,
     }))
 
     frame:EnableKeyboard(true)

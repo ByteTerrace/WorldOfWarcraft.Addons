@@ -246,7 +246,7 @@
     },
     "namePlate.enemyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
-      "contexts": { "combat/Combat": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "namePlate.friendlyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
@@ -273,6 +273,7 @@
           "CHAT_MSG_CHANNEL": "table",
           "CHAT_MSG_PARTY": "table",
           "CHAT_MSG_SAY": "table",
+          "CHAT_MSG_WHISPER": "table",
           "CHAT_MSG_YELL": "table"
         }
       },
@@ -284,6 +285,7 @@
         "CHAT_MSG_CHANNEL": "Aa Aa",
         "CHAT_MSG_PARTY": "Aa Aa",
         "CHAT_MSG_SAY": "Aa Aa",
+        "CHAT_MSG_WHISPER": "Aa Aa",
         "CHAT_MSG_YELL": "Aa Aa"
       },
       "contexts": { "combat/Combat": true, "idle/none": true }
@@ -621,8 +623,7 @@
         "guid": "string",
         "name": "string"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70009)"
+      "contexts": { "idle/none": true }
     },
     "units.secretTokenInAuraEvent": {
       "result": { "Combat": "player,target", "none": "player,target" },

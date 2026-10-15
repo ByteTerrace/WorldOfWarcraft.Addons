@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 -- Calibration probes about the client itself and the world around the player: chat colors and
 -- strings, addon messages, fonts, realm, faction, guild, map, quest dialogs and the quest log, text
--- to speech, XP, resting and flights, bags, vendors and trainers, the controller, and the textures
+-- to speech, XP, resting and flights, bags, vendors and trainers, and the textures
 -- the addons draw.
 -- Probes.lua's header is the contract; ProbeNeeds.lua defines the needs named here.
 
@@ -45,9 +45,6 @@ local TexturePaths = {
     "Interface\\Icons\\INV_Mushroom_11",
     "Interface\\Icons\\INV_Misc_Gear_01",
 }
-
--- The labelStyle values ByteTerrace_Core/Input.lua has labels for (its Labels table).
-local KnownLabelStyles = { Letters = true, Reverse = true, Shapes = true }
 
 local Probes = ns.Probes
 local Byte, Fields, Joined = Probes.Byte, Probes.Fields, Probes.Joined
@@ -497,29 +494,6 @@ Probes.Define({
                 result.description = Text(GetTrainerServiceDescription(available))
             end
             return result
-        end,
-    },
-    {
-        name = "gamePad.device",
-        needs = { "controller" },
-        run = function()
-            local deviceID = C_GamePad.GetActiveDeviceID()
-            local state = C_GamePad.GetDeviceMappedState(deviceID)
-            local style = (((type(state) == "table") and state.labelStyle) or nil)
-            local known = (not issecretvalue(style) and (type(style) == "string") and (KnownLabelStyles[style] == true))
-
-            return {
-                deviceID = Shape(deviceID), state = Shape(state), fields = Fields(state), labelStyle = Text(style),
-                isKnownLabelStyle = known, unknownLabelStyle = ((not known and Value(style)) or nil),
-            }
-        end,
-    },
-    {
-        harness = "the harness doesn't fake IsGamePadFreelookEnabled or C_GamePad.IsEnabled",
-        name = "gamePad.settings",
-        needs = { "controller" },
-        run = function()
-            return { freelook = Shape(IsGamePadFreelookEnabled()), enabled = Shape(C_GamePad.IsEnabled()) }
         end,
     },
     {

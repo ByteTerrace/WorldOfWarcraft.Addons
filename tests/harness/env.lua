@@ -400,10 +400,23 @@ function Harness:BuildEnvironment()
             ClearLedColor = function() h.led = nil end,
             GetActiveDeviceID = function() return ((h.labelStyle and 1) or 0) end,
             GetDeviceMappedState = function(id) return h:GamePadMappedState(id) end,
+            -- [D] The device's Enum.GamePadPowerLevel (GamePadDocumentation; the ID is Nilable).
+            -- [G] h.powerLevel for the connected controller, Unknown without one.
+            GetPowerLevel = function()
+                return ((h.labelStyle and h.powerLevel) or 5) -- 5: Enum.GamePadPowerLevel.Unknown
+            end,
             SetLedColor = function(color) h.led = { color:GetRGB() } end,
             SetVibration = function(kind, intensity) h.vibrations[#h.vibrations + 1] = { kind, intensity } end,
             StopVibration = function() h.vibrationsStopped = (h.vibrationsStopped + 1) end,
         },
+
+        -- [D] The interface style, an Enum.InputDeviceInterfaceType (InputInterfaceStyle docs).
+        -- [G] h.interfaceStyle, mouse and keyboard unless a test sets it.
+        C_InputInterfaceStyle = {
+            GetCurrentStyle = function() return h.interfaceStyle end,
+        },
+        -- [D] Whether the last input came from a controller. [G] h.usingGamepad.
+        IsUsingGamepad = function() return h.usingGamepad end,
 
         -- Addon metadata.
         C_AddOns = {

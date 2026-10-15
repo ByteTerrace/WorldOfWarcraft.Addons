@@ -13,4 +13,5 @@ ProbesWorld.lua
 ProbesUnits.lua
 ProbesCombat.lua
 ProbesNames.lua
+ProbesInput.lua
 DevTools.lua

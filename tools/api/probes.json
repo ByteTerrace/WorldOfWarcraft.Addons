@@ -187,17 +187,6 @@
       "result": { "Game18Font": "Font", "Game24Font": "Font", "Game30Font": "Font" },
       "contexts": { "combat/Combat": true, "idle/none": true }
     },
-    "gamePad.device": {
-      "result": {
-        "deviceID": "number",
-        "fields": "axes,axisCount,buttonCount,buttons,labelStyle,name,stickCount,sticks",
-        "isKnownLabelStyle": true,
-        "labelStyle": "text",
-        "state": "table"
-      },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70009)"
-    },
     "gamePad.settings": {
       "result": { "enabled": "boolean", "freelook": "boolean" },
       "contexts": { "idle/none": true },

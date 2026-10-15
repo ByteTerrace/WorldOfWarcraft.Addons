@@ -14,6 +14,9 @@ local addonName, ns = ...
 --                      skips are printed with what they need.
 --   /btdev probe list  the probes with no result for this build yet, grouped by what they need,
 --                      in the order one play session in a starting zone reaches them (Probes.Steps).
+--   /btdev rumble      plays four vibration types in turn (ProbesInput.lua), for gamePad.vibration;
+--                      /btdev rumble <type> [intensity] [seconds] plays one, and stop stops it.
+--                      What a vibration feels like is for the player to say.
 --
 -- From load it also listens for UNIT_COMBAT on the player and the target, for the unitCombat.seen
 -- probe (Probes.NoteUnitCombat keeps the payloads' shapes), for the kill events, for
@@ -27,7 +30,8 @@ local addonName, ns = ...
 -- for damageMeter.pvpSecrecy (Probes.NotePvPLeftCombat reads the meter's totals then and a few
 -- seconds later), for your deaths and the damage meter's updates after them, for
 -- damageMeter.afterDeath (Probes.NoteDeath, NoteMeterUpdate), and for boss encounters' starts and
--- warnings, for encounterWarning.seen (Probes.NoteEncounterStart, NoteEncounterWarning).
+-- warnings, for encounterWarning.seen (Probes.NoteEncounterStart, NoteEncounterWarning), and for
+-- controller and interface events, for input.events (Probes.NoteInputEvent).
 --
 -- Only the client's own names are dumped. A global or table member any addon set is tainted by
 -- that addon (issecurevariable), so it's counted under `skipped` instead, per addon: other addons'
@@ -258,14 +262,51 @@ local function Help()
     print("  /btdev probe - record calibration probes for the test harness, then /reload")
     print("  /btdev probe list - the probes that still need a result, and what each needs, in play-session order")
     print("  /btdev dump - record the client's globals for tlk api-sync, then /reload")
+    print("  /btdev rumble - play four vibration types in turn, for gamePad.vibration")
+    print("  /btdev rumble <type> [intensity 0-1] [seconds] - one vibration; without seconds it plays until it stops by itself")
+    print("  /btdev rumble stop - stop any vibration")
+end
+
+-- /btdev rumble's arguments, as typed (vibration types may be case-sensitive).
+local function RumbleCommand(args)
+    if args == "" then
+        Say("playing High, Low, LTrigger and RTrigger, 1.5 seconds apart: note what each one felt like, then /btdev probe.")
+        Probes.RumbleCandidates(Say)
+        return
+    end
+    if args:lower() == "stop" then
+        Probes.StopRumble()
+        Say("rumble stopped.")
+        return
+    end
+    local kind, intensityText, secondsText = args:match("^(%S+)%s*(%S*)%s*(%S*)$")
+    local intensity = tonumber((((intensityText ~= "") and intensityText) or "1"))
+    local seconds = (((secondsText ~= "") and tonumber(secondsText)) or nil)
+
+    if not kind or not intensity or (intensity < 0) or (intensity > 1) or ((secondsText ~= "") and (not seconds or (seconds <= 0))) then
+        Say("usage: /btdev rumble <type> [intensity 0-1] [seconds], or /btdev rumble stop")
+        return
+    end
+    local ok, problem = Probes.Rumble(kind, intensity, seconds)
+
+    if not ok then
+        Say(("the client refused %s: %s"):format(kind, tostring(problem)))
+    elseif seconds then
+        Say(("rumble %s at %s for %s seconds."):format(kind, intensity, seconds))
+    else
+        Say(("rumble %s at %s, until it stops by itself (or /btdev rumble stop)."):format(kind, intensity))
+    end
 end
 
 SLASH_BYTETERRACEDEVTOOLS1 = "/btdev"
 
 SlashCmdList.BYTETERRACEDEVTOOLS = function(input)
-    local command = strtrim(input or ""):lower()
+    local typed = strtrim(input or "")
+    local command = typed:lower()
 
-    if command == "dump" then
+    if (command == "rumble") or (command:sub(1, 7) == "rumble ") then
+        RumbleCommand(strtrim(typed:sub(7)))
+    elseif command == "dump" then
         Dump()
     elseif command == "probe" then
         RunProbes()
@@ -359,6 +400,23 @@ KillListener:RegisterEvent("PLAYER_TARGET_DIED")
 KillListener:RegisterEvent("UNIT_DIED")
 KillListener:SetScript("OnEvent", function(_, event, ...)
     Probes.NoteKill(event, ...)
+end)
+
+-- Controller and interface events for input.events, from load, and the first
+-- PLAYER_ENTERING_WORLD, so it can say which fired before it.
+local InputListener = CreateFrame("Frame")
+
+for _, event in ipairs(Probes.InputEvents) do
+    InputListener:RegisterEvent(event)
+end
+InputListener:RegisterEvent("PLAYER_ENTERING_WORLD")
+InputListener:SetScript("OnEvent", function(self, event, ...)
+    if event == "PLAYER_ENTERING_WORLD" then
+        Probes.NoteWorldEntered()
+        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    else
+        Probes.NoteInputEvent(event, ...)
+    end
 end)
 
 -- Boss encounters' starts and warnings for encounterWarning.seen, from load.

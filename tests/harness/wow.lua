@@ -290,6 +290,9 @@ function Harness.New(player)
     h.echo = true             -- your own group addon messages come back to you (h:Echo)
     h.rng = nil               -- h:SeedRandom state; nil = Lua's math.random
     h.labelStyle = nil        -- C_GamePad labelStyle of the connected controller; nil = none connected
+    h.interfaceStyle = 0      -- C_InputInterfaceStyle.GetCurrentStyle: Enum.InputDeviceInterfaceType.Mkb
+    h.powerLevel = 4          -- C_GamePad.GetPowerLevel of the connected controller: Enum.GamePadPowerLevel.Wired
+    h.usingGamepad = false    -- IsUsingGamepad
     h.loaded = {}
     h.loadOrder = {}
     h.loggedIn = false        -- IsLoggedIn(): true from PLAYER_LOGIN on

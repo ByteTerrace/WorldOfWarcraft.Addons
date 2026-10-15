@@ -317,8 +317,7 @@
         "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "names.player": {
       "result": {

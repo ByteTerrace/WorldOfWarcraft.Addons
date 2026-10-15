@@ -28,7 +28,7 @@ local Kit = ns.Puzzles.Kit
 local Words = Kit.Words
 local Generators, Pick, Shuffle, Finish, WrongNumbers, Fits = Kit.Generators, Kit.Pick, Kit.Shuffle, Kit.Finish,
     Kit.WrongNumbers, Kit.Fits
-local MaxObjectives = ns.QuestBook.MaxObjectives
+local MaxObjectives, Named = ns.QuestBook.MaxObjectives, ns.QuestBook.Named
 
 -- A one-line text from a record: no control characters, escape or template characters, trimmed,
 -- at most length; "" otherwise.
@@ -48,8 +48,26 @@ local function Body(text)
     return (gsub(gsub(text, "[|{}\\]", ""), "[%z\1-\9\11-\31]", ""))
 end
 
+-- An objective's kind as the riddles ask about it, by the log's type: an item to bring, a foe to
+-- defeat, anything else a task to do.
+local ObjectiveKinds = { item = "item", monster = "foe" }
+local ObjectiveVerbs = { { "item", "Bring" }, { "foe", "Defeat" }, { "task", "Do" } }
+
+-- A record's objective i, or nil: its text and count, kind, and name (a foe's without "slain").
+-- One without a name the client had loaded, or saved before the book noted kinds, isn't asked about.
+local function RecordObjective(record, i)
+    local text, required, logType = Line(record["objective" .. i], MaxLine), record["required" .. i], record["type" .. i]
+    if not (Named(text) and type(required) == "number" and required >= 1 and type(logType) == "string" and logType ~= "") then
+        return nil
+    end
+    local kind = ObjectiveKinds[logType] or "task"
+    local name = kind == "foe" and (gsub(text, "%s+slain$", "")) or text
+    return Named(name) and { text = text, name = name, kind = kind, required = required } or nil
+end
+
 -- A record as the riddles read it: { title, giver, place, zone, ender, endPlace, endZone, turnedIn,
--- goal, text, objectives = { { text, required } } }, every field cleaned; nil without a title.
+-- goal, text, objectives = { { text, name, kind, required } } }, every field cleaned; nil without a
+-- title.
 local function Clean(record)
     local quest = {
         key = record.key, title = Line(record.title, MaxTitle), giver = Line(record.giver, MaxLine),
@@ -59,10 +77,7 @@ local function Clean(record)
         goal = Line(record.goal, 200), text = Body(record.text), objectives = {},
     }
     for i = 1, MaxObjectives do
-        local text, required = Line(record["objective" .. i], MaxLine), record["required" .. i]
-        if text ~= "" and type(required) == "number" and required >= 1 then
-            quest.objectives[#quest.objectives + 1] = { text = text, required = required }
-        end
+        quest.objectives[#quest.objectives + 1] = RecordObjective(record, i)
     end
     return quest.title ~= "" and quest or nil
 end
@@ -77,12 +92,16 @@ local function Book(quest)
     elseif quest.place ~= "" then
         lines[#lines + 1] = "Taken in " .. quest.place .. "."
     end
-    if #quest.objectives > 0 then
+    for _, verb in ipairs(ObjectiveVerbs) do
         local parts = {}
-        for i, objective in ipairs(quest.objectives) do
-            parts[i] = objective.required > 1 and (objective.text .. " (" .. objective.required .. ")") or objective.text
+        for _, objective in ipairs(quest.objectives) do
+            if objective.kind == verb[1] then
+                parts[#parts + 1] = objective.required > 1 and (objective.name .. " (" .. objective.required .. ")") or objective.name
+            end
         end
-        lines[#lines + 1] = "Objectives: " .. concat(parts, "; ")
+        if #parts > 0 then
+            lines[#lines + 1] = verb[2] .. ": " .. concat(parts, "; ")
+        end
     end
     if quest.goal ~= "" then
         lines[#lines + 1] = quest.goal
@@ -148,13 +167,15 @@ local function Gather(state, ...)
     return values
 end
 
--- The other known quests' objectives.
-local function OtherObjectives(state)
+-- The other known quests' objectives of a kind, by name.
+local function OtherObjectives(state, kind)
     local values = {}
     for _, other in ipairs(state.known) do
         if other.key ~= state.quest.key then
             for _, objective in ipairs(other.objectives) do
-                values[#values + 1] = objective.text
+                if objective.kind == kind then
+                    values[#values + 1] = objective.name
+                end
             end
         end
     end
@@ -248,19 +269,23 @@ Generators["quest.count"] = function(state)
     for i, value in ipairs(WrongNumbers(state, n, { n - 1, n + 1, n + 2, n * 2 })) do
         wrongs[i] = tostring(value)
     end
-    local vars = { title = state.quest.title, objective = objective.text, answer = n, v = n }
-    return Finish(state, "quest.count", Words.quest.count, vars, tostring(n), wrongs)
+    local vars = { title = state.quest.title, objective = objective.name, answer = n, v = n }
+    return Finish(state, "quest.count", Words.quest.count[objective.kind], vars, tostring(n), wrongs)
 end
 
+-- What an objective asked for, by its kind: wrong answers are objectives of that kind too.
+local ObjectiveBanks = { item = Words.questItems, foe = Words.questFoes, task = Words.questTasks }
 Generators["quest.objective"] = function(state)
     local quest = state.quest
     local own = {}
     for _, objective in ipairs(quest.objectives) do
-        own[lower(objective.text)] = true
+        own[lower(objective.name)] = true -- the quest's other objectives are right answers too
     end
-    local answer = Pick(state, quest.objectives).text
-    local wrongs = Wrongs(state, answer, OtherObjectives(state), Words.questObjectives, own)
-    return Finish(state, "quest.objective", Words.quest.objective, { title = quest.title, answer = answer }, answer, wrongs)
+    local objective = Pick(state, quest.objectives)
+    local answer = objective.name
+    local wrongs = Wrongs(state, answer, OtherObjectives(state, objective.kind), ObjectiveBanks[objective.kind], own)
+    return Finish(state, "quest.objective", Words.quest.objective[objective.kind], { title = quest.title, answer = answer },
+        answer, wrongs)
 end
 
 Generators["quest.title"] = function(state)

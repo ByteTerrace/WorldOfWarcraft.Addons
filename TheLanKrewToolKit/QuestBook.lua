@@ -7,16 +7,21 @@ local addonName, ns = ...
 -- A quest is recorded when it's accepted, from what the client showed: the giver's offer
 -- (QUEST_DETAIL: the title, the quest's text and goal, the giver's name), or the quest log alone
 -- for a quest an area trigger accepted, whose text the player reads by opening the log. Its
--- objectives come from the log, and where it began from the subzone (with the zone around it,
+-- objectives come from the log (each with its kind: item, monster, ...), and where it began from the subzone (with the zone around it,
 -- never a wrong answer for where). Turning it in (QUEST_COMPLETE, then QUEST_TURNED_IN) adds who
 -- took it, where, and the reward text. Each exposure, accepting and turning in, makes the quest
 -- fresh: something new to ask about. Only these events read the quest APIs, out of combat as
 -- quests are, and a secret answer is left out rather than stored.
 --
+-- An objective the client hasn't named yet (its item or creature not loaded: "0/5 " for "0/5
+-- Duskbat Pelt") isn't recorded: the quest waits (unnamed) and its objectives are read again on
+-- QUEST_LOG_UPDATE until every one has a name, or it leaves the log. A named book reads nothing then.
+--
 --   ns.QuestBook.Order()      every key in the order to ask about them: fresh quests, newest
 --                             first, then the rest for review, the one asked longest ago first
 --   ns.QuestBook.Asked(key)   the quest has been asked about (now) since its last exposure
 --   ns.QuestBook.All()        every record, as copies with their key, newest first
+--   ns.QuestBook.Named(text)  whether an objective's text (count removed) names something
 --
 -- Records are QuestBook.quests, keyed by the quest ID as text, up to Limit of them (the oldest
 -- seen go first). Texts are whole, keep their line breaks and lose the client's escape codes (a
@@ -31,7 +36,8 @@ local C_QuestLog, GetQuestID, GetQuestLogQuestText = C_QuestLog, GetQuestID, Get
 local GetObjectiveText, GetQuestText, GetRewardText, GetTitleText = GetObjectiveText, GetQuestText, GetRewardText, GetTitleText
 local GetRealZoneText, GetServerTime, GetSubZoneText, UnitName = GetRealZoneText, GetServerTime, GetSubZoneText, UnitName
 local issecretvalue, ipairs, tostring, type = issecretvalue, ipairs, tostring, type
-local gsub, sub = string.gsub, string.sub
+local find, gsub, sub = string.find, string.gsub, string.sub
+local next, pairs, tonumber, wipe = next, pairs, tonumber, wipe
 
 local Addon = ns.Addon
 
@@ -61,8 +67,16 @@ end
 
 -- An objective's text without its count: "0/8 Wolf Pelt" and "Wolf Pelt: 0/8" are "Wolf Pelt".
 local function Objective(text)
-    text = gsub(gsub(Plain(text, MaxLine), "^%d+/%d+%s+", ""), "%s*:%s*%d+/%d+$", "")
+    text = gsub(gsub(Plain(text, MaxLine), "^%d+/%d+%s*", ""), "%s*:%s*%d+/%d+$", "")
     return text
+end
+
+--- Whether an objective's text (its count removed) names something: an item, a creature or a task
+--- starts with a capital (enUS), where a name the client hadn't loaded leaves "" or " slain".
+---@param text string
+---@return boolean
+local function Named(text)
+    return find(text, "%u") ~= nil
 end
 
 -- A unit's name, or "" while it's secret or missing.
@@ -80,18 +94,49 @@ local function Place()
     return subZone ~= "" and subZone or zone, zone
 end
 
--- The quest log's objectives for questID, as record fields (objective1, required1, ...).
+-- The quest log's objectives for questID, as record fields (objective1, required1, type1, ...):
+-- the named ones, the rest of the slots cleared, and unnamed when one still lacks its name.
 local function ObjectiveFields(questID, values)
-    local count = 0
+    local count, unnamed = 0, false
     for _, objective in ipairs(C_QuestLog.GetQuestObjectives(questID) or {}) do
-        local text, required = Objective(objective.text), objective.numRequired
-        if count < MaxObjectives and text ~= "" and not issecretvalue(required) and type(required) == "number"
-            and required >= 1 and required % 1 == 0 then
-            count = count + 1
-            values["objective" .. count], values["required" .. count] = text, required
+        local text, required, kind = Objective(objective.text), objective.numRequired, objective.type
+        if not issecretvalue(required) and type(required) == "number" and required >= 1 and required % 1 == 0 then
+            if not Named(text) then
+                unnamed = true
+            elseif count < MaxObjectives then
+                count = count + 1
+                values["objective" .. count], values["required" .. count] = text, required
+                values["type" .. count] = not issecretvalue(kind) and type(kind) == "string" and kind or ""
+            end
         end
     end
+    for i = count + 1, MaxObjectives do
+        values["objective" .. i], values["required" .. i], values["type" .. i] = "", 0, ""
+    end
+    values.unnamed = unnamed
     return values
+end
+
+-- The keys of quests whose objectives wait for their names (ObjectiveFields' unnamed).
+local Unnamed = {}
+
+-- The client loaded more names: each waiting quest still in the log reads its objectives again.
+local function OnLogUpdate()
+    if next(Unnamed) == nil then
+        return
+    end
+    local quests = QuestBookModule.Records.quests
+    for key in pairs(Unnamed) do
+        local questID = tonumber(key)
+        if quests:Has(key) and C_QuestLog.GetLogIndexForQuestID(questID) then
+            quests:Set(key, ObjectiveFields(questID, {}))
+            if not quests:Field(key, "unnamed") then
+                Unnamed[key] = nil
+            end
+        else
+            Unnamed[key] = nil -- turned in or abandoned: its log entry, and the names, are gone
+        end
+    end
 end
 
 -- GetQuestID and the quest events' IDs are plain numbers (the snapshot flags none of them; probes
@@ -123,7 +168,11 @@ local function OnAccepted(questID)
     if values.title == "" then
         return -- nothing to name it by
     end
-    QuestBookModule.Records.quests:Set(tostring(questID), ObjectiveFields(questID, values))
+    local key = tostring(questID)
+    QuestBookModule.Records.quests:Set(key, ObjectiveFields(questID, values))
+    if values.unnamed then
+        Unnamed[key] = true
+    end
 end
 
 local function OnTurnInPanel()
@@ -222,7 +271,9 @@ local Fields = {
 for i = 1, MaxObjectives do
     Fields[#Fields + 1] = { name = "objective" .. i, kind = "string", default = "" }
     Fields[#Fields + 1] = { name = "required" .. i, kind = "number", default = 0, min = 0, step = 1 }
+    Fields[#Fields + 1] = { name = "type" .. i, kind = "string", default = "" }
 end
+Fields[#Fields + 1] = { name = "unnamed", kind = "boolean", default = false }
 
 QuestBookModule = Addon:Module("QuestBook", {
     toggle = false,
@@ -233,10 +284,18 @@ QuestBookModule = Addon:Module("QuestBook", {
         module:On("QUEST_ACCEPTED", OnAccepted)
         module:On("QUEST_COMPLETE", OnTurnInPanel)
         module:On("QUEST_TURNED_IN", OnTurnedIn)
+        module:On("QUEST_LOG_UPDATE", OnLogUpdate)
+        local quests = module.Records.quests
+        for _, key in ipairs(quests:Keys()) do
+            if quests:Field(key, "unnamed") then
+                Unnamed[key] = true
+            end
+        end
     end,
     OnDisable = function()
         Offer, TurnIn = nil, nil
+        wipe(Unnamed)
     end,
 })
 
-ns.QuestBook = { Order = Order, Asked = Asked, All = All, MaxObjectives = MaxObjectives }
+ns.QuestBook = { Order = Order, Asked = Asked, All = All, Named = Named, MaxObjectives = MaxObjectives }

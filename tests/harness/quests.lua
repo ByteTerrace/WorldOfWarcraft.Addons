@@ -4,8 +4,8 @@
 -- level }), h.questTitles ([questID] = title, for every quest the client has seen) and h.questDialog
 -- (nil, or { panel = "detail" | "reward", quest, reward }) with the giver as the "questnpc" and
 -- "npc" units while it's open. A quest spec is { id, title, text (the description), goal (the
--- objective summary), objectives = { { text, required, type ("item" unless given) } }, header (the
--- log's zone header), level }; missing fields get stand-ins.
+-- objective summary), objectives = { { text, required, type ("item" unless given), uncached } },
+-- header (the log's zone header), level }; missing fields get stand-ins.
 --
 --   h:OfferQuest(spec, giver)     the giver's offer panel: QUEST_DETAIL(0)
 --   h:AcceptQuest()               accepts the offer: QUEST_ACCEPTED(id), QUEST_LOG_UPDATE, QUEST_FINISHED
@@ -13,6 +13,8 @@
 --   h:OpenTurnIn(id, ender, reward)  the reward panel of a quest in the log: QUEST_COMPLETE
 --   h:CompleteQuest(xp, money)    clicks Complete Quest: QUEST_TURNED_IN(id, xp, money),
 --                                 QUEST_REMOVED(id, false), QUEST_LOG_UPDATE, QUEST_FINISHED
+--   h:LoadQuestNames()            the client has loaded the names uncached objectives lacked:
+--                                 QUEST_LOG_UPDATE
 --
 -- Modeling decisions ([D] documented or seen in Blizzard's Forever UI source, [P] probed in game,
 -- [G] a guess where neither says):
@@ -34,7 +36,10 @@
 --               (questLog.text). [G] One header per header name, in first-seen order; a header's
 --               entry carries the same fields with questID 0. [G] An objective's text puts its
 --               count first ("0/8 Wolf Pelt"), as the Mainline tracker shows it; probe
---               questLog.countForm records which form the client uses. [G] A turned-in
+--               questLog.countForm records which form the client uses. [E] An objective whose
+--               item or creature the client hadn't loaded yet comes without its name: "0/5 " for
+--               "0/5 Duskbat Pelt", "0/10  slain" for "0/10 Scarlet Warrior slain" (seen in a
+--               player's saved quest book); an uncached objective reads so until h:LoadQuestNames. [G] A turned-in
 --               quest's title stays known to GetTitleForQuestID.
 
 local QuestInfoFields = {
@@ -61,7 +66,8 @@ local function FillQuest(spec)
         header = spec.header or "Elwynn Forest", level = spec.level or 5, objectives = {},
     }
     for i, objective in ipairs(spec.objectives or {}) do
-        quest.objectives[i] = { text = objective.text, required = objective.required or 1, type = objective.type or "item" }
+        quest.objectives[i] = { text = objective.text, required = objective.required or 1, type = objective.type or "item",
+            uncached = objective.uncached == true }
     end
     return quest
 end
@@ -111,8 +117,12 @@ end
 local function Objectives(quest)
     local list = {}
     for i, objective in ipairs(quest.objectives) do
+        local text = objective.text
+        if objective.uncached then
+            text = text:sub(#text:gsub("%s+slain$", "") + 1) -- the name goes: "", or " slain"
+        end
         list[i] = {
-            text = ("0/%d %s"):format(objective.required, objective.text), type = objective.type,
+            text = ("0/%d %s"):format(objective.required, text), type = objective.type,
             finished = false, numFulfilled = 0, numRequired = objective.required,
         }
     end
@@ -196,6 +206,17 @@ function Harness:CompleteQuest(xp, money)
 end
 
 -- The quest fakes, merged into the env (env.lua) before it wraps them.
+-- The client has loaded the item and creature names the log's objectives lacked: they read whole,
+-- and QUEST_LOG_UPDATE fires.
+function Harness:LoadQuestNames()
+    for _, quest in ipairs(self.questLog) do
+        for _, objective in ipairs(quest.objectives) do
+            objective.uncached = false
+        end
+    end
+    self:Fire("QUEST_LOG_UPDATE")
+end
+
 function Harness:QuestFakes(uiParent)
     local h = self
     local function Dialog(panel)

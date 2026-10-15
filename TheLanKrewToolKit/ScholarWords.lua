@@ -430,13 +430,34 @@ ns.ScholarWords = {
             prompt = "Where did you turn in the quest \"{title}\"?",
             hint = "Open the quest book: it says where you finished.", explain = "You turned it in at {answer}.",
         },
+        -- Objectives by kind: an item to bring, a foe to defeat, or a task to do.
         count = {
-            prompt = "The quest \"{title}\" asked for \"{objective}\". How many?",
-            hint = "Open the quest book and read the objectives.", explain = "It asked for {answer}: {objective}.",
+            item = {
+                prompt = "The quest \"{title}\" asked you to bring \"{objective}\". How many?",
+                hint = "Open the quest book: it says what to bring.", explain = "It asked for {answer}: {objective}.",
+            },
+            foe = {
+                prompt = "The quest \"{title}\" asked you to defeat \"{objective}\". How many?",
+                hint = "Open the quest book: it says who to defeat.", explain = "It asked you to defeat {answer}: {objective}.",
+            },
+            task = {
+                prompt = "The quest \"{title}\" asked for \"{objective}\". How many?",
+                hint = "Open the quest book and read what to do.", explain = "It asked for {answer}: {objective}.",
+            },
         },
         objective = {
-            prompt = "What did the quest \"{title}\" ask you to do?",
-            hint = "Open the quest book and read the objectives.", explain = "\"{title}\" asked for: {answer}.",
+            item = {
+                prompt = "What did the quest \"{title}\" ask you to bring?",
+                hint = "Open the quest book: it says what to bring.", explain = "\"{title}\" asked you to bring {answer}.",
+            },
+            foe = {
+                prompt = "Which enemy did the quest \"{title}\" ask you to defeat?",
+                hint = "Open the quest book: it says who to defeat.", explain = "\"{title}\" asked you to defeat {answer}.",
+            },
+            task = {
+                prompt = "What did the quest \"{title}\" ask you to do?",
+                hint = "Open the quest book and read what to do.", explain = "\"{title}\" asked you to: {answer}.",
+            },
         },
         title = {
             prompt = "{giver} gave you a quest. Which one?",
@@ -461,9 +482,18 @@ ns.ScholarWords = {
         "Kobold Camp Cleanup", "Wolves Across the Border", "The Fargodeep Mine", "Report to Goldshire",
         "The Jasperlode Mine", "A Threat Within", "Lost Necklace", "Bounty on Murlocs",
     },
-    questObjectives = {
-        "Kobold Vermin slain", "Tough Wolf Meat", "Kobold Candle", "Gold Dust", "Murloc Fin", "Linen Cloth",
-        "Red Burlap Bandana", "Report to Marshal Dughan",
+    -- Plausible objectives of each kind for wrong answers: items to bring, foes to defeat, tasks.
+    questItems = {
+        "Tough Wolf Meat", "Kobold Candle", "Gold Dust", "Murloc Fin", "Linen Cloth", "Red Burlap Bandana",
+        "Duskbat Pelt", "Embalming Ichor",
+    },
+    questFoes = {
+        "Kobold Vermin", "Young Wolf", "Defias Thug", "Murloc Forager", "Mangy Wolf", "Rot Hide Gnoll",
+        "Rattlecage Soldier", "Scarlet Convert",
+    },
+    questTasks = {
+        "Report to Marshal Dughan", "Sit near the campfire", "Speak with the innkeeper", "Light the signal fire",
+        "Search the old wagon", "Find the lost necklace",
     },
     -- Words too plain to blank out of a quest's text.
     stopWords = {

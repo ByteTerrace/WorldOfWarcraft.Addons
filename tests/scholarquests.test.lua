@@ -161,7 +161,7 @@ test("a quest riddle comes first over math and reading, newest quest first", fun
     Accept(h, Wolves)
     h:Advance(5)
     Accept(h, { id = 40, title = "The Fargodeep Mine", text = "Kobolds have overrun the Fargodeep Mine.",
-        objectives = { { text = "Kobold Vermin slain", required = 10 } } }, "Marshal Dughan")
+        objectives = { { text = "Kobold Vermin slain", required = 10, type = "monster" } } }, "Marshal Dughan")
     h:Slash("/tlk puzzle")
     eq(shown[1].questKey, "40", "the newest")
 end)
@@ -171,11 +171,11 @@ test("every kind asks what the quest holds, with the right answer among four", f
     local quest = {
         key = "33", title = "Wolves Across the Border", giver = "Eagan Peltskinner", place = "Goldshire",
         turnedIn = true, ender = "Marshal McBride", endPlace = "Eastvale Logging Camp", seen = 10,
-        text = Wolves.text, goal = Wolves.goal, objective1 = "Tough Wolf Meat", required1 = 8,
+        text = Wolves.text, goal = Wolves.goal, objective1 = "Tough Wolf Meat", required1 = 8, type1 = "item",
     }
     local known = { quest,
-        { key = "40", title = "The Fargodeep Mine", giver = "Marshal Dughan", place = "Fargodeep Mine", objective1 = "Kobold Candle", required1 = 8, seen = 9 },
-        { key = "41", title = "Lost Necklace", giver = "Billy Maclure", place = "Maclure Vineyards", objective1 = "Billy's Pie", required1 = 1, seen = 8 },
+        { key = "40", title = "The Fargodeep Mine", giver = "Marshal Dughan", place = "Fargodeep Mine", objective1 = "Kobold Candle", required1 = 8, type1 = "item", seen = 9 },
+        { key = "41", title = "Lost Necklace", giver = "Billy Maclure", place = "Maclure Vineyards", objective1 = "Billy's Pie", required1 = 1, type1 = "item", seen = 8 },
     }
     local expected = {
         ["quest.giver"] = "Eagan Peltskinner", ["quest.ender"] = "Marshal McBride", ["quest.place"] = "Goldshire",
@@ -295,7 +295,7 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
         id = 34, title = "The Great Outdoors", header = "Tirisfal Glades",
         text = paragraph:rep(20) .. "Have a seat near the fire and get comfortable.",
         goal = "Sit near Eleanor's Basic Campfire and wait until you receive the Boosted Rest buff.",
-        objectives = { { text = "Sit near the campfire", required = 1 }, { text = "Gain the Boosted Rest buff", required = 1 } },
+        objectives = { { text = "Sit near the campfire", required = 1, type = "log" }, { text = "Gain the Boosted Rest buff", required = 1, type = "log" } },
     }
     Accept(h, long, "Eleanor Shackleton")
     h:Slash("/tlk puzzle")
@@ -496,4 +496,87 @@ test("quest text keeps its words and line breaks, and loses the client's links a
         "Eagan Peltskinner")
     h:AcceptQuest()
     eq(Quests(addon):Field("50", "text"), "Kill ten boars.\nThen see [Boar Ribs].")
+end)
+
+-- Every quest.objective puzzle about quest across seeds: { [prompt] = true }, and every choice.
+local function ObjectivePuzzles(h, ns, quest, known)
+    local prompts, choices, answers = {}, {}, {}
+    for seed = 1, 300 do
+        h:SeedRandom(seed)
+        local puzzle = ns.Puzzles.Generate({ subject = "quest", random = h.env.math.random, quest = quest, known = known })
+        if puzzle and (puzzle.kind == "quest.objective" or puzzle.kind == "quest.count") then
+            prompts[puzzle.prompt] = true
+            answers[puzzle.choices[puzzle.answer]] = true
+            for _, choice in ipairs(puzzle.choices) do choices[choice] = true end
+        end
+    end
+    return prompts, choices, answers
+end
+
+test("objectives the client hasn't named yet wait in the book until it names them", function()
+    local h, addon = LoadKid()
+    Accept(h, {
+        id = 70, title = "The Chill of Death", header = "Tirisfal Glades",
+        objectives = {
+            { text = "Duskbat Pelt", required = 5, uncached = true },
+            { text = "Coarse Thread", required = 1 },
+            { text = "Scarlet Warrior slain", required = 10, type = "monster", uncached = true },
+        },
+    }, "Gretchen Dedmar")
+    local quests = Quests(addon)
+    eq(quests:Field("70", "objective1"), "Coarse Thread", "a nameless \"0/5\" isn't an objective")
+    eq(quests:Field("70", "objective2"), "", "nor is a nameless \"slain\"")
+    h:LoadQuestNames()
+    eq(quests:Field("70", "objective1") .. "|" .. quests:Field("70", "type1"), "Duskbat Pelt|item")
+    eq(quests:Field("70", "objective2") .. "|" .. quests:Field("70", "type2"), "Coarse Thread|item")
+    eq(quests:Field("70", "objective3") .. "|" .. quests:Field("70", "type3"), "Scarlet Warrior slain|monster")
+    h:Reload()
+    local calls = h:CountApiCalls("C_QuestLog.GetQuestObjectives")
+    h:Fire("QUEST_LOG_UPDATE")
+    eq(h:CountApiCalls("C_QuestLog.GetQuestObjectives"), calls, "a named book reads nothing on log updates")
+end)
+
+test("an objective riddle asks about one kind of objective, with wrong answers of that kind", function()
+    local h, _, ns = LoadKid()
+    local function Quest(key, title, objectives)
+        local record = { key = key, title = title, giver = "Gretchen Dedmar", seen = tonumber(key) }
+        for i, objective in ipairs(objectives) do
+            record["objective" .. i], record["required" .. i], record["type" .. i] = objective[1], objective[2], objective[3]
+        end
+        return record
+    end
+    local pelts = Quest("1", "The Chill of Death", { { "Duskbat Pelt", 5, "item" }, { "Coarse Thread", 1, "item" } })
+    local warriors = Quest("2", "At War With The Scarlet Crusade", { { "Scarlet Warrior slain", 10, "monster" } })
+    local campfire = Quest("3", "The Great Outdoors", { { "Sit near the campfire", 1, "log" } })
+    local known = { pelts, warriors, campfire }
+    local prompts, choices, answers = ObjectivePuzzles(h, ns, pelts, known)
+    truthy(prompts['What did the quest "The Chill of Death" ask you to bring?'], "items are brought")
+    falsy(choices["Scarlet Warrior"] or choices["Sit near the campfire"], "no foes or tasks among items")
+    truthy(answers["Duskbat Pelt"] or answers["Coarse Thread"])
+    prompts, choices, answers = ObjectivePuzzles(h, ns, warriors, known)
+    truthy(prompts['Which enemy did the quest "At War With The Scarlet Crusade" ask you to defeat?'], "foes are defeated")
+    truthy(answers["Scarlet Warrior"], "the foe by name, without \"slain\"")
+    for choice in pairs(choices) do
+        falsy(choice:find("slain", 1, true) or choice == "Duskbat Pelt", "only foes: " .. choice)
+    end
+    prompts = ObjectivePuzzles(h, ns, campfire, known)
+    truthy(prompts['What did the quest "The Great Outdoors" ask you to do?'], "the rest are things to do")
+end)
+
+test("objectives saved without a name or a kind are never asked about or offered", function()
+    local h, _, ns = LoadKid()
+    local junk = { key = "1", title = "At War With The Scarlet Crusade", giver = "Executor Zygand", seen = 1,
+        objective1 = "slain", required1 = 10, objective2 = "0/5", required2 = 5 }
+    local untyped = { key = "2", title = "The Chill of Death", giver = "Gretchen Dedmar", seen = 2,
+        objective1 = "Coarse Thread", required1 = 1 }
+    local good = { key = "3", title = "Doom Weed", giver = "Junior Apothecary Holland", seen = 3,
+        objective1 = "Doom Weed", required1 = 10, type1 = "item" }
+    local known = { junk, untyped, good }
+    for _, quest in ipairs(known) do
+        local _, choices = ObjectivePuzzles(h, ns, quest, known)
+        for choice in pairs(choices) do
+            falsy(choice == "slain" or choice:find("^%d+/%d+$") or choice == "Coarse Thread",
+                ("%s offers %q"):format(quest.title, choice))
+        end
+    end
 end)

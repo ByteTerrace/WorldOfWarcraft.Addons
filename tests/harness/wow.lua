@@ -45,25 +45,8 @@
 --   h:LoadAddon("TheLanKrewToolKit")
 --   h:EnterCombat()
 
-local Addons = __addons -- set by tools/lib/harness.mjs: { [name] = { files, sources, metadata, ... } }
-
--- Decodes the API snapshot tools/lib/harness.mjs passes as text into
--- { functions, events, methods = { [api] = { [method] = entry } }, enums }. An entry holds secret
--- (a set of flags), SecretArguments, IsProtectedFunction, HasRestrictions, Arguments and Payload
--- (comma-separated types), the aspect sets SecretArgumentsAddAspect / SecretReturnsForAspect and
--- the Preconditions set (RequiresFontStringTextAccess, RestrictedForMacroChatMessages, ...), and
--- ArgumentsNilable / PayloadNilable: the sets of positions that may be nil ({ [3] = true }).
-local function Set(list)
-    if list == "" then
-        return nil
-    end
-    local set = {}
-
-    for item in list:gmatch("[^,]+") do
-        set[item] = true
-    end
-    return set
-end
+-- set by tools/lib/harness.mjs: { [name] = { files, sources, metadata, ... } }
+local Addons = __addons
 
 local function Positions(list)
     local set = {}
@@ -71,6 +54,26 @@ local function Positions(list)
     for item in list:gmatch("[^,]+") do
         set[tonumber(item)] = true
     end
+
+    return set
+end
+
+-- Decodes the API snapshot tools/lib/harness.mjs passes as text into { functions, events, methods = { [api] = {
+-- [method] = entry } }, enums }. An entry holds secret (a set of flags), SecretArguments, IsProtectedFunction,
+-- HasRestrictions, Arguments and Payload (comma-separated types), the aspect sets SecretArgumentsAddAspect /
+-- SecretReturnsForAspect and the Preconditions set (RequiresFontStringTextAccess, RestrictedForMacroChatMessages, ...),
+-- and ArgumentsNilable / PayloadNilable: the sets of positions that may be nil ({ [3] = true }).
+local function Set(list)
+    if list == "" then
+        return nil
+    end
+
+    local set = {}
+
+    for item in list:gmatch("[^,]+") do
+        set[item] = true
+    end
+
     return set
 end
 
@@ -84,6 +87,7 @@ local function DecodeSnapshot(text)
             i = (i + 1)
             fields[i] = field
         end
+
         local kind, name = fields[1], fields[2]
 
         if kind == "N" then
@@ -92,15 +96,16 @@ local function DecodeSnapshot(text)
             for key, value in fields[3]:gmatch("([^,=]+)=([^,]+)") do
                 enum[key] = tonumber(value)
             end
+
             snapshot.enums[name] = enum
         else
             local entry = {
-                secret = Set(fields[3]), SecretArguments = (((fields[4] ~= "") and fields[4]) or nil),
-                IsProtectedFunction = ((fields[5] == "1") or nil), HasRestrictions = ((fields[6] == "1") or nil),
-                Arguments = fields[7], Payload = fields[8],
-                SecretArgumentsAddAspect = Set(fields[9]), SecretReturnsForAspect = Set(fields[10]),
-                Preconditions = Set(fields[11] or ""),
-                ArgumentsNilable = Positions(fields[12] or ""), PayloadNilable = Positions(fields[13] or ""),
+                Arguments = fields[7], ArgumentsNilable = Positions(fields[12] or ""),
+                HasRestrictions = ((fields[6] == "1") or nil), IsProtectedFunction = ((fields[5] == "1") or nil),
+                Payload = fields[8], PayloadNilable = Positions(fields[13] or ""),
+                Preconditions = Set(fields[11] or ""), secret = Set(fields[3]),
+                SecretArguments = (((fields[4] ~= "") and fields[4]) or nil), SecretArgumentsAddAspect = Set(fields[9]),
+                SecretReturnsForAspect = Set(fields[10]),
             }
 
             if kind == "F" then
@@ -115,12 +120,14 @@ local function DecodeSnapshot(text)
             end
         end
     end
+
     return snapshot
 end
 
 if type(__snapshot) == "string" then
     __snapshot = DecodeSnapshot(__snapshot)
 end
+
 local Snapshot = __snapshot
 
 -- JS arrays arrive 0-based; make them Lua sequences.
@@ -128,12 +135,14 @@ local function Sequence(t)
     if (t == nil) or (t[0] == nil) then
         return (t or {})
     end
+
     local out, i = {}, 0
 
     while t[i] ~= nil do
         out[i + 1] = t[i]
         i = (i + 1)
     end
+
     return out
 end
 
@@ -151,8 +160,8 @@ Harness.created = {}
 -- Widget state, keyed weakly by the widget (see widgets.lua).
 Harness.widgetStates = setmetatable({}, { __mode = "k" })
 
--- A widget's harness state ({ value, min, max, text, shown, calls, scripts, events, ... }), or
--- nil for anything that isn't a widget. Live: tests may reset calls through it.
+-- A widget's harness state ({ value, min, max, text, shown, calls, scripts, events, ... }), or nil for anything that
+-- isn't a widget. Live: tests may reset calls through it.
 function Harness.State(widget)
     return Harness.widgetStates[widget]
 end
@@ -168,18 +177,20 @@ Harness.MAX_TIMER_CALLBACKS = 10000
 local ConfigurableUnits = { focus = true, mouseover = true, pet = true, vehicle = true }
 
 for i = 1, 4 do ConfigurableUnits["party" .. i] = true end
+
 for i = 1, 40 do ConfigurableUnits["nameplate" .. i] = true end
 
--- Defines a test-only addon (for the harness's own tests): spec = { sources = { "lua", ... },
--- savedVariables, savedVariablesPerCharacter, dependencies, metadata, missing = { TOC files the disk lacks },
--- files = { a name per source (default File1.lua...) }, as = the real addon whose files the sources
--- are (their chunks are named after it, so errors and coverage point at the real files) }.
+-- Defines a test-only addon (for the harness's own tests): spec = { sources = { "lua", ... }, savedVariables,
+-- savedVariablesPerCharacter, dependencies, metadata, missing = { TOC files the disk lacks }, files = { a name per
+-- source (default File1.lua...) }, as = the real addon whose files the sources are (their chunks are named after it, so
+-- errors and coverage point at the real files) }.
 function Harness.DefineAddOn(name, spec)
     local files = {}
 
     for i in ipairs(spec.sources) do
         files[i] = ((spec.files and spec.files[i]) or ("File" .. i .. ".lua"))
     end
+
     Addons[name] = {
         as = spec.as, dependencies = (spec.dependencies or {}), files = files, metadata = (spec.metadata or {}),
         missing = (spec.missing or {}), savedVariables = (spec.savedVariables or {}),
@@ -201,12 +212,17 @@ local function FillUnit(unit)
             unit[field] = default
         end
     end
+
     if unit.isPlayer and (unit.surname == nil) then
-        unit.surname = Harness.DEFAULT_SURNAME -- [E] every Forever character has a surname
+        -- [E] every Forever character has a surname
+        unit.surname = Harness.DEFAULT_SURNAME
     end
+
     if unit.playerControlled == nil then
-        unit.playerControlled = unit.isPlayer -- players (and their pets) are player-controlled
+        -- players (and their pets) are player-controlled
+        unit.playerControlled = unit.isPlayer
     end
+
     return unit
 end
 
@@ -215,8 +231,58 @@ Harness.FillUnit = FillUnit
 -- The surname a player unit gets when a test gives none.
 Harness.DEFAULT_SURNAME = "Doe"
 
--- [E] A unit's full name as Forever shows it: "First Last" for a player, the name alone for an NPC
--- (GetPlayerInfoByGUID and chat senders say "Aa Aa", probed in game).
+-- What ExpectErrors and ExpectBlocked declare: a count, or a list of Lua patterns.
+local function Expected(first, ...)
+    if type(first) == "number" then
+        return first
+    end
+
+    return { first, ... }
+end
+
+-- Nil when the entries are what `expected` (a count or patterns) allows, else a description.
+local function Unexpected(kind, entries, expected)
+    if type(expected) == "number" then
+        if #entries ~= expected then
+            return ("%s (expected %d): %s"):format(kind, expected, table.concat(entries, " | "))
+        end
+
+        return nil
+    end
+
+    local unmatched = {}
+
+    for _, message in ipairs(entries) do
+        unmatched[#unmatched + 1] = message
+    end
+
+    for _, pattern in ipairs(expected) do
+        local found
+
+        for i, message in ipairs(unmatched) do
+            if message:find(pattern) then
+                found = i
+
+                break
+            end
+        end
+
+        if not found then
+            return ("no %s matches %q (%s: %s)"):format(kind, pattern, kind, table.concat(entries, " | "))
+        end
+
+        table.remove(unmatched, found)
+    end
+
+    if #unmatched > 0 then
+        return ("unexpected %s: %s"):format(kind, table.concat(unmatched, " | "))
+    end
+
+    return nil
+end
+
+-- [E] A unit's full name as Forever shows it: "First Last" for a player, the name alone for an NPC (GetPlayerInfoByGUID
+-- and chat senders say "Aa Aa", probed in game).
 function Harness.DisplayName(unit)
     return ((unit.surname and (unit.name .. " " .. unit.surname)) or unit.name)
 end
@@ -225,46 +291,77 @@ function Harness.New(player)
     player = (player or {})
     local h = setmetatable({}, Harness)
 
-    h.time = 0                -- GetTime()
-    h.workTime = 0            -- ms the current frame's work has taken: debugprofilestop() adds it to h.time
-    h.serverTime = Harness.SERVER_EPOCH -- GetServerTime(), time()
-    h.inCombat = false        -- the player is in combat (mirrors restrictions.Combat)
-    h.lockdown = false        -- InCombatLockdown()
-    h.restrictions = {}       -- [Enum.AddOnRestrictionType name] = true while active
+    -- GetTime()
+    h.time = 0
+    -- ms the current frame's work has taken: debugprofilestop() adds it to h.time
+    h.workTime = 0
+    -- GetServerTime(), time()
+    h.serverTime = Harness.SERVER_EPOCH
+    -- the player is in combat (mirrors restrictions.Combat)
+    h.inCombat = false
+    -- InCombatLockdown()
+    h.lockdown = false
+    -- [Enum.AddOnRestrictionType name] = true while active
+    h.restrictions = {}
+
     for _, name in ipairs(Harness.RESTRICTIONS) do
         h.restrictions[name] = false
     end
-    h.restrictionDispatch = 0 -- > 0 while ADDON_RESTRICTION_STATE_CHANGED dispatches
-    h.blocked = {}            -- API names blocked (ADDON_ACTION_BLOCKED) or forbidden (_FORBIDDEN)
-    h.forbidden = {}          -- API names refused with ADDON_ACTION_FORBIDDEN
-    h.frames = {}             -- frames (event and input receivers), in creation order
-    h.widgets = {}            -- every widget: frames, regions, animations
+
+    -- > 0 while ADDON_RESTRICTION_STATE_CHANGED dispatches
+    h.restrictionDispatch = 0
+    -- API names blocked (ADDON_ACTION_BLOCKED) or forbidden (_FORBIDDEN)
+    h.blocked = {}
+    -- API names refused with ADDON_ACTION_FORBIDDEN
+    h.forbidden = {}
+    -- frames (event and input receivers), in creation order
+    h.frames = {}
+    -- every widget: frames, regions, animations
+    h.widgets = {}
     h.methodCache = {}
-    h.timers = {}             -- pending C_Timer callbacks and animations, see Advance
+    -- pending C_Timer callbacks and animations, see Advance
+    h.timers = {}
     h.timerSerial = 0
     h.handles = 0
-    h.apiCalls = {}           -- [API name] = calls to that wrapped function (h:CountApiCalls)
-    -- C_AddOnProfiler's answers: enabled, and [metric] = number for each addon, the application
-    -- and all addons together; memory is GetAddOnMemoryUsage's KB by addon.
+    -- [API name] = calls to that wrapped function (h:CountApiCalls)
+    h.apiCalls = {}
+    -- C_AddOnProfiler's answers: enabled, and [metric] = number for each addon, the application and all addons
+    -- together; memory is GetAddOnMemoryUsage's KB by addon.
     h.profiler = { addons = {}, application = {}, enabled = false, memory = {}, overall = {} }
-    h.memoryUpdates = 0       -- UpdateAddOnMemoryUsage calls
+    -- UpdateAddOnMemoryUsage calls
+    h.memoryUpdates = 0
     h.printed = {}
-    h.sounds = {}             -- { path, channel, handle } per PlaySoundFile that played
-    h.soundKits = {}          -- { kit, channel, handle } per PlaySound / C_Sound.PlaySound
-    h.stopped = {}            -- { handle, fade } per StopSound
-    h.files = {}              -- [path] = true for media that exists (C_UIFileAsset.IsKnownFile knows it)
-    h.mutedChannels = {}      -- [channel] = true: PlaySoundFile won't play on it (willPlay false)
-    h.led = nil               -- current light bar color {r,g,b}, nil when cleared
-    h.vibrations = {}         -- { type, intensity }
-    h.vibrationsStopped = 0   -- C_GamePad.StopVibration calls
-    h.opened = {}             -- settings panel openings (C_SettingsUtil.OpenSettingsPanel ids)
-    h.categories = {}         -- the Settings fake's registered categories (env.lua)
+    -- { path, channel, handle } per PlaySoundFile that played
+    h.sounds = {}
+    -- { kit, channel, handle } per PlaySound / C_Sound.PlaySound
+    h.soundKits = {}
+    -- { handle, fade } per StopSound
+    h.stopped = {}
+    -- [path] = true for media that exists (C_UIFileAsset.IsKnownFile knows it)
+    h.files = {}
+    -- [channel] = true: PlaySoundFile won't play on it (willPlay false)
+    h.mutedChannels = {}
+    -- current light bar color {r,g,b}, nil when cleared
+    h.led = nil
+    -- { type, intensity }
+    h.vibrations = {}
+    -- C_GamePad.StopVibration calls
+    h.vibrationsStopped = 0
+    -- settings panel openings (C_SettingsUtil.OpenSettingsPanel ids)
+    h.opened = {}
+    -- the Settings fake's registered categories (env.lua)
+    h.categories = {}
     h.spellNames = { [5308] = "Execute" }
-    h.usable = {}             -- [spellName] = { isUsable, insufficientPower }
-    h.zone = (player.zone or "Elwynn Forest")   -- GetRealZoneText
-    h.subZone = (player.subZone or "")          -- GetSubZoneText
-    h.maxLevel = 60           -- GetMaxPlayerLevel
-    local powerType = (player.powerType or 3)   -- Enum.PowerType.Energy
+    -- [spellName] = { isUsable, insufficientPower }
+    h.usable = {}
+    -- GetRealZoneText
+    h.zone = (player.zone or "Elwynn Forest")
+    -- GetSubZoneText
+    h.subZone = (player.subZone or "")
+    -- GetMaxPlayerLevel
+    h.maxLevel = 60
+    -- Enum.PowerType.Energy
+    local powerType = (player.powerType or 3)
 
     h.player = FillUnit({
         classFile = (player.classFile or "ROGUE"), isPlayer = true, level = (player.level or 1),
@@ -273,44 +370,115 @@ function Harness.New(player)
         realm = (player.realm or "Forever"), rested = (player.rested or 0), resting = (player.resting or false),
         surname = player.surname, xp = (player.xp or 0), xpMax = (player.xpMax or 400),
     })
+
     h.target = nil
-    h.units = {}              -- [token] = unit table for h:SetUnit tokens (pet, focus, party1, ...)
-    h.declared = {}           -- globals the TOC declares (SavedVariables); nil reads allowed
-    h.errors = {}             -- messages passed to the error handler; a test fails if any are unexpected
-    h.expectedErrors = 0      -- a count, or a list of patterns (see ExpectErrors)
-    h.expectedBlocked = 0     -- a count, or a list of patterns (see ExpectBlocked)
-    h.propagated = {}         -- gamepad buttons no frame consumed
-    h.propagatedKeys = {}     -- keys no frame consumed (h:Key)
-    h.group = { kind = nil, members = {} } -- see group.lua
+    -- [token] = unit table for h:SetUnit tokens (pet, focus, party1, ...)
+    h.units = {}
+    -- globals the TOC declares (SavedVariables); nil reads allowed
+    h.declared = {}
+    -- messages passed to the error handler; a test fails if any are unexpected
+    h.errors = {}
+    -- a count, or a list of patterns (see ExpectErrors)
+    h.expectedErrors = 0
+    -- a count, or a list of patterns (see ExpectBlocked)
+    h.expectedBlocked = 0
+    -- gamepad buttons no frame consumed
+    h.propagated = {}
+    -- keys no frame consumed (h:Key)
+    h.propagatedKeys = {}
+    -- see group.lua
+    h.group = { kind = nil, members = {} }
     h.partySerial = 0
-    h.prefixes = {}           -- [prefix] = true once registered (C_ChatInfo); a UI restart clears them
+    -- [prefix] = true once registered (C_ChatInfo); a UI restart clears them
+    h.prefixes = {}
     h.prefixOrder = {}
-    h.addonMessages = {}      -- { prefix, message, chatType, target, result } per SendAddonMessage
-    h.throttle = {}           -- [prefix] = { allowance, time } after its last successful send
-    h.echo = true             -- your own group addon messages come back to you (h:Echo)
-    h.rng = nil               -- h:SeedRandom state; nil = Lua's math.random
-    h.labelStyle = nil        -- C_GamePad labelStyle of the connected controller; nil = none connected
-    h.interfaceStyle = 0      -- C_InputInterfaceStyle.GetCurrentStyle: Enum.InputDeviceInterfaceType.Mkb
-    h.powerLevel = 4          -- C_GamePad.GetPowerLevel of the connected controller: Enum.GamePadPowerLevel.Wired
-    h.usingGamepad = false    -- IsUsingGamepad
+    -- { prefix, message, chatType, target, result } per SendAddonMessage
+    h.addonMessages = {}
+    -- [prefix] = { allowance, time } after its last successful send
+    h.throttle = {}
+    -- your own group addon messages come back to you (h:Echo)
+    h.echo = true
+    -- h:SeedRandom state; nil = Lua's math.random
+    h.rng = nil
+    -- C_GamePad labelStyle of the connected controller; nil = none connected
+    h.labelStyle = nil
+    -- C_InputInterfaceStyle.GetCurrentStyle: Enum.InputDeviceInterfaceType.Mkb
+    h.interfaceStyle = 0
+    -- C_GamePad.GetPowerLevel of the connected controller: Enum.GamePadPowerLevel.Wired
+    h.powerLevel = 4
+    -- IsUsingGamepad
+    h.usingGamepad = false
     h.loaded = {}
     h.loadOrder = {}
-    h.loggedIn = false        -- IsLoggedIn(): true from PLAYER_LOGIN on
-    h.locale = "enUS"         -- GetLocale(); the GlobalStrings stay enUS unless a test rawsets them
-    h.saved = (player.saved or {}) -- [SavedVariable name] = value, as the client restores it
-    h:InitWorld(player)       -- units, maps, waypoints, honor, raid notices (units.lua, world.lua)
-    h:InitMeter()             -- damage meter sessions and death recaps (meter.lua)
-    h:InitSpeech(player)      -- h.spoken and the speech settings (speech.lua)
-    h:InitQuests()            -- the quest log and quest dialogs (quests.lua)
+    -- IsLoggedIn(): true from PLAYER_LOGIN on
+    h.loggedIn = false
+    -- GetLocale(); the GlobalStrings stay enUS unless a test rawsets them
+    h.locale = "enUS"
+    -- [SavedVariable name] = value, as the client restores it
+    h.saved = (player.saved or {})
+    -- units, maps, waypoints, honor, raid notices (units.lua, world.lua)
+    h:InitWorld(player)
+    -- damage meter sessions and death recaps (meter.lua)
+    h:InitMeter()
+    -- h.spoken and the speech settings (speech.lua)
+    h:InitSpeech(player)
+    -- the quest log and quest dialogs (quests.lua)
+    h:InitQuests()
     h.env = h:BuildEnvironment()
     Harness.created[#Harness.created + 1] = h
+
     return h
 end
 
--- The harness unit table for a token, or nil (the unit doesn't exist). A secret token (passed to
--- an API that allows secret arguments) names the same unit.
+-- Declares the protected calls this test deliberately has blocked or forbidden (h.blocked): a count or Lua patterns,
+-- like ExpectErrors. Any other blocked call fails the test, as the client would show the player its "blocked from an
+-- action" message.
+function Harness:ExpectBlocked(first, ...)
+    self.expectedBlocked = Expected(first, ...)
+end
+
+-- Declares the errors this test deliberately causes: a count (h:ExpectErrors(2)) or Lua patterns (h:ExpectErrors("did
+-- not settle", "boom")), each matching one reported error, in any order.
+function Harness:ExpectErrors(first, ...)
+    self.expectedErrors = Expected(first, ...)
+end
+
+function Harness:FireRestriction(index, state)
+    self.restrictionDispatch = (self.restrictionDispatch + 1)
+    self:Fire("ADDON_RESTRICTION_STATE_CHANGED", index, state)
+    self.restrictionDispatch = (self.restrictionDispatch - 1)
+end
+
+function Harness:ReportError(message)
+    self.errors[#self.errors + 1] = tostring(message)
+end
+
+-- Registers a unit table as the target (nil clears) and fires PLAYER_TARGET_CHANGED. Missing fields default: an
+-- existing, living, full-health NPC; playerControlled follows isPlayer.
+function Harness:SetTarget(unit)
+    self.target = ((unit and FillUnit(unit)) or nil)
+    self:Fire("PLAYER_TARGET_CHANGED")
+end
+
+-- Sets (or with nil, removes) a unit other than the player and target: pet, focus, mouseover, vehicle, party1-4 or
+-- nameplate1-40 (a party token set here wins over h:JoinGroup's). Missing fields default like SetTarget's. Fires
+-- nothing; fire the event the change would cause (PLAYER_FOCUS_CHANGED, UNIT_PET, ...) if the test needs it.
+function Harness:SetUnit(token, unit)
+    assert(ConfigurableUnits[token], "SetUnit: " .. tostring(token) .. " isn't a configurable unit (use h.player or h:SetTarget)")
+    self.units[token] = ((unit and FillUnit(unit)) or nil)
+end
+
+-- Returns nil when the reported errors and the blocked protected calls are what the test expected, else a description.
+function Harness:UnexpectedErrors()
+    return (Unexpected("reported errors", self.errors, self.expectedErrors)
+        or Unexpected("blocked calls", self.blocked, self.expectedBlocked))
+end
+
+-- The harness unit table for a token, or nil (the unit doesn't exist). A secret token (passed to an API that allows
+-- secret arguments) names the same unit.
 function Harness:Unit(token)
     token = Reveal(token)
+
     if token == "player" then
         return self.player
     elseif token == "target" then
@@ -320,163 +488,85 @@ function Harness:Unit(token)
     end
 end
 
--- Sets (or with nil, removes) a unit other than the player and target: pet, focus, mouseover,
--- vehicle, party1-4 or nameplate1-40 (a party token set here wins over h:JoinGroup's). Missing fields default like SetTarget's. Fires nothing;
--- fire the event the change would cause (PLAYER_FOCUS_CHANGED, UNIT_PET, ...) if the test needs it.
-function Harness:SetUnit(token, unit)
-    assert(ConfigurableUnits[token], "SetUnit: " .. tostring(token) .. " isn't a configurable unit (use h.player or h:SetTarget)")
-    self.units[token] = ((unit and FillUnit(unit)) or nil)
-end
-
--- What ExpectErrors and ExpectBlocked declare: a count, or a list of Lua patterns.
-local function Expected(first, ...)
-    if type(first) == "number" then
-        return first
-    end
-    return { first, ... }
-end
-
--- Declares the errors this test deliberately causes: a count (h:ExpectErrors(2)) or Lua patterns
--- (h:ExpectErrors("did not settle", "boom")), each matching one reported error, in any order.
-function Harness:ExpectErrors(first, ...)
-    self.expectedErrors = Expected(first, ...)
-end
-
--- Declares the protected calls this test deliberately has blocked or forbidden (h.blocked): a
--- count or Lua patterns, like ExpectErrors. Any other blocked call fails the test, as the client
--- would show the player its "blocked from an action" message.
-function Harness:ExpectBlocked(first, ...)
-    self.expectedBlocked = Expected(first, ...)
-end
-
--- Nil when the entries are what `expected` (a count or patterns) allows, else a description.
-local function Unexpected(kind, entries, expected)
-    if type(expected) == "number" then
-        if #entries ~= expected then
-            return ("%s (expected %d): %s"):format(kind, expected, table.concat(entries, " | "))
-        end
-        return nil
-    end
-    local unmatched = {}
-
-    for _, message in ipairs(entries) do
-        unmatched[#unmatched + 1] = message
-    end
-    for _, pattern in ipairs(expected) do
-        local found
-
-        for i, message in ipairs(unmatched) do
-            if message:find(pattern) then
-                found = i
-                break
-            end
-        end
-        if not found then
-            return ("no %s matches %q (%s: %s)"):format(kind, pattern, kind, table.concat(entries, " | "))
-        end
-        table.remove(unmatched, found)
-    end
-    if #unmatched > 0 then
-        return ("unexpected %s: %s"):format(kind, table.concat(unmatched, " | "))
-    end
-    return nil
-end
-
--- Returns nil when the reported errors and the blocked protected calls are what the test
--- expected, else a description.
-function Harness:UnexpectedErrors()
-    return (Unexpected("reported errors", self.errors, self.expectedErrors)
-        or Unexpected("blocked calls", self.blocked, self.expectedBlocked))
-end
-
-function Harness:ReportError(message)
-    self.errors[#self.errors + 1] = tostring(message)
-end
-
--- Registers a unit table as the target (nil clears) and fires PLAYER_TARGET_CHANGED. Missing
--- fields default: an existing, living, full-health NPC; playerControlled follows isPlayer.
-function Harness:SetTarget(unit)
-    self.target = ((unit and FillUnit(unit)) or nil)
-    self:Fire("PLAYER_TARGET_CHANGED")
-end
-
-function Harness:FireRestriction(index, state)
-    self.restrictionDispatch = (self.restrictionDispatch + 1)
-    self:Fire("ADDON_RESTRICTION_STATE_CHANGED", index, state)
-    self.restrictionDispatch = (self.restrictionDispatch - 1)
-end
-
--- Restrictions that take hold with no Active event after Activating. [P] combat.edges: entering
--- combat, the client sent Combat Activating and nothing more until Inactive, though the restriction
--- is in force during the fight. [G] The others send Active (no probe has seen one enter yet).
+-- Restrictions that take hold with no Active event after Activating. [P] combat.edges: entering combat, the client sent
+-- Combat Activating and nothing more until Inactive, though the restriction is in force during the fight. [G] The
+-- others send Active (no probe has seen one enter yet).
 Harness.SILENT_ACTIVE = { Combat = true }
 
--- Activates or clears an addon restriction (Enum.AddOnRestrictionType name). Activating fires
--- ADDON_RESTRICTION_STATE_CHANGED(type, Activating) while the restriction isn't enforced, then
--- enforces it and fires Active (none for SILENT_ACTIVE ones); clearing lifts it, then fires
--- Inactive.
-function Harness:SetRestriction(name, active)
-    local index
-
-    for i, known in ipairs(Harness.RESTRICTIONS) do
-        if known == name then
-            index = (i - 1)
-        end
-    end
-    assert(index, "unknown restriction " .. tostring(name))
-    active = ((active and true) or false)
-    if self.restrictions[name] == active then
-        return
-    end
-    if active then
-        self:FireRestriction(index, 1) -- Activating: not enforced during this dispatch
-        self.restrictions[name] = true
-        if not Harness.SILENT_ACTIVE[name] then
-            self:FireRestriction(index, 2) -- Active
-        end
-    else
-        self.restrictions[name] = false
-        self:FireRestriction(index, 0) -- Inactive
-    end
+local function Finite(value)
+    return ((value == value) and (value ~= math.huge) and (value ~= -math.huge))
 end
 
--- Combat, in the order [P] combat.edges saw: PLAYER_REGEN_DISABLED (UnitAffectingCombat already
--- true; no lockdown or restriction yet), then the Combat restriction, then lockdown and a new
--- damage meter session (meter.lua).
-function Harness:EnterCombat()
-    self.inCombat = true
-    self:Fire("PLAYER_REGEN_DISABLED")
-    self:SetRestriction("Combat", true)
-    self.lockdown = true
-    self:MeterStartSession()
+local function SavedNames(addon)
+    local names = {}
+
+    for _, list in ipairs({ addon.savedVariables, addon.savedVariablesPerCharacter }) do
+        for _, name in ipairs(list) do
+            names[#names + 1] = name
+        end
+    end
+
+    return names
 end
 
--- Leaving combat ends lockdown and the damage meter session, then lifts the Combat restriction
--- before PLAYER_REGEN_ENABLED ([P] combat.edges: Combat Inactive comes first).
-function Harness:LeaveCombat()
-    self.lockdown = false
-    self.inCombat = false
-    self:MeterEndSession()
-    self:SetRestriction("Combat", false)
-    self:Fire("PLAYER_REGEN_ENABLED")
+-- What the client writes to disk and reads back: finite numbers, strings, booleans, and tables keyed by strings or
+-- finite numbers, written out as text, so every table read back is a fresh copy (shared references become separate
+-- tables). Functions, widgets, NaN, inf and a cycle's back-reference aren't saved. A secret is an error [C]: what the
+-- client does with one is unknown, and an addon that lets a secret reach its SavedVariables broke the secret rule
+-- anyway.
+-- path holds the tables being written.
+local function Serialize(value, path)
+    if IsSecret(value) then
+        error("a secret value reached SavedVariables", 0)
+    end
+
+    local kind = type(value)
+
+    if (kind == "string") or (kind == "boolean") then
+        return value
+    elseif kind == "number" then
+        return ((Finite(value) and value) or nil)
+    elseif (kind ~= "table") or Harness.State(value) then
+        return nil
+    end
+
+    path = (path or {})
+
+    if path[value] then
+        return nil
+    end
+
+    path[value] = true
+    local copy = {}
+
+    for k, v in pairs(value) do
+        if IsSecret(k) then
+            -- The client refuses a secret table key when it's set (secrets.rawOperations: tableKey); Lua 5.1 can't
+            -- intercept that, so the write to SavedVariables is where it surfaces.
+            error("a secret table key reached SavedVariables", 0)
+        end
+
+        if (type(k) == "string") or ((type(k) == "number") and Finite(k)) then
+            local saved = Serialize(v, path)
+
+            if saved ~= nil then
+                copy[k] = saved
+            end
+        end
+    end
+
+    path[value] = nil
+
+    return copy
 end
 
 function Harness:AddMedia(path)
     self.files[path] = true
 end
 
--- Schedules fn at h.time + delay; returns the entry (entry.cancelled stops it).
-function Harness:Schedule(delay, fn)
-    self.timerSerial = (self.timerSerial + 1)
-    local entry = { due = (self.time + math.max(delay or 0, 0)), serial = self.timerSerial, fn = fn }
-
-    self.timers[#self.timers + 1] = entry
-    return entry
-end
-
--- Advances GetTime and the server clock by seconds, running every C_Timer callback and
--- animation finish that falls due, in due order (ties in scheduling order). A callback's error
--- reaches the error handler. More than MAX_TIMER_CALLBACKS callbacks in one call is an error.
+-- Advances GetTime and the server clock by seconds, running every C_Timer callback and animation finish that falls due,
+-- in due order (ties in scheduling order). A callback's error reaches the error handler. More than MAX_TIMER_CALLBACKS
+-- callbacks in one call is an error.
 function Harness:Advance(seconds)
     local target = (self.time + seconds)
     local ran = 0
@@ -493,45 +583,66 @@ function Harness:Advance(seconds)
                 end
             end
         end
+
         if not nextIndex then
             break
         end
+
         ran = (ran + 1)
+
         if ran > Harness.MAX_TIMER_CALLBACKS then
             error(("h:Advance ran %d timer callbacks without reaching time %s: a timer keeps rescheduling itself")
                 :format(Harness.MAX_TIMER_CALLBACKS, tostring(target)), 2)
         end
+
         local entry = table.remove(self.timers, nextIndex)
 
         self.serverTime = (self.serverTime + (entry.due - self.time))
         self.time = entry.due
         self:Protect(entry.fn)
     end
+
     for i = #self.timers, 1, -1 do
         if self.timers[i].cancelled then
             table.remove(self.timers, i)
         end
     end
+
     self.serverTime = (self.serverTime + (target - self.time))
     self.time = target
 end
 
--- Runs fn(...) like the client runs a script: an error goes to the error handler.
-function Harness:Protect(fn, ...)
-    local args, n = { ... }, select("#", ...)
-    local ok, err = pcall(function() return fn(unpack(args, 1, n)) end)
-
-    if not ok then
-        self:ReportError(err)
-    end
-    return ok
+-- Calls to a wrapped API function ("UnitHealth", "C_Spell.IsSpellUsable") since the harness was made or the count was
+-- reset (h.apiCalls = {}), so tests can assert the work per event.
+function Harness:CountApiCalls(name)
+    return (self.apiCalls[name] or 0)
 end
 
--- Dispatches an event to every frame registered for it when the dispatch starts (frames created
--- or registered during it wait for the next one). Unit registrations filter on the raw unit
--- token, before any wrapping. A payload the snapshot flags as secret is wrapped when its
--- predicate holds, except its unit-token fields. Handler errors reach the error handler; a payload
--- the event couldn't carry (Harness.CheckPayload) is the test's error.
+-- Every widget's (frames, regions, animations) calls to method, summed.
+function Harness:CountCalls(method)
+    local total = 0
+
+    for _, widget in ipairs(self.widgets) do
+        total = (total + (Harness.State(widget).calls[method] or 0))
+    end
+
+    return total
+end
+
+-- Combat, in the order [P] combat.edges saw: PLAYER_REGEN_DISABLED (UnitAffectingCombat already true; no lockdown or
+-- restriction yet), then the Combat restriction, then lockdown and a new damage meter session (meter.lua).
+function Harness:EnterCombat()
+    self.inCombat = true
+    self:Fire("PLAYER_REGEN_DISABLED")
+    self:SetRestriction("Combat", true)
+    self.lockdown = true
+    self:MeterStartSession()
+end
+
+-- Dispatches an event to every frame registered for it when the dispatch starts (frames created or registered during it
+-- wait for the next one). Unit registrations filter on the raw unit token, before any wrapping. A payload the snapshot
+-- flags as secret is wrapped when its predicate holds, except its unit-token fields. Handler errors reach the error
+-- handler; a payload the event couldn't carry (Harness.CheckPayload) is the test's error.
 function Harness:Fire(event, ...)
     local entry = Snapshot.events[event]
 
@@ -549,6 +660,7 @@ function Harness:Fire(event, ...)
             receivers[#receivers + 1] = frame
         end
     end
+
     if entry.secret and self:SecretFor(entry.secret, Harness.CallContext(entry, "Payload", payload)) then
         local types = Harness.Types(entry, "Payload")
 
@@ -558,6 +670,7 @@ function Harness:Fire(event, ...)
             end
         end
     end
+
     for _, frame in ipairs(receivers) do
         local state = Harness.State(frame)
         local handler = state.scripts.OnEvent
@@ -568,78 +681,14 @@ function Harness:Fire(event, ...)
     end
 end
 
--- Resets every widget's call counters (for per-event work assertions).
-function Harness:ResetCalls()
-    for _, widget in ipairs(self.widgets) do
-        Harness.State(widget).calls = {}
-    end
-end
-
--- Calls to a wrapped API function ("UnitHealth", "C_Spell.IsSpellUsable") since the harness was
--- made or the count was reset (h.apiCalls = {}), so tests can assert the work per event.
-function Harness:CountApiCalls(name)
-    return (self.apiCalls[name] or 0)
-end
-
--- Every widget's (frames, regions, animations) calls to method, summed.
-function Harness:CountCalls(method)
-    local total = 0
-
-    for _, widget in ipairs(self.widgets) do
-        total = (total + (Harness.State(widget).calls[method] or 0))
-    end
-    return total
-end
-
-local function SavedNames(addon)
-    local names = {}
-
-    for _, list in ipairs({ addon.savedVariables, addon.savedVariablesPerCharacter }) do
-        for _, name in ipairs(list) do
-            names[#names + 1] = name
-        end
-    end
-    return names
-end
-
--- Loads one addon's files (dependencies first), assigns its SavedVariables (account and
--- per-character, from h.saved) and fires its ADDON_LOADED, like the client. The SavedVariables
--- are nil while the files run; a restored value replaces whatever the files assigned.
-function Harness:LoadFiles(name)
-    if self.loaded[name] then
-        return self.loaded[name]
-    end
-    local addon = assert(Addons[name], "unknown addon " .. tostring(name))
-
-    assert(#addon.missing == 0, ("%s: the TOC lists %s, which doesn't exist"):format(name, table.concat(addon.missing, ", ")))
-    for _, dependency in ipairs(addon.dependencies) do
-        self:LoadFiles(dependency)
-    end
-    local saved = SavedNames(addon)
-
-    for _, variable in ipairs(saved) do
-        self.declared[variable] = true
-        rawset(self.env, variable, nil)
-    end
-    local ns = {}
-
-    self.loading = addon
-    for i, file in ipairs(addon.files) do
-        local chunk = assert(loadstring(addon.sources[i], "@" .. (addon.as or name) .. "/" .. file))
-
-        setfenv(chunk, self.env)
-        self:Protect(chunk, name, ns) -- like the client: a file that errors is reported, the rest still load
-    end
-    self.loading = nil
-    self.loaded[name] = ns
-    self.loadOrder[#self.loadOrder + 1] = name
-    for _, variable in ipairs(saved) do
-        if self.saved[variable] ~= nil then
-            rawset(self.env, variable, self.saved[variable])
-        end
-    end
-    self:Fire("ADDON_LOADED", name, false)
-    return ns
+-- Leaving combat ends lockdown and the damage meter session, then lifts the Combat restriction before
+-- PLAYER_REGEN_ENABLED ([P] combat.edges: Combat Inactive comes first).
+function Harness:LeaveCombat()
+    self.lockdown = false
+    self.inCombat = false
+    self:MeterEndSession()
+    self:SetRestriction("Combat", false)
+    self:Fire("PLAYER_REGEN_ENABLED")
 end
 
 -- Loads an addon and runs the login sequence. Returns the addon's namespace table.
@@ -648,6 +697,57 @@ function Harness:LoadAddon(name)
 
     self.ns, self.mainAddon = ns, name
     self:Login(true, false)
+
+    return ns
+end
+
+-- Loads one addon's files (dependencies first), assigns its SavedVariables (account and per-character, from h.saved)
+-- and fires its ADDON_LOADED, like the client. The SavedVariables are nil while the files run; a restored value
+-- replaces whatever the files assigned.
+function Harness:LoadFiles(name)
+    if self.loaded[name] then
+        return self.loaded[name]
+    end
+
+    local addon = assert(Addons[name], "unknown addon " .. tostring(name))
+
+    assert(#addon.missing == 0, ("%s: the TOC lists %s, which doesn't exist"):format(name, table.concat(addon.missing, ", ")))
+
+    for _, dependency in ipairs(addon.dependencies) do
+        self:LoadFiles(dependency)
+    end
+
+    local saved = SavedNames(addon)
+
+    for _, variable in ipairs(saved) do
+        self.declared[variable] = true
+        rawset(self.env, variable, nil)
+    end
+
+    local ns = {}
+
+    self.loading = addon
+
+    for i, file in ipairs(addon.files) do
+        local chunk = assert(loadstring(addon.sources[i], "@" .. (addon.as or name) .. "/" .. file))
+
+        setfenv(chunk, self.env)
+        -- like the client: a file that errors is reported, the rest still load
+        self:Protect(chunk, name, ns)
+    end
+
+    self.loading = nil
+    self.loaded[name] = ns
+    self.loadOrder[#self.loadOrder + 1] = name
+
+    for _, variable in ipairs(saved) do
+        if self.saved[variable] ~= nil then
+            rawset(self.env, variable, self.saved[variable])
+        end
+    end
+
+    self:Fire("ADDON_LOADED", name, false)
+
     return ns
 end
 
@@ -657,128 +757,100 @@ function Harness:Login(isInitialLogin, isReloadingUi)
     self:Fire("PLAYER_ENTERING_WORLD", isInitialLogin, isReloadingUi)
 end
 
-local function Finite(value)
-    return ((value == value) and (value ~= math.huge) and (value ~= -math.huge))
+-- Runs fn(...) like the client runs a script: an error goes to the error handler.
+function Harness:Protect(fn, ...)
+    local args, n = { ... }, select("#", ...)
+    local ok, err = pcall(function() return fn(unpack(args, 1, n)) end)
+
+    if not ok then
+        self:ReportError(err)
+    end
+
+    return ok
 end
 
--- What the client writes to disk and reads back: finite numbers, strings, booleans, and tables
--- keyed by strings or finite numbers, written out as text, so every table read back is a fresh
--- copy (shared references become separate tables). Functions, widgets, NaN, inf and a cycle's
--- back-reference aren't saved. A secret is an error [C]: what the client does with one is
--- unknown, and an addon that lets a secret reach its SavedVariables broke the secret rule anyway.
--- path holds the tables being written.
-local function Serialize(value, path)
-    if IsSecret(value) then
-        error("a secret value reached SavedVariables", 0)
+-- Resets every widget's call counters (for per-event work assertions).
+function Harness:ResetCalls()
+    for _, widget in ipairs(self.widgets) do
+        Harness.State(widget).calls = {}
     end
-    local kind = type(value)
+end
 
-    if (kind == "string") or (kind == "boolean") then
-        return value
-    elseif kind == "number" then
-        return ((Finite(value) and value) or nil)
-    elseif (kind ~= "table") or Harness.State(value) then
-        return nil
-    end
-    path = (path or {})
-    if path[value] then
-        return nil
-    end
-    path[value] = true
-    local copy = {}
+-- Schedules fn at h.time + delay; returns the entry (entry.cancelled stops it).
+function Harness:Schedule(delay, fn)
+    self.timerSerial = (self.timerSerial + 1)
+    local entry = { due = (self.time + math.max(delay or 0, 0)), fn = fn, serial = self.timerSerial }
 
-    for k, v in pairs(value) do
-        if IsSecret(k) then
-            -- The client refuses a secret table key when it's set (secrets.rawOperations: tableKey);
-            -- Lua 5.1 can't intercept that, so the write to SavedVariables is where it surfaces.
-            error("a secret table key reached SavedVariables", 0)
-        end
-        if (type(k) == "string") or ((type(k) == "number") and Finite(k)) then
-            local saved = Serialize(v, path)
+    self.timers[#self.timers + 1] = entry
 
-            if saved ~= nil then
-                copy[k] = saved
-            end
+    return entry
+end
+
+-- Activates or clears an addon restriction (Enum.AddOnRestrictionType name). Activating fires
+-- ADDON_RESTRICTION_STATE_CHANGED(type, Activating) while the restriction isn't enforced, then enforces it and fires
+-- Active (none for SILENT_ACTIVE ones); clearing lifts it, then fires Inactive.
+function Harness:SetRestriction(name, active)
+    local index
+
+    for i, known in ipairs(Harness.RESTRICTIONS) do
+        if known == name then
+            index = (i - 1)
         end
     end
-    path[value] = nil
-    return copy
+
+    assert(index, "unknown restriction " .. tostring(name))
+    active = ((active and true) or false)
+
+    if self.restrictions[name] == active then
+        return
+    end
+
+    if active then
+        -- Activating: not enforced during this dispatch
+        self:FireRestriction(index, 1)
+        self.restrictions[name] = true
+
+        if not Harness.SILENT_ACTIVE[name] then
+            -- Active
+            self:FireRestriction(index, 2)
+        end
+    else
+        self.restrictions[name] = false
+        -- Inactive
+        self:FireRestriction(index, 0)
+    end
 end
 
 Harness.Serialize = Serialize
 
--- Logs out and back in (or reloads the UI): fires PLAYER_LOGOUT, writes every loaded addon's
--- SavedVariables, then starts a fresh UI (new frames and environment, same world) that loads
--- the same addons and runs the login sequence with the given PLAYER_ENTERING_WORLD arguments.
--- whileAway (optional) runs after logout and before the files load again: the world can change
--- while the player is gone (time passes, rested XP accrues).
-function Harness:Restart(isInitialLogin, isReloadingUi, whileAway)
-    self:Fire("PLAYER_LOGOUT")
-    for _, name in ipairs(self.loadOrder) do
-        for _, variable in ipairs(SavedNames(Addons[name])) do
-            self.saved[variable] = Serialize(rawget(self.env, variable))
-        end
-    end
-    if whileAway then
-        whileAway(self)
-    end
-    local order, main = self.loadOrder, self.mainAddon
+-- Clicks a widget with the mouse (button defaults to "LeftButton"): OnMouseDown, OnMouseUp and, for a Button, OnClick.
+-- Only a visible, mouse-enabled widget receives clicks (a Button is mouse-enabled from creation, like the client's).
+-- Returns whether the click landed.
+function Harness:Click(widget, button)
+    button = (button or "LeftButton")
+    local state = Harness.State(widget)
 
-    self.frames, self.widgets, self.timers, self.loaded, self.loadOrder, self.declared = {}, {}, {}, {}, {}, {}
-    -- The quest dialog closes with the old UI, and its giver with it.
-    self.loggedIn, self.ns, self.questDialog = false, nil, nil
-    self.units.questnpc, self.units.npc = nil, nil
-    self.categories, self.category = {}, nil
-    self.prefixes, self.prefixOrder = {}, {}
-    self.env = self:BuildEnvironment()
-    for _, name in ipairs(order) do
-        local ns = self:LoadFiles(name)
-
-        if (name == main) or not main then
-            self.ns = ns
-        end
+    if not self:IsVisibleWidget(widget) or not state.mouseEnabled then
+        return false
     end
-    self:Login(isInitialLogin, isReloadingUi)
+
+    local scripts = state.scripts
+
+    if scripts.OnMouseDown then self:Protect(scripts.OnMouseDown, widget, button) end
+
+    if scripts.OnMouseUp then self:Protect(scripts.OnMouseUp, widget, button, true) end
+
+    if (state.widgetType == "Button") and (state.enabled ~= false) and scripts.OnClick then
+        self:Protect(scripts.OnClick, widget, button, false)
+    end
+
+    return true
 end
 
--- /reload: PLAYER_ENTERING_WORLD(false, true).
-function Harness:Reload()
-    self:Restart(false, true)
-end
-
--- Logs out, waits serverSecondsLater (default 60) and logs back in: PLAYER_ENTERING_WORLD(true, false).
--- Logging out ends combat, lockdown and every restriction, and clears the damage meter's sessions
--- and recaps. A fresh login has no target, focus, mouseover or nameplates, and no combo points
--- (the pet and the group stay). whileAway(h), if given, runs while logged out, after the time has
--- passed.
-function Harness:Relog(serverSecondsLater, whileAway)
-    local seconds = (serverSecondsLater or 60)
-
-    self:Restart(true, false, function()
-        self.inCombat, self.lockdown = false, false
-        for _, name in ipairs(Harness.RESTRICTIONS) do
-            self.restrictions[name] = false
-        end
-        self:InitMeter()
-        self.target, self.comboHolder = nil, nil
-        for token in pairs(self.units) do
-            if token ~= "pet" then
-                self.units[token] = nil
-            end
-        end
-        self.serverTime = (self.serverTime + seconds)
-        self.time = (self.time + seconds)
-        if whileAway then
-            whileAway(self)
-        end
-    end)
-end
-
--- Presses (down = true) or releases a gamepad key like "PAD1". The newest visible frame (every
--- ancestor shown) with gamepad buttons enabled and a script for it takes the key, whatever the
--- script returns [E]: while Scholar's riddle had its buttons enabled, the d-pad, which the riddle
--- doesn't bind and whose script returned true, never reached the game (client 1.60.1 (70009)).
--- Only a key no such frame takes lands in h.propagated.
+-- Presses (down = true) or releases a gamepad key like "PAD1". The newest visible frame (every ancestor shown) with
+-- gamepad buttons enabled and a script for it takes the key, whatever the script returns [E]: while Scholar's riddle
+-- had its buttons enabled, the d-pad, which the riddle doesn't bind and whose script returned true, never reached the
+-- game (client 1.60.1 (70009)). Only a key no such frame takes lands in h.propagated.
 function Harness:Gamepad(key, down)
     local script = ((down and "OnGamePadButtonDown") or "OnGamePadButtonUp")
 
@@ -789,35 +861,16 @@ function Harness:Gamepad(key, down)
 
         if state.gamepadButtons and self:IsVisibleWidget(frame) and handler then
             self:Protect(handler, frame, key)
+
             return
         end
     end
+
     self.propagated[#self.propagated + 1] = key
 end
 
--- Clicks a widget with the mouse (button defaults to "LeftButton"): OnMouseDown, OnMouseUp and,
--- for a Button, OnClick. Only a visible, mouse-enabled widget receives clicks (a Button is
--- mouse-enabled from creation, like the client's). Returns whether the click landed.
-function Harness:Click(widget, button)
-    button = (button or "LeftButton")
-    local state = Harness.State(widget)
-
-    if not self:IsVisibleWidget(widget) or not state.mouseEnabled then
-        return false
-    end
-    local scripts = state.scripts
-
-    if scripts.OnMouseDown then self:Protect(scripts.OnMouseDown, widget, button) end
-    if scripts.OnMouseUp then self:Protect(scripts.OnMouseUp, widget, button, true) end
-    if (state.widgetType == "Button") and (state.enabled ~= false) and scripts.OnClick then
-        self:Protect(scripts.OnClick, widget, button, false)
-    end
-    return true
-end
-
--- Moves the mouse onto (entering = true) or off a widget: OnEnter(widget, true) or
--- OnLeave(widget, true). Like clicks, only a visible, mouse-enabled widget gets them. Returns
--- whether the script ran.
+-- Moves the mouse onto (entering = true) or off a widget: OnEnter(widget, true) or OnLeave(widget, true). Like clicks,
+-- only a visible, mouse-enabled widget gets them. Returns whether the script ran.
 function Harness:Hover(widget, entering)
     local state = Harness.State(widget)
     local handler = state.scripts[((entering == false) and "OnLeave") or "OnEnter"]
@@ -825,8 +878,86 @@ function Harness:Hover(widget, entering)
     if not self:IsVisibleWidget(widget) or not state.mouseEnabled or not handler then
         return false
     end
+
     self:Protect(handler, widget, true)
+
     return true
+end
+
+-- /reload: PLAYER_ENTERING_WORLD(false, true).
+function Harness:Reload()
+    self:Restart(false, true)
+end
+
+-- Logs out, waits serverSecondsLater (default 60) and logs back in: PLAYER_ENTERING_WORLD(true, false). Logging out
+-- ends combat, lockdown and every restriction, and clears the damage meter's sessions and recaps. A fresh login has no
+-- target, focus, mouseover or nameplates, and no combo points (the pet and the group stay). whileAway(h), if given,
+-- runs while logged out, after the time has passed.
+function Harness:Relog(serverSecondsLater, whileAway)
+    local seconds = (serverSecondsLater or 60)
+
+    self:Restart(true, false, function()
+        self.inCombat, self.lockdown = false, false
+
+        for _, name in ipairs(Harness.RESTRICTIONS) do
+            self.restrictions[name] = false
+        end
+
+        self:InitMeter()
+        self.target, self.comboHolder = nil, nil
+
+        for token in pairs(self.units) do
+            if token ~= "pet" then
+                self.units[token] = nil
+            end
+        end
+
+        self.serverTime = (self.serverTime + seconds)
+        self.time = (self.time + seconds)
+
+        if whileAway then
+            whileAway(self)
+        end
+    end)
+end
+
+-- Logs out and back in (or reloads the UI): fires PLAYER_LOGOUT, writes every loaded addon's SavedVariables, then
+-- starts a fresh UI (new frames and environment, same world) that loads the same addons and runs the login sequence
+-- with the given PLAYER_ENTERING_WORLD arguments.
+-- whileAway (optional) runs after logout and before the files load again: the world can change while the player is gone
+-- (time passes, rested XP accrues).
+function Harness:Restart(isInitialLogin, isReloadingUi, whileAway)
+    self:Fire("PLAYER_LOGOUT")
+
+    for _, name in ipairs(self.loadOrder) do
+        for _, variable in ipairs(SavedNames(Addons[name])) do
+            self.saved[variable] = Serialize(rawget(self.env, variable))
+        end
+    end
+
+    if whileAway then
+        whileAway(self)
+    end
+
+    local order, main = self.loadOrder, self.mainAddon
+
+    self.frames, self.widgets, self.timers, self.loaded, self.loadOrder, self.declared = {}, {}, {}, {}, {}, {}
+    -- The quest dialog closes with the old UI, and its giver with it.
+    self.loggedIn, self.ns, self.questDialog = false, nil, nil
+    self.units.questnpc, self.units.npc = nil, nil
+    self.categories, self.category = {}, nil
+    self.prefixes, self.prefixOrder = {}, {}
+    self.env = self:BuildEnvironment()
+
+    for _, name in ipairs(order) do
+        local ns = self:LoadFiles(name)
+
+        if (name == main) or not main then
+            self.ns = ns
+        end
+    end
+
+    self:Login(isInitialLogin, isReloadingUi)
 end
 
 -- Runs a slash command as if typed, e.g. h:Slash("/tlk fom").
@@ -838,10 +969,12 @@ function Harness:Slash(line)
             local alias = rawget(self.env, "SLASH_" .. key .. i)
 
             if alias == nil then break end
+
             if alias:lower() == command:lower() then
                 return handler(rest)
             end
         end
     end
+
     error("no slash command " .. command)
 end

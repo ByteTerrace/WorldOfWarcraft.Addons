@@ -1,5 +1,5 @@
--- The harness's fidelity rules for frame visibility scripts and moving frames
--- (tests/harness/widgets.lua, h:Drag in tests/harness/input.lua).
+-- The harness's fidelity rules for frame visibility scripts and moving frames (tests/harness/widgets.lua, h:Drag in
+-- tests/harness/input.lua).
 
 local function Recorder(log, name)
     return function() log[#log + 1] = name end
@@ -14,19 +14,23 @@ test("OnShow and OnHide run when visibility changes, for the frame and its visib
     local hidden = env.CreateFrame("Frame", nil, child)
 
     hidden:Hide()
+
     for name, frame in pairs({ child = child, hidden = hidden, parent = parent }) do
         frame:SetScript("OnShow", Recorder(log, name .. "+"))
         frame:SetScript("OnHide", Recorder(log, name .. "-"))
     end
+
     parent:Show()
     eq(#log, 0, "showing a shown frame runs nothing")
     parent:Hide()
     eq(table.concat(log, ","), "parent-,child-", "the frame first, then descendants that were visible")
     log = {}
+
     for name, frame in pairs({ child = child, hidden = hidden, parent = parent }) do
         frame:SetScript("OnShow", Recorder(log, name .. "+"))
         frame:SetScript("OnHide", Recorder(log, name .. "-"))
     end
+
     hidden:Show()
     eq(#log, 0, "showing under a hidden parent doesn't make it visible")
     truthy(hidden:IsShown())
@@ -60,6 +64,7 @@ local function Movable(h)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
+
     return frame
 end
 
@@ -71,15 +76,18 @@ test("dragging runs OnMouseDown, OnDragStart and OnDragStop, not OnMouseUp or On
 
     frame:SetScript("OnMouseDown", function(_, button) log[#log + 1] = ("down:" .. button) end)
     frame:SetScript("OnMouseUp", Recorder(log, "up"))
+
     frame:SetScript("OnDragStart", function(self, button)
         log[#log + 1] = ("start:" .. button)
         self:StartMoving()
     end)
+
     frame:SetScript("OnDragStop", function(self)
         log[#log + 1] = "stop"
         self:StopMovingOrSizing()
         stopped = { self:GetPoint(1) }
     end)
+
     falsy(frame:IsUserPlaced())
     truthy(h:Drag(frame, -100, 50))
     eq(table.concat(log, ","), "down:LeftButton,start:LeftButton,stop")
@@ -146,7 +154,8 @@ end)
 test("moving a protected frame is blocked in combat lockdown", function()
     local h = Harness.New()
 
-    h:ExpectBlocked(2) -- the calls under test
+    -- the calls under test
+    h:ExpectBlocked(2)
     local env = h.env
     local secure = env.CreateFrame("Button", nil, env.UIParent, "SecureActionButtonTemplate")
 

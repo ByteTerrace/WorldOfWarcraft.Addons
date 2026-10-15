@@ -1,7 +1,7 @@
 local addonName, ns = ...
 
--- Scholar's pictures: riddles drawn so young players can count. ScholarView owns the frame's place
--- on the screen; this file fills it.
+-- Scholar's pictures: riddles drawn so young players can count. ScholarView owns the frame's place on the screen; this
+-- file fills it.
 --
 --   ns.ScholarPictures.Create(parent) -> frame   an empty picture area
 --   ns.ScholarPictures.Draw(frame, picture, tiles) -> height
@@ -11,14 +11,27 @@ local addonName, ns = ...
 --     are an unscramble's letters, drawn as letter tiles instead. Returns 0 when there's nothing
 --     to draw, and the frame is then hidden.
 --
--- It also defines ns.ScholarStyle, the look the whole Scholar screen shares: { Palette, Solid,
--- Border, StarIcon, WrongIcon, Backdrop(frame, edgeSize), BackdropColors(frame, fill, edge),
--- TextColor(fontString, color) }. This file
+-- It also defines ns.ScholarStyle, the look the whole Scholar screen shares: { Palette, Solid, Border, StarIcon,
+-- WrongIcon, Backdrop(frame, edgeSize), BackdropColors(frame, fill, edge), TextColor(fontString, color) }. This file
 -- loads before ScholarView.lua, which reads it.
 
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local IconGap = 3
 local IconSize = 20
+
+-- Icons for the items riddles count, by the item's name (ScholarWords.lua's items). An item not listed is drawn as a
+-- star.
+local ItemIcons = {
+    apple = "Interface\\Icons\\INV_Misc_Food_19",
+    arrow = "Interface\\Icons\\INV_Ammo_Arrow_02",
+    fish = "Interface\\Icons\\INV_Misc_Fish_02",
+    gear = "Interface\\Icons\\INV_Misc_Gear_01",
+    gem = "Interface\\Icons\\INV_Misc_Gem_Ruby_01",
+    mushroom = "Interface\\Icons\\INV_Mushroom_11",
+    potion = "Interface\\Icons\\INV_Potion_51",
+    scroll = "Interface\\Icons\\INV_Scroll_03",
+}
+
 local Palette = {
     bad = { 1, 0.4, 0.35 },
     band = { 0.2, 0.15, 0.09 },
@@ -48,23 +61,12 @@ local Palette = {
     tile = { 0.93, 0.86, 0.68 },
     wrongFill = { 0.24, 0.07, 0.06 },
 }
+
 local Solid = "Interface\\Buttons\\WHITE8X8"
 local StarIcon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1"
 local TileGap = 8
 local TileSize = 40
 local WrongIcon = "Interface\\RAIDFRAME\\ReadyCheck-NotReady"
--- Icons for the items riddles count, by the item's name (ScholarWords.lua's items). An item not
--- listed is drawn as a star.
-local ItemIcons = {
-    apple = "Interface\\Icons\\INV_Misc_Food_19",
-    arrow = "Interface\\Icons\\INV_Ammo_Arrow_02",
-    fish = "Interface\\Icons\\INV_Misc_Fish_02",
-    gear = "Interface\\Icons\\INV_Misc_Gear_01",
-    gem = "Interface\\Icons\\INV_Misc_Gem_Ruby_01",
-    mushroom = "Interface\\Icons\\INV_Mushroom_11",
-    potion = "Interface\\Icons\\INV_Potion_51",
-    scroll = "Interface\\Icons\\INV_Scroll_03",
-}
 
 local ceil, floor, max, min = math.ceil, math.floor, math.max, math.min
 local CreateFrame = CreateFrame
@@ -81,8 +83,7 @@ local function Backdrop(frame, edgeSize)
         insets = { bottom = 3, left = 3, right = 3, top = 3 } })
 end
 
---- Colors frame's backdrop with palette colors, { r, g, b }: fill (opaque) and edge. A nil one
---- stays as it is.
+--- Colors frame's backdrop with palette colors, { r, g, b }: fill (opaque) and edge. A nil one stays as it is.
 ---@param frame table
 ---@param fill table?
 ---@param edge table?
@@ -90,16 +91,23 @@ local function BackdropColors(frame, fill, edge)
     if fill then
         frame:SetBackdropColor(fill[1], fill[2], fill[3], 1)
     end
+
     if edge then
         frame:SetBackdropBorderColor(edge[1], edge[2], edge[3])
     end
 end
 
---- Colors fontString with a palette color, { r, g, b }.
----@param fontString table
----@param color table
-local function TextColor(fontString, color)
-    fontString:SetTextColor(color[1], color[2], color[3])
+local function PictureCard(pictures, index)
+    local card = pictures.Cards[index]
+
+    if not card then
+        card = CreateFrame("Frame", nil, pictures, "BackdropTemplate")
+        Backdrop(card, 10)
+        BackdropColors(card, Palette.card, Palette.edge)
+        pictures.Cards[index] = card
+    end
+
+    return card
 end
 
 local function PictureIcon(pictures, index)
@@ -114,19 +122,8 @@ local function PictureIcon(pictures, index)
         icon.Cross:SetTexture(WrongIcon)
         pictures.Icons[index] = icon
     end
+
     return icon
-end
-
-local function PictureCard(pictures, index)
-    local card = pictures.Cards[index]
-
-    if not card then
-        card = CreateFrame("Frame", nil, pictures, "BackdropTemplate")
-        Backdrop(card, 10)
-        BackdropColors(card, Palette.card, Palette.edge)
-        pictures.Cards[index] = card
-    end
-    return card
 end
 
 -- Places count icons in a grid of columns starting at (x, y); returns the grid's width and height.
@@ -145,9 +142,17 @@ local function Grid(pictures, first, count, columns, x, y, texture, crossedFrom)
         icon.Cross:SetShown((crossed and true) or false)
         icon:Show()
     end
+
     local columnsUsed, rows = min(count, columns), ceil(count / columns)
 
     return ((columnsUsed * (IconSize + IconGap)) - IconGap), ((rows * (IconSize + IconGap)) - IconGap)
+end
+
+--- Colors fontString with a palette color, { r, g, b }.
+---@param fontString table
+---@param color table
+local function TextColor(fontString, color)
+    fontString:SetTextColor(color[1], color[2], color[3])
 end
 
 -- Lays out an unscramble's letters as tiles; returns their width and height.
@@ -167,17 +172,18 @@ local function DrawTiles(pictures, tiles)
             TextColor(tile.Letter, Palette.ink)
             pictures.Tiles[i] = tile
         end
+
         tile.Letter:SetText(letter)
         tile:ClearAllPoints()
         tile:SetPoint("TOPLEFT", x, 0)
         tile:Show()
         x = ((x + TileSize) + TileGap)
     end
+
     return (x - TileGap), (TileSize + 4)
 end
 
---- Draws a puzzle's picture (see the header) or its tiles, and returns the height, or 0 when
---- there's nothing to draw.
+--- Draws a puzzle's picture (see the header) or its tiles, and returns the height, or 0 when there's nothing to draw.
 ---@param pictures table the frame from Create
 ---@param picture table?
 ---@param tiles table?
@@ -187,24 +193,32 @@ local function Draw(pictures, picture, tiles)
         icon:Hide()
         icon.Cross:Hide()
     end
+
     for _, card in ipairs(pictures.Cards) do
         card:Hide()
     end
+
     for _, tile in ipairs(pictures.Tiles) do
         tile:Hide()
     end
+
     pictures.Plus:Hide()
+
     if tiles then
         local width, height = DrawTiles(pictures, tiles)
 
         pictures:SetSize(width, height)
         pictures:Show()
+
         return height
     end
+
     if not picture then
         pictures:Hide()
+
         return 0
     end
+
     local texture, width, height = (ItemIcons[picture.item] or StarIcon), 0, 0
 
     if picture.kind == "groups" then
@@ -223,6 +237,7 @@ local function Draw(pictures, picture, tiles)
             x = ((x + cardWidth) + 10)
             height = max(height, h + 16)
         end
+
         width = (x - 10)
     elseif picture.kind == "join" then
         local w1, h1 = Grid(pictures, 1, picture.a, 5, 0, 0, texture)
@@ -238,8 +253,10 @@ local function Draw(pictures, picture, tiles)
     elseif picture.kind == "count" then
         width, height = Grid(pictures, 1, picture.n, 5, 0, 0, texture)
     end
+
     pictures:SetSize(max(width, 1), height)
     pictures:Show()
+
     return height
 end
 
@@ -253,6 +270,7 @@ function ScholarPictures.Create(parent)
     pictures.Plus = pictures:CreateFontString(nil, "OVERLAY", "Game24Font")
     pictures.Plus:SetText("+")
     TextColor(pictures.Plus, Palette.gold)
+
     return pictures
 end
 

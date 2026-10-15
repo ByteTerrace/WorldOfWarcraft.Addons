@@ -1,6 +1,5 @@
--- The kills fact (Facts.lua): your kills of players, for features that react to them. A demand
--- fact: it runs only while a module that uses it runs (uses = { "kills" }). React to a kill with
--- module:OnIncrease on a count.
+-- The kills fact (Facts.lua): your kills of players, for features that react to them. A demand fact: it runs only while
+-- a module that uses it runs (uses = { "kills" }). React to a kill with module:OnIncrease on a count.
 --
 --   kills.honorable  honorable kills this session, one per kill message. The client gives addons no
 --                    combat log; CHAT_MSG_COMBAT_HONOR_GAIN is how it says you got credit for a
@@ -17,14 +16,15 @@ local ByteTerrace = ByteTerrace
 local ipairs = ipairs
 local issecretvalue, type, UnitGUID = issecretvalue, type, UnitGUID
 
--- A Lua pattern from a client format string ("%s dies (Honorable Kill: %s). ..."): each %s is a
--- capture, so the first capture is the victim's name. Both formats are GlobalStrings the client
--- always defines (tools/api/forever.json).
+-- A Lua pattern from a client format string ("%s dies (Honorable Kill: %s). ..."): each %s is a capture, so the first
+-- capture is the victim's name. Both formats are GlobalStrings the client always defines (tools/api/forever.json).
 local function Pattern(formatString)
-    local pattern = formatString:gsub("%%%d+%$([sd])", "%%%1") -- "%1$s" (another locale's order) is "%s"
+    -- "%1$s" (another locale's order) is "%s"
+    local pattern = formatString:gsub("%%%d+%$([sd])", "%%%1")
 
     pattern = pattern:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
     pattern = pattern:gsub("%%s", "(.-)"):gsub("%%d", "%%d+")
+
     return ("^" .. pattern .. "$")
 end
 
@@ -39,6 +39,7 @@ local function Victim(text)
             return victim
         end
     end
+
     return nil
 end
 
@@ -57,19 +58,24 @@ ByteTerrace.Facts.kills = {
                 state:Set(honorable, state.Values[honorable] + 1)
             end
         end)
+
         module:On("PARTY_KILL", function(attackerGUID, targetGUID)
             if issecretvalue(attackerGUID) or issecretvalue(targetGUID) or (type(targetGUID) ~= "string")
                 or not targetGUID:find("^Player%-") then
                 return
             end
+
             local me, pet = UnitGUID("player"), UnitGUID("pet")
 
             if issecretvalue(me) or issecretvalue(pet) then
                 return
             end
+
             if (attackerGUID ~= me) and ((pet == nil) or (attackerGUID ~= pet)) then
-                return -- a groupmate's blow
+                -- a groupmate's blow
+                return
             end
+
             state:Set(blows, state.Values[blows] + 1)
         end)
     end,

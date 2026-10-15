@@ -1,35 +1,42 @@
-// The format verb's rewrites: Puck's `puck format` passes, mapped to Lua (docs/Conventions.md).
-// formatLua(text) runs every pass to a fixed point and returns the canonical text.
+// The format verb's rewrites: Puck's `puck format` passes, mapped to Lua, plus the habits Puck's own
+// code keeps that its formatter doesn't write (docs/Conventions.md#formatting). formatLua(text) runs
+// every pass to a fixed point and returns the canonical text.
 //
-//   string-merge    `"a" .. "b"` of two double-quoted literals on one line becomes one literal.
-//   paren-clarity   every binary and logical expression is parenthesized, except where something
-//                   already delimits it: existing parentheses, an if/elseif/while/until condition, a
-//                   call's arguments, an index's brackets and a numeric for's bounds. An operand of
-//                   the same `and`, `or` or `..` stays bare, so a chain stays one flat group.
-//   init-order      a table constructor whose every field is `name = value` is sorted by name,
-//                   when no value has a side effect. Across lines, fields that each had a line
-//                   keep one; packed fields are packed again, up to 120 columns.
-//   trailing-comma  a multi-line table constructor's last field ends with a comma.
-//   alias-order     a file-level `local a, b = x, y` with side-effect-free values is sorted by name.
-//   local-order     a file-level run of `local` statements (consecutive lines, no comment lines
-//                   between, no side effects, no functions) is sorted by name, never moving a statement past one
-//                   whose value reads it or one that the value read as a global before.
-//   decl-spacing    one blank line between a run of `local` statements and the statement after it.
-//   member-spacing  one blank line between a file-level function and its neighbors.
-//   blank-lines     no run of blank lines longer than one, and none at the start of the file.
+//   trailing-comments  a comment after code moves onto its own line above it.
+//   string-merge       `"a" .. "b"` of two double-quoted literals on one line becomes one literal.
+//   paren-clarity      every binary and logical expression is parenthesized, except where something
+//                      already delimits it: existing parentheses, an if/elseif/while/until condition,
+//                      a call's arguments, an index's brackets and a numeric for's bounds. An operand
+//                      of the same `and`, `or` or `..` stays bare, so a chain stays one flat group.
+//   init-order         a table constructor whose every field is `name = value` is sorted by name,
+//                      when no value calls anything (or with options.sortCalls); a field's own comment
+//                      lines move with it. Across lines, fields that each had a line keep one; packed
+//                      fields are packed again, up to 120 columns.
+//   trailing-comma     a multi-line table constructor's last field ends with a comma.
+//   alias-order        a file-level `local a, b = x, y` with values that call nothing is sorted by name.
+//   export-order       a file-level run of `Table.member = value` lines is sorted by target.
+//   local-order        a file-level run of `local` statements (consecutive lines, values that call
+//                      nothing and hold no function) is sorted by name, with each one's comment lines.
+//   function-order     a file-level run of functions is sorted, local ones first, with each one's
+//                      comment lines.
+//   decl-spacing       one blank line between a run of `local` statements and the statement after it.
+//   block-spacing      one blank line around blocks and statements spanning lines, and before a return.
+//   member-spacing     one blank line between a file-level function and its neighbors.
+//   comment-fill       a prose paragraph of full-line comments fills its lines up to 120 columns.
+//   blank-lines        no run of blank lines longer than one, and none at the start of the file.
 //
-// Like Puck's, the reordering passes decline anything a comment could be attached to: a comment
-// between table fields, or a comment line inside a run of locals. A pass that changes nothing
-// returns no edits; the result must parse, and running the passes again must change nothing.
-// Names sort alphabetically, ignoring case (Puck's names share one case; Lua's data keys and
-// handlers don't).
+// A sort never moves a unit past one whose values read a name it declares (or whose name it read as
+// a global before). The comment lines directly above a statement are its own; any other comment
+// where a sort would move things keeps the order as written. A pass that changes nothing returns no
+// edits; the result must parse, and running the passes again must change nothing. Names sort
+// alphabetically, ignoring case (Puck's names share one case; Lua's data keys and handlers don't).
 
 import luaparse from "luaparse";
 import { parse, walk } from "./lua-scope.mjs";
 
 export const PASSES = [
-    "string-merge", "paren-clarity", "init-order", "trailing-comma", "alias-order", "local-order", "decl-spacing",
-    "member-spacing", "blank-lines",
+    "trailing-comments", "string-merge", "paren-clarity", "init-order", "trailing-comma", "alias-order", "export-order",
+    "local-order", "function-order", "decl-spacing", "block-spacing", "member-spacing", "comment-fill", "blank-lines",
 ];
 
 const MaxColumns = 120;
@@ -100,6 +107,25 @@ function isPure(node) {
     }
 }
 
+// A table constructor's fields when it has two or more and every one is `name = value` with its
+// own name, or null: the constructors init-order sorts.
+function sortableFields(node) {
+    if (node.type !== "TableConstructorExpression" || node.fields.length < 2) return null;
+    if (!node.fields.every((field) => field.type === "TableKeyString")) return null;
+    const names = node.fields.map((field) => field.key.name);
+    return new Set(names).size === names.length ? node.fields : null;
+}
+
+// Whether `-- <kind>: <why>` sits on node's first line or alone on the line above it.
+function annotated(text, ast, node, kind) {
+    const start = lineStart(text, node.range[0]);
+    const above = lineStart(text, start - 1);
+    const pattern = new RegExp(`^--\\s*${kind}:\\s*\\S`);
+    return ast.comments.some((comment) => pattern.test(comment.raw)
+        && ((comment.range[0] >= start && comment.range[0] <= lineEnd(text, start))
+            || (comment.range[0] >= above && comment.range[1] < start && ownLines(text, comment))));
+}
+
 // The names an expression reads (not member names after `.` or `:`), function bodies included.
 function namesRead(node) {
     const names = new Set();
@@ -130,6 +156,34 @@ function blocksOf(ast) {
         else if (Array.isArray(node.body) && node.type !== "Chunk") blocks.push({ body: node.body, fileLevel: false });
     });
     return blocks;
+}
+
+// Whether a comment has its lines to itself.
+function ownLines(text, comment) {
+    return text.slice(lineStart(text, comment.range[0]), comment.range[0]).trim() === ""
+        && text.slice(comment.range[1], lineEnd(text, comment.range[1])).trim() === "";
+}
+
+// Where a statement's unit starts: the first of the comment lines directly above it (no blank
+// line between, each on its own lines), which belong to it, or the statement's own line.
+function unitStart(text, ast, statement) {
+    let start = lineStart(text, statement.range[0]);
+    for (let i = ast.comments.length - 1; i >= 0; i--) {
+        const comment = ast.comments[i];
+        if (comment.range[1] > start) continue;
+        if (!ownLines(text, comment) || lineEnd(text, comment.range[1]) + 1 !== start) break;
+        start = lineStart(text, comment.range[0]);
+    }
+    return start;
+}
+
+// The long strings and comments, whose text is their own: no pass edits inside one.
+function fixedRanges(ast) {
+    const fixed = [...ast.comments.map((comment) => comment.range)];
+    walk(ast.body, (node) => {
+        if (node.type === "StringLiteral" && node.raw.startsWith("[")) fixed.push(node.range);
+    });
+    return fixed;
 }
 
 // The end of a statement's last line when nothing but a line comment follows it there, or -1.
@@ -202,22 +256,28 @@ const Passes = {
         return edits;
     },
 
-    "init-order": ({ text, ast }) => {
+    "init-order": ({ text, ast, options }) => {
         const edits = [];
         walk(ast.body, (node) => {
-            if (node.type !== "TableConstructorExpression" || node.fields.length < 2) return;
-            const fields = node.fields;
-            if (!fields.every((field) => field.type === "TableKeyString")) return;
-            const names = fields.map((field) => field.key.name);
-            if (new Set(names).size !== names.length) return;
+            const fields = sortableFields(node);
+            if (!fields) return;
             const sorted = [...fields].sort((a, b) => compareNames(a.key.name, b.key.name));
             if (sorted.every((field, i) => field === fields[i])) return;
-            if (!fields.every((field) => isPure(field.value))) return;
-            const inField = (comment) => fields.some((field) => comment.range[0] >= field.range[0] && comment.range[1] <= field.range[1]);
+            if (!options.sortCalls && !fields.every((field) => isPure(field.value))) return;
+            if (annotated(text, ast, node, "order")) return;
+            // In a constructor with a field to a line, the comment lines directly above a field are
+            // its own and move with it; any other comment between fields keeps the order as written.
+            const startsLine = (field) => text.slice(lineStart(text, field.range[0]), field.range[0]).trim() === "";
+            const vertical = fields.every(startsLine);
+            const starts = fields.map((field) => {
+                const start = vertical ? unitStart(text, ast, field) : lineStart(text, field.range[0]);
+                return start < lineStart(text, field.range[0]) ? text.indexOf("--", start) : field.range[0];
+            });
+            const inField = (comment) => fields.some((field, i) => comment.range[0] >= starts[i] && comment.range[1] <= field.range[1]);
             if (commentsBetween(ast, node.range[0], node.range[1]).some((comment) => !inField(comment))) return;
             // A field spanning lines moves with its lines re-indented; a long string or comment
             // inside one can't be re-indented, so that constructor stays.
-            const texts = fields.map((field) => text.slice(field.range[0], field.range[1]));
+            const texts = fields.map((field, i) => text.slice(starts[i], field.range[1]));
             if (texts.some((value) => value.includes("\n") && /\[=*\[/.test(value))) return;
             const source = text.slice(node.range[0], node.range[1]);
             if (!source.includes("\n")) {
@@ -228,8 +288,6 @@ const Passes = {
             // started its own line they still do; packed fields fill lines up to MaxColumns, from
             // the brace's line when the first field was there, and a field spanning lines starts a
             // line. The closing brace stays where it was: after the last field or on its own line.
-            const startsLine = (field) => text.slice(lineStart(text, field.range[0]), field.range[0]).trim() === "";
-            const vertical = fields.every(startsLine);
             const openInline = !text.slice(node.range[0], fields[0].range[0]).includes("\n");
             const closeInline = !text.slice(fields[fields.length - 1].range[1], node.range[1]).includes("\n");
             const indent = indentOf(text, node.range[0]) + 4;
@@ -306,14 +364,15 @@ const Passes = {
             let run = [];
             const flush = () => {
                 if (run.length > 1) {
-                    const edit = orderRun(text, run);
+                    const edit = orderRun(text, run, (entry) => entry.statement.variables.map((variable) => variable.name),
+                        (entry) => entry.statement.init, (entry) => entry.statement.variables[0].name, "\n");
                     if (edit) edits.push(edit);
                 }
                 run = [];
             };
             for (const statement of body) {
                 const end = statement.type === "LocalStatement" ? ownLineEnd(text, ast, statement) : -1;
-                // A local holding a function is a function: member-spacing sets it apart.
+                // A local holding a function is a function: function-order sorts it.
                 const movable = end >= 0 && statement.init.every(isPure) && !statement.init.some(hasVararg)
                     && !statement.init.some((value) => value.type === "FunctionDeclaration")
                     && !commentsBetween(ast, statement.range[0], statement.range[1]).length;
@@ -321,9 +380,102 @@ const Passes = {
                     flush();
                     continue;
                 }
+                const start = unitStart(text, ast, statement);
                 const previous = run[run.length - 1];
-                if (previous && lineStart(text, statement.range[0]) !== previous.end + 1) flush();
-                run.push({ statement, start: lineStart(text, statement.range[0]), end });
+                if (previous && start !== previous.end + 1) flush();
+                run.push({ statement, start, end });
+            }
+            flush();
+        }
+        return edits;
+    },
+
+    // A file-level run of `Table.member = value` exports (single lines; values are names, literals
+    // or other plain reads' names), sorted by target, each statement's own pairs first.
+    "export-order": ({ text, ast }) => {
+        const edits = [];
+        const targetText = (node) => text.slice(node.range[0], node.range[1]);
+        const plain = (node) => ["Identifier", "StringLiteral", "NumericLiteral", "BooleanLiteral", "NilLiteral"].includes(node.type);
+        for (const { body, fileLevel } of blocksOf(ast)) {
+            if (!fileLevel) continue;
+            let run = [];
+            const flush = () => {
+                const targets = run.flatMap((entry) => entry.targets);
+                if (run.length > 1 && new Set(targets).size === targets.length) {
+                    const sorted = [...run].sort((a, b) => compareNames(a.targets[0], b.targets[0]));
+                    if (sorted.some((entry, i) => entry !== run[i])) {
+                        edits.push({ start: run[0].start, end: run[run.length - 1].end, text: sorted.map((entry) => entry.text).join("\n") });
+                    }
+                }
+                run = [];
+            };
+            for (const statement of body) {
+                const end = statement.type === "AssignmentStatement" ? ownLineEnd(text, ast, statement) : -1;
+                const exported = end >= 0 && statement.variables.length === statement.init.length
+                    && statement.variables.every((variable) => variable.type === "MemberExpression")
+                    && statement.init.every(plain) && !text.slice(statement.range[0], statement.range[1]).includes("\n");
+                if (!exported) {
+                    flush();
+                    continue;
+                }
+                const start = unitStart(text, ast, statement);
+                const previous = run[run.length - 1];
+                if (previous && start !== previous.end + 1) flush();
+                const pairs = statement.variables.map((variable, i) => ({ target: targetText(variable), value: targetText(statement.init[i]) }))
+                    .sort((a, b) => compareNames(a.target, b.target));
+                const own = `${pairs.map((pair) => pair.target).join(", ")} = ${pairs.map((pair) => pair.value).join(", ")}`;
+                const leading = text.slice(start, lineStart(text, statement.range[0]));
+                const indent = text.slice(lineStart(text, statement.range[0]), statement.range[0]);
+                run.push({ end, start, targets: pairs.map((pair) => pair.target), text: `${leading}${indent}${own}` });
+            }
+            flush();
+        }
+        return edits;
+    },
+
+    // A file-level run of functions (local functions, locals holding a function, and functions
+    // stored in tables), each with its comment lines, sorted: local ones first, then the rest, each
+    // alphabetically, never moving one past a function whose name it reads (or one whose name it
+    // read as a global before). A statement of any other kind, or a comment of its own, ends the run.
+    "function-order": ({ text, ast }) => {
+        const edits = [];
+        const nameOf = (statement) => {
+            const identifier = statement.type === "FunctionDeclaration" ? statement.identifier : statement.variables[0];
+            return text.slice(identifier.range[0], identifier.range[1]);
+        };
+        const declares = (statement) => {
+            if (statement.type === "FunctionDeclaration") return statement.isLocal ? [statement.identifier.name] : [];
+            return statement.type === "LocalStatement" ? [statement.variables[0].name] : [];
+        };
+        const isFunctionUnit = (statement) => {
+            if (statement.type === "FunctionDeclaration") return statement.identifier !== null;
+            return statement.type === "LocalStatement" && statement.variables.length === 1 && statement.init.length === 1
+                && statement.init[0].type === "FunctionDeclaration";
+        };
+        for (const { body, fileLevel } of blocksOf(ast)) {
+            if (!fileLevel) continue;
+            let run = [];
+            const flush = () => {
+                const names = run.map((entry) => entry.name);
+                if (run.length > 1 && new Set(names).size === names.length) {
+                    const edit = orderRun(text, run, (entry) => declares(entry.statement), (entry) => [entry.statement],
+                        (entry) => `${entry.local ? 0 : 1}${entry.name}`, "\n\n");
+                    if (edit) edits.push(edit);
+                }
+                run = [];
+            };
+            for (const statement of body) {
+                const end = isFunctionUnit(statement) ? ownLineEnd(text, ast, statement) : -1;
+                if (end < 0) {
+                    flush();
+                    continue;
+                }
+                const start = unitStart(text, ast, statement);
+                const previous = run[run.length - 1];
+                // Only blank lines may sit between two functions of a run; a comment there is its own.
+                if (previous && text.slice(previous.end, start).trim() !== "") flush();
+                const local = statement.type === "LocalStatement" || statement.isLocal;
+                run.push({ end, local, name: nameOf(statement), start, statement });
             }
             flush();
         }
@@ -360,14 +512,101 @@ const Passes = {
         return edits;
     },
 
+    // A comment after code on its line moves onto its own line above, at that line's indentation.
+    "trailing-comments": ({ text, ast }) => {
+        const edits = [];
+        const fixed = fixedRanges(ast);
+        for (const comment of ast.comments) {
+            if (comment.raw.startsWith("--[")) continue;
+            const start = lineStart(text, comment.range[0]);
+            const code = text.slice(start, comment.range[0]);
+            if (code.trim() === "" || lineEnd(text, comment.range[1]) !== comment.range[1]) continue;
+            // A line that starts inside a long string can't take a line above it.
+            if (fixed.some(([from, to]) => from < start && to > start)) continue;
+            const indent = /^ */.exec(code)[0];
+            const codeEnd = start + code.trimEnd().length;
+            edits.push({ start, end: start, text: `${indent}${comment.raw}\n` }, { start: codeEnd, end: comment.range[1], text: "" });
+        }
+        return edits;
+    },
+
+    // One blank line before and after a block (if, a loop, do, a function) or a statement spanning
+    // lines, and before a return or break, between statements of one block. It goes above the
+    // later statement's comment lines.
+    "block-spacing": ({ text, ast }) => {
+        const edits = [];
+        const Blocks = ["IfStatement", "WhileStatement", "RepeatStatement", "ForNumericStatement", "ForGenericStatement",
+            "DoStatement", "FunctionDeclaration"];
+        const blockLike = (statement) => Blocks.includes(statement.type) || text.slice(statement.range[0], statement.range[1]).includes("\n");
+        const exits = (statement) => statement.type === "ReturnStatement" || statement.type === "BreakStatement";
+        for (const { body } of blocksOf(ast)) {
+            for (let i = 1; i < body.length; i++) {
+                if (!blockLike(body[i - 1]) && !blockLike(body[i]) && !exits(body[i])) continue;
+                const edit = spaceBefore(text, ast, body[i - 1], body[i], true);
+                if (edit) edits.push(edit);
+            }
+        }
+        return edits;
+    },
+
+    // A paragraph of full-line comments (same indentation and prefix, plain prose: no lists, no
+    // aligned columns, no annotations) fills its lines up to MaxColumns.
+    "comment-fill": ({ text, ast }) => {
+        const edits = [];
+        const lines = text.split("\n");
+        const offsets = [];
+        let offset = 0;
+        for (const line of lines) {
+            offsets.push(offset);
+            offset += line.length + 1;
+        }
+        const fixed = fixedRanges(ast).filter(([from, to]) => text.slice(from, to).includes("\n"));
+        const prose = (i) => {
+            const match = /^( *)(---?) (\S.*)$/.exec(lines[i]);
+            if (!match || fixed.some(([from, to]) => from < offsets[i] && to > offsets[i])) return null;
+            const words = match[3];
+            if (words.startsWith("@") || /\S {2,}\S/.test(words) || /^([-*+]|\d+[.)]) /.test(words)) return null;
+            if (/^(secret|protected|global|order):/.test(words)) return null;
+            return { indent: match[1], prefix: match[2], words };
+        };
+        for (let i = 0; i < lines.length;) {
+            const first = prose(i);
+            if (!first) {
+                i++;
+                continue;
+            }
+            let j = i + 1;
+            const words = [first.words];
+            // A line starting in lower case after one that ends a sentence is a note of its own (a
+            // moved trailing comment, say), not the sentence's next line.
+            const joins = (next) => next && next.indent === first.indent && next.prefix === first.prefix
+                && !(/[.!?]$/.test(words[words.length - 1]) && /^[a-z]/.test(next.words));
+            for (let next = prose(j); joins(next); next = prose(++j)) {
+                words.push(next.words);
+            }
+            const lead = `${first.indent}${first.prefix} `;
+            const filled = [];
+            let line = "";
+            for (const word of words.join(" ").split(" ")) {
+                if (line && lead.length + line.length + 1 + word.length > MaxColumns) {
+                    filled.push(lead + line);
+                    line = word;
+                } else {
+                    line = line ? `${line} ${word}` : word;
+                }
+            }
+            filled.push(lead + line);
+            const original = lines.slice(i, j).join("\n");
+            if (filled.join("\n") !== original) edits.push({ start: offsets[i], end: offsets[i] + original.length, text: filled.join("\n") });
+            i = j;
+        }
+        return edits;
+    },
+
     "blank-lines": ({ text, ast }) => {
         const edits = [];
         // Lines inside a long string or comment are its own text.
-        const fixed = [];
-        walk(ast.body, (node) => {
-            if (node.type === "StringLiteral" && node.raw.startsWith("[")) fixed.push(node.range);
-        });
-        for (const comment of ast.comments) fixed.push(comment.range);
+        const fixed = fixedRanges(ast);
         const isFixed = (position) => fixed.some(([start, end]) => position > start && position < end);
         const leading = /^\n+/.exec(text);
         if (leading) edits.push({ start: 0, end: leading[0].length, text: "" });
@@ -379,16 +618,17 @@ const Passes = {
     },
 };
 
-// Sorts one run of file-level local statements: by first declared name, except that a statement
-// whose value reads a name the run declares keeps its side of that declaration.
-function orderRun(text, run) {
-    const declared = run.map((entry) => entry.statement.variables.map((variable) => variable.name));
+// Sorts one run of file-level units ({ start, end }, each its own lines) by keyOf, except that a
+// unit whose values (valuesOf) read a name another unit declares (declaredOf) keeps its side of
+// that declaration: after it when it read it, before it when it read the global of that name.
+// The units are joined by joiner.
+function orderRun(text, run, declaredOf, valuesOf, keyOf, joiner) {
+    const declared = run.map(declaredOf);
     const after = run.map(() => new Set());
     run.forEach((entry, i) => {
-        const read = new Set(entry.statement.init.flatMap((value) => [...namesRead(value)]));
+        const read = new Set(valuesOf(entry).flatMap((value) => [...namesRead(value)]));
         run.forEach((_, j) => {
             if (i === j || !declared[j].some((name) => read.has(name))) return;
-            // Reading a later declaration read the global or outer name: it stays before it.
             if (j < i) after[i].add(j);
             else after[j].add(i);
         });
@@ -397,16 +637,16 @@ function orderRun(text, run) {
     const placed = new Set();
     while (order.length < run.length) {
         let best = -1;
-        run.forEach((_, i) => {
+        run.forEach((entry, i) => {
             if (placed.has(i) || [...after[i]].some((j) => !placed.has(j))) return;
-            if (best < 0 || compareNames(declared[i][0], declared[best][0]) < 0) best = i;
+            if (best < 0 || compareNames(keyOf(entry), keyOf(run[best])) < 0) best = i;
         });
         placed.add(best);
         order.push(best);
     }
     if (order.every((value, i) => value === i)) return null;
-    const lines = order.map((i) => text.slice(run[i].start, run[i].end));
-    return { start: run[0].start, end: run[run.length - 1].end, text: lines.join("\n") };
+    const units = order.map((i) => text.slice(run[i].start, run[i].end));
+    return { start: run[0].start, end: run[run.length - 1].end, text: units.join(joiner) };
 }
 
 // One blank line between two statements on their own lines, unless a comment leads the second
@@ -438,10 +678,12 @@ function applyEdits(text, edits) {
 export class FormatError extends Error {}
 
 /**
- * Formats Lua source with the given passes (all of them by default), to a fixed point.
+ * Formats Lua source with the given passes (all of them by default), to a fixed point. With
+ * options.sortCalls, init-order also sorts constructors whose values call something: only for a
+ * reviewed sweep, since a call can change what another field reads.
  * @throws {FormatError} when the source doesn't parse, a pass breaks it, or the passes don't settle.
  */
-export function formatLua(text, passes = PASSES) {
+export function formatLua(text, passes = PASSES, options = {}) {
     let current = text;
     const read = (source, after) => {
         try {
@@ -454,7 +696,7 @@ export function formatLua(text, passes = PASSES) {
     for (let round = 0; round < MaxRounds; round++) {
         let changed = false;
         for (const pass of passes) {
-            const edits = Passes[pass]({ text: current, ...parsed });
+            const edits = Passes[pass]({ text: current, ...parsed, options });
             if (!edits.length) continue;
             const next = applyEdits(current, edits);
             if (next === current) continue;
@@ -465,6 +707,24 @@ export function formatLua(text, passes = PASSES) {
         if (!changed) return current;
     }
     throw new FormatError(`the passes didn't settle in ${MaxRounds} rounds`);
+}
+
+/**
+ * The table constructors whose named fields aren't alphabetical and that init-order won't sort (a
+ * value calls something, or a comment sits between fields), unless `-- order: <why>` says why
+ * their order matters: { line } each.
+ */
+export function orderFindings(text) {
+    const ast = parse(text);
+    const findings = [];
+    walk(ast.body, (node) => {
+        const fields = sortableFields(node);
+        if (!fields || annotated(text, ast, node, "order")) return;
+        const names = fields.map((field) => field.key.name);
+        const sorted = [...names].sort(compareNames);
+        if (names.some((name, i) => name !== sorted[i])) findings.push({ line: lineOf(text, node.range[0]) });
+    });
+    return findings;
 }
 
 /** The 1-based line where two texts first differ. */

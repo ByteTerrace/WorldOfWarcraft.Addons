@@ -122,8 +122,10 @@ test("a Krew sighting of a champion asks for aid; one of a stranger shows nothin
     eq(#h.raidNotices, 0, "a stranger to the ledger")
     h:Slash("/tlk glory Cara Doe")
     Receive(h, "Mom", "SIGHT", Key(h, "Cara"), "Hillsbrad Foothills", "Tarren Mill", "1")
+
     truthy(Notices(h):find("Mom Doe: champion Cara Doe needs aid at Tarren Mill (Hillsbrad Foothills)!", 1, true),
         Notices(h))
+
     addon.State:Set("Warband.alerts", false)
     h:Slash("/tlk mark Bob Doe")
     Receive(h, "Mom", "SIGHT", Key(h, "Bob"), "Hillsbrad Foothills", "Tarren Mill", "0")
@@ -148,7 +150,8 @@ test("a Krew unmark lifts only a mark, and a Krew peace ends the war", function(
     h:Slash("/tlk war Knights of Light")
     local guild = ("Knights of Light-" .. h.env.GetNormalizedRealmName())
 
-    Receive(h, "Mom", "PEACE", "Knights of Light") -- no realm: not a guild key
+    -- no realm: not a guild key
+    Receive(h, "Mom", "PEACE", "Knights of Light")
     truthy(wars:Has(guild))
     Receive(h, "Mom", "PEACE", guild)
     falsy(wars:Has(guild))
@@ -160,7 +163,8 @@ test("dying to the enemy you targeted asks for a grudge; a click holds it with t
     h:SetTarget(Enemy())
     h:Die()
     eq(Card(h), nil, "waits for the death recap")
-    h:Advance(3) -- none came: ask about the suspect
+    -- none came: ask about the suspect
+    h:Advance(3)
     local text, card = Card(h)
 
     truthy(text and text:find("Slain by Bob Doe?", 1, true), text)
@@ -277,7 +281,8 @@ test("bad messages are ignored: foreign keys, escape codes, junk numbers", funct
     local h, addon = Grouped()
     local key = Key(h, "Bob")
 
-    Receive(h, "Mom", "MARK", key .. "-Realm", "ROGUE", "60", "Alliance") -- a key never carries a realm
+    -- a key never carries a realm
+    Receive(h, "Mom", "MARK", key .. "-Realm", "ROGUE", "60", "Alliance")
     Receive(h, "Mom", "MARK", "Bob|Hlink|h Doe", "ROGUE", "60", "Alliance")
     Receive(h, "Mom", "GRUDGE", key, "rogue|T", "banana", "Martians", "1")
     Receive(h, "Mom", "GRUDGE", "Bob|Hlink|h Doe", "ROGUE", "60", "Alliance", "1")
@@ -310,8 +315,10 @@ test("a rally from inside an instance has no position to share", function()
     local h = Grouped()
 
     h:AddMap(1424, { mapType = "Zone", name = "Hillsbrad Foothills" })
+
     h:SetLocation({ instance = "party", mapID = 1424, subZone = "Tarren Mill", x = 0.5, y = 0.25,
         zone = "Hillsbrad Foothills" })
+
     h:Slash("/tlk rally")
     h:Advance(2)
     eq(Sent(h, "RALLY")[1], "RALLY:0\t0\t0\tHillsbrad Foothills\tTarren Mill")
@@ -339,9 +346,11 @@ test("five enemy players gathering are reported once", function()
 
     h:AddMap(1424, { mapType = "Zone", name = "Hillsbrad Foothills" })
     h:SetLocation({ mapID = 1424, subZone = "Southshore", x = 0.5, y = 0.5, zone = "Hillsbrad Foothills" })
+
     for i = 1, 6 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h:Advance(3)
     local intel = Sent(h, "INTEL")
 
@@ -354,9 +363,11 @@ test("a gathering counts the enemies of one place: moving on starts the count ov
 
     h:AddMap(1424, { mapType = "Zone", name = "Hillsbrad Foothills" })
     h:SetLocation({ mapID = 1424, subZone = "Southshore", x = 0.5, y = 0.5, zone = "Hillsbrad Foothills" })
+
     for i = 1, 4 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h:SetLocation({ mapID = 1424, subZone = "Darrow Hill", x = 0.4, y = 0.4, zone = "Hillsbrad Foothills" })
     h:AddNamePlate(Enemy("Foe5"))
     h:Advance(3)
@@ -367,19 +378,25 @@ test("a gathering counts the last minute's enemies, and isn't reported with the 
     local h, addon = Grouped()
 
     h:SetLocation({ subZone = "Southshore", zone = "Hillsbrad Foothills" })
+
     for i = 1, 4 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h:Advance(61)
+
     for i = 5, 8 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h:Advance(3)
     eq(#Sent(h, "INTEL"), 0, "four a minute ago and four now aren't five within a minute")
     addon.State:Set("Warband.intel", false)
+
     for i = 9, 14 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h:Advance(3)
     eq(#Sent(h, "INTEL"), 0, "intel is off")
 end)
@@ -389,18 +406,24 @@ test("a reported gathering costs no zone reads while it lasts; the next place is
 
     h:AddMap(1424, { mapType = "Zone", name = "Hillsbrad Foothills" })
     h:SetLocation({ mapID = 1424, subZone = "Southshore", x = 0.5, y = 0.5, zone = "Hillsbrad Foothills" })
+
     for i = 1, 6 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h.apiCalls = {}
+
     for i = 7, 11 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     eq(h:CountApiCalls("GetSubZoneText") + h:CountApiCalls("GetRealZoneText"), 0, "the place is known")
     h:SetLocation({ mapID = 1424, subZone = "Darrow Hill", x = 0.4, y = 0.4, zone = "Hillsbrad Foothills" })
+
     for i = 12, 16 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h:Advance(3)
     local intel = Sent(h, "INTEL")
 
@@ -447,7 +470,9 @@ test("switched off, Warband listens to nothing", function()
     local _, addon = Load()
 
     addon.State:Set("Warband.enabled", false)
-    addon.State:Set("Streaks.enabled", false) -- kill streaks read honor kills too
+    -- kill streaks read honor kills too
+    addon.State:Set("Streaks.enabled", false)
+
     for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "UPDATE_MOUSEOVER_UNIT", "CHAT_MSG_COMBAT_HONOR_GAIN" }) do
         falsy(addon.Events.Frame:IsEventRegistered(event), event)
     end
@@ -482,6 +507,7 @@ test("a full ledger refuses newcomers and forgets no one, for you and from the K
     for i = 1, 300 do
         h:Slash("/tlk grudge Foe" .. i .. " Doe")
     end
+
     h:JoinGroup("party", { "Mom" })
     h:Echo(false)
     h:Advance(2)
@@ -541,14 +567,18 @@ test("nameplates below a gathering never read the zone", function()
     for i = 1, 4 do
         plates[i] = h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     for i = 1, 4 do
         h:RemoveNamePlate(plates[i])
     end
+
     h:Advance(5)
     h.apiCalls = {}
+
     for i = 1, 4 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     eq(h:CountApiCalls("GetSubZoneText"), 0)
 end)
 
@@ -563,9 +593,11 @@ test("a gathering the Krew reported shows once, and isn't reported again", funct
     h:Click(card, "RightButton")
     Receive(h, "Mom", "INTEL", "8", "Alliance", "1424", "5000", "5000", "Hillsbrad Foothills", "Southshore")
     eq(Card(h), nil, "the Krew already knows")
+
     for i = 1, 6 do
         h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h:Advance(3)
     eq(#Sent(h, "INTEL"), 0, "Mom already told the Krew")
 end)
@@ -576,6 +608,7 @@ test("counts from the Krew are whole numbers in digits; text holds no control ch
     for _, count in ipairs({ "0x10", "1e2", "inf", "7.0", "-7", "0" }) do
         Receive(h, "Mom", "INTEL", count, "Alliance", "1424", "5000", "5000", "Hillsbrad Foothills", "Southshore")
     end
+
     eq(Card(h), nil)
     Receive(h, "Mom", "RALLY", "1", "1", "1", "Hills\7brad", "")
     truthy(Notices(h):find("needs the Krew at somewhere!", 1, true), Notices(h))
@@ -596,11 +629,13 @@ test("a rally's map and position are whole numbers in digits, or no waypoint", f
     local h = Grouped()
 
     h:AddMap(1424, { mapType = "Zone", name = "Hillsbrad Foothills" })
+
     for _, fields in ipairs({ { "0x590", "5000", "5000" }, { "1424", "5e3", "5000" }, { "1424", "inf", "5000" },
         { "1424", "50.5", "5000" }, { "1424", "-1", "5000" } }) do
         Receive(h, "Mom", "RALLY", fields[1], fields[2], fields[3], "Hillsbrad Foothills", "")
         eq(h.waypoint, nil, table.concat(fields, ","))
     end
+
     Receive(h, "Mom", "RALLY", "1424", "0", "10000", "Hillsbrad Foothills", "")
     eq(h.waypoint and h.waypoint.uiMapID, 1424, "the edges are fine")
 end)
@@ -612,6 +647,7 @@ test("a kill of a stranger with the rivalry records full makes room for it in on
     for i = 1, 1000 do
         people:Set("Stranger" .. i .. " Doe", { seen = i })
     end
+
     h:HonorKill("Newcomer Doe", "Private", 10)
     eq(people:Count(), 901, "the hundred seen longest ago made room together")
     truthy(people:Has("Newcomer Doe"))
@@ -619,7 +655,7 @@ end)
 
 test("a menu whose surname is secret offers nothing", function()
     local h = Load()
-    local menu = h:OpenMenu("MENU_UNIT_PLAYER", { which = "PLAYER", name = "Cara", surname = Secret("Other") })
+    local menu = h:OpenMenu("MENU_UNIT_PLAYER", { name = "Cara", surname = Secret("Other"), which = "PLAYER" })
 
     eq(menu:Find("Grant glory"), nil)
 end)
@@ -638,12 +674,14 @@ test("a command with no name and no player target says how to name someone", fun
     local h = Grouped()
 
     h:SetTarget({ canAttack = true, name = "Wolf" })
+
     for _, verb in ipairs({ "mark", "unmark", "grudge", "glory", "forgive" }) do
         h:Slash("/tlk " .. verb)
         local last = h.printed[#h.printed]
 
         truthy(last:find("Target a player, or name them: /tlk " .. verb .. " <name>", 1, true), last)
     end
+
     h:Slash("/tlk war")
     truthy(h.printed[#h.printed]:find("name the guild: /tlk war <name>", 1, true), h.printed[#h.printed])
     h:Slash("/tlk peace Knights of Light")
@@ -667,6 +705,7 @@ test("the ledger lists marks first, the most recently seen first, then the wars"
     h.printed = {}
     h:Slash("/tlk ledger")
     truthy(h.printed[1]:find("The ledger (4 of 300):", 1, true), h.printed[1])
+
     eq(table.concat(h.printed, "\n", 2), table.concat({
         "  Marked for death: Cara Doe - Krew 0 : 0 Cara Doe",
         "  Grudge: Bob Doe (60 Rogue) - Krew 1 : 0 Bob Doe - last seen in Hillsbrad Foothills",
@@ -702,6 +741,7 @@ test("the right-click menu offers peace with a guild at war, and nothing while W
     for _, text in ipairs(h:OpenTargetMenu():Texts()) do
         if text == "Mark for death" then count = (count + 1) end
     end
+
     eq(count, 1, "switched on again, the menu is hooked once")
 end)
 
@@ -718,7 +758,8 @@ test("the tooltip names a champion and who honored them, and a guild at war", fu
 
     h:Slash("/tlk glory Cara Doe")
     h:Slash("/tlk war Knights of Light")
-    h:Advance(60) -- a sighting a minute after the record began counts
+    -- a sighting a minute after the record began counts
+    h:Advance(60)
     local cara = h:AddNamePlate(Enemy("Cara", { canAttack = false, faction = "Horde", isEnemy = false }))
     local knight = h:AddNamePlate(Enemy("Bob", { guild = "Knights of Light" }))
 

@@ -1,19 +1,16 @@
 local addonName, ns = ...
 
--- The math generators: one function per math kind in ScholarWords.kinds, registered in
--- Kit.Generators for Generate (ScholarPuzzles.lua, which loads first). Pure like
--- ScholarPuzzles.lua.
+-- The math generators: one function per math kind in ScholarWords.kinds, registered in Kit.Generators for Generate
+-- (ScholarPuzzles.lua, which loads first). Pure like ScholarPuzzles.lua.
 --
--- Every puzzle here is numeric: it carries value (the answer as a number; copper for money,
--- tenths as a decimal) and, for calculations, expression (ASCII: + - x / and parentheses), so
--- callers and tests can recompute it.
+-- Every puzzle here is numeric: it carries value (the answer as a number; copper for money, tenths as a decimal) and,
+-- for calculations, expression (ASCII: + - x / and parentheses), so callers and tests can recompute it.
 
--- The largest sum or starting number, per grade (0 and 1) and level.
-local SmallCap = { [0] = { 5, 7, 10 }, { 12, 16, 20 } }
 -- Times-table factor ranges per level: { first from, first to, second from, second to }.
 local FactRanges = { { 2, 5, 2, 5 }, { 2, 10, 2, 5 }, { 3, 10, 3, 10 } }
--- Order of operations, per level: forms returning the text, its value and the classic slips
--- (working left to right, or ignoring the parentheses). Every form stays positive.
+
+-- Order of operations, per level: forms returning the text, its value and the classic slips (working left to right, or
+-- ignoring the parentheses). Every form stays positive.
 local OrderForms = {
     {
         function(a, b, c) return ((a + 4) .. " + " .. b .. " x " .. c), ((a + 4) + (b * c)), (((a + 4) + b) * c) end,
@@ -40,6 +37,9 @@ local OrderForms = {
     },
 }
 
+-- The largest sum or starting number, per grade (0 and 1) and level.
+local SmallCap = { [0] = { 5, 7, 10 }, { 12, 16, 20 } }
+
 local concat = table.concat
 local floor, max, min = math.floor, math.max, math.min
 local ipairs, tostring = ipairs, tostring
@@ -50,13 +50,21 @@ local Chance, Fill, Pick, Shuffle, Trim = Kit.Chance, Kit.Fill, Kit.Pick, Kit.Sh
 local Coins, Count, Finish, Vars, WrongNumbers = Kit.Coins, Kit.Count, Kit.Finish, Kit.Vars, Kit.WrongNumbers
 local Generators, Words = Kit.Generators, Kit.Words
 
--- A number of tenths as a decimal: 35 is "3.5".
-local function Tenths(tenths)
-    return (floor(tenths / 10) .. "." .. (tenths % 10))
+-- Four distinct numbers from lo to hi.
+local function FourOf(state, lo, hi)
+    local pool = {}
+
+    for n = lo, hi do
+        pool[#pool + 1] = n
+    end
+
+    pool = Shuffle(state, pool)
+
+    return { pool[1], pool[2], pool[3], pool[4] }
 end
 
--- A math puzzle whose choices are numbers. vars.v is the answer; Words.math[key] is the text;
--- options = { lo, hi, format } bounds and formats the distractors.
+-- A math puzzle whose choices are numbers. vars.v is the answer; Words.math[key] is the text; options = { lo, hi,
+-- format } bounds and formats the distractors.
 local function Numeric(state, kind, key, vars, wrong, options)
     options = (options or {})
     local format = (options.format or tostring)
@@ -65,67 +73,8 @@ local function Numeric(state, kind, key, vars, wrong, options)
     for i, n in ipairs(WrongNumbers(state, vars.v, wrong, options.lo, options.hi)) do
         wrongs[i] = format(n)
     end
+
     return Finish(state, kind, Words.math[key], Vars(state, vars), format(vars.v), wrongs)
-end
-
--- Which of four numbers is biggest or smallest; decimals come in tenths.
-local function Extreme(state, kind, key, four, biggest, tenths)
-    local best = ((biggest and max(four[1], four[2], four[3], four[4])) or min(four[1], four[2], four[3], four[4]))
-    local format, wrongs, terms = ((tenths and Tenths) or tostring), {}, {}
-
-    for i, n in ipairs(four) do
-        terms[i] = ((tenths and (n / 10)) or n)
-        if n ~= best then
-            wrongs[#wrongs + 1] = format(n)
-        end
-    end
-    local vars = { v = format(best), report = ((tenths and (best / 10)) or best), terms = terms,
-        word = ((biggest and "biggest") or "smallest"), when = ((biggest and "last") or "first") }
-
-    return Finish(state, kind, Words.math[key], vars, format(best), wrongs)
-end
-
--- Four distinct numbers from lo to hi.
-local function FourOf(state, lo, hi)
-    local pool = {}
-
-    for n = lo, hi do
-        pool[#pool + 1] = n
-    end
-    pool = Shuffle(state, pool)
-    return { pool[1], pool[2], pool[3], pool[4] }
-end
-
-local function AddSmall(state)
-    local cap, low = SmallCap[state.grade][state.level], (((state.grade == 0) and 1) or 2)
-    local a = state.roll(low, cap - low)
-    local b = state.roll(low, cap - a)
-    local v = (a + b)
-
-    return Numeric(state, "math.add", "addSmall", { a = a, b = b, v = v },
-        { (v + 1), (v - 1), (v + 2), (v - 2), (a - b), (b - a) }, { hi = (cap + 2) })
-end
-
-local function SubtractSmall(state)
-    local cap = SmallCap[state.grade][state.level]
-    local a = state.roll(((state.grade == 0) and 2) or 5, cap)
-    local b = state.roll(1, (((state.grade == 0) and (state.level == 3)) and a) or (a - 1))
-    local v = (a - b)
-
-    return Numeric(state, "math.subtract", "subtractSmall", { a = a, b = b, v = v },
-        { (v + 1), (v - 1), (a + b), (v + 2), b }, { hi = (cap + 2) })
-end
-
--- Grade 1 and 2 subtraction sometimes counts the player's levels to a milestone.
-local function LevelsToGo(state, goal)
-    local level = state.context.level
-
-    if level and (level < goal) and Chance(state, 3) then
-        local v = (goal - level)
-
-        return Numeric(state, "math.subtract", "levels", { a = goal, b = level, v = v },
-            { (v + 1), (v - 1), (v + 10), (v - 10), goal }, { hi = goal })
-    end
 end
 
 -- Two-digit addition: level 1 never regroups, level 3 always does.
@@ -142,10 +91,33 @@ local function AddBig(state)
 
         a, b = ((10 * tensA) + onesA), ((10 * tensB) + onesB)
     end
+
     local v = (a + b)
 
     return Numeric(state, "math.add", "addBig", { a = a, b = b, v = v },
         { (v + 10), (v - 10), (v + 1), (v - 1), (v + 11) }, { hi = 110 })
+end
+
+local function AddSmall(state)
+    local cap, low = SmallCap[state.grade][state.level], (((state.grade == 0) and 1) or 2)
+    local a = state.roll(low, cap - low)
+    local b = state.roll(low, cap - a)
+    local v = (a + b)
+
+    return Numeric(state, "math.add", "addSmall", { a = a, b = b, v = v },
+        { (v + 1), (v - 1), (v + 2), (v - 2), (a - b), (b - a) }, { hi = (cap + 2) })
+end
+
+-- Grade 1 and 2 subtraction sometimes counts the player's levels to a milestone.
+local function LevelsToGo(state, goal)
+    local level = state.context.level
+
+    if level and (level < goal) and Chance(state, 3) then
+        local v = (goal - level)
+
+        return Numeric(state, "math.subtract", "levels", { a = goal, b = level, v = v },
+            { (v + 1), (v - 1), (v + 10), (v - 10), goal }, { hi = goal })
+    end
 end
 
 -- Two-digit subtraction: level 1 never borrows, level 3 always does.
@@ -162,11 +134,46 @@ local function SubtractBig(state)
 
         a, b = ((10 * tensA) + onesA), ((10 * tensB) + onesB)
     end
+
     local v = (a - b)
     local noBorrow = (((floor(a / 10) - floor(b / 10)) * 10) + ((b % 10) - (a % 10)))
 
     return Numeric(state, "math.subtract", "subtractBig", { a = a, b = b, v = v },
         { noBorrow, (v + 10), (v - 10), (v + 1), (v - 1) }, { hi = 100 })
+end
+
+local function SubtractSmall(state)
+    local cap = SmallCap[state.grade][state.level]
+    local a = state.roll(((state.grade == 0) and 2) or 5, cap)
+    local b = state.roll(1, (((state.grade == 0) and (state.level == 3)) and a) or (a - 1))
+    local v = (a - b)
+
+    return Numeric(state, "math.subtract", "subtractSmall", { a = a, b = b, v = v },
+        { (v + 1), (v - 1), (a + b), (v + 2), b }, { hi = (cap + 2) })
+end
+
+-- A number of tenths as a decimal: 35 is "3.5".
+local function Tenths(tenths)
+    return (floor(tenths / 10) .. "." .. (tenths % 10))
+end
+
+-- Which of four numbers is biggest or smallest; decimals come in tenths.
+local function Extreme(state, kind, key, four, biggest, tenths)
+    local best = ((biggest and max(four[1], four[2], four[3], four[4])) or min(four[1], four[2], four[3], four[4]))
+    local format, wrongs, terms = ((tenths and Tenths) or tostring), {}, {}
+
+    for i, n in ipairs(four) do
+        terms[i] = ((tenths and (n / 10)) or n)
+
+        if n ~= best then
+            wrongs[#wrongs + 1] = format(n)
+        end
+    end
+
+    local vars = { report = ((tenths and (best / 10)) or best), terms = terms, v = format(best),
+        when = ((biggest and "last") or "first"), word = ((biggest and "biggest") or "smallest") }
+
+    return Finish(state, kind, Words.math[key], vars, format(best), wrongs)
 end
 
 Generators["math.add"] = function(state)
@@ -177,6 +184,7 @@ Generators["math.subtract"] = function(state)
     if state.grade == 0 then
         return SubtractSmall(state)
     end
+
     return (LevelsToGo(state, ((state.grade == 1) and 20) or 60)
         or (((state.grade == 1) and SubtractSmall(state)) or SubtractBig(state)))
 end
@@ -184,11 +192,14 @@ end
 Generators["math.count"] = function(state)
     local n = state.roll(({ 1, 3, 5 })[state.level], ({ 5, 8, 10 })[state.level])
     local thing = Pick(state, Words.countables)
-    local vars = { v = n, row = Trim(rep(thing[1] .. " ", n)), things = thing[3],
-        counted = Count(n, { thing[2], thing[3] }) }
+
+    local vars = { counted = Count(n, { thing[2], thing[3] }), row = Trim(rep(thing[1] .. " ", n)), things = thing[3],
+        v = n }
+
     local puzzle = Numeric(state, "math.count", "count", vars, { (n + 1), (n - 1), (n + 2), (n - 2) }, { hi = 12 })
     -- row: the prompt's text version of the picture
     puzzle.picture = { item = thing[2], kind = "count", n = n, row = vars.row }
+
     return puzzle
 end
 
@@ -219,10 +230,12 @@ Generators["math.skip"] = function(state)
         step = -Pick(state, { 2, 5, 10 })
         start = state.roll(1 - (4 * step), 100)
     end
+
     local shown = { start, (start + step), (start + (2 * step)), (start + (3 * step)) }
     local v = (start + (4 * step))
-    local vars = { v = v, n = (((step < 0) and -step) or step), start = start, shown = concat(shown, ", "),
-        terms = { start, step } }
+
+    local vars = { n = (((step < 0) and -step) or step), shown = concat(shown, ", "), start = start,
+        terms = { start, step }, v = v }
 
     return Numeric(state, "math.skip", ((step < 0) and "skipBack") or "skip", vars,
         { (v + 1), (v - 1), (v + step), (v - (2 * step)), (v + 10), (v - 10) }, { hi = 110, lo = 1 })
@@ -242,6 +255,7 @@ Generators["math.coins"] = function(state)
     else
         key, a, b = "coinsChange", 100, state.roll(5, 95)
     end
+
     local v = (((key == "coinsChange") and (a - b)) or (a + b))
 
     return Numeric(state, "math.coins", key, { a = a, b = b, v = v }, { (v + 10), (v - 10), (v + 1), (v - 1), (100 - v) },
@@ -255,6 +269,7 @@ local function Factors(state)
     if Chance(state, 2) then
         return b, a
     end
+
     return a, b
 end
 
@@ -304,6 +319,7 @@ Generators["math.remainder"] = function(state)
             wrongs[#wrongs + 1] = Say(wrong[1], wrong[2])
         end
     end
+
     local vars = Vars(state, { a = ((q * d) + r), b = d, bv = (q * d), r = r, terms = { ((q * d) + r), d }, v = q })
 
     return Finish(state, "math.remainder", Words.math.remainder, vars, Say(q, r), wrongs)
@@ -333,7 +349,8 @@ Generators["math.money"] = function(state)
         key, v = "moneyConvert", a
         wrong = { ((floor(a / 10) * 100) + (a % 10)), (a + 100), (a - 100), ((floor(a / 100) * 100) + floor((a % 100) / 10)), (a + 1) }
     end
-    local vars = { a = a, b = b, v = v, ca = Coins(a), cb = (b and Coins(b)), cv = Coins(v) }
+
+    local vars = { a = a, b = b, ca = Coins(a), cb = (b and Coins(b)), cv = Coins(v), v = v }
 
     return Numeric(state, "math.money", (mine and (key .. "Mine")) or key, vars, wrong, { format = Coins, hi = 9999, lo = 1 })
 end
@@ -350,8 +367,10 @@ end
 
 local function Change(state)
     local n = state.roll(2, 5)
+
     local p = (((state.level == 1) and (5 * state.roll(1, 4)))
         or state.roll(((state.level == 2) and 6) or 11, ((state.level == 2) and 25) or 45))
+
     local m = (50 * (floor((n * p) / 50) + 1))
     local v = (m - (n * p))
 
@@ -385,6 +404,7 @@ Generators["math.decimal"] = function(state)
 
         return Extreme(state, "math.decimal", "decimalCompare", FourOf(state, base, base + 19), true, true)
     end
+
     local a = (((state.level == 1) and state.roll(1, 8)) or state.roll(11, 59))
     local b = (((state.level == 1) and state.roll(1, 9 - a)) or state.roll(11, 49))
     local subtract = ((state.level == 3) and Chance(state, 2))
@@ -392,11 +412,12 @@ Generators["math.decimal"] = function(state)
     if subtract then
         a, b = (max(a, b) + (((a == b) and 11) or 0)), min(a, b)
     end
+
     local v = ((subtract and (a - b)) or (a + b))
     local unit = ((subtract and " cups") or " miles")
 
     return Numeric(state, "math.decimal", (subtract and "decimalSubtract") or "decimalAdd",
-        { da = Tenths(a), db = Tenths(b), dv = Tenths(v), v = v, report = (v / 10) }, { (v + 1), (v - 1), (v + 10), (v - 10), (v + 2) },
+        { da = Tenths(a), db = Tenths(b), dv = Tenths(v), report = (v / 10), v = v }, { (v + 1), (v - 1), (v + 10), (v - 10), (v + 2) },
         { format = function(tenths) return (Tenths(tenths) .. unit) end, hi = 200, lo = 1 })
 end
 
@@ -411,6 +432,7 @@ local function PercentPlan(state)
             end
         end
     end
+
     local percent = Pick(state, ({ { 10, 50 }, { 10, 20, 25, 50 }, { 15, 30, 40, 60, 75 } })[state.level])
 
     return (({ 10, 20, 20 })[state.level] * state.roll(2, ({ 20, 10, 15 })[state.level])), percent, false
@@ -424,7 +446,7 @@ Generators["math.percent"] = function(state)
     local v = ((sale and (n - off)) or off)
     local wrong = ((sale and { off, (n - p), (n + off), (v + 5), (v - 5) }) or { (n - off), p, (off * 2), (off + 10), (n / 5) })
 
-    return Numeric(state, "math.percent", key, { n = n, p = p, off = off, v = v, gear = Pick(state, Words.gear) }, wrong,
+    return Numeric(state, "math.percent", key, { gear = Pick(state, Words.gear), n = n, off = off, p = p, v = v }, wrong,
         { format = function(gold) return (gold .. " gold") end, hi = (n * 2) })
 end
 
@@ -439,10 +461,12 @@ Generators["math.ratio"] = function(state)
 
         return Numeric(state, "math.ratio", "ratioPart", vars, { (x * m), (t - y), (t / y), (v + y), (v - y) }, { hi = t })
     end
+
     local pair, h = Pick(state, Words.ratios), (x * m)
+
     local vars = {
-        x = x, y = y, h = h, m = m, v = v, second = pair[2][2], have = Count(h, pair[1]),
-        sentence = Fill(pair[3], { X = Count(x, pair[1]), Y = Count(y, pair[2]) }),
+        h = h, have = Count(h, pair[1]), m = m, second = pair[2][2],
+        sentence = Fill(pair[3], { X = Count(x, pair[1]), Y = Count(y, pair[2]) }), v = v, x = x, y = y,
     }
 
     return Numeric(state, "math.ratio", "ratio", vars, { ((h + y) - x), (h * y), (h + y), (v + y), (v - y) }, { hi = ((h * y) + 10) })

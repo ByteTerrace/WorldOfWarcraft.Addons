@@ -1,23 +1,24 @@
 local addonName, ns = ...
 
--- Streaks: an Unreal Tournament announcer for your killing blows on players (ByteTerrace_Core's
--- kills fact, kills.blows), shared with the Krew. A kill counts for whoever landed it, as in Unreal, not for
--- everyone the honorable kill credits.
+-- Streaks: an Unreal Tournament announcer for your killing blows on players (ByteTerrace_Core's kills fact,
+-- kills.blows), shared with the Krew. A kill counts for whoever landed it, as in Unreal, not for everyone the honorable
+-- kill credits.
 --
 --   First blood  your first killing blow of the session, unless a Krew member drew it first.
 --   Multi kills  kills each within MultiKillWindow of the last: double (2), multi (3), mega (4),
 --                ultra (5), monster (6), ludicrous (7), holy shit (8 and on).
 --   Sprees       kills without dying: killing spree (5), rampage (10), dominating (15),
 --                unstoppable (20), godlike (25), wicked sick (30).
--- A kill announces one of them: a spree it reaches, else a multi kill, else first blood. You see it
--- as a raid warning and hear its sound (Streaks.* settings; the master sound switch applies). With
--- Streaks.share on, the Krew sees your first blood, each spree, and the end of a spree when you die,
--- with who ended it when the death recap names them (the death fact's death.killer).
--- A Krew member's first blood takes yours for the session. Krew messages only show a raid warning.
--- Whether first blood is drawn, and your kills since you last died, are saved per character, so a
--- /reload continues the session; the next login, or switching streaks off, starts them over.
+-- A kill announces one of them: a spree it reaches, else a multi kill, else first blood. You see it as a raid warning
+-- and hear its sound (Streaks.* settings; the master sound switch applies). With Streaks.share on, the Krew sees your
+-- first blood, each spree, and the end of a spree when you die, with who ended it when the death recap names them (the
+-- death fact's death.killer). A Krew member's first blood takes yours for the session. Krew messages only show a raid
+-- warning. Whether first blood is drawn, and your kills since you last died, are saved per character, so a /reload
+-- continues the session; the next login, or switching streaks off, starts them over.
 
-local MaxCount = 9999      -- the largest count accepted from a Krew message
+-- the largest count accepted from a Krew message
+local MaxCount = 9999
+
 local MultiKills = {
     { file = "DoubleKill", key = "doubleKill", label = "Double kill", word = "double" },
     { file = "MultiKill", key = "multiKill", label = "Multi kill", word = "multi" },
@@ -27,8 +28,12 @@ local MultiKills = {
     { file = "LudicrousKill", key = "ludicrousKill", label = "Ludicrous kill", word = "ludicrous" },
     { file = "HolyShit", key = "holyShit", label = "Holy shit", word = "holy" },
 }
-local MultiKillWindow = 10 -- seconds between kills; Unreal's 4 is too short for WoW's fights
-local SpreeEndMinimum = 5  -- kills: a shorter run ending isn't news
+
+-- seconds between kills; Unreal's 4 is too short for WoW's fights
+local MultiKillWindow = 10
+-- kills: a shorter run ending isn't news
+local SpreeEndMinimum = 5
+
 local Sprees = {
     { file = "KillingSpree", key = "killingSpree", kills = 5, label = "Killing spree", says = "is on a killing spree", word = "spree" },
     { file = "Rampage", key = "rampage", kills = 10, label = "Rampage", says = "is on a rampage", word = "rampage" },
@@ -53,27 +58,47 @@ for i, spree in ipairs(Sprees) do
     SpreeKeys[i] = spree.key
     SoundBank:Define(spree.key, { file = spree.file, label = spree.label, row = "Streaks.sprees", word = spree.word })
 end
+
 for i, multi in ipairs(MultiKills) do
     MultiKeys[i] = multi.key
     SoundBank:Define(multi.key, { file = multi.file, label = multi.label, row = "Streaks.multiKills", word = multi.word })
 end
+
 SoundBank:Define("firstBlood", { file = "FirstBlood", label = "First blood", row = "Streaks.firstBlood", word = "first" })
 
-local EndedAt    -- the spree your last death ended, until its killer is known
-local LastKillAt -- GetTime() of your last killing blow
-local Multi = 0  -- kills in the current multi kill
+-- the spree your last death ended, until its killer is known
+local EndedAt
+-- GetTime() of your last killing blow
+local LastKillAt
+-- kills in the current multi kill
+local Multi = 0
 local StreaksModule
+
+local function OnMessage(sender, fields)
+    local event, count = fields[1], CleanCount(fields[2], MaxCount)
+
+    if not count then
+        return
+    end
+
+    local spree = SpreeByKey[event]
+
+    if event == "firstBlood" then
+        StreaksModule:Set("firstBloodTaken", true)
+        Alert(sender .. " drew first blood!")
+    elseif event == "ended" then
+        local killer = CleanText(fields[3])
+
+        Alert(("%s's spree ended at %d kills%s."):format(sender, count, ((killer ~= "") and (" by " .. killer)) or ""))
+    elseif spree then
+        Alert(("%s %s! (%d kills)"):format(sender, spree.says, count))
+    end
+end
 
 local function Share(event, count, killer)
     if StreaksModule:Get("share") then
         Krew:Send("STREAK", { event, tostring(count), killer })
     end
-end
-
--- A new session: no first blood yet, and no kills.
-local function StartOver()
-    StreaksModule:Set("firstBloodTaken", false)
-    StreaksModule:Set("streak", 0)
 end
 
 -- What added killing blows announce: a spree they reach, else a multi kill, else first blood.
@@ -119,7 +144,8 @@ end
 
 -- A death ends the streak and any multi kill at once; its report waits for the killer.
 local function OnDeath()
-    ReportEnd("") -- an earlier death whose killer never came
+    -- an earlier death whose killer never came
+    ReportEnd("")
     local streak = StreaksModule:Get("streak")
 
     EndedAt = (((streak >= SpreeEndMinimum) and streak) or nil)
@@ -127,30 +153,44 @@ local function OnDeath()
     Multi, LastKillAt = 0, nil
 end
 
-local function OnMessage(sender, fields)
-    local event, count = fields[1], CleanCount(fields[2], MaxCount)
-
-    if not count then
-        return
-    end
-    local spree = SpreeByKey[event]
-
-    if event == "firstBlood" then
-        StreaksModule:Set("firstBloodTaken", true)
-        Alert(sender .. " drew first blood!")
-    elseif event == "ended" then
-        local killer = CleanText(fields[3])
-
-        Alert(("%s's spree ended at %d kills%s."):format(sender, count, ((killer ~= "") and (" by " .. killer)) or ""))
-    elseif spree then
-        Alert(("%s %s! (%d kills)"):format(sender, spree.says, count))
-    end
+-- A new session: no first blood yet, and no kills.
+local function StartOver()
+    StreaksModule:Set("firstBloodTaken", false)
+    StreaksModule:Set("streak", 0)
 end
 
 StreaksModule = Addon:Module("Streaks", {
-    label = "Kill streaks",
-    page = "Sounds",
     description = "Unreal Tournament's announcer for your world PvP killing blows: first blood, multi kills and killing sprees. Kills in battlegrounds, arenas or other instances do not count.",
+    label = "Kill streaks",
+    OnDisable = function()
+        StartOver()
+        Multi, LastKillAt, EndedAt = 0, nil, nil
+    end,
+    OnEnable = function(module)
+        if IsLoggedIn() then
+            -- switched on mid-session
+            StartOver()
+        end
+
+        module:On("PLAYER_ENTERING_WORLD", function(isInitialLogin)
+            if isInitialLogin then
+                StartOver()
+            end
+        end)
+
+        module:Listen(Krew, "STREAK", OnMessage)
+
+        module:OnIncrease("kills.blows", function(_, count, previous)
+            OnKill(count - previous)
+        end)
+
+        module:OnIncrease("death.count", OnDeath)
+
+        module:OnIncrease("death.attributed", function(state)
+            ReportEnd(((state:Get("death.killerKind") == "self") and "") or state:Get("death.killer"))
+        end)
+    end,
+    page = "Sounds",
     state = {
         SoundBank:Row("firstBlood", "First blood", "Your first killing blow on a player this session, unless a Krew member drew it first.", { "firstBlood" }),
         SoundBank:Row("multiKills", "Multi kills", ("Killing blows each within %d seconds of the last: double kill and up."):format(MultiKillWindow), MultiKeys),
@@ -162,26 +202,4 @@ StreaksModule = Addon:Module("Streaks", {
         { default = 0, kind = "number", min = 0, name = "streak", scope = "character", step = 1 },
     },
     uses = { "kills", "death" },
-    OnEnable = function(module)
-        if IsLoggedIn() then
-            StartOver() -- switched on mid-session
-        end
-        module:On("PLAYER_ENTERING_WORLD", function(isInitialLogin)
-            if isInitialLogin then
-                StartOver()
-            end
-        end)
-        module:Listen(Krew, "STREAK", OnMessage)
-        module:OnIncrease("kills.blows", function(_, count, previous)
-            OnKill(count - previous)
-        end)
-        module:OnIncrease("death.count", OnDeath)
-        module:OnIncrease("death.attributed", function(state)
-            ReportEnd(((state:Get("death.killerKind") == "self") and "") or state:Get("death.killer"))
-        end)
-    end,
-    OnDisable = function()
-        StartOver()
-        Multi, LastKillAt, EndedAt = 0, nil, nil
-    end,
 })

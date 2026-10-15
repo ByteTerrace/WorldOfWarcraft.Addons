@@ -14,6 +14,7 @@ local function Sounds(h, kit)
             count = (count + 1)
         end
     end
+
     return count
 end
 
@@ -24,12 +25,15 @@ test("five marked enemies at once: one alert now, one summary after, every name 
     for _, name in ipairs(names) do
         h:Slash("/tlk mark " .. name .. " Doe")
     end
-    h:Advance(6) -- the marks reach the Krew
+
+    -- the marks reach the Krew
+    h:Advance(6)
     local sounds = Sounds(h, h.env.SOUNDKIT.RAID_WARNING)
 
     for _, name in ipairs(names) do
         h:AddNamePlate(Enemy(name))
     end
+
     eq(#h.raidNotices, 1, "the first alert shows now")
     eq(h.raidNotices[1].text, "|cffff2020Marked for death:|r Bob Doe (60 Rogue) is here!")
     h:Advance(10)
@@ -56,8 +60,10 @@ test("a summary lists marks, grudges, wars and champions in that order, with one
     h:AddNamePlate(Enemy("Finn"))
     h:Advance(5)
     eq(#h.raidNotices, 2)
+
     eq(h.raidNotices[2].text, "4 more nearby: |cffff2020Marked for death:|r Finn Doe; |cffff8000Grudge:|r Cara Doe; "
         .. "|cffff8000At war:|r Eve Doe; |cff40c0ffChampion:|r Dan Doe (in a fight)")
+
     eq(Sounds(h, h.env.SOUNDKIT.RAID_WARNING) - warnings, 2, "the first alert's, and the summary's")
     eq(Sounds(h, h.env.SOUNDKIT.READY_CHECK) - checks, 0, "the champion's is in the summary's")
 end)

@@ -1,5 +1,5 @@
--- Who killed you: the death fact's recap attribution, Warband's grudge cards and rivalry records,
--- and Streaks' spree endings.
+-- Who killed you: the death fact's recap attribution, Warband's grudge cards and rivalry records, and Streaks' spree
+-- endings.
 
 local Kit = use("toolkit")
 
@@ -15,6 +15,7 @@ local Sent = Kit.Sent
 -- The player's source in a fight they die in, killed by attacker (a unit table) with one blow.
 local function KilledBy(attacker, blow)
     blow = (blow or {})
+
     return {
         death = {},
         spells = { DamageTaken = { {
@@ -52,7 +53,8 @@ end)
 
 test("a melee killing blow reads as a melee hit, and the suspect fills in what the recap can't", function()
     local h, addon = Grouped()
-    local bob = Enemy("Bob") -- no race: the recap can't tell the faction
+    -- no race: the recap can't tell the faction
+    local bob = Enemy("Bob")
 
     h:SetTarget(bob)
     h:MeterFight({ duration = 5, sources = { KilledBy(bob, { amount = 90, spellID = 6603 }) } })
@@ -91,7 +93,8 @@ test("a recap that lands after the death still names the killer, with the suspec
     truthy(addon.Events.Frame:IsEventRegistered("DAMAGE_METER_COMBAT_SESSION_UPDATED"), "waiting for the meter")
     h:SetTarget(nil)
     h:MeterAdd(KilledBy(bob))
-    h:LeaveCombat() -- cards wait out combat
+    -- cards wait out combat
+    h:LeaveCombat()
     truthy(Card(h):find("Slain by Bob Doe\n", 1, true), Card(h))
     eq(People(addon):Field(Key(h, "Bob"), "level"), 60)
     falsy(addon.Events.Frame:IsEventRegistered("DAMAGE_METER_COMBAT_SESSION_UPDATED"), "done waiting")
@@ -113,6 +116,7 @@ test("a spree's end names who ended it, for you and the Krew", function()
         Blow(h, "Foe" .. i)
         h:Advance(20)
     end
+
     h:MeterFight({ duration = 5, sources = { KilledBy(Enemy("Bob")) } })
     h:Advance(2)
     truthy(h.printed[#h.printed]:find("Your spree ended at 5 kills. Bob Doe ended it.", 1, true), h.printed[#h.printed])
@@ -124,6 +128,7 @@ test("a spree's end names who ended it, for you and the Krew", function()
     for _, notice in ipairs(h.raidNotices) do
         notices[#notices + 1] = notice.text
     end
+
     truthy(table.concat(notices, "\n"):find("Mom Doe's spree ended at 7 kills by Cid.", 1, true))
     truthy(notices[#notices] == "Mom Doe's spree ended at 7 kills.", "a name with markup is dropped: " .. notices[#notices])
 end)
@@ -146,14 +151,17 @@ test("a recap that comes too late is set aside, not given to your next death", f
 
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
-    h:Advance(3) -- given up: unknown
+    -- given up: unknown
+    h:Advance(3)
     eq(addon.State:Get("death.attributed"), 1)
     eq(addon.State:Get("death.killer"), "")
-    h:MeterAdd(KilledBy(Enemy("Bob"))) -- the first death's recap, late
+    -- the first death's recap, late
+    h:MeterAdd(KilledBy(Enemy("Bob")))
     h:LeaveCombat()
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0, "a late recap counts for no one")
     falsy(addon.Events.Frame:IsEventRegistered("DAMAGE_METER_COMBAT_SESSION_UPDATED"))
-    h:Fire("PLAYER_DEAD") -- a fall, out of combat: no new meter session, no new recap
+    -- a fall, out of combat: no new meter session, no new recap
+    h:Fire("PLAYER_DEAD")
     h:Advance(3)
     eq(addon.State:Get("death.attributed"), 2)
     eq(addon.State:Get("death.killer"), "", "the fall isn't Bob's")
@@ -165,16 +173,21 @@ test("a death inside the late window takes its own recap, not the death before's
 
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
-    h:Advance(3) -- the first death gives up: unknown
+    -- the first death gives up: unknown
+    h:Advance(3)
     h:Advance(7)
-    h:Fire("PLAYER_DEAD") -- a second death, still in the first one's late window
-    h:MeterAdd(KilledBy(Enemy("Bob")))   -- the first death's recap, late
-    h:MeterAdd(KilledBy(Enemy("Alice"))) -- the second death's
+    -- a second death, still in the first one's late window
+    h:Fire("PLAYER_DEAD")
+    -- the first death's recap, late
+    h:MeterAdd(KilledBy(Enemy("Bob")))
+    -- the second death's
+    h:MeterAdd(KilledBy(Enemy("Alice")))
     eq(addon.State:Get("death.attributed"), 2)
     eq(addon.State:Get("death.killer"), "Alice Doe")
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0, "the late recap counts for no one")
     h:LeaveCombat()
-    h:Fire("PLAYER_DEAD") -- a fall, with no recap of its own
+    -- a fall, with no recap of its own
+    h:Fire("PLAYER_DEAD")
     h:Advance(3)
     eq(addon.State:Get("death.attributed"), 3)
     eq(addon.State:Get("death.killer"), "", "nobody's recap is left over for it")
@@ -199,24 +212,28 @@ test("an attacker the recap hides is unknown: the card asks about the suspect", 
     local bob = Enemy("Bob")
 
     h:SetTarget(bob)
-    h:MeterFight({ duration = 5, sources = { { unit = "player", death = { events = {
-        { event = "SPELL_DAMAGE", spellId = 8676, spellName = "Ambush", amount = 700, hideCaster = true,
-            sourceName = h:FullName(bob), sourceGUID = h:GUID(bob) },
-    } } } } })
+
+    h:MeterFight({ duration = 5, sources = { { death = { events = {
+            { amount = 700, event = "SPELL_DAMAGE", hideCaster = true, sourceGUID = h:GUID(bob),
+                sourceName = h:FullName(bob), spellId = 8676, spellName = "Ambush" },
+        } },
+        unit = "player" } } })
+
     eq(addon.State:Get("death.killer"), "")
     truthy(Card(h):find("Slain by Bob Doe?", 1, true), Card(h))
 end)
 
--- Blizzard_DeathRecap.lua guards its damage line with "if elementData.amount": a recap event may
--- have no amount.
+-- Blizzard_DeathRecap.lua guards its damage line with "if elementData.amount": a recap event may have no amount.
 test("a killing blow the recap gives no amount for names the killer without a damage line", function()
     local h, addon = Grouped()
     local bob = Enemy("Bob")
 
-    h:MeterFight({ duration = 5, sources = { { unit = "player", death = { events = {
-        { event = "SPELL_INSTAKILL", spellId = 8676, spellName = "Ambush", sourceName = Key(h, "Bob"),
-            sourceGUID = h:GUID(bob), sourceFlags = 0x548 },
-    } } } } })
+    h:MeterFight({ duration = 5, sources = { { death = { events = {
+            { event = "SPELL_INSTAKILL", sourceFlags = 0x548, sourceGUID = h:GUID(bob), sourceName = Key(h, "Bob"),
+                spellId = 8676, spellName = "Ambush" },
+        } },
+        unit = "player" } } })
+
     eq(addon.State:Get("death.killer"), "Bob Doe")
     eq(addon.State:Get("death.killerDamage"), 0)
     local text = Card(h)

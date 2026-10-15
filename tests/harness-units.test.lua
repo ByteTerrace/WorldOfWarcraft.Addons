@@ -1,5 +1,5 @@
--- The harness's fidelity rules for units (tests/harness/units.lua): enemy players, nameplates,
--- mouseover, death, raid target icons, GUIDs and realms.
+-- The harness's fidelity rules for units (tests/harness/units.lua): enemy players, nameplates, mouseover, death, raid
+-- target icons, GUIDs and realms.
 
 local Kit = use("harness")
 
@@ -10,6 +10,7 @@ local function EnemyPlayer(fields)
         name = "Bob", race = "Human" }
 
     for key, value in pairs(fields or {}) do unit[key] = value end
+
     return unit
 end
 
@@ -51,7 +52,8 @@ test("hostility is relative to the player: canAttack, and isEnemy defaulting to 
     truthy(env.UnitCanAttack("target", "player"))
     truthy(env.UnitIsEnemy("player", "target"), "isEnemy follows canAttack")
     falsy(env.UnitIsEnemy("player", "player"))
-    h:SetTarget(EnemyPlayer({ canAttack = false, isEnemy = true })) -- an enemy you can't attack (sanctuary)
+    -- an enemy you can't attack (sanctuary)
+    h:SetTarget(EnemyPlayer({ canAttack = false, isEnemy = true }))
     falsy(env.UnitCanAttack("player", "target"))
     truthy(env.UnitIsEnemy("player", "target"))
     h:SetTarget(nil)
@@ -119,7 +121,8 @@ test("a secret token passed where secrets are allowed names the unit, and the an
     h:SetTarget({ name = "Hogger" })
     h:SetRestriction("Encounter", true)
     local token = Secret("target")
-    local name = h.env.UnitName(token) -- UnitName allows secret arguments
+    -- UnitName allows secret arguments
+    local name = h.env.UnitName(token)
 
     truthy(h.env.issecretvalue(name))
     eq(Reveal(name), "Hogger")
@@ -160,8 +163,10 @@ test("nameplates take the lowest free token, exist for every unit API, and fire 
     eq(during, "Foe1", "the unit is readable while NAME_PLATE_UNIT_REMOVED dispatches")
     falsy(env.UnitExists("nameplate1"), "gone after")
     eq(h:AddNamePlate(EnemyPlayer({ name = "Foe3" })), "nameplate1", "the freed token is reused")
+
     eq(table.concat(seen, ","), "NAME_PLATE_UNIT_ADDED:nameplate1,NAME_PLATE_UNIT_ADDED:nameplate2,"
         .. "NAME_PLATE_UNIT_REMOVED:nameplate1,NAME_PLATE_UNIT_ADDED:nameplate1")
+
     throws(function() h:RemoveNamePlate("nameplate9") end, "isn't an active nameplate")
 end)
 
@@ -198,11 +203,13 @@ test("a plate shows before NAME_PLATE_UNIT_ADDED and hides after _REMOVED, takin
     watcher:RegisterEvent("NAME_PLATE_CREATED")
     watcher:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     watcher:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+
     watcher:SetScript("OnEvent", function(_, event, arg)
         local plate = (((event == "NAME_PLATE_CREATED") and arg) or env.C_NamePlate.GetNamePlateForUnit(arg))
 
         seen[#seen + 1] = (event .. ":" .. tostring(plate:IsShown()))
     end)
+
     local token = h:AddNamePlate(EnemyPlayer())
     local plate = env.C_NamePlate.GetNamePlateForUnit(token)
 
@@ -259,7 +266,8 @@ test("death: PLAYER_DEAD in lockdown, then combat ends; release and revive fire 
     falsy(env.UnitIsDeadOrGhost("player"))
     eq(env.UnitHealth("player"), 100)
     h:Die()
-    h:Revive() -- resurrected before releasing
+    -- resurrected before releasing
+    h:Revive()
     eq(table.concat(seen, ","), "PLAYER_DEAD,PLAYER_REGEN_ENABLED,PLAYER_ALIVE,PLAYER_UNGHOST,PLAYER_DEAD,PLAYER_ALIVE")
     throws(function() h:ReleaseSpirit() end, "isn't dead")
 end)
@@ -267,7 +275,8 @@ end)
 test("addon code can't set raid icons: SetRaidTarget is forbidden, as the client refused it", function()
     local h = Harness.New()
 
-    h:ExpectBlocked(1) -- the call under test
+    -- the call under test
+    h:ExpectBlocked(1)
     local seen = Watch(h, "ADDON_ACTION_FORBIDDEN", "RAID_TARGET_UPDATE")
 
     h:SetTarget(EnemyPlayer())
@@ -301,8 +310,10 @@ test("GetGuildInfo returns name, rank, rank index and another realm's name; noth
     eq(rank, "Officer")
     eq(index, 1)
     eq(realm, nil, "the player's own realm is nil")
+
     h:SetTarget(EnemyPlayer({ guild = "Knights of Light", guildRank = "Guild Master", guildRankIndex = 0,
         guildRealm = "Other Realm" }))
+
     name, rank, index, realm = env.GetGuildInfo("target")
     eq(name, "Knights of Light")
     eq(rank, "Guild Master")
@@ -377,8 +388,10 @@ test("a relog starts with no target, focus, mouseover, nameplates or combo point
     falsy(h.env.UnitExists("questnpc"), "the dialog closed with the old UI, and its giver with it")
     truthy(h.env.UnitExists("target"), "a /reload keeps the world")
     h:Relog()
+
     for _, unit in ipairs({ "target", "focus", "mouseover", "nameplate1" }) do
         falsy(h.env.UnitExists(unit), unit .. " after a fresh login")
     end
+
     eq(h.env.GetComboPoints("player", "target"), 0)
 end)

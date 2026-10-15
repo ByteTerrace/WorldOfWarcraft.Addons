@@ -12,34 +12,39 @@ local addonName, ns = ...
 --   Flawless   so do your flawless victories (Victory.flawlessWins, Kombat.lua).
 --   Scholar    and the riddles a young scholar solves (Scholar.stars).
 --
--- ns.Krew is the Krew module's Comms (ByteTerrace_Core's Comms.lua): every feature that talks to
--- the Krew (Warband's marks, sightings and rallies; Streaks' sprees) sends and listens through it,
--- so they all play by Blizzard's addon rules the same way: hidden messages to your own group only,
--- rare and rate-limited, never during chat messaging lockdown, parsed strictly, and never heard
--- or sent while the Krew module is off. Received messages only ever show a card or an alert,
--- update the ledger, or (a rally, with Warband.rallyWaypoint on) set a map waypoint; none acts on
+-- ns.Krew is the Krew module's Comms (ByteTerrace_Core's Comms.lua): every feature that talks to the Krew (Warband's
+-- marks, sightings and rallies; Streaks' sprees) sends and listens through it, so they all play by Blizzard's addon
+-- rules the same way: hidden messages to your own group only, rare and rate-limited, never during chat messaging
+-- lockdown, parsed strictly, and never heard or sent while the Krew module is off. Received messages only ever show a
+-- card or an alert, update the ledger, or (a rally, with Warband.rallyWaypoint on) set a map waypoint; none acts on
 -- your behalf.
 --
 -- ns.KrewFields cleans the fields of received messages for every feature that listens:
 --   CleanText(text)         a zone, subzone or name to show, or "".
 --   CleanCount(text, max)   a whole number from 1 to max written in digits, or nil.
 --   MaxLevel                the highest level a message may carry.
--- Neither passes a "|" or a control character: someone else's message never puts a link,
--- texture or color on your screen.
+-- Neither passes a "|" or a control character: someone else's message never puts a link, texture or color on your
+-- screen.
 --
--- Krew members are the group members whose hello you heard; one who leaves the group leaves the
--- Krew once the roster settles: a raid forming fires a burst of roster updates, and the roster is
--- read once, PruneDelay after the last of them. Showing or listing the Krew reads it first.
+-- Krew members are the group members whose hello you heard; one who leaves the group leaves the Krew once the roster
+-- settles: a raid forming fires a burst of roster updates, and the roster is read once, PruneDelay after the last of
+-- them. Showing or listing the Krew reads it first.
 
 local KrewIcon = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend"
-local MaxLevel = 200   -- the highest level accepted from a message
-local MaxStars = 99999 -- the most stars accepted from a message
-local MaxText = 60     -- longest text accepted from a message
-local NewerQuorum = 2  -- Krew members on a newer version that make it worth saying
+-- the highest level accepted from a message
+local MaxLevel = 200
+-- the most stars accepted from a message
+local MaxStars = 99999
+-- longest text accepted from a message
+local MaxText = 60
+-- Krew members on a newer version that make it worth saying
+local NewerQuorum = 2
 local PartyUnits, RaidUnits = {}, {}
 local Prefix = "TLKKrew1"
-local PruneDelay = 1 -- seconds without a roster update that end a burst of them
-local ReplyDelay = 1 -- seconds that gather a burst of hellos into one reply
+-- seconds without a roster update that end a burst of them
+local PruneDelay = 1
+-- seconds that gather a burst of hellos into one reply
+local ReplyDelay = 1
 local RollCallDelay = 2
 
 for i = 1, 40 do
@@ -55,29 +60,27 @@ local Addon = ns.Addon
 local Names = ByteTerrace.Names
 local ShowCard = ns.Cards.Show
 
-local Krew, Messages -- the module, and its Comms (ns.Krew)
-local Members = {} -- [name] = the version its hello named ("" unreadable), for members running the toolkit
-local Present = {} -- scratch: [name] = true for the group's members, while pruning Members
-local PruneTimer    -- pending timer that prunes Members once a burst of roster updates settles
-local ReplyTimer    -- pending timer that answers a burst of hellos with one reply
-local RollCallTimer -- pending timer that merges a burst of hellos into one card
-local RosterAt = 0  -- GetTime() of the last roster update
-local Said = false  -- you said hello to this group
-local ToldNewer = false -- this group heard that a newer version is out
+-- the module, and its Comms (ns.Krew)
+local Krew, Messages
+-- [name] = the version its hello named ("" unreadable), for members running the toolkit
+local Members = {}
+-- scratch: [name] = true for the group's members, while pruning Members
+local Present = {}
+-- pending timer that prunes Members once a burst of roster updates settles
+local PruneTimer
+-- pending timer that answers a burst of hellos with one reply
+local ReplyTimer
+-- pending timer that merges a burst of hellos into one card
+local RollCallTimer
+-- GetTime() of the last roster update
+local RosterAt = 0
+-- you said hello to this group
+local Said = false
+-- this group heard that a newer version is out
+local ToldNewer = false
 
---- A text field from a message (a zone, a subzone, a name), or "" when it's missing, longer than
---- MaxText, or holds a "|" or a control character.
----@param text string?
----@return string
-local function CleanText(text)
-    if (type(text) ~= "string") or (#text > MaxText) or text:find("[|%c]") then
-        return ""
-    end
-    return text
-end
-
---- A count from a message: a whole number from 1 to max written in digits only (no sign,
---- exponent, hex or "inf"), or nil.
+--- A count from a message: a whole number from 1 to max written in digits only (no sign, exponent, hex or "inf"), or
+--- nil.
 ---@param text string?
 ---@param max integer
 ---@return integer?
@@ -85,9 +88,22 @@ local function CleanCount(text, max)
     if (type(text) ~= "string") or (#text > 9) or not text:find("^%d+$") then
         return nil
     end
+
     local count = tonumber(text)
 
     return ((((count >= 1) and (count <= max)) and count) or nil)
+end
+
+--- A text field from a message (a zone, a subzone, a name), or "" when it's missing, longer than MaxText, or holds a
+--- "|" or a control character.
+---@param text string?
+---@return string
+local function CleanText(text)
+    if (type(text) ~= "string") or (#text > MaxText) or text:find("[|%c]") then
+        return ""
+    end
+
+    return text
 end
 
 -- A version from a message, "major.minor.patch" in digits (at most 6 each), or "".
@@ -95,11 +111,12 @@ local function CleanVersion(text)
     if (type(text) ~= "string") or not text:find("^%d%d?%d?%d?%d?%d?%.%d%d?%d?%d?%d?%d?%.%d%d?%d?%d?%d?%d?$") then
         return ""
     end
+
     return text
 end
 
--- Compares two versions CleanVersion accepts, part by part as numbers: below 0 when a is older,
--- 0 when they're equal, above 0 when a is newer.
+-- Compares two versions CleanVersion accepts, part by part as numbers: below 0 when a is older, 0 when they're equal,
+-- above 0 when a is newer.
 local function CompareVersions(a, b)
     local a1, a2, a3 = a:match("^(%d+)%.(%d+)%.(%d+)$")
     local b1, b2, b3 = b:match("^(%d+)%.(%d+)%.(%d+)$")
@@ -108,33 +125,40 @@ local function CompareVersions(a, b)
     if major ~= 0 then
         return major
     end
+
     if minor ~= 0 then
         return minor
     end
+
     return (tonumber(a3) - tonumber(b3))
 end
 
--- Drops Krew members who left the group. While any member's name is unreadable, nobody is dropped.
--- With no Krew members there's no one to drop, and no name to read.
+-- Drops Krew members who left the group. While any member's name is unreadable, nobody is dropped. With no Krew members
+-- there's no one to drop, and no name to read.
 local function Prune()
     if next(Members) == nil then
         return
     end
+
     wipe(Present)
     local raid, count = IsInRaid(), GetNumGroupMembers()
     local units = ((raid and RaidUnits) or PartyUnits)
 
     if not raid then
-        count = (count - 1) -- party tokens leave out the player
+        -- party tokens leave out the player
+        count = (count - 1)
     end
+
     for i = 1, count do
         local name = Names.OfUnit(units[i])
 
         if not name then
             return
         end
+
         Present[name] = true
     end
+
     for name in pairs(Members) do
         if not Present[name] then
             Members[name] = nil
@@ -148,10 +172,34 @@ local function PruneWhenQuiet()
 
     if quiet < PruneDelay then
         PruneTimer = Krew:After(PruneDelay - quiet, PruneWhenQuiet)
+
         return
     end
+
     PruneTimer = nil
     Prune()
+end
+
+-- A roster update: the roster is pruned once updates stop for PruneDelay. One timer serves a burst; it waits out the
+-- updates that came after it was set.
+local function RosterChanged()
+    RosterAt = GetTime()
+
+    if not PruneTimer and (next(Members) ~= nil) then
+        PruneTimer = Krew:After(PruneDelay, PruneWhenQuiet)
+    end
+end
+
+local function SendHello(reply)
+    Messages:Send("HELLO", { (Addon.Version or "?"), ((reply and "1") or "0") })
+end
+
+-- Says hello to this group, once; a group the messages can't reach yet (lockdown) waits for the next roster update.
+local function SayHello()
+    if not Said and Messages:Ready() then
+        Said = true
+        SendHello(false)
+    end
 end
 
 -- Runs a pending prune now, so a reader of Members sees the group as it is.
@@ -170,7 +218,9 @@ local function KrewNames()
     for name in pairs(Members) do
         names[#names + 1] = name
     end
+
     sort(names)
+
     return names
 end
 
@@ -183,18 +233,20 @@ local function KrewList()
 
         names[i] = (((version ~= "") and ("%s (%s)"):format(name, version)) or name)
     end
+
     return concat(names, ", ")
 end
 
--- Says once per group that a newer version is out, when NewerQuorum Krew members run one: the
--- oldest of their versions, and "or newer" when they don't all run it. Only a hello naming a
--- newer version (heard) counts them, so other hellos read no roster.
+-- Says once per group that a newer version is out, when NewerQuorum Krew members run one: the oldest of their versions,
+-- and "or newer" when they don't all run it. Only a hello naming a newer version (heard) counts them, so other hellos
+-- read no roster.
 local function NoticeNewer(heard)
     local mine = CleanVersion(Addon.Version)
 
     if ToldNewer or (mine == "") or (heard == "") or (CompareVersions(heard, mine) <= 0) then
         return
     end
+
     Settle()
     local count, oldest, mixed = 0, nil, false
 
@@ -202,13 +254,16 @@ local function NoticeNewer(heard)
         if (version ~= "") and (CompareVersions(version, mine) > 0) then
             count = (count + 1)
             mixed = (mixed or ((oldest ~= nil) and (version ~= oldest)))
+
             if not oldest or (CompareVersions(version, oldest) < 0) then
                 oldest = version
             end
         end
     end
+
     if count >= NewerQuorum then
         ToldNewer = true
+
         Addon:Print(("A newer %s is out (%d Krew members run %s%s)."):format(addonName, count, oldest,
             (mixed and " or newer") or ""))
     end
@@ -219,30 +274,8 @@ local function ShowRollCall()
     local names = KrewNames()
 
     if #names > 0 then
-        ShowCard({ icon = KrewIcon, sound = SOUNDKIT.READY_CHECK, title = "The Krew is here!",
-            body = (concat(names, ", ") .. (((#names == 1) and " is") or " are") .. " running the toolkit too.") })
-    end
-end
-
-local function SendHello(reply)
-    Messages:Send("HELLO", { (Addon.Version or "?"), ((reply and "1") or "0") })
-end
-
--- Says hello to this group, once; a group the messages can't reach yet (lockdown) waits for the
--- next roster update.
-local function SayHello()
-    if not Said and Messages:Ready() then
-        Said = true
-        SendHello(false)
-    end
-end
-
--- A roster update: the roster is pruned once updates stop for PruneDelay. One timer serves a
--- burst; it waits out the updates that came after it was set.
-local function RosterChanged()
-    RosterAt = GetTime()
-    if not PruneTimer and (next(Members) ~= nil) then
-        PruneTimer = Krew:After(PruneDelay, PruneWhenQuiet)
+        ShowCard({ body = (concat(names, ", ") .. (((#names == 1) and " is") or " are") .. " running the toolkit too."),
+            icon = KrewIcon, sound = SOUNDKIT.READY_CHECK, title = "The Krew is here!" })
     end
 end
 
@@ -251,11 +284,14 @@ local function Listen(module)
         local version, known = CleanVersion(fields[1]), (Members[sender] ~= nil)
 
         Members[sender] = version
+
         if not known and Krew:Get("hello") then
             Krew:Cancel(RollCallTimer)
             RollCallTimer = Krew:After(RollCallDelay, ShowRollCall)
         end
+
         NoticeNewer(version)
+
         if (fields[2] ~= "1") and not ReplyTimer then
             ReplyTimer = Krew:After(ReplyDelay, function()
                 ReplyTimer = nil
@@ -307,37 +343,44 @@ Krew = Addon:Module("Krew", {
     OnDisable = function()
         wipe(Members)
         Said, ToldNewer = false, false
-        RollCallTimer, ReplyTimer, PruneTimer = nil, nil, nil -- the module's timers stop with it
+        -- the module's timers stop with it
+        RollCallTimer, ReplyTimer, PruneTimer = nil, nil, nil
     end,
     OnEnable = function(module)
         Listen(module)
         module:On("GROUP_JOINED", SayHello)
+
         module:On("GROUP_ROSTER_UPDATE", function()
             if IsInGroup() then
                 RosterChanged()
                 SayHello()
             end
         end)
+
         module:On("GROUP_LEFT", function()
             wipe(Members)
             Said, ToldNewer = false, false
         end)
+
         module:On("PLAYER_LEVEL_UP", function(level)
             if module:Get("shareDings") then
                 Messages:Send("DING", level)
             end
         end)
+
         -- The counters rise once per victory or star.
         module:OnIncrease("Victory.flawlessWins", function()
             if module:Get("shareFlawless") then
                 Messages:Send("FLAWLESS")
             end
         end)
+
         module:OnIncrease("Scholar.stars", function(_, stars)
             if module:Get("shareScholar") then
                 Messages:Send("SCHOLAR", stars)
             end
         end)
+
         if IsInGroup() then
             SayHello()
         end
@@ -355,6 +398,7 @@ Krew = Addon:Module("Krew", {
             kind = "boolean", label = "Share solved riddles", name = "shareScholar" },
     },
 })
+
 Messages = Krew.Comms
 ns.Krew = Messages
 ns.KrewFields = { CleanCount = CleanCount, CleanText = CleanText, MaxLevel = MaxLevel }

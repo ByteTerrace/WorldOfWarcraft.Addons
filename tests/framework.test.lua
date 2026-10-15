@@ -31,6 +31,7 @@ test("compile reports every bad declaration at once", function()
             { default = false, kind = "boolean", lockedBy = 3, name = "lock" },
         },
         toggle = false })
+
     local err = tostring(StartRefused(h, addon))
 
     truthy(err:find("Bad.kind: unknown kind table", 1, true), "reports kind")
@@ -52,6 +53,7 @@ test("writes are validated and secrets are refused", function()
             { default = 1, kind = "number", max = 10, min = 0, name = "n" },
         },
         toggle = false })
+
     Start(h)
     throws(function() addon.State:Set("M.mode", "c") end, "expects one of a, b")
     throws(function() addon.State:Set("M.n", 11) end, "at most 10")
@@ -75,6 +77,7 @@ test("saved values load; invalid and renamed ones reset, undeclared ones are kep
             { default = "a", kind = "string", name = "mode", values = { "a", "b" } },
         },
         toggle = false })
+
     Start(h)
     eq(addon.State:Get("M.flag"), true)
     eq(addon.State:Get("M.mode"), "a", "invalid saved value falls back to default")
@@ -164,9 +167,11 @@ test("a rule runs when its verdict flips, and only then", function()
 
     addon.State:Rule({ changed = function(active) flips[#flips + 1] = tostring(active) end, reads = { "M.n" },
         when = function(s) return (s:Get("M.n") > 5) end })
+
     for _, n in ipairs({ 1, 6, 7, 8, 2, 3, 9 }) do
         addon.State:Set("M.n", n)
     end
+
     eq(table.concat(flips, ","), "true,false,true")
 end)
 
@@ -248,6 +253,7 @@ test("a disabled module registers nothing, and disabling removes what it owned",
         label = "M",
         OnEnable = function(module) module:On("PLAYER_TARGET_CHANGED", function() fired = (fired + 1) end) end,
     })
+
     Start(h)
     local frame = addon.Events.Frame
 
@@ -305,8 +311,11 @@ test("set and toggle change settings from text", function()
         { default = "a", kind = "string", label = "Mode", name = "mode", values = { "a", "b" } },
         { default = 1, kind = "number", label = "Size", max = 10, min = 0, name = "size" },
     } })
+
     Start(h)
+
     local function Last() return h.printed[#h.printed] end
+
     h:Slash("/test set M.mode b")
     eq(addon.State:Get("M.mode"), "b")
     h:Slash("/test set M.mode nope")
@@ -338,6 +347,7 @@ test("duplicate slash words and commands without a label are refused at compile"
             { name = "three", run = function() end },
         },
         toggle = false })
+
     local err = StartRefused(h, addon)
 
     truthy(tostring(err):find("slash word 'x' is taken", 1, true))
@@ -351,6 +361,7 @@ test("bound buttons run commands; while a map is active, unbound buttons are tak
     addon:Module("M", { bindings = { { command = "M.hold", map = "menu", source = "gamepad.south" } },
         commands = { { held = true, label = "Hold", name = "hold", run = function(_, phase) phases[#phases + 1] = phase end } },
         toggle = false })
+
     Start(h)
     h:Gamepad("PAD1", true)
     eq(#phases, 0, "inactive map captures nothing")
@@ -379,10 +390,12 @@ test("a release goes to its press's command; a held command whose map goes away 
             { held = true, label = "B", name = "b", run = function(_, phase) log[#log + 1] = ("b:" .. phase) end },
         },
         toggle = false })
+
     Start(h)
     addon.Input:SetActiveMaps({ "one" })
     h:Gamepad("PAD1", true)
-    addon.Input:SetActiveMaps({ "one", "two" }) -- "two" overrides south, so a's hold is canceled
+    -- "two" overrides south, so a's hold is canceled
+    addon.Input:SetActiveMaps({ "one", "two" })
     h:Gamepad("PAD1", false)
     eq(table.concat(log, ","), "a:down,a:cancel")
     addon.Input:SetActiveMaps({ "two" })
@@ -400,16 +413,19 @@ test("the settings window is generated from labeled persisted rows, in declarati
         { default = false, kind = "boolean", name = "hidden" },
         { default = false, kind = "boolean", label = "Runtime", name = "runtime", persist = false },
     } })
+
     Start(h)
     local window, state, names = addon.SettingsWindow, addon.State, {}
 
     window:Show()
+
     for _, entry in ipairs(window.Pages[1].entries) do
         if entry.name then
             names[#names + 1] = entry.name
             truthy(window.Controls[entry.id], "each setting has a control")
         end
     end
+
     eq(table.concat(names, ","), "M.enabled,M.mode,addon.debug")
     eq(window.Controls[state:Id("M.hidden")], nil)
     eq(window.Controls[state:Id("M.runtime")], nil)
@@ -431,8 +447,10 @@ local function Pages(pages)
         for _, entry in ipairs(page.entries) do
             parts[#parts + 1] = ((entry.header and ("[" .. entry.header .. "]")) or entry.name)
         end
+
         lines[#lines + 1] = (page.name .. ": " .. table.concat(parts, " "))
     end
+
     return table.concat(lines, " | ")
 end
 
@@ -444,12 +462,15 @@ test("module pages and sections organize the window; debug closes the main page"
         { default = false, kind = "boolean", name = "hidden" },
         { default = false, kind = "boolean", label = "Loud", name = "loud", section = "Noise" },
     } })
+
     addon:Module("Beta", { label = "Beta", page = "Extras" })
+
     addon:Module("Gamma", { page = "Other", section = "Gamma things",
         state = {
             { default = 1, kind = "number", label = "N", max = 3, min = 1, name = "n" },
         },
         toggle = false })
+
     addon:Module("Delta", { label = "Extras", page = "Extras" })
     addon:Module("Echo", { label = "Test AddOn" })
     addon:Module("Quiet", { state = { { default = true, kind = "boolean", label = "On", name = "on" } }, toggle = false })
@@ -461,6 +482,7 @@ test("module pages and sections organize the window; debug closes the main page"
         "Extras: [Beta] Beta.enabled Delta.enabled",
         "Other: [Gamma things] Gamma.n",
     }, " | "), "a header that repeats its page's name is left out, and a module with no label has none")
+
     eq(Pages(window.Pages), Pages(h.env.ByteTerrace.SettingsPages(addon)), "the window draws the schema's pages")
     window:Show(3)
     window.Controls[addon.State:Id("Gamma.n")].Plus:Click()
@@ -520,6 +542,7 @@ test("a module stopped directly inside its own handler runs no more of that disp
             m:On("PLAYER_TARGET_CHANGED", function() count = (count + 1) end)
         end,
         toggle = false })
+
     Start(h)
     h:Fire("PLAYER_TARGET_CHANGED")
     eq(count, 0)
@@ -529,6 +552,7 @@ end)
 test("switching a module off through its row takes effect when the batch publishes", function()
     local h, addon = NewAddOn()
     local count = 0
+
     local module = addon:Module("M", { label = "M", OnEnable = function(m)
         m:On("PLAYER_TARGET_CHANGED", function() addon.State:Set("M.enabled", false) end)
         m:On("PLAYER_TARGET_CHANGED", function() count = (count + 1) end)
@@ -547,6 +571,7 @@ test("a long watcher chain that settles isn't reported, and every version moves"
     local rows = {}
 
     for i = 1, 9 do rows[i] = { default = 0, kind = "number", name = ("r" .. i), persist = false } end
+
     addon:Module("C", { state = rows, toggle = false })
     Start(h)
     local s = addon.State
@@ -556,6 +581,7 @@ test("a long watcher chain that settles isn't reported, and every version moves"
 
         s:Watch({ from }, function(st) st:Set(to, st.Values[from]) end, true)
     end
+
     s:Set("C.r1", 5)
     eq(s:Get("C.r9"), 5)
     eq(s:Version("C.r9"), 1)
@@ -569,9 +595,11 @@ test("a secret unit token in a payload can't break publication", function()
     local seen, filtered = 0, 0
 
     m:Watch({ "x" }, function() seen = (seen + 1) end, true)
+
     for _, unit in ipairs({ "player", "target", "focus" }) do
         m:On("UNIT_AURA", function() filtered = (filtered + 1) end, unit)
     end
+
     h:Fire("UNIT_AURA", Secret("nameplate3"), {})
     eq(filtered, 0, "filtered handlers can't claim a secret unit")
     m:Set("x", 1)
@@ -636,6 +664,7 @@ test("a command is one batch", function()
     m = addon:Module("M", { commands = { { label = "Both", name = "both", run = function() m:Set("a", 1); m:Set("b", 1) end, slash = "both" } },
         state = { { default = 0, kind = "number", name = "a" }, { default = 0, kind = "number", name = "b" } },
         toggle = false })
+
     Start(h)
     local seen = {}
 
@@ -654,9 +683,11 @@ test("a cancel handler that switches maps wins over the switch that canceled it"
             { held = true, label = "Hold", name = "hold",
                 run = function(_, phase)
                     phases[#phases + 1] = phase
+
                     if phase == "cancel" then addon.Input:SetActiveMaps({ "a", "b" }) end end },
             { label = "Other", name = "other", run = function() end } },
         toggle = false })
+
     Start(h)
     addon.Input:SetActiveMaps({ "a" })
     h:Gamepad("PAD1", true)
@@ -672,6 +703,7 @@ test("registration changes only when the wanted registration does", function()
     addon:Module("M", { label = "M", OnEnable = function(m)
         for _ = 1, 5 do m:On("PLAYER_TARGET_CHANGED", function() end) end
     end })
+
     Start(h)
     local frame = addon.Events.Frame
 
@@ -694,6 +726,7 @@ test("controller capture works in combat: the capture frame isn't a protected fr
 
     addon:Module("M", { bindings = { { command = "M.go", map = "a", source = "gamepad.south" } },
         commands = { { label = "Go", name = "go", run = function() ran = (ran + 1) end } }, toggle = false })
+
     Start(h)
     h:EnterCombat()
     addon.Input:SetActiveMaps({ "a" })
@@ -747,6 +780,7 @@ test("a watcher registered mid-batch doesn't react to writes made before it exis
             m:Watch({ "M.x" }, function() fired = (fired + 1) end, true)
         end,
         toggle = false })
+
     addon:Module("Writer", { OnEnable = function() addon.State:Set("M.x", 1) end, toggle = false })
     Start(h)
     eq(fired, 1, "the write came after the watcher: it fires")
@@ -757,10 +791,12 @@ test("a watcher registered mid-batch doesn't react to writes made before it exis
     local fired2 = 0
 
     addon2:Module("Writer", { OnEnable = function() addon2.State:Set("M.x", 1) end, toggle = false })
+
     addon2:Module("Reader", { OnEnable = function(m)
             m:Watch({ "M.x" }, function() fired2 = (fired2 + 1) end, true)
         end,
         toggle = false })
+
     Start(h2)
     eq(fired2, 0, "the write came before the watcher: it doesn't")
 end)
@@ -769,10 +805,12 @@ test("a rule's first verdict doesn't depend on module declaration order", functi
     for _, readerFirst in ipairs({ true, false }) do
         local h, addon = NewAddOn()
         local calls = 0
+
         local reader = { OnEnable = function(m)
                 m:Rule({ changed = function() calls = (calls + 1) end, reads = { "W.flag" }, when = function(s) return s:Get("W.flag") end })
             end,
             toggle = false }
+
         local writer = { OnEnable = function(m) m:Set("flag", true) end,
             state = { { default = false, kind = "boolean", name = "flag", persist = false } }, toggle = false }
 
@@ -781,6 +819,7 @@ test("a rule's first verdict doesn't depend on module declaration order", functi
         else
             addon:Module("W", writer); addon:Module("R", reader)
         end
+
         Start(h)
         eq(calls, 0, (readerFirst and "reader declared first") or "writer declared first")
     end
@@ -806,6 +845,7 @@ test("a module's errors for a bad value or an unknown row point at the module's 
     local chunk = tostring(mark):match("^(.-):%d+: mark$")
 
     truthy(chunk, "this test's own chunk name: " .. tostring(mark))
+
     for _, call in ipairs({
         function() m:Set("n", "bad") end,
         function() m:Get("typo") end,
@@ -839,6 +879,7 @@ end)
 
 test("a stopped module's runtime rows return to their defaults", function()
     local h, addon = NewAddOn()
+
     local m = addon:Module("M", { label = "M", OnEnable = function(mod) mod:Set("fact", true) end,
         state = { { default = false, kind = "boolean", name = "fact", persist = false } } })
 

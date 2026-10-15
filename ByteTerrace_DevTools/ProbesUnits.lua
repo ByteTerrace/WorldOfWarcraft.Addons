@@ -1,17 +1,17 @@
 local addonName, ns = ...
 
--- Calibration probes about units: identity and health (secret or plain, idle and in combat),
--- health percent, classification, primary power, combo points, nameplate frames, the UNIT_COMBAT payloads
--- and UNIT_AURA tokens DevTools.lua collects, and whether aura sounds (C_UnitAuras.AddAuraSound)
--- register. Probes.lua's header is the contract; ProbeNeeds.lua defines the needs.
+-- Calibration probes about units: identity and health (secret or plain, idle and in combat), health percent,
+-- classification, primary power, combo points, nameplate frames, the UNIT_COMBAT payloads and UNIT_AURA tokens
+-- DevTools.lua collects, and whether aura sounds (C_UnitAuras.AddAuraSound) register. Probes.lua's header is the
+-- contract; ProbeNeeds.lua defines the needs.
 
 -- UnitClassification's documented answers (warcraft.wiki.gg API_UnitClassification).
 local Classifications = {
     elite = true, minus = true, normal = true, rare = true, rareelite = true, trivial = true, worldboss = true,
 }
 
--- The aura auraSound.api registers a sound for: Mark of the Wild (Rank 1), a common buff on the
--- player. The sound file doesn't exist and never plays: the registration is removed in the same run.
+-- The aura auraSound.api registers a sound for: Mark of the Wild (Rank 1), a common buff on the player. The sound file
+-- doesn't exist and never plays: the registration is removed in the same run.
 local AuraSoundFile = "Interface\\AddOns\\ByteTerrace_DevTools\\AuraSoundProbe.ogg"
 local AuraSoundSpellID = 1126
 
@@ -23,57 +23,6 @@ local Joined, JoinSets, Shape, Value = Probes.Joined, Probes.JoinSets, Probes.Sh
 local Kills, UnitCombat = Probes.Kills, Probes.UnitCombat
 local NamePlateToken = Probes.NamePlateToken
 
--- A unit's identity: UnitName, UnitClass and UnitGUID, as shapes. withRealm adds UnitName's realm,
--- for units whose realm is always the player's (an NPC's is nil).
-local function Identity(unit, withRealm)
-    local name, realm = UnitName(unit) -- secret: recorded by Shape as a marker
-    local className, classFile, classID = UnitClass(unit) -- secret: recorded by Shape as a marker
-    local guid = UnitGUID(unit) -- secret: recorded by Shape as a marker
-
-    return {
-        name = Shape(name), realm = ((withRealm and Shape(realm)) or nil), className = Shape(className),
-        classFile = Shape(classFile), classID = Shape(classID), guid = Shape(guid),
-    }
-end
-
--- Registers an aura sound for AuraSoundSpellID on the player with throttleSeconds, then removes
--- it by the ID it returned: whether either call errored, and the ID's shape.
-local function TryAuraSound(throttleSeconds)
-    local auras = C_UnitAuras
-    local sound = {
-        soundFileName = AuraSoundFile, spellID = AuraSoundSpellID, throttleSeconds = throttleSeconds,
-        unitToken = "player",
-    }
-    -- protected: auraSound.api needs idle, so this never runs in combat lockdown
-    local ok, id = pcall(auras.AddAuraSound, Enum.UnitAuraSoundTrigger.Added, sound)
-    local result = { errors = not ok, auraSoundID = ((ok and Shape(id)) or nil) }
-
-    if ok and not issecretvalue(id) and (type(id) == "number") then
-        result.removeErrors = not pcall(auras.RemoveAuraSound, id)
-    end
-    return result
-end
-
-local function Health(unit)
-    local health = UnitHealth(unit) -- secret: recorded by Shape as a marker
-    local healthMax = UnitHealthMax(unit) -- secret: recorded by Shape as a marker
-
-    return { health = Shape(health), healthMax = Shape(healthMax) }
-end
-
--- UnitHealthPercent and UnitHealthMissing, with and without predicted healing, as shapes.
-local function HealthSignals(unit)
-    local percent = UnitHealthPercent(unit) -- secret: recorded by Shape as a marker
-    local percentUnpredicted = UnitHealthPercent(unit, false) -- secret: recorded by Shape as a marker
-    local missing = UnitHealthMissing(unit) -- secret: recorded by Shape as a marker
-    local missingUnpredicted = UnitHealthMissing(unit, false) -- secret: recorded by Shape as a marker
-
-    return {
-        percent = Shape(percent), percentUnpredicted = Shape(percentUnpredicted), missing = Shape(missing),
-        missingUnpredicted = Shape(missingUnpredicted),
-    }
-end
-
 -- A unit's UnitClassification and UnitLevel, as shapes; isSkull is a plain level of -1.
 local function Classification(unit)
     local classification, level = UnitClassification(unit), UnitLevel(unit)
@@ -81,30 +30,65 @@ local function Classification(unit)
     local plainLevel = (not issecretvalue(level) and (type(level) == "number"))
 
     return {
-        classification = Shape(classification), level = Shape(level), isSkull = (plainLevel and (level == -1)),
+        classification = Shape(classification),
         isDocumented = (plainClassification and (Classifications[classification] == true)),
+        isSkull = (plainLevel and (level == -1)), level = Shape(level),
     }
 end
 
--- The player's combo points, as shapes: UnitPower and UnitPowerMax of the power type, and
--- GetComboPoints on the target.
+-- The player's combo points, as shapes: UnitPower and UnitPowerMax of the power type, and GetComboPoints on the target.
 local function ComboPoints()
     local comboPoints = Enum.PowerType.ComboPoints
-    local current = UnitPower("player", comboPoints) -- secret: recorded by Shape as a marker
-    local max = UnitPowerMax("player", comboPoints) -- secret: recorded by Shape as a marker
-    local onTarget = GetComboPoints("player", "target") -- secret: recorded by Shape as a marker
+    -- secret: recorded by Shape as a marker
+    local current = UnitPower("player", comboPoints)
+    -- secret: recorded by Shape as a marker
+    local max = UnitPowerMax("player", comboPoints)
+    -- secret: recorded by Shape as a marker
+    local onTarget = GetComboPoints("player", "target")
 
     return { comboPoints = Shape(current), comboPointsMax = Shape(max), onTarget = Shape(onTarget) }
 end
 
--- A unit's primary power, as shapes: UnitPowerType's number and token, UnitPower and UnitPowerMax
--- of that type (no PowerType argument). Any class answers: mana, rage and energy are all primary.
-local function PrimaryPower(unit)
-    local powerType, token = UnitPowerType(unit)
-    local current = UnitPower(unit) -- secret: recorded by Shape as a marker
-    local max = UnitPowerMax(unit) -- secret: recorded by Shape as a marker
+local function Health(unit)
+    -- secret: recorded by Shape as a marker
+    local health = UnitHealth(unit)
+    -- secret: recorded by Shape as a marker
+    local healthMax = UnitHealthMax(unit)
 
-    return { powerType = Shape(powerType), token = Shape(token), current = Shape(current), max = Shape(max) }
+    return { health = Shape(health), healthMax = Shape(healthMax) }
+end
+
+-- UnitHealthPercent and UnitHealthMissing, with and without predicted healing, as shapes.
+local function HealthSignals(unit)
+    -- secret: recorded by Shape as a marker
+    local percent = UnitHealthPercent(unit)
+    -- secret: recorded by Shape as a marker
+    local percentUnpredicted = UnitHealthPercent(unit, false)
+    -- secret: recorded by Shape as a marker
+    local missing = UnitHealthMissing(unit)
+    -- secret: recorded by Shape as a marker
+    local missingUnpredicted = UnitHealthMissing(unit, false)
+
+    return {
+        missing = Shape(missing), missingUnpredicted = Shape(missingUnpredicted), percent = Shape(percent),
+        percentUnpredicted = Shape(percentUnpredicted),
+    }
+end
+
+-- A unit's identity: UnitName, UnitClass and UnitGUID, as shapes. withRealm adds UnitName's realm, for units whose
+-- realm is always the player's (an NPC's is nil).
+local function Identity(unit, withRealm)
+    -- secret: recorded by Shape as a marker
+    local name, realm = UnitName(unit)
+    -- secret: recorded by Shape as a marker
+    local className, classFile, classID = UnitClass(unit)
+    -- secret: recorded by Shape as a marker
+    local guid = UnitGUID(unit)
+
+    return {
+        classFile = Shape(classFile), classID = Shape(classID), className = Shape(className), guid = Shape(guid),
+        name = Shape(name), realm = ((withRealm and Shape(realm)) or nil),
+    }
 end
 
 -- The nameplate frame of a non-player unit (enemy or friendly, NamePlateToken), as shapes.
@@ -114,63 +98,115 @@ local function NamePlateShape(enemy)
     if plate == nil then
         return { plate = "nil" }
     end
+
     return {
+        -- secret: recorded by Value as a marker
+        forbidden = Value(plate:IsForbidden()),
+        -- Blizzard_NamePlateBase assigns it as a plain field
+        hasUnitFrame = (rawget(plate, "UnitFrame") ~= nil),
+        -- secret: recorded by Value as a marker
+        objectType = Value(plate:GetObjectType()),
         plate = Shape(plate),
-        forbidden = Value(plate:IsForbidden()), -- secret: recorded by Value as a marker
-        objectType = Value(plate:GetObjectType()), -- secret: recorded by Value as a marker
-        hasUnitFrame = (rawget(plate, "UnitFrame") ~= nil), -- Blizzard_NamePlateBase assigns it as a plain field
     }
+end
+
+-- A unit's primary power, as shapes: UnitPowerType's number and token, UnitPower and UnitPowerMax of that type (no
+-- PowerType argument). Any class answers: mana, rage and energy are all primary.
+local function PrimaryPower(unit)
+    local powerType, token = UnitPowerType(unit)
+    -- secret: recorded by Shape as a marker
+    local current = UnitPower(unit)
+    -- secret: recorded by Shape as a marker
+    local max = UnitPowerMax(unit)
+
+    return { current = Shape(current), max = Shape(max), powerType = Shape(powerType), token = Shape(token) }
+end
+
+-- Registers an aura sound for AuraSoundSpellID on the player with throttleSeconds, then removes it by the ID it
+-- returned: whether either call errored, and the ID's shape.
+local function TryAuraSound(throttleSeconds)
+    local auras = C_UnitAuras
+
+    local sound = {
+        soundFileName = AuraSoundFile, spellID = AuraSoundSpellID, throttleSeconds = throttleSeconds,
+        unitToken = "player",
+    }
+
+    -- protected: auraSound.api needs idle, so this never runs in combat lockdown
+    local ok, id = pcall(auras.AddAuraSound, Enum.UnitAuraSoundTrigger.Added, sound)
+    local result = { auraSoundID = ((ok and Shape(id)) or nil), errors = not ok }
+
+    if ok and not issecretvalue(id) and (type(id) == "number") then
+        result.removeErrors = not pcall(auras.RemoveAuraSound, id)
+    end
+
+    return result
 end
 
 Probes.Define({
     {
-        -- What addon code may do with a secret (UnitHealth("player") is always one, probed): each
-        -- operation is tried in pcall, so a refusal is recorded instead of raised. The *Result
-        -- fields give what an allowed operation returned (a secret's marker, or its type), or
-        -- "refused".
+        -- What addon code may do with a secret (UnitHealth("player") is always one, probed): each operation is tried in
+        -- pcall, so a refusal is recorded instead of raised. The *Result fields give what an allowed operation returned
+        -- (a secret's marker, or its type), or "refused".
         name = "secrets.operations",
         needs = {},
         run = function()
-            local health = UnitHealth("player") -- secret: only handed to the operations under test
+            -- secret: only handed to the operations under test
+            local health = UnitHealth("player")
 
             local function Try(fn)
                 return (pcall(fn))
             end
+
             local function Result(fn)
                 local ok, result = pcall(fn)
 
                 return ((ok and Shape(result)) or "refused")
             end
+
             return {
+                -- secret: the operation under test
+                arithmetic = Try(function() return (health + 1) end),
+                -- secret: the operation under test
+                concat = Try(function() return ("hp " .. health) end),
+                -- secret: the operation under test
+                concatResult = Result(function() return ("hp " .. health) end),
+                -- secret: the operation under test
+                format = Try(function() return ("%d"):format(health) end),
+                -- secret: the operation under test
+                formatResult = Result(function() return ("%s"):format(health) end),
+                -- secret: the operation under test
+                formatString = Try(function() return ("%s"):format(health) end),
                 isSecret = issecretvalue(health),
-                tostring = Try(function() return tostring(health) end), -- secret: the operation under test
-                concat = Try(function() return ("hp " .. health) end), -- secret: the operation under test
-                concatResult = Result(function() return ("hp " .. health) end), -- secret: the operation under test
-                format = Try(function() return ("%d"):format(health) end), -- secret: the operation under test
-                formatString = Try(function() return ("%s"):format(health) end), -- secret: the operation under test
-                formatResult = Result(function() return ("%s"):format(health) end), -- secret: the operation under test
-                truthTest = Try(function() return (health and true) end), -- secret: the operation under test
-                tableValue = Try(function() return { value = health } end), -- secret: the operation under test
-                arithmetic = Try(function() return (health + 1) end), -- secret: the operation under test
+                -- secret: the operation under test
+                tableValue = Try(function() return { value = health } end),
+                -- secret: the operation under test
+                tostring = Try(function() return tostring(health) end),
+                -- secret: the operation under test
+                truthTest = Try(function() return (health and true) end),
             }
         end,
     },
     {
-        -- Two uses of a secret the client refuses and Lua 5.1 can't intercept: comparing a value with
-        -- itself (raw equality holds before __eq is consulted) and using it as a table key (no
-        -- metamethod runs). The static SECRET rule covers both in addon code.
+        harness = "Lua 5.1 compares a value with itself and keys a table without consulting a metamethod",
+        -- Two uses of a secret the client refuses and Lua 5.1 can't intercept: comparing a value with itself (raw
+        -- equality holds before __eq is consulted) and using it as a table key (no metamethod runs). The static SECRET
+        -- rule covers both in addon code.
         name = "secrets.rawOperations",
         needs = {},
-        harness = "Lua 5.1 compares a value with itself and keys a table without consulting a metamethod",
         run = function()
-            local health = UnitHealth("player") -- secret: only handed to the operations under test
+            -- secret: only handed to the operations under test
+            local health = UnitHealth("player")
 
             local function Try(fn)
                 return (pcall(fn))
             end
+
             return {
-                compare = Try(function() return (health == health) end), -- secret: the operation under test
-                tableKey = Try(function() return ({ [health] = true }) end), -- secret: the operation under test
+                -- secret: the operation under test
+                compare = Try(function() return (health == health) end),
+                -- secret: the operation under test
+                tableKey = Try(function() return ({ [health] = true }) end),
             }
         end,
     },
@@ -266,8 +302,8 @@ Probes.Define({
         run = function() return PrimaryPower("target") end,
     },
     {
-        -- The docs keep UnitPowerMax plain for player-controlled units, as they did UnitHealthMax,
-        -- which the client made secret for an enemy player (unitHealth.enemyPlayer).
+        -- The docs keep UnitPowerMax plain for player-controlled units, as they did UnitHealthMax, which the client
+        -- made secret for an enemy player (unitHealth.enemyPlayer).
         name = "power.enemyPlayer",
         needs = { "idle", "enemyPlayer" },
         run = function() return PrimaryPower("target") end,
@@ -293,12 +329,12 @@ Probes.Define({
         run = function() return NamePlateShape(true) end,
     },
     {
-        -- An enemy hunter's Feign Death: whether the client says they're feigning, or only that
-        -- they're dead (FactsTarget.lua takes a death that isn't a feign for a kill).
+        -- An enemy hunter's Feign Death: whether the client says they're feigning, or only that they're dead
+        -- (FactsTarget.lua takes a death that isn't a feign for a kill).
         name = "feign.enemyHunter",
         needs = { "enemyHunterFeigning" },
         run = function()
-            return { feigning = Value(UnitIsFeignDeath("target")), dead = Value(UnitIsDeadOrGhost("target")) }
+            return { dead = Value(UnitIsDeadOrGhost("target")), feigning = Value(UnitIsFeignDeath("target")) }
         end,
     },
     {
@@ -309,28 +345,27 @@ Probes.Define({
             local units = UnitCombat.units
 
             return {
-                player = JoinSets(units.player), target = JoinSets(units.target), actions = Joined(UnitCombat.actions),
-                flagTexts = Joined(UnitCombat.flagTexts),
-                amountInCombat = UnitCombat.amountInCombat,
+                actions = Joined(UnitCombat.actions), amountInCombat = UnitCombat.amountInCombat,
+                flagTexts = Joined(UnitCombat.flagTexts), player = JoinSets(units.player),
+                target = JoinSets(units.target),
             }
         end,
     },
     {
-        -- UNIT_AURA's unit token per restriction text it came under ("secret", or the token): the
-        -- event is SecretWhenAurasRestricted, and the harness never makes a unit token secret, while
-        -- ByteTerrace_Core's Events.lua guards it. DevTools.lua listens for the player and the target.
+        accumulates = true,
+        -- UNIT_AURA's unit token per restriction text it came under ("secret", or the token): the event is
+        -- SecretWhenAurasRestricted, and the harness never makes a unit token secret, while ByteTerrace_Core's
+        -- Events.lua guards it. DevTools.lua listens for the player and the target.
         name = "units.secretTokenInAuraEvent",
         needs = { "auraRestricted" },
-        accumulates = true,
         run = function() return JoinSets(Probes.AuraTokens) end,
     },
     {
-        -- Whether C_UnitAuras.AddAuraSound works on Forever, as BigWigs uses it: a registration for
-        -- an aura on the player (its ID's shape, or that it errored), removed at once with
-        -- RemoveAuraSound and that ID, which the docs give as the way to undo it. Registration is
-        -- HasRestrictions, so this runs idle only. A throttle past the documented 5 seconds
-        -- "rejects registration": invalidThrottle says whether that's an error or no ID (any ID
-        -- it does return is removed the same way).
+        -- Whether C_UnitAuras.AddAuraSound works on Forever, as BigWigs uses it: a registration for an aura on the
+        -- player (its ID's shape, or that it errored), removed at once with RemoveAuraSound and that ID, which the docs
+        -- give as the way to undo it. Registration is HasRestrictions, so this runs idle only. A throttle past the
+        -- documented 5 seconds "rejects registration": invalidThrottle says whether that's an error or no ID (any ID it
+        -- does return is removed the same way).
         name = "auraSound.api",
         needs = { "idle" },
         run = function()
@@ -338,22 +373,23 @@ Probes.Define({
 
             return {
                 -- protected: only its type is read here; TryAuraSound calls it
-                addAuraSound = Shape(auras.AddAuraSound), removeAuraSound = Shape(auras.RemoveAuraSound),
-                added = TryAuraSound(MaxAuraSoundThrottle), invalidThrottle = TryAuraSound(MaxAuraSoundThrottle + 1),
+                addAuraSound = Shape(auras.AddAuraSound),
+                added = TryAuraSound(MaxAuraSoundThrottle),
+                invalidThrottle = TryAuraSound(MaxAuraSoundThrottle + 1),
+                removeAuraSound = Shape(auras.RemoveAuraSound),
             }
         end,
     },
     {
-        -- PARTY_KILL is how killing-blow addons read kills since the combat log closed: whose blow
-        -- (you, your pet, someone else) and the victim's kind. UNIT_DIED and PLAYER_TARGET_DIED
-        -- are new in the same client.
+        accumulates = true,
+        -- PARTY_KILL is how killing-blow addons read kills since the combat log closed: whose blow (you, your pet,
+        -- someone else) and the victim's kind. UNIT_DIED and PLAYER_TARGET_DIED are new in the same client.
         name = "kills.seen",
         needs = { "killedMob" },
-        accumulates = true,
         run = function()
             return {
-                partyKill = (Kills.partyKill and JoinSets(Kills.partyKill)), unitDied = (Kills.unitDied and JoinSets(Kills.unitDied)),
-                targetDied = Kills.targetDied,
+                partyKill = (Kills.partyKill and JoinSets(Kills.partyKill)), targetDied = Kills.targetDied,
+                unitDied = (Kills.unitDied and JoinSets(Kills.unitDied)),
             }
         end,
     },

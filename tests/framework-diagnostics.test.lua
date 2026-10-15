@@ -1,5 +1,5 @@
--- ByteTerrace framework: per-module work counts (debug work), their reset, profiling (debug
--- profile), and what counting costs a dispatch.
+-- ByteTerrace framework: per-module work counts (debug work), their reset, profiling (debug profile), and what counting
+-- costs a dispatch.
 
 local Kit = use("framework")
 
@@ -15,9 +15,11 @@ local function BytesPerCall(fn, calls)
     for _ = 1, calls do
         fn()
     end
+
     local grown = (((collectgarbage("count") - before) * 1024) / calls)
 
     collectgarbage("restart")
+
     return grown
 end
 
@@ -25,14 +27,17 @@ test("debug work counts each kind of work in the module it ran for, busiest firs
     local h, addon = NewAddOn()
     local chat = addon:Module("Chat", { comms = { prefix = "TestApp1" }, label = "Chat" })
     local action
+
     local busy = addon:Module("Busy", {
         commands = { { label = "Poke", name = "poke", run = function() end, slash = "poke" } },
         label = "Busy",
         OnEnable = function(module)
             module:On("PLAYER_TARGET_CHANGED", function() module:Set("count", module:Get("count") + 1) end)
             module:Watch({ "count" }, function() end, true)
+
             module:Rule({ changed = function() end, reads = { "count" },
                 when = function(state) return (state:Get("Busy.count") > 1) end })
+
             module:Every(1, function() end)
             module:Listen(chat.Comms, "PING", function() end)
             action = module:Callback(function() end)
@@ -50,6 +55,7 @@ test("debug work counts each kind of work in the module it ran for, busiest firs
     for _ = 1, 3 do
         h:Fire("PLAYER_TARGET_CHANGED")
     end
+
     h:Advance(2)
     h:Slash("/test poke")
     action()
@@ -86,6 +92,7 @@ end)
 
 test("a module's counts outlast a stop and a restart", function()
     local h, addon = NewAddOn()
+
     local module = addon:Module("M", { label = "M", OnEnable = function(module)
         module:On("PLAYER_TARGET_CHANGED", function() end)
     end })
@@ -102,6 +109,7 @@ end)
 
 test("debug profile times each module's callbacks, only while it's on", function()
     local h, addon = NewAddOn()
+
     local busy = addon:Module("Busy", {
         commands = { { label = "Poke", name = "poke",
             run = function()
@@ -116,6 +124,7 @@ test("debug profile times each module's callbacks, only while it's on", function
         end,
         state = { { default = 0, kind = "number", name = "count", persist = false } },
     })
+
     local other = addon:Module("Other", { label = "Other", OnEnable = function(module)
         module:Watch({ "Busy.count" }, function() h.workTime = (h.workTime + 0.25) end, true)
     end })
@@ -171,11 +180,14 @@ test("counting adds no allocation to a dispatch: it costs exactly its handlers' 
             module:On("PLAYER_TARGET_CHANGED", function() end)
         end
     end })
+
     Start(h)
     local events, SafeCall = addon.Events, h.env.ByteTerrace.SafeCall
 
     local function Empty() end
-    events:Dispatch("PLAYER_TARGET_CHANGED") -- the event's dispatch count gets its key
+
+    -- the event's dispatch count gets its key
+    events:Dispatch("PLAYER_TARGET_CHANGED")
     eq(rawget(events, "Dispatch"), nil, "profiling is off: the class's counting Dispatch runs")
     local dispatch = BytesPerCall(function() events:Dispatch("PLAYER_TARGET_CHANGED") end, 200)
     local call = BytesPerCall(function() SafeCall(Empty) end, 200)
@@ -193,9 +205,10 @@ test("while profiling, rules, first readings, deliveries and deferred actions ar
     local function Spend(ms)
         return function() h.workTime = (h.workTime + ms) end
     end
+
     local late = addon:Module("Late", { default = false, label = "Late",
         OnEnable = function(module)
-            module:Rule({ reads = { "Chat.enabled" }, when = function() return true end, changed = Spend(1), initial = true })
+            module:Rule({ changed = Spend(1), initial = true, reads = { "Chat.enabled" }, when = function() return true end })
             module:Watch({ "Chat.enabled" }, Spend(2))
             module:Listen(chat.Comms, "PING", Spend(4))
             action = module:Callback(Spend(8))
@@ -218,6 +231,7 @@ end)
 test("the profiling dispatch filters units and isolates errors like the counting one", function()
     local h, addon = NewAddOn()
     local calls = {}
+
     local module = addon:Module("M", { label = "M", OnEnable = function(module)
         module:On("UNIT_HEALTH", function(unit) calls[#calls + 1] = ("player:" .. unit) end, "player")
         module:On("UNIT_HEALTH", function() error("boom") end)
@@ -231,7 +245,8 @@ test("the profiling dispatch filters units and isolates errors like the counting
     h:Fire("UNIT_HEALTH", "player")
     eq(table.concat(calls, " "), "any:target player:player any:player")
     eq(module.Work.events, 5, "the filtered handler ran once, the others twice")
-    addon.Events:Dispatch("PLAYER_TARGET_CHANGED") -- no handler: the client's late delivery of a dropped event
+    -- no handler: the client's late delivery of a dropped event
+    addon.Events:Dispatch("PLAYER_TARGET_CHANGED")
     eq(addon.Events.Counts.PLAYER_TARGET_CHANGED, nil)
 end)
 
@@ -244,6 +259,7 @@ test("debug work breaks ties by name and lists at most a screenful", function()
             end,
             toggle = false })
     end
+
     Start(h)
     h:Fire("PLAYER_TARGET_CHANGED")
     h.printed = {}
@@ -252,5 +268,6 @@ test("debug work breaks ties by name and lists at most a screenful", function()
 
     truthy(text:find(":\n  addon: 2 (1 event, 1 command)\n  M01: 1 (1 event)\n  M02: 1 (1 event)", 1, true),
         "the addon's ADDON_LOADED and report command, then ties by name: " .. text)
+
     truthy(text:find("  M39: 1 (1 event)\n  ... and 2 more", 1, true), text)
 end)

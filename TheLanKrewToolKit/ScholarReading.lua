@@ -1,8 +1,7 @@
 local addonName, ns = ...
 
--- The reading generators: one function per reading kind in ScholarWords.kinds, registered in
--- Kit.Generators for Generate (ScholarPuzzles.lua, which loads first). Pure like
--- ScholarPuzzles.lua.
+-- The reading generators: one function per reading kind in ScholarWords.kinds, registered in Kit.Generators for
+-- Generate (ScholarPuzzles.lua, which loads first). Pure like ScholarPuzzles.lua.
 
 local concat, sort = table.concat, table.sort
 local gsub, sub = string.gsub, string.sub
@@ -13,24 +12,13 @@ local Kit = ns.Puzzles.Kit
 local Chance, Fill, Finish, Pick, Shuffle = Kit.Chance, Kit.Fill, Kit.Finish, Kit.Pick, Kit.Shuffle
 local Generators, Words = Kit.Generators, Kit.Words
 
--- Entries of a tiered bank with lo <= t <= hi (and, when given, a value at index field).
-local function Tier(list, lo, hi, field)
-    local out = {}
-
-    for _, entry in ipairs(list) do
-        if (entry.t >= lo) and (entry.t <= hi) and (not field or entry[field]) then
-            out[#out + 1] = entry
-        end
-    end
-    return out
-end
-
 local function Letters(word)
     local list = {}
 
     for i = 1, #word do
         list[i] = sub(word, i, i)
     end
+
     return list
 end
 
@@ -45,6 +33,20 @@ local function OneFromEach(state, bank, except, first, keep)
             out[#out + 1] = word
         end
     end
+
+    return out
+end
+
+-- Entries of a tiered bank with lo <= t <= hi (and, when given, a value at index field).
+local function Tier(list, lo, hi, field)
+    local out = {}
+
+    for _, entry in ipairs(list) do
+        if (entry.t >= lo) and (entry.t <= hi) and (not field or entry[field]) then
+            out[#out + 1] = entry
+        end
+    end
+
     return out
 end
 
@@ -69,7 +71,7 @@ end
 
 -- entry = { word, sentence, three misspellings }
 local function Spelling(state, kind, key, entry)
-    local vars = { sentence = entry[2], word = entry[1], spelled = concat(Letters(entry[1]), "-") }
+    local vars = { sentence = entry[2], spelled = concat(Letters(entry[1]), "-"), word = entry[1] }
 
     return Finish(state, kind, Words.reading[key], vars, entry[1], { entry[3], entry[4], entry[5] })
 end
@@ -90,6 +92,7 @@ local function Matches(a, b)
             n = (n + 1)
         end
     end
+
     return n
 end
 
@@ -104,6 +107,7 @@ local function LookAlikes(state, target, except)
             end
         end
     end
+
     return out
 end
 
@@ -119,15 +123,17 @@ Generators["reading.cvc"] = function(state)
                 while sub(from, i, i) == sub(target, i, i) do
                     i = (i + 1)
                 end
+
                 local wrongs = LookAlikes(state, target, from)
 
                 wrongs[3] = from
-                local vars = { from = from, was = sub(from, i, i), now = sub(target, i, i), target = target }
+                local vars = { from = from, now = sub(target, i, i), target = target, was = sub(from, i, i) }
 
                 return Finish(state, "reading.cvc", Words.reading.swap, vars, target, wrongs)
             end
         end
     end
+
     local vars = { sounds = concat(Letters(target), " - "), target = target }
 
     return Finish(state, "reading.cvc", Words.reading.blend, vars, target, LookAlikes(state, target))
@@ -137,6 +143,7 @@ local function Sorted(word)
     local list = Letters(word)
 
     sort(list)
+
     return concat(list)
 end
 
@@ -149,6 +156,7 @@ Generators["reading.unscramble"] = function(state)
     if concat(letters) == word then
         letters[1], letters[#letters] = letters[#letters], letters[1]
     end
+
     local wrongs = {}
 
     for pass = 1, 2 do
@@ -160,16 +168,19 @@ Generators["reading.unscramble"] = function(state)
             end
         end
     end
+
     local key = ((((state.grade == 3) and (state.level == 3)) and "unscrambleNoClue") or "unscramble")
-    local vars = { letters = concat(letters, " "), clue = entry[2], word = word }
+    local vars = { clue = entry[2], letters = concat(letters, " "), word = word }
     local puzzle = Finish(state, "reading.unscramble", Words.reading[key], vars, word, wrongs)
 
-    puzzle.tiles = letters -- ScholarView draws them as letter tiles
+    -- ScholarView draws them as letter tiles
+    puzzle.tiles = letters
+
     return puzzle
 end
 
--- Synonym or antonym (field 2 or 3 of an entry). The other kind of match is always one of the
--- distractors; the rest come from other entries, which never share a meaning.
+-- Synonym or antonym (field 2 or 3 of an entry). The other kind of match is always one of the distractors; the rest
+-- come from other entries, which never share a meaning.
 local function Meaning(state, kind, field)
     local pool = Tier(Words.synonyms, 1, (((state.grade == 2) and (state.level < 3)) and 1) or 2, field)
     local entry = Pick(state, pool)
@@ -180,6 +191,7 @@ local function Meaning(state, kind, field)
             wrongs[#wrongs + 1] = other[field]
         end
     end
+
     local vars = { correct = entry[field], word = entry[1] }
 
     return Finish(state, "reading." .. kind, Words.reading[kind], vars, entry[field], wrongs)
@@ -226,7 +238,7 @@ end
 Generators["reading.blank"] = function(state)
     local entry = Advanced(state, Words.blanks)
     local sentence = Fill(entry[1], StoryVars(state, entry))
-    local vars = { sentence = sentence, filled = (gsub(sentence, "___", entry[2])) }
+    local vars = { filled = (gsub(sentence, "___", entry[2])), sentence = sentence }
 
     return Finish(state, "reading.blank", Words.reading.blank, vars, entry[2], { entry[3], entry[4], entry[5] })
 end
@@ -236,7 +248,7 @@ Generators["reading.story"] = function(state)
     local story = Pick(state, Words.stories)
     local vars = StoryVars(state, story)
     local question = (((state.level == 1) and story[2]) or story[state.roll(2, #story)])
-    local out = { story = Fill(story[1], vars), question = Fill(question[1], vars), answer = Fill(question[2], vars) }
+    local out = { answer = Fill(question[2], vars), question = Fill(question[1], vars), story = Fill(story[1], vars) }
     local wrongs = { Fill(question[3], vars), Fill(question[4], vars), Fill(question[5], vars) }
 
     return Finish(state, "reading.story", Words.reading.story, out, out.answer, wrongs)

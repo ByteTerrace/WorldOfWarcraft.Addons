@@ -1,5 +1,5 @@
--- Scholar's riddle screen in play: when a riddle waits for Blizzard's windows, what Read aloud
--- says, and the difficulty quest riddles leave alone.
+-- Scholar's riddle screen in play: when a riddle waits for Blizzard's windows, what Read aloud says, and the difficulty
+-- quest riddles leave alone.
 
 local Kit = use("scholar")
 
@@ -34,7 +34,9 @@ test("quest riddles never change the difficulty math and reading use", function(
     local shown = Watch(ns)
 
     Accept(h, Wolves)
+
     for _ = 1, 3 do Solve(h, shown) end
+
     eq(addon.State:Get("Scholar.streak"), 3, "three right in a row")
     eq(addon.State:Get("Scholar.level"), 2, "and quest riddles are no harder")
     h:Slash("/tlk puzzle")
@@ -104,10 +106,12 @@ test("Blizzard's windows cost nothing while the challenge is off, and a loading 
     for _, event in ipairs({ "PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "GOSSIP_SHOW", "QUEST_FINISHED", "TAXIMAP_CLOSED" }) do
         falsy(frame:IsEventRegistered(event), event)
     end
+
     addon.State:Set("Scholar.enabled", true)
     truthy(frame:IsEventRegistered("PLAYER_INTERACTION_MANAGER_FRAME_SHOW"), "registered while it runs")
     h:OpenInteraction("Merchant")
-    h:Fire("PLAYER_ENTERING_WORLD", false, false) -- zoning closes every window without a word
+    -- zoning closes every window without a word
+    h:Fire("PLAYER_ENTERING_WORLD", false, false)
     h:Slash("/tlk puzzle")
     truthy(Showing(h), "nothing holds the riddle after a loading screen")
 end)
@@ -124,6 +128,7 @@ test("Read aloud says a blank as \"blank\", in reading and math riddles alike", 
         prompt = "Which word fits?\n\"Look at ___ big dragon!\"" })
 
     truthy(sight:find("Look at blank big dragon", 1, true), sight)
+
     local missing = Says({ choices = { "4", "5", "3", "10" }, kind = "math.missing",
         prompt = "What number goes in the blank?\n3 + __ = 7" })
 
@@ -140,6 +145,7 @@ test("Read aloud spells a spelling riddle's choices letter by letter", function(
         truthy(said:find("B, E, L, I, V, E", 1, true), kind .. ": " .. said)
         falsy(said:find("beleive", 1, true), kind .. ": a misspelling is never said as a word")
     end
+
     local rhyme = Says({ choices = { "hat", "dog", "sun", "pig" }, kind = "reading.rhyme", prompt = "Which word rhymes with \"cat\"?" })
 
     truthy(rhyme:find("hat, dog, sun, or pig", 1, true), "other riddles say their choices as words: " .. rhyme)

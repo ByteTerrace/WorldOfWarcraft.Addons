@@ -1,13 +1,16 @@
--- Scholar puzzles (TheLanKrewToolKit/ScholarWords.lua, ScholarPuzzles.lua, ScholarMath.lua and
--- ScholarReading.lua): property tests across seeds, every grade, every level and both subjects.
+-- Scholar puzzles (TheLanKrewToolKit/ScholarWords.lua, ScholarPuzzles.lua, ScholarMath.lua and ScholarReading.lua):
+-- property tests across seeds, every grade, every level and both subjects.
 --
--- The puzzle files load on their own, not with the whole addon, so concurrent edits to other files
--- can't break these tests. Their sources come from the runner (tools/lib/test-worker.mjs passes
--- every TOC-listed file's source as __addons), and Harness.DefineAddOn wraps them as a test-only
--- addon that runs in the harness's strict environment (reading an undefined global errors).
--- A seeded LCG is the only randomness, and it rejects malformed ranges.
+-- The puzzle files load on their own, not with the whole addon, so concurrent edits to other files can't break these
+-- tests. Their sources come from the runner (tools/lib/test-worker.mjs passes every TOC-listed file's source as
+-- __addons), and Harness.DefineAddOn wraps them as a test-only addon that runs in the harness's strict environment
+-- (reading an undefined global errors). A seeded LCG is the only randomness, and it rejects malformed ranges.
 
+-- The largest number a grade's math may use, in its answers and calculations (copper for money).
+local Band = { [0] = 10, 20, 100, 100, 9999, 1000, 1000 }
+local Context = { class = "MAGE", copper = 4567, level = 12, name = "Tessa", zone = "Duskwood" }
 local Files = { "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarMath.lua", "ScholarReading.lua" }
+
 local Kinds = {
     math = {
         [0] = { "math.count", "math.add", "math.subtract", "math.compare" },
@@ -28,11 +31,42 @@ local Kinds = {
         { "reading.vocab", "reading.blank", "reading.story" },
     },
 }
+
 local Subjects = { "math", "reading" }
--- The largest number a grade's math may use, in its answers and calculations (copper for money).
-local Band = { [0] = 10, 20, 100, 100, 9999, 1000, 1000 }
-local Context = { class = "MAGE", copper = 4567, level = 12, name = "Tessa", zone = "Duskwood" }
 local Unkind = { "kill", "killed", "blood", "bloody", "dead", "death", "die", "dies", "stupid", "dumb", "idiot", "loser" }
+
+local function Escape(s)
+    return (s:gsub("%p", "%%%0"))
+end
+
+local function Fold(s)
+    return (s:gsub("^%s+", ""):gsub("%s+$", ""):lower())
+end
+
+local function HasWord(text, word)
+    return (text:lower():find("%f[%w]" .. Escape(word:lower()) .. "%f[%W]") ~= nil)
+end
+
+-- Park and Miller's minimal standard LCG; every product stays exact in a double.
+local function Rng(seed)
+    local state = ((seed % 2147483646) + 1)
+
+    return function(m, n)
+        if (type(m) ~= "number") or (type(n) ~= "number") or (m ~= math.floor(m)) or (n ~= math.floor(n)) or (m > n) then
+            error(("random(%s, %s) is not a valid range"):format(tostring(m), tostring(n)), 2)
+        end
+
+        state = ((state * 48271) % 2147483647)
+
+        return (m + (state % ((n - m) + 1)))
+    end
+end
+
+local function Options(subject, grade, level, seed, context)
+    local mix = ((((seed * 7919) + (grade * 104729)) + (level * 1299709)) + (((subject == "math") and 0) or 15485863))
+
+    return { context = context, grade = grade, level = level, random = Rng(mix), subject = subject }
+end
 
 local function Sources()
     local addon = assert(__addons.TheLanKrewToolKit, "TheLanKrewToolKit isn't an addon")
@@ -44,35 +78,18 @@ local function Sources()
                 sources[i], at[i] = addon.sources[j], j
             end
         end
+
         assert(sources[i], name .. " isn't listed in TheLanKrewToolKit_Camelot.toc (ScholarWords.lua goes right before ScholarPuzzles.lua)")
     end
+
     return sources, at
 end
 
 local function Load()
-    Harness.DefineAddOn("ScholarOnly", { sources = (Sources()), files = Files, as = "TheLanKrewToolKit" })
+    Harness.DefineAddOn("ScholarOnly", { as = "TheLanKrewToolKit", files = Files, sources = (Sources()) })
     local h = Harness.New()
 
     return h:LoadFiles("ScholarOnly"), h
-end
-
--- Park and Miller's minimal standard LCG; every product stays exact in a double.
-local function Rng(seed)
-    local state = ((seed % 2147483646) + 1)
-
-    return function(m, n)
-        if (type(m) ~= "number") or (type(n) ~= "number") or (m ~= math.floor(m)) or (n ~= math.floor(n)) or (m > n) then
-            error(("random(%s, %s) is not a valid range"):format(tostring(m), tostring(n)), 2)
-        end
-        state = ((state * 48271) % 2147483647)
-        return (m + (state % ((n - m) + 1)))
-    end
-end
-
-local function Options(subject, grade, level, seed, context)
-    local mix = ((((seed * 7919) + (grade * 104729)) + (level * 1299709)) + (((subject == "math") and 0) or 15485863))
-
-    return { subject = subject, grade = grade, level = level, random = Rng(mix), context = context }
 end
 
 -- Calls fn(puzzle, options) for seeds 1..seeds of every subject, grade and level.
@@ -90,24 +107,12 @@ local function Sweep(puzzles, seeds, context, fn)
     end
 end
 
-local function Fold(s)
-    return (s:gsub("^%s+", ""):gsub("%s+$", ""):lower())
-end
-
-local function Escape(s)
-    return (s:gsub("%p", "%%%0"))
-end
-
-local function HasWord(text, word)
-    return (text:lower():find("%f[%w]" .. Escape(word:lower()) .. "%f[%W]") ~= nil)
-end
-
 local function Where(p, options)
     return ("%s grade %d level %d (%s): %q"):format(options.subject, options.grade, options.level, tostring(p.kind), tostring(p.prompt))
 end
 
--- Fails with message (formatted with ...) and the puzzle it's about. The message is only built on
--- a failure: the sweeps check tens of thousands of facts.
+-- Fails with message (formatted with ...) and the puzzle it's about. The message is only built on a failure: the sweeps
+-- check tens of thousands of facts.
 local function Expect(ok, p, options, message, ...)
     if not ok then
         error(message:format(...) .. " at " .. Where(p, options), 2)
@@ -120,67 +125,14 @@ for i, word in ipairs({ "nil", unpack(Unkind) }) do
     UnkindPatterns[i] = { pattern = ("%f[%w]" .. word .. "%f[%W]"), word = word }
 end
 
--- What keeps text from being plain, or nil: empty, a byte outside printable ASCII (a line break
--- only with allowNewline), template braces or escape codes, "nil", or an unkind word.
-local function Unplain(text, allowNewline)
-    if (type(text) ~= "string") or (text == "") then
-        return "empty text"
-    end
-    local at = text:find((allowNewline and "[^\n -~]") or "[^ -~]")
-
-    if at then
-        return ("byte %d in %q"):format(text:byte(at), text)
-    end
-    if text:find("[{}|]") then
-        return ("template braces or escape codes in %q"):format(text)
-    end
-    local lowered = text:lower()
-
-    for _, unkind in ipairs(UnkindPatterns) do
-        if lowered:find(unkind.pattern) then
-            return ("%q in %q"):format(unkind.word, text)
-        end
-    end
-    return nil
-end
-
-local function ExpectPlain(text, allowNewline, p, options)
-    local problem = Unplain(text, allowNewline)
-
-    Expect(problem == nil, p, options, "plain text, not %s", problem)
-end
-
 local function Contains(list, value)
     for _, item in ipairs(list) do
         if item == value then
             return true
         end
     end
+
     return false
-end
-
--- The shape every puzzle has, whatever its kind.
-local function CheckShape(p, options)
-    Expect(p.subject == options.subject, p, options, "subject %s", tostring(p.subject))
-    Expect(Contains(Kinds[options.subject][options.grade], p.kind), p, options, "kind belongs to the grade")
-    ExpectPlain(p.title, false, p, options)
-    Expect(#p.title <= 40, p, options, "short title")
-    ExpectPlain(p.prompt, true, p, options)
-    Expect(#p.prompt <= 240, p, options, "prompt within 240 chars (%d)", #p.prompt)
-    Expect((#p.choices == 4) and (p.choices[5] == nil), p, options, "exactly four choices")
-    local seen = {}
-
-    for _, choice in ipairs(p.choices) do
-        ExpectPlain(choice, false, p, options)
-        Expect(#choice <= 40, p, options, "choice %q within 40 chars", choice)
-        Expect(not seen[Fold(choice)], p, options, "distinct choice %q", choice)
-        seen[Fold(choice)] = true
-    end
-    Expect((type(p.answer) == "number") and (p.answer >= 1) and (p.answer <= 4) and ((p.answer % 1) == 0), p, options, "answer in 1..4")
-    ExpectPlain(p.hint, false, p, options)
-    ExpectPlain(p.explanation, false, p, options)
-    Expect(not HasWord(p.hint, p.choices[p.answer]), p, options, "hint %q doesn't give away %q", p.hint, p.choices[p.answer])
-    Expect(not (p.explanation:lower():find("wrong") or p.title:lower():find("wrong")), p, options, "encouraging words")
 end
 
 -- An independent evaluator for expressions: numbers (with decimals), + - x / and parentheses.
@@ -201,22 +153,28 @@ local function Evaluate(text)
             tokens[#tokens + 1], i = c, (i + 1)
         end
     end
+
     local at, Sum = 1, nil
 
     local function Atom()
         local t = tokens[at]
 
         at = (at + 1)
+
         if t == "(" then
             local v = Sum()
 
             assert(tokens[at] == ")", "unbalanced " .. text)
             at = (at + 1)
+
             return v
         end
+
         assert(type(t) == "number", "number expected in " .. text)
+
         return t
     end
+
     local function Product()
         local v = Atom()
 
@@ -228,8 +186,10 @@ local function Evaluate(text)
 
             v = (((op == "x") and (v * r)) or (v / r))
         end
+
         return v
     end
+
     Sum = function()
         local v = Product()
 
@@ -241,11 +201,14 @@ local function Evaluate(text)
 
             v = (((op == "+") and (v + r)) or (v - r))
         end
+
         return v
     end
+
     local v = Sum()
 
     assert(at == (#tokens + 1), "trailing tokens in " .. text)
+
     return v
 end
 
@@ -255,6 +218,7 @@ local function Numbers(text)
     for number in text:gmatch("%d+%.?%d*") do
         out[#out + 1] = tonumber(number)
     end
+
     return out
 end
 
@@ -267,6 +231,7 @@ local function ChoiceValue(kind, choice)
 
         return { tonumber(q), tonumber(r) }
     end
+
     return Numbers(choice)[1]
 end
 
@@ -274,7 +239,67 @@ local function Same(a, b)
     if type(a) == "table" then
         return ((a[1] == b[1]) and (a[2] == b[2]))
     end
+
     return ((a ~= nil) and (b ~= nil) and (math.abs(a - b) < 1e-9))
+end
+
+-- What keeps text from being plain, or nil: empty, a byte outside printable ASCII (a line break only with
+-- allowNewline), template braces or escape codes, "nil", or an unkind word.
+local function Unplain(text, allowNewline)
+    if (type(text) ~= "string") or (text == "") then
+        return "empty text"
+    end
+
+    local at = text:find((allowNewline and "[^\n -~]") or "[^ -~]")
+
+    if at then
+        return ("byte %d in %q"):format(text:byte(at), text)
+    end
+
+    if text:find("[{}|]") then
+        return ("template braces or escape codes in %q"):format(text)
+    end
+
+    local lowered = text:lower()
+
+    for _, unkind in ipairs(UnkindPatterns) do
+        if lowered:find(unkind.pattern) then
+            return ("%q in %q"):format(unkind.word, text)
+        end
+    end
+
+    return nil
+end
+
+local function ExpectPlain(text, allowNewline, p, options)
+    local problem = Unplain(text, allowNewline)
+
+    Expect(problem == nil, p, options, "plain text, not %s", problem)
+end
+
+-- The shape every puzzle has, whatever its kind.
+local function CheckShape(p, options)
+    Expect(p.subject == options.subject, p, options, "subject %s", tostring(p.subject))
+    Expect(Contains(Kinds[options.subject][options.grade], p.kind), p, options, "kind belongs to the grade")
+    ExpectPlain(p.title, false, p, options)
+    Expect(#p.title <= 40, p, options, "short title")
+    ExpectPlain(p.prompt, true, p, options)
+    Expect(#p.prompt <= 240, p, options, "prompt within 240 chars (%d)", #p.prompt)
+    Expect((#p.choices == 4) and (p.choices[5] == nil), p, options, "exactly four choices")
+    local seen = {}
+
+    for _, choice in ipairs(p.choices) do
+        ExpectPlain(choice, false, p, options)
+        Expect(#choice <= 40, p, options, "choice %q within 40 chars", choice)
+        Expect(not seen[Fold(choice)], p, options, "distinct choice %q", choice)
+        seen[Fold(choice)] = true
+    end
+
+    Expect((type(p.answer) == "number") and (p.answer >= 1) and (p.answer <= 4) and ((p.answer % 1) == 0), p, options, "answer in 1..4")
+    ExpectPlain(p.hint, false, p, options)
+    ExpectPlain(p.explanation, false, p, options)
+    Expect(not HasWord(p.hint, p.choices[p.answer]), p, options, "hint %q doesn't give away %q", p.hint, p.choices[p.answer])
+    Expect(not (p.explanation:lower():find("wrong") or p.title:lower():find("wrong")), p, options, "encouraging words")
 end
 
 -- Kinds whose prompt shows every number of the calculation.
@@ -283,59 +308,6 @@ local Shown = {
     ["math.groups"] = true, ["math.fraction"] = true, ["math.multistep"] = true, ["math.ratio"] = true, ["math.order"] = true,
     ["math.coins"] = true, ["math.decimal"] = true,
 }
-
-local function CheckMath(p, options)
-    local band = Band[options.grade]
-
-    Expect(type(p.value) == "number", p, options, "numeric value")
-    local expected = (((p.kind == "math.remainder") and { p.value, p.remainder }) or p.value)
-    local correct = ChoiceValue(p.kind, p.choices[p.answer])
-
-    Expect(Same(correct, expected), p, options, "the correct choice %q is the value %s", p.choices[p.answer], tostring(p.value))
-    for i, choice in ipairs(p.choices) do
-        local value = ChoiceValue(p.kind, choice)
-
-        Expect((value ~= nil) and ((type(value) ~= "table") or value[1]), p, options, "choice %q has a number", choice)
-        if i ~= p.answer then
-            Expect(not Same(value, expected), p, options, "distractor %q isn't also correct", choice)
-        end
-        if p.value > 0 then
-            Expect((((type(value) == "table") and value[1]) or value) > 0, p, options, "distractor %q is positive", choice)
-        end
-    end
-    Expect((p.value >= 0) and (p.value <= band), p, options, "value %s within grade band %d", tostring(p.value), band)
-    if p.expression then
-        Expect(Same(Evaluate(p.expression), p.value), p, options, "%s = %s", p.expression, tostring(p.value))
-        for _, n in ipairs(Numbers(p.expression)) do
-            Expect(n <= band, p, options, "%s stays within grade band %d", p.expression, band)
-            if Shown[p.kind] then
-                Expect(p.prompt:find("%f[%d]" .. Escape(tostring(n)) .. "%f[%D]"), p, options, "the prompt shows %s", tostring(n))
-            end
-        end
-    elseif p.kind == "math.count" then
-        local row = p.prompt:match("\n([^\n]+)\n")
-        local counted = select(2, row:gsub("[^ ]", ""))
-
-        Expect(counted == p.value, p, options, "%d symbols to count, not %d", counted, p.value)
-    elseif p.kind == "math.remainder" then
-        local n, d = p.terms[1], p.terms[2]
-
-        Expect(p.value == math.floor(n / d), p, options, "quotient")
-        Expect(p.remainder == (n % d), p, options, "remainder")
-        Expect((p.remainder >= 1) and (n <= 200) and (d <= 9), p, options, "a small remainder")
-    else
-        Expect((p.kind == "math.compare") or (p.kind == "math.decimal"), p, options, "only comparisons lack an expression")
-        local best = p.terms[1]
-
-        for _, n in ipairs(p.terms) do
-            best = ((p.prompt:find("biggest") and math.max(best, n)) or math.min(best, n))
-        end
-        Expect(p.value == best, p, options, "the extreme of the four")
-        for _, n in ipairs(p.terms) do
-            Expect(n <= band, p, options, "compared numbers within band")
-        end
-    end
-end
 
 -- Kind-specific checks for the grade bands that the shape can't see.
 local function CheckBand(p, options)
@@ -358,13 +330,82 @@ local function CheckBand(p, options)
     end
 end
 
+local function CheckMath(p, options)
+    local band = Band[options.grade]
+
+    Expect(type(p.value) == "number", p, options, "numeric value")
+    local expected = (((p.kind == "math.remainder") and { p.value, p.remainder }) or p.value)
+    local correct = ChoiceValue(p.kind, p.choices[p.answer])
+
+    Expect(Same(correct, expected), p, options, "the correct choice %q is the value %s", p.choices[p.answer], tostring(p.value))
+
+    for i, choice in ipairs(p.choices) do
+        local value = ChoiceValue(p.kind, choice)
+
+        Expect((value ~= nil) and ((type(value) ~= "table") or value[1]), p, options, "choice %q has a number", choice)
+
+        if i ~= p.answer then
+            Expect(not Same(value, expected), p, options, "distractor %q isn't also correct", choice)
+        end
+
+        if p.value > 0 then
+            Expect((((type(value) == "table") and value[1]) or value) > 0, p, options, "distractor %q is positive", choice)
+        end
+    end
+
+    Expect((p.value >= 0) and (p.value <= band), p, options, "value %s within grade band %d", tostring(p.value), band)
+
+    if p.expression then
+        Expect(Same(Evaluate(p.expression), p.value), p, options, "%s = %s", p.expression, tostring(p.value))
+
+        for _, n in ipairs(Numbers(p.expression)) do
+            Expect(n <= band, p, options, "%s stays within grade band %d", p.expression, band)
+
+            if Shown[p.kind] then
+                Expect(p.prompt:find("%f[%d]" .. Escape(tostring(n)) .. "%f[%D]"), p, options, "the prompt shows %s", tostring(n))
+            end
+        end
+    elseif p.kind == "math.count" then
+        local row = p.prompt:match("\n([^\n]+)\n")
+        local counted = select(2, row:gsub("[^ ]", ""))
+
+        Expect(counted == p.value, p, options, "%d symbols to count, not %d", counted, p.value)
+    elseif p.kind == "math.remainder" then
+        local n, d = p.terms[1], p.terms[2]
+
+        Expect(p.value == math.floor(n / d), p, options, "quotient")
+        Expect(p.remainder == (n % d), p, options, "remainder")
+        Expect((p.remainder >= 1) and (n <= 200) and (d <= 9), p, options, "a small remainder")
+    else
+        Expect((p.kind == "math.compare") or (p.kind == "math.decimal"), p, options, "only comparisons lack an expression")
+        local best = p.terms[1]
+
+        for _, n in ipairs(p.terms) do
+            best = ((p.prompt:find("biggest") and math.max(best, n)) or math.min(best, n))
+        end
+
+        Expect(p.value == best, p, options, "the extreme of the four")
+
+        for _, n in ipairs(p.terms) do
+            Expect(n <= band, p, options, "compared numbers within band")
+        end
+    end
+end
+
+local function Serialize(p)
+    return table.concat({ p.subject, p.kind, p.title, p.prompt, table.concat(p.choices, "|"), p.answer, p.hint,
+        p.explanation, tostring(p.value), tostring(p.expression), tostring(p.remainder) }, "\n")
+end
+
 local function Sorted(word)
     local letters = {}
 
     for letter in word:gmatch("%a") do
         letters[#letters + 1] = letter
     end
+
     table.sort(letters)
+
     return table.concat(letters)
 end
 
@@ -375,6 +416,7 @@ local function CheckReading(p, options)
         local target = p.prompt:match("rhymes with \"(%a+)\"")
 
         Expect((correct ~= target) and (correct:sub(-2) == target:sub(-2)), p, options, "the answer rhymes")
+
         for i, choice in ipairs(p.choices) do
             Expect((i == p.answer) or (choice:sub(-2) ~= target:sub(-2)), p, options, "distractor %q doesn't look like a rhyme", choice)
         end
@@ -394,6 +436,7 @@ local function CheckReading(p, options)
         local letters = p.prompt:match("\n([A-Z][A-Z ]+)")
 
         Expect(letters:gsub(" ", "") ~= correct, p, options, "the letters are scrambled")
+
         for i, choice in ipairs(p.choices) do
             Expect((Sorted(choice) == Sorted(letters)) == (i == p.answer), p, options, "anagram check for %q", choice)
         end
@@ -402,17 +445,13 @@ end
 
 local function CheckAll(p, options)
     CheckShape(p, options)
+
     if p.subject == "math" then
         CheckMath(p, options)
         CheckBand(p, options)
     else
         CheckReading(p, options)
     end
-end
-
-local function Serialize(p)
-    return table.concat({ p.subject, p.kind, p.title, p.prompt, table.concat(p.choices, "|"), p.answer, p.hint,
-        p.explanation, tostring(p.value), tostring(p.expression), tostring(p.remainder) }, "\n")
 end
 
 test("the TOC lists ScholarWords.lua right before ScholarPuzzles.lua, and the generators after it", function()
@@ -423,18 +462,20 @@ test("the TOC lists ScholarWords.lua right before ScholarPuzzles.lua, and the ge
 end)
 
 test("loads standalone and defines ns.Puzzles, ns.ScholarWords and no globals", function()
-    Harness.DefineAddOn("ScholarOnly", { sources = (Sources()), files = Files, as = "TheLanKrewToolKit" })
+    Harness.DefineAddOn("ScholarOnly", { as = "TheLanKrewToolKit", files = Files, sources = (Sources()) })
     local h = Harness.New()
     local before = {}
 
     for key in pairs(h.env) do
         before[key] = true
     end
+
     local ns = h:LoadFiles("ScholarOnly")
 
     for key in pairs(h.env) do
         truthy(before[key], "no new global " .. tostring(key))
     end
+
     eq(type(ns.Puzzles.Generate), "function")
     eq(type(ns.ScholarWords), "table")
     local keys = {}
@@ -442,6 +483,7 @@ test("loads standalone and defines ns.Puzzles, ns.ScholarWords and no globals", 
     for key in pairs(ns.Puzzles) do
         keys[#keys + 1] = key
     end
+
     table.sort(keys)
     eq(table.concat(keys, ","), "Generate,Grades,Kit", "exactly the contract's fields")
 end)
@@ -452,6 +494,7 @@ test("Grades runs from Kindergarten to Grade 6 in order", function()
     eq(#puzzles.Grades, 7)
     eq(puzzles.Grades[1].id, 0)
     eq(puzzles.Grades[1].label, "Kindergarten")
+
     for i = 2, 7 do
         eq(puzzles.Grades[i].id, i - 1)
         eq(puzzles.Grades[i].label, "Grade " .. (i - 1))
@@ -463,11 +506,14 @@ test("randomness comes only from options.random", function()
     local addon = __addons.TheLanKrewToolKit
 
     for i, file in ipairs(addon.files) do
-        if file == "ScholarQuests.lua" then -- it needs the whole addon to load, but is just as pure
+        -- it needs the whole addon to load, but is just as pure
+        if file == "ScholarQuests.lua" then
             sources[#sources + 1] = addon.sources[i]
         end
     end
+
     eq(#sources, #Files + 1, "ScholarQuests.lua is listed")
+
     for _, source in ipairs(sources) do
         -- Whole words: BlankCandidate( isn't date(.
         for _, banned in ipairs({ "math.random", "%f[%w]os%.", "%f[%w]time%(", "GetTime", "%f[%w]date%(", "%f[%w]random%(" }) do
@@ -480,15 +526,15 @@ test("bad options fail loudly instead of guessing", function()
     local puzzles = Load().Puzzles
 
     throws(function() puzzles.Generate({ grade = 1, level = 1, subject = "math" }) end, "random")
-    throws(function() puzzles.Generate({ subject = "art", grade = 1, level = 1, random = Rng(1) }) end, "subject")
-    local p = puzzles.Generate({ subject = "math", grade = "3", level = "9", random = Rng(5) })
+    throws(function() puzzles.Generate({ grade = 1, level = 1, random = Rng(1), subject = "art" }) end, "subject")
+    local p = puzzles.Generate({ grade = "3", level = "9", random = Rng(5), subject = "math" })
 
     truthy(Contains(Kinds.math[3], p.kind), "grade and level strings are read and clamped")
     CheckShape(p, { grade = 3, level = 3, subject = "math" })
     local text = { explain = "1 + 2 = 3.", hint = "Count on.", prompt = "What is 1 + 2?" }
 
     throws(function()
-        puzzles.Kit.Finish({ roll = Rng(1), subject = "math", grade = 1 }, "math.add", text, {}, "3", { "4", " 4 ", "3", "" })
+        puzzles.Kit.Finish({ grade = 1, roll = Rng(1), subject = "math" }, "math.add", text, {}, "3", { "4", " 4 ", "3", "" })
     end, "too few distractors", "a generator without three distinct wrong answers is refused")
 end)
 
@@ -533,6 +579,7 @@ test("every kind appears across seeds, and the answer lands in every position", 
         seen[options.subject][options.grade .. p.kind] = true
         positions[p.answer], total = (positions[p.answer] + 1), (total + 1)
     end)
+
     for _, subject in ipairs(Subjects) do
         for grade = 0, 6 do
             for _, kind in ipairs(Kinds[subject][grade]) do
@@ -540,6 +587,7 @@ test("every kind appears across seeds, and the answer lands in every position", 
             end
         end
     end
+
     for i = 1, 4 do
         truthy(positions[i] > (total * 0.18), ("answer position %d is used often enough (%d of %d)"):format(i, positions[i], total))
     end
@@ -547,6 +595,7 @@ end)
 
 test("each variant of a kind turns up", function()
     local found = {}
+
     local variants = {
         "Count back by", "Which number is the biggest", "Which number is the smallest", "left over", "Change the",
         "Say each sound", "Clue:", "gears in inches", "100 copper", "in all%?", "%)", "%% off",
@@ -557,6 +606,7 @@ test("each variant of a kind turns up", function()
             found[pattern] = (found[pattern] or (p.prompt:find(pattern) ~= nil))
         end
     end)
+
     for _, pattern in ipairs(variants) do
         truthy(found[pattern], "some prompt matches " .. pattern)
     end
@@ -568,6 +618,7 @@ test("context personalizes some puzzles, never all, and only where it fits the g
     local function Seen(label, yes)
         counts[label] = ((counts[label] or 0) + ((yes and 1) or 0))
     end
+
     Sweep(Load().Puzzles, 80, Context, function(p, options)
         total = (total + 1)
         local text = p.prompt
@@ -582,9 +633,11 @@ test("context personalizes some puzzles, never all, and only where it fits the g
         falsy((options.grade ~= 4) and text:find("45 silver 67 copper"), "their purse only in grade 4 silver math")
         falsy((options.grade == 0) and text:find("magic muffin"), "kindergarten keeps to simple items")
     end)
+
     for _, label in ipairs({ "name", "class", "zone", "class item", "level", "silver", "reading name" }) do
         truthy(counts[label] > 0, label .. " appears sometimes")
     end
+
     truthy(counts.name < (total / 2), "the name appears only sometimes")
 end)
 
@@ -599,8 +652,10 @@ test("small purses, far levels and gold personalize the grades they suit", funct
                 end
             end
         end
+
         return false
     end
+
     truthy(Any(2, { copper = 45 }, "You have 45 copper right now!"), "grade 2 uses a purse under 90 copper")
     falsy(Any(2, { copper = 150 }, "You have 150 copper"), "grade 2 skips a purse over 100 copper")
     truthy(Any(2, { level = 12 }, "until you reach level 60%?"), "grade 2 counts levels to 60")
@@ -611,9 +666,10 @@ end)
 
 test("a missing or odd context falls back gracefully", function()
     local puzzles = Load().Puzzles
+
     local odd = {
         false, {}, { name = "" }, { name = "Tessa-Stormrage" }, { name = "Maximilianusz" }, { name = "|cffff0000Red" },
-        { class = "NOTACLASS", copper = -5, level = 0.5, name = 42, zone = {} }, { zone = string.rep("x", 100), copper = 1e15 },
+        { class = "NOTACLASS", copper = -5, level = 0.5, name = 42, zone = {} }, { copper = 1e15, zone = string.rep("x", 100) },
         { class = "mage", copper = 0, level = 99 }, "not a table",
     }
 
@@ -662,6 +718,7 @@ test("banks hold distinct, plain, short options", function()
             end
         end
     end
+
     for _, story in ipairs(wordBanks.stories) do
         for q = 2, #story do
             local seen = {}
@@ -679,12 +736,14 @@ test("the story bank has at least 15 short stories of 2 to 4 sentences with 1 to
     local wordBanks = Words()
 
     truthy(#wordBanks.stories >= 15, "at least 15 stories")
+
     for _, story in ipairs(wordBanks.stories) do
         local text = story[1]:gsub("{hero}", story.hero or "Pip"):gsub("{place}", story.place or "Goldshire")
         local sentences = select(2, (text .. " "):gsub("[%.!%?]\"? ", ""))
 
         truthy((sentences >= 2) and (sentences <= 4), ("2 to 4 sentences (%d): %s"):format(sentences, text))
         truthy((#story >= 2) and (#story <= 4), "1 to 3 questions: " .. text)
+
         for q = 2, #story do
             local prompt = (text .. "\n" .. story[q][1]:gsub("{hero}", story.hero or "Pip"))
 
@@ -700,37 +759,45 @@ test("misspellings are never real words, and word banks don't overlap in meaning
     local function Add(word)
         real[word:lower()] = true
     end
+
     for _, family in ipairs(wordBanks.rhymes) do
         for _, word in ipairs(family) do
             Add(word)
         end
     end
+
     for _, group in ipairs(wordBanks.sounds) do
         for i = 2, #group do
             Add(group[i])
         end
     end
+
     for _, word in ipairs(wordBanks.cvc) do
         Add(word)
     end
+
     for _, entry in ipairs(wordBanks.synonyms) do
         for _, word in ipairs(entry) do
             Add(word)
         end
     end
+
     for _, bank in ipairs({ wordBanks.sight, wordBanks.spelling }) do
         for _, entry in ipairs(bank) do
             Add(entry[1])
         end
     end
+
     for _, bank in ipairs({ wordBanks.sight, wordBanks.spelling }) do
         for _, entry in ipairs(bank) do
             for i = 3, 5 do
                 falsy(real[entry[i]], entry[i] .. " is not a real word")
             end
+
             truthy(entry[2]:find("___"), "a blank in " .. entry[2])
         end
     end
+
     local owner = {}
 
     for _, entry in ipairs(wordBanks.synonyms) do
@@ -739,6 +806,7 @@ test("misspellings are never real words, and word banks don't overlap in meaning
             owner[word] = true
         end
     end
+
     local family = {}
 
     for i, words in ipairs(wordBanks.rhymes) do
@@ -747,6 +815,7 @@ test("misspellings are never real words, and word banks don't overlap in meaning
             family[word] = i
         end
     end
+
     for _, word in ipairs(wordBanks.cvc) do
         eq(#word, 3, word .. " is three letters")
         falsy(word:match("(%a).*%1"), word .. " has no repeated letter")
@@ -763,14 +832,18 @@ test("pictures always match the math, and only small numbers in the early grades
         if not picture then
             return
         end
+
         local where = ("%s grade %d: %s"):format(p.kind, options.grade, p.prompt)
 
         truthy(options.grade <= 3, "no pictures above grade 3 at " .. where)
+
         if picture.item then
             truthy(p.prompt:lower():find(picture.item, 1, true), "the picture draws the item the riddle counts at " .. where)
             seen.item = true
         end
+
         seen[picture.kind] = true
+
         if picture.kind == "groups" then
             eq(picture.groups * picture.each, p.value, where)
             truthy((picture.groups * picture.each) <= 30, where)
@@ -787,6 +860,7 @@ test("pictures always match the math, and only small numbers in the early grades
             error("unknown picture kind " .. tostring(picture.kind))
         end
     end)
+
     truthy(seen.groups and seen.join and seen.take and seen.count, "every picture kind shows up")
     truthy(seen.item, "pictures carry the item they draw")
 end)
@@ -802,5 +876,6 @@ test("unscramble riddles carry their letters as tiles, in the prompt's order", f
             truthy(p.prompt:match("%?$"), "ends with its question")
         end
     end)
+
     truthy(found > 0)
 end)

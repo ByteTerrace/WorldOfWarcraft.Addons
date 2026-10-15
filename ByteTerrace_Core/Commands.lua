@@ -1,5 +1,5 @@
--- Commands: named intents. A command is declared once and every driver runs the same
--- definition: slash text, key bindings, controller buttons (Input.lua) and UI controls.
+-- Commands: named intents. A command is declared once and every driver runs the same definition: slash text, key
+-- bindings, controller buttons (Input.lua) and UI controls.
 --
 --   Define(spec)  before compile. spec: name (unique), label, run(arg, phase, source),
 --                 slash (the lowercase word after the slash command; "" for a bare slash command),
@@ -13,8 +13,8 @@
 --
 -- After compile, Ids maps each name to its id (Input.lua resolves bindings through it).
 --
--- Commands are insecure: they can drive the addon's own UI and state, never protected actions
--- (casting, targeting), which WoW only allows from secure templates and bindings.
+-- Commands are insecure: they can drive the addon's own UI and state, never protected actions (casting, targeting),
+-- which WoW only allows from secure templates and bindings.
 
 local ByteTerrace = ByteTerrace
 local ipairs, pairs, print, strtrim, tostring, type = ipairs, pairs, print, strtrim, tostring, type
@@ -22,27 +22,13 @@ local Refuse, SortedKeys = ByteTerrace.Refuse, ByteTerrace.SortedKeys
 
 local Commands = {}
 
-Commands.__index = Commands
 ByteTerrace.Commands = Commands
+Commands.__index = Commands
 
 --- Creates an addon's command table, empty and uncompiled.
 ---@param addon table the owning AddOn
 function ByteTerrace.NewCommands(addon)
     return setmetatable({ m_addon = addon, m_declared = {} }, Commands)
-end
-
---- Declares a command before compile. The spec is copied. AddOn.lua checks names before
---- defining: each is "<Module>.<command>" (the addon's own are "addon.<command>"), unique, and
---- defined before compile.
----@param spec table see the file header
-function Commands:Define(spec)
-    local own = {}
-
-    for key, value in pairs(spec) do
-        own[key] = value
-    end
-    own.work = ((spec.module and spec.module.Work) or self.m_addon.Work)
-    self.m_declared[spec.name] = own
 end
 
 --- Assigns ids and validates every command, raising all problems at once.
@@ -55,12 +41,15 @@ function Commands:Compile()
         local spec = self.m_declared[name]
 
         ids[name], specs[id] = id, spec
+
         if type(spec.run) ~= "function" then
             problems[#problems + 1] = (name .. ": run must be a function")
         end
+
         if (type(spec.label) ~= "string") or (spec.label == "") then
             problems[#problems + 1] = (name .. ": needs a label")
         end
+
         local word = spec.slash
 
         if (word ~= nil) and spec.held then
@@ -76,9 +65,24 @@ function Commands:Compile()
             end
         end
     end
+
     Refuse(self.m_addon.Name .. " commands", problems)
     self.Ids, self.m_specs, self.m_bySlash = ids, specs, bySlash
     self.m_declared = nil
+end
+
+--- Declares a command before compile. The spec is copied. AddOn.lua checks names before defining: each is
+--- "<Module>.<command>" (the addon's own are "addon.<command>"), unique, and defined before compile.
+---@param spec table see the file header
+function Commands:Define(spec)
+    local own = {}
+
+    for key, value in pairs(spec) do
+        own[key] = value
+    end
+
+    own.work = ((spec.module and spec.module.Work) or self.m_addon.Work)
+    self.m_declared[spec.name] = own
 end
 
 --- The module a command belongs to, or nil for the addon's own (help, settings, debug...).
@@ -88,6 +92,19 @@ function Commands:ModuleOf(id)
     local spec = self.m_specs[id]
 
     return (spec and spec.module)
+end
+
+--- Prints every slash command with its label, sorted by word.
+function Commands:PrintHelp()
+    local addon = self.m_addon
+
+    addon:Print("Commands:")
+
+    for _, word in ipairs(SortedKeys(self.m_bySlash)) do
+        local spec = self.m_specs[self.m_bySlash[word]]
+
+        print(("  %s%s - %s"):format(addon.Slash[1], ((word ~= "") and (" " .. word)) or "", spec.label))
+    end
 end
 
 --- Runs a command as one state batch.
@@ -103,10 +120,13 @@ function Commands:Run(ref, arg, phase, source)
     if not spec then
         return false
     end
+
     phase = (phase or "down")
+
     if (phase ~= "down") and not spec.held then
         return true
     end
+
     local addon, module = self.m_addon, spec.module
 
     if module and not spec.always and not module:IsRunning() then
@@ -115,11 +135,14 @@ function Commands:Run(ref, arg, phase, source)
 
             addon:Print(("%s is turned off. Turn it on in settings (%s)."):format(module.Spec.label or module.Name, slash))
         end
+
         return false
     end
+
     local work = spec.work
 
     work.commands = (work.commands + 1)
+
     return addon:Run(work, spec.run, arg, phase, source)
 end
 
@@ -135,19 +158,9 @@ function Commands:Slash(input)
 
     if not id then
         self.m_addon:Print("Unknown command '" .. word .. "'. Type " .. self.m_addon.Slash[1] .. " help.")
+
         return false
     end
+
     return self:Run(id, ((rest ~= "") and rest) or nil, "down", "slash")
-end
-
---- Prints every slash command with its label, sorted by word.
-function Commands:PrintHelp()
-    local addon = self.m_addon
-
-    addon:Print("Commands:")
-    for _, word in ipairs(SortedKeys(self.m_bySlash)) do
-        local spec = self.m_specs[self.m_bySlash[word]]
-
-        print(("  %s%s - %s"):format(addon.Slash[1], ((word ~= "") and (" " .. word)) or "", spec.label))
-    end
 end

@@ -16,6 +16,7 @@ end
 
 test("record replacement publishes only the complete collection", function()
     local h, addon = NewAddOn()
+
     local module = addon:Module("Ledger", { records = {
             { evict = "seen", fields = { { default = 0, kind = "number", name = "seen" } }, limit = 1, name = "people" },
         },
@@ -25,12 +26,15 @@ test("record replacement publishes only the complete collection", function()
     local people, snapshots = module.Records.people, {}
 
     people:Set("A", { seen = 1 })
+
     addon.State:Watch({ "Ledger.people" }, function()
         snapshots[#snapshots + 1] = table.concat(people:Keys(), ",")
+
         if people:Count() == 0 then
             people:Set("Intruder", { seen = 2 })
         end
     end, true)
+
     people:Set("B", { seen = 3 })
     eq(table.concat(snapshots, ";"), "B")
     eq(people:Count(), 1, "a watcher cannot fill a transient eviction hole")
@@ -47,6 +51,7 @@ test("an immediate watcher that stops its owner leaves no subscription", functio
         runs = (runs + 1)
         module:SetEnabled(false)
     end)
+
     eq(addon.State:WatcherCount(), before)
     module:Set("n", 1)
     eq(runs, 1)
@@ -64,6 +69,7 @@ test("an immediate rule that stops its owner leaves no subscription", function()
             module:SetEnabled(false)
         end,
         initial = true, reads = { "n" }, when = function(state) return (state:Get("M.n") > 0) end })
+
     eq(addon.State:WatcherCount(), before)
     module:Set("n", 1)
     eq(runs, 1)
@@ -73,6 +79,7 @@ test("failed module startup releases all resources and dependencies", function()
     local h, addon = NewAddOn()
     local fact = addon:Module("Fact", { demand = true, toggle = false })
     local fired = 0
+
     local broken = addon:Module("Broken", { label = "Broken",
         OnEnable = function(module)
             module:On("PLAYER_TARGET_CHANGED", function() fired = (fired + 1) end)
@@ -84,6 +91,7 @@ test("failed module startup releases all resources and dependencies", function()
             { default = 0, kind = "number", name = "value", persist = false },
         },
         uses = { "Fact" } })
+
     local good = addon:Module("Good", { label = "Good" })
 
     h:ExpectErrors("startup failed")
@@ -105,10 +113,12 @@ test("scalar and array message fields obey the same encoding rules", function()
 
     Start(h)
     h:JoinGroup("party", { "Bob" })
+
     for _, field in ipairs({ "a\tb", "a\nb", "a\rb", "a\000b" }) do
         throws(function() module.Comms:Send("PING", field) end, "field")
         throws(function() module.Comms:Send("PING", { field }) end, "field")
     end
+
     eq(#h.addonMessages, 0)
 end)
 
@@ -133,6 +143,7 @@ for _, restriction in ipairs({ "Encounter", "ChallengeMode", "PvPMatch", "Map", 
                 queued, timers = module.Comms:Queued(), module:PendingTimers()
             end
         end)
+
         h:SetRestriction(restriction, true)
         truthy(activating)
         falsy(locked, "the restriction is not yet enforced during Activating")
@@ -157,11 +168,14 @@ test("combat and inactive restriction events preserve the message queue", functi
     module.Comms:Send("PING", "waiting")
     h:EnterCombat()
     eq(module.Comms:Queued(), 1, "combat alone allows addon messages")
+
     for _, restriction in ipairs({ "Encounter", "ChallengeMode", "PvPMatch", "Map", "Chat" }) do
         h:Fire("ADDON_RESTRICTION_STATE_CHANGED", h.env.Enum.AddOnRestrictionType[restriction],
             h.env.Enum.AddOnRestrictionState.Inactive)
+
         eq(module.Comms:Queued(), 1)
     end
+
     h:Advance(5)
     eq(#h.addonMessages, 2)
     eq(h.addonMessages[2].message, "PING:waiting")
@@ -189,6 +203,7 @@ test("restarting a transport inside a listener ends the old delivery", function(
         module:SetEnabled(false)
         module:SetEnabled(true)
     end)
+
     module.Comms:Listen("PING", function() runs = (runs + 1) end)
     Start(h)
     h:JoinGroup("party", { "Bob" })
@@ -216,6 +231,7 @@ test("a failed declaration leaves no rows, commands or records and can be retrie
                 { default = "", kind = "string", name = "note" },
             } })
     end, "prefix")
+
     Start(h)
     truthy(addon.Started)
     eq(addon.State.Ids["Broken.note"], nil)
@@ -229,6 +245,7 @@ test("a failed declaration leaves no rows, commands or records and can be retrie
     throws(function()
         retryAddon:Module("Retry", { comms = { prefix = "" }, label = "Retry" })
     end, "prefix")
+
     retryAddon:Module("Retry", { label = "Retry" })
     Start(retryHarness)
     truthy(retryAddon.Modules.Retry.Enabled)
@@ -236,10 +253,13 @@ end)
 
 test("a failed dependency never starts its user and only releases acquired dependencies", function()
     local h, addon = NewAddOn()
+
     local broken = addon:Module("Broken", { demand = true, OnEnable = function() error("dependency failed") end,
         toggle = false })
+
     local untouched = addon:Module("Untouched", { demand = true, toggle = false })
     local ran = false
+
     local user = addon:Module("User", { label = "User", OnEnable = function() ran = true end,
         uses = { "Broken", "Untouched" } })
 
@@ -255,6 +275,7 @@ test("module message subscriptions stop immediately and do not accumulate across
     local h, addon = NewAddOn()
     local chat = addon:Module("Chat", { comms = { prefix = "TestApp1" }, label = "Chat" })
     local runs = 0
+
     local listener = addon:Module("Listener", { label = "Listener", OnEnable = function(module)
         module:Listen(chat.Comms, "PING", function() module:SetEnabled(false) end)
         module:Listen(chat.Comms, "PING", function() runs = (runs + 1) end)
@@ -263,12 +284,14 @@ test("module message subscriptions stop immediately and do not accumulate across
 
     Start(h)
     h:JoinGroup("party", { "Bob" })
+
     for _ = 1, 3 do
         listener:SetEnabled(true)
         h:ReceiveAddonMessage("TestApp1", "PONG", "PARTY", "Bob")
         h:ReceiveAddonMessage("TestApp1", "PING", "PARTY", "Bob")
         h:ReceiveAddonMessage("TestApp1", "PONG", "PARTY", "Bob")
     end
+
     eq(runs, 3)
     throws(function() listener:Listen(chat.Comms, "PING", function() end) end, "stopped")
 end)
@@ -279,9 +302,11 @@ test("messages reject secrets, sparse arrays, non-scalar fields, non-finite numb
 
     Start(h)
     h:JoinGroup("party", { "Bob" })
+
     for _, fields in ipairs({ Secret("hidden"), { Secret(3) }, { math.huge }, (0 / 0), { [2] = "gap" } }) do
         throws(function() chat.Comms:Send("PING", fields) end, "field")
     end
+
     throws(function() chat.Comms:Send("PING", { "a", nil, "c" }) end, "dense array")
     throws(function() chat.Comms:Send("PING", { {} }) end, "must be a string, number or boolean")
     throws(function() chat.Comms:Send("PING", print) end, "must be a string, number or boolean")
@@ -335,10 +360,12 @@ test("a malformed binding cannot leave a partial module declaration", function()
     throws(function()
         addon:Module("M", { bindings = { false }, label = "M" })
     end, "a binding must be a table")
+
     throws(function()
         addon:Module("M", { bindings = { { command = "M.go", source = "gamepad.south" } },
             commands = { { label = "Go", name = "go", run = function() end } }, label = "M" })
     end, "a binding needs a map, source and command name")
+
     local module = addon:Module("M", { label = "M" })
 
     Start(h)
@@ -354,6 +381,7 @@ test("numeric declarations reject invalid bounds before reaching settings contro
         local row = { default = 0, kind = "number", label = "Number", name = "n" }
 
         for key, value in pairs(bounds) do row[key] = value end
+
         addon:Module("M", { label = "M", state = { row } })
         h:ExpectErrors(1)
         Start(h)
@@ -372,6 +400,7 @@ test("recursive deferred rules report a loop and leave no queued initial callbac
         runs = (runs + 1)
         addon.State:Rule({ changed = Register, initial = true, reads = { "M.n" }, when = function() return true end })
     end
+
     h:ExpectErrors("did not settle")
     addon:Batch(Register)
     local after = runs
@@ -385,9 +414,11 @@ test("early event removal keeps teardown work independent of past registrations"
     local module = addon:Module("M", { label = "M" })
 
     Start(h)
+
     for _ = 1, 100 do
         module:Off(module:On("PLAYER_TARGET_CHANGED", function() end))
     end
+
     module:On("PLAYER_TARGET_CHANGED", function() end)
     local frame = addon.Events.Frame
 
@@ -403,6 +434,7 @@ end)
 test("dependency teardown cannot restart a module whose stop is still in progress", function()
     local h, addon = NewAddOn()
     local user
+
     local fact = addon:Module("Fact", { demand = true,
         OnDisable = function()
             user:SetEnabled(true)
@@ -418,6 +450,7 @@ end)
 
 test("bound callbacks preserve nil arguments and publish once, then expire permanently", function()
     local h, addon = NewAddOn()
+
     local module = addon:Module("M", { label = "M", state = {
         { default = 0, kind = "number", name = "a" }, { default = 0, kind = "number", name = "b" },
     } })
@@ -426,6 +459,7 @@ test("bound callbacks preserve nil arguments and publish once, then expire perma
     local runs = 0
 
     addon.State:Watch({ "M.a", "M.b" }, function() runs = (runs + 1) end, true)
+
     local action = module:Callback(function(...)
         eq(select("#", ...), 3)
         local first, second, third = ...
@@ -465,8 +499,10 @@ test("invalid commands refuse startup before saved values are normalized", funct
     local saved = { ["M.renamed"] = "recover", ["M.n"] = 99 }
 
     rawset(h.env, "TestDB", saved)
+
     addon:Module("M", { commands = { { label = "Broken", name = "broken" } }, label = "M",
         state = { { default = 0, kind = "number", max = 10, name = "n" } } })
+
     h:ExpectErrors("run must be a function")
     Start(h)
     falsy(addon.Started)
@@ -477,7 +513,7 @@ end)
 test("secret defaults cannot bypass the state and record admission boundary", function()
     local h, addon = NewAddOn()
 
-    addon:Module("M", { label = "M", state = { { name = "text", kind = "string", default = Secret("hidden") } } })
+    addon:Module("M", { label = "M", state = { { default = Secret("hidden"), kind = "string", name = "text" } } })
     h:ExpectErrors("secret value")
     Start(h)
     falsy(addon.Started)
@@ -485,7 +521,7 @@ test("secret defaults cannot bypass the state and record admission boundary", fu
     local _, other = NewAddOn()
 
     throws(function()
-        other:Module("M", { label = "M", records = { { name = "people", limit = 1,
-            fields = { { name = "text", kind = "string", default = Secret("hidden") } } } } })
+        other:Module("M", { label = "M", records = { { fields = { { default = Secret("hidden"), kind = "string", name = "text" } },
+            limit = 1, name = "people" } } })
     end, "secret value")
 end)

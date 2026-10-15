@@ -4,7 +4,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { FormatError, PASSES, formatLua } from "../tools/lib/format-lua.mjs";
+import { FormatError, PASSES, formatLua, orderFindings } from "../tools/lib/format-lua.mjs";
 import { assert, withTemp } from "../tools/lib/test-support.mjs";
 import { formatRepository } from "../tools/verbs/format.mjs";
 
@@ -64,10 +64,12 @@ export const tests = [
     },
     {
         // A comment between fields would end up describing whichever field moved under it.
-        name: "format leaves a table constructor with a comment between its fields as written",
+        name: "format moves a field's comment lines with it, and leaves a constructor with any other comment between fields as written",
         run: () => {
-            const source = lua("local t = {", "    -- the second", "    b = 2,", "    a = 1,", "}");
-            formats(source, source, ["init-order"]);
+            formats(lua("local t = {", "    -- the second", "    b = 2,", "    a = 1,", "}"),
+                lua("local t = {", "    a = 1,", "    -- the second", "    b = 2,", "}"), ["init-order"]);
+            const packed = lua("local t = { b = 2, -- after b", "    a = 1 }");
+            formats(packed, packed, ["init-order"]);
             formats(lua("local t = {", "    b = function()", "        -- inside a value moves with it", "    end,", "    a = 1,", "}"),
                 lua("local t = {", "    a = 1,", "    b = function()", "        -- inside a value moves with it", "    end,", "}"), ["init-order"]);
         },
@@ -127,8 +129,11 @@ export const tests = [
                 "local Beta = Rows()",
                 "local Alpha2 = 1",
                 "local Late = 1",
-                "-- a comment line ends a run",
+                "-- a comment line belongs to the local below it",
                 "local Early = 1",
+                "",
+                "-- a comment of its own ends the run",
+                "",
                 "local Fn = function() end",
                 "local Abc = 1",
             ), lua(
@@ -144,9 +149,12 @@ export const tests = [
                 "local Ceil = 2",
                 "local Beta = Rows()",
                 "local Alpha2 = 1",
-                "local Late = 1",
-                "-- a comment line ends a run",
+                "-- a comment line belongs to the local below it",
                 "local Early = 1",
+                "local Late = 1",
+                "",
+                "-- a comment of its own ends the run",
+                "",
                 "local Fn = function() end",
                 "local Abc = 1",
             ), ["local-order"]);
@@ -263,5 +271,110 @@ export const tests = [
             assert(readFileSync(file, "utf8") === lua("-- Main: a dash – here.", "", "local a = 1", "", "print(a == 1)"), readFileSync(file, "utf8"));
             assert(formatRepository({ files: [file], check: true, root: dir }).findings.length === 0, "formatted twice");
         }),
+    },
+    {
+        name: "format moves a comment after code onto its own line above, at that line's indentation",
+        run: () => {
+            formats(lua("local Max = 8 -- the most at once", "local function F()", "    return 1 -- secret: widget sink", "end", "local s = [[", "a]] -- after a long string"),
+                lua("-- the most at once", "local Max = 8", "local function F()", "    -- secret: widget sink", "    return 1", "end", "local s = [[",
+                    "a]] -- after a long string"), ["trailing-comments"]);
+        },
+    },
+    {
+        name: "format sets blocks and multi-line statements apart with blank lines, and puts one before a return",
+        run: () => {
+            formats(lua(
+                "local function F(a)",
+                "    Prepare(a)",
+                "    if a then",
+                "        Use(a)",
+                "        return a",
+                "    end",
+                "    Tidy()",
+                "    -- the comment goes with what follows it",
+                "    for i = 1, 2 do Use(i) end",
+                "    return nil",
+                "end",
+            ), lua(
+                "local function F(a)",
+                "    Prepare(a)",
+                "",
+                "    if a then",
+                "        Use(a)",
+                "",
+                "        return a",
+                "    end",
+                "",
+                "    Tidy()",
+                "",
+                "    -- the comment goes with what follows it",
+                "    for i = 1, 2 do Use(i) end",
+                "",
+                "    return nil",
+                "end",
+            ), ["block-spacing"]);
+        },
+    },
+    {
+        name: "format fills a prose comment paragraph up to 120 columns and leaves lists, columns and annotations alone",
+        run: () => {
+            const words = "word ".repeat(30).trim();
+            const filled = formatLua(lua(`-- ${words}`, "-- more", "--", "--   Indented  aligned", "-- - a list item", "-- secret: why"), ["comment-fill"]);
+            const lines = filled.split("\n");
+            assert(lines.every((line) => line.length <= 120), filled);
+            assert((lines[0].length > 110) && (lines[1] === "-- word word word word word word word more"), filled);
+            assert(filled.endsWith(lua("--", "--   Indented  aligned", "-- - a list item", "-- secret: why")), filled);
+        },
+    },
+    {
+        // F reads G, so G stays before it; H read a global G2 before G2 was declared, so it stays before G2.
+        name: "format sorts a file-level run of functions, locals first, never past a function whose name another reads",
+        run: () => {
+            formats(lua(
+                "local function Zed() end",
+                "",
+                "--- Says hello.",
+                "function M.Hello() end",
+                "",
+                "local function G() end",
+                "",
+                "local function F() return G() end",
+                "",
+                "local function H() return G2() end",
+                "",
+                "local function G2() end",
+            ), lua(
+                "local function G() end",
+                "",
+                "local function F() return G() end",
+                "",
+                "local function H() return G2() end",
+                "",
+                "local function G2() end",
+                "",
+                "local function Zed() end",
+                "",
+                "--- Says hello.",
+                "function M.Hello() end",
+            ), ["function-order"]);
+        },
+    },
+    {
+        name: "format sorts a run of exports by target, each statement's own pairs first",
+        run: () => {
+            formats(lua("Probes.Needs = Needs", "Probes.B, Probes.A = B, A", "Probes.Call = Make()", "Probes.Z = Z"),
+                lua("Probes.A, Probes.B = A, B", "Probes.Needs = Needs", "Probes.Call = Make()", "Probes.Z = Z"), ["export-order"]);
+        },
+    },
+    {
+        name: "format sorts constructors whose values call something only with sortCalls, and check reports them otherwise",
+        run: () => {
+            const source = lua("Show({ title = Title(), body = Body() })", "-- order: the calls must run in this order", "Show({ second = Next(), first = Next() })");
+            formats(source, source, ["init-order"]);
+            assert(orderFindings(source).map((finding) => finding.line).join() === "1", JSON.stringify(orderFindings(source)));
+            const sorted = formatLua(source, ["init-order"], { sortCalls: true });
+            assert(sorted === lua("Show({ body = Body(), title = Title() })", "-- order: the calls must run in this order", "Show({ second = Next(), first = Next() })"), sorted);
+            assert(orderFindings(sorted).length === 0, JSON.stringify(orderFindings(sorted)));
+        },
     },
 ];

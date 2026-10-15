@@ -1,12 +1,13 @@
--- ByteTerrace_DevTools' controller tools: /btdev rumble plays the vibration candidates in turn for
--- gamePad.vibration, or one vibration as typed; the input listener keeps the controller and
--- interface events' payload shapes from load, for input.events.
+-- ByteTerrace_DevTools' controller tools: /btdev rumble plays the vibration candidates in turn for gamePad.vibration,
+-- or one vibration as typed; the input listener keeps the controller and interface events' payload shapes from load,
+-- for input.events.
 
 local function Load()
     local h = Harness.New()
 
     h.labelStyle = "Letters"
     h:LoadAddon("ByteTerrace_DevTools")
+
     return h
 end
 
@@ -16,6 +17,7 @@ local function Played(h)
     for i, vibration in ipairs(h.vibrations) do
         kinds[i] = (vibration[1] .. "@" .. vibration[2])
     end
+
     return table.concat(kinds, " ")
 end
 

@@ -10,20 +10,8 @@ local function EnemyPlayer(fields)
     local unit = { canAttack = true, isPlayer = true, playerControlled = true }
 
     for key, value in pairs(fields or {}) do unit[key] = value end
+
     return unit
-end
-
-local function Played(h, file)
-    local count = 0
-
-    for _, sound in ipairs(h.sounds) do
-        if sound.path == (MediaPath .. file) then count = (count + 1) end
-    end
-    return count
-end
-
-local function Registered(addon, event)
-    return addon.Events.Frame:IsEventRegistered(event)
 end
 
 -- Each settings page as one line: "Name: [Header] Module.row ...".
@@ -36,14 +24,31 @@ local function Pages(pages)
         for _, entry in ipairs(page.entries) do
             parts[#parts + 1] = ((entry.header and ("[" .. entry.header .. "]")) or entry.name)
         end
+
         lines[#lines + 1] = (page.name .. ": " .. table.concat(parts, " "))
     end
+
     return lines
+end
+
+local function Played(h, file)
+    local count = 0
+
+    for _, sound in ipairs(h.sounds) do
+        if sound.path == (MediaPath .. file) then count = (count + 1) end
+    end
+
+    return count
+end
+
+local function Registered(addon, event)
+    return addon.Events.Frame:IsEventRegistered(event)
 end
 
 test("loads cleanly and builds its settings window, organized into pages and sections", function()
     local h, addon = Load()
     local main = "The Lan Krew ToolKit"
+
     local expected = {
         (main .. ": [Fuck-o-meter] FuckOMeter.enabled"
             .. " [Session journal] Journal.enabled Journal.welcome Journal.ding [Advanced] addon.debug"),
@@ -59,6 +64,7 @@ test("loads cleanly and builds its settings window, organized into pages and sec
         ("Scholar's challenge: Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading Scholar.quests"
             .. " [When] Scholar.interval Scholar.onLevelUp Scholar.onFlight Scholar.onTurnIn Scholar.onDeath Scholar.mode"),
     }
+
     local window = addon.SettingsWindow
     local pages = Pages(window.Pages)
     local schema = Pages(h.env.ByteTerrace.SettingsPages(addon))
@@ -67,6 +73,7 @@ test("loads cleanly and builds its settings window, organized into pages and sec
         eq(pages[i], expected[i], "page " .. i)
         eq(schema[i], expected[i], "schema page " .. i)
     end
+
     window:Show(2)
     local channel = window.Controls[addon.State:Id("Sounds.channel")]
 
@@ -79,7 +86,8 @@ end)
 test("the addon compartment button toggles the settings window", function()
     local h, addon = Load()
     local name = h.env.C_AddOns.GetAddOnMetadata("TheLanKrewToolKit", "AddonCompartmentFunc")
-    local click = h.env[name] -- the client calls the global the TOC names
+    -- the client calls the global the TOC names
+    local click = h.env[name]
 
     falsy(addon.SettingsWindow:IsShown())
     click("TheLanKrewToolKit", "LeftButton")
@@ -101,8 +109,10 @@ test("fuck-o-meter shows for energy users and passes secret energy straight to t
     eq(Reveal(Harness.State(meter.Bar).value), 42)
     eq(Reveal(Harness.State(meter.Value).text), 42)
     eq(Harness.State(meter.Bar).calls.SetValue, 1, "one SetValue per power event")
+
     eq(Harness.State(meter.Bar).interpolation, h.env.Enum.StatusBarInterpolation.ExponentialEaseOut,
         "the bar eases toward each value, in the same call")
+
     eq(Harness.State(meter.Bar).calls.SetMinMaxValues, nil, "range isn't touched on power ticks")
 end)
 
@@ -118,7 +128,8 @@ end)
 test("fuck-o-meter ignores other power types and stays unregistered for non-energy users", function()
     local h, addon = Load({ classFile = "DRUID", powerType = 0 })
 
-    addon.State:Set("Kombat.comboPoints", false) -- combo point callouts listen to power too
+    -- combo point callouts listen to power too
+    addon.State:Set("Kombat.comboPoints", false)
     addon.State:Set("Kombat.finishHim", false)
     addon.State:Set("Kombat.fatality", false)
     local meter = h.env.TheLanKrewToolKitFuckOMeter
@@ -154,7 +165,8 @@ end)
 test("fom toggles the meter off and removes its events, and on again", function()
     local h, addon = Load({ classFile = "ROGUE", powerType = 3 })
 
-    addon.State:Set("Sounds.enabled", false) -- combo point callouts listen to power too
+    -- combo point callouts listen to power too
+    addon.State:Set("Sounds.enabled", false)
     local meter = h.env.TheLanKrewToolKitFuckOMeter
 
     h:Slash("/tlk fom")
@@ -285,7 +297,8 @@ test("heals, regeneration and fully absorbed hits don't break flawless; an ambus
     h:SetTarget(enemy)
     h:EnterCombat()
     h:HealPlayer(10)
-    h:Fire("UNIT_HEALTH", "player") -- regeneration: no combat event
+    -- regeneration: no combat event
+    h:Fire("UNIT_HEALTH", "player")
     h:HitPlayer(0, "ABSORB")
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
@@ -294,7 +307,8 @@ test("heals, regeneration and fully absorbed hits don't break flawless; an ambus
     h:Advance(5)
     enemy = EnemyPlayer()
     h:SetTarget(enemy)
-    h:HitPlayer(30) -- the opening hit lands a moment before the client says combat started
+    -- the opening hit lands a moment before the client says combat started
+    h:HitPlayer(30)
     h:EnterCombat()
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
@@ -313,8 +327,10 @@ test("a flawless victory counts when the fight ends, unless the damage meter say
         h:Fire("UNIT_HEALTH", "target")
         eq(addon.State:Get("Victory.flawlessWins"), 0, "counted when the fight ends")
         h:LeaveCombat()
+
         eq(addon.State:Get("Victory.flawlessWins"), ((taken == 0) and 1) or 0,
             ("the meter said %d damage, readable once the Combat restriction lifted"):format(taken))
+
         h:Advance(10)
         eq(addon.State:Get("Victory.flawlessWins"), ((taken == 0) and 1) or 0, "counted once")
     end
@@ -340,7 +356,8 @@ test("starting health doesn't matter (addons can't read it); a selected corpse n
 
     h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     h:HitPlayer(60)
-    h:Advance(5) -- out of combat: not part of any fight
+    -- out of combat: not part of any fight
+    h:Advance(5)
     local corpse = EnemyPlayer({ dead = true })
 
     h:SetTarget(corpse)
@@ -377,15 +394,18 @@ test("finish him: warriors, once per target, when Execute is actually usable", f
     h:AddMedia(MediaPath .. "FinishHim.ogg")
     h:SetTarget(EnemyPlayer())
     h:EnterCombat()
-    h.usable.Execute = { false, true } -- not enough rage: not proof of range
+    -- not enough rage: not proof of range
+    h.usable.Execute = { false, true }
     h:Fire("SPELL_UPDATE_USABLE")
     eq(Played(h, "FinishHim.ogg"), 0)
     h.usable.Execute = { true, false }
     h:Fire("SPELL_UPDATE_USABLE")
     eq(Played(h, "FinishHim.ogg"), 1)
-    h.usable.Execute = { false, false } -- Defensive Stance
+    -- Defensive Stance
+    h.usable.Execute = { false, false }
     h:Fire("UPDATE_SHAPESHIFT_FORM")
-    h.usable.Execute = { true, false } -- back to Battle Stance
+    -- back to Battle Stance
+    h.usable.Execute = { true, false }
     h:Fire("UPDATE_SHAPESHIFT_FORM")
     eq(Played(h, "FinishHim.ogg"), 1, "a stance dance doesn't repeat it")
     h:SetTarget(EnemyPlayer())
@@ -421,16 +441,20 @@ end)
 test("switched-off sounds cost nothing: their events unregister", function()
     local h, addon = Load({ classFile = "WARRIOR", powerType = 1 })
 
-    addon.State:Set("Warband.enabled", false) -- Warband watches targets too
+    -- Warband watches targets too
+    addon.State:Set("Warband.enabled", false)
     truthy(Registered(addon, "PLAYER_TARGET_CHANGED"))
-    h:SetTarget(EnemyPlayer()) -- usability is only heard with an enemy player target
+    -- usability is only heard with an enemy player target
+    h:SetTarget(EnemyPlayer())
     addon.State:Set("Kombat.finishHim", false)
     truthy(Registered(addon, "SPELL_UPDATE_USABLE"), "fatality still needs to know finishing range")
     addon.State:Set("Kombat.fatality", false)
     falsy(Registered(addon, "SPELL_UPDATE_USABLE"), "finish him and fatality off: no usability polling")
+
     for _, row in ipairs({ "flawlessVictory", "chooseYourDestiny", "testYourMight", "superbVictory" }) do
         addon.State:Set("Kombat." .. row, false)
     end
+
     falsy(Registered(addon, "PLAYER_TARGET_CHANGED"), "no target sounds: no target events")
     falsy(Registered(addon, "UNIT_HEALTH"))
     addon.State:Set("Kombat.chooseYourDestiny", true)
@@ -488,7 +512,8 @@ test("the next login welcomes you back with last session's highlights and rested
 
     truthy(text, "a card is shown")
     truthy(text:find("Welcome back, Tester!", 1, true), text)
-    truthy(text:find("You were away 3 Day", 1, true), text) -- the harness SecondsToTime is a stand-in
+    -- the harness SecondsToTime is a stand-in
+    truthy(text:find("You were away 3 Day", 1, true), text)
     truthy(text:find("Rested up: +38% of a level", 1, true), text)
     truthy(text:find("Stranglethorn Vale", 1, true), text)
     truthy(text:find("2 quests", 1, true), text)
@@ -567,6 +592,7 @@ local function StartDuel(h)
     h:SetTarget(rival)
     rival.canAttack = true
     h:Fire("UNIT_FLAGS", "target")
+
     return rival
 end
 
@@ -589,7 +615,8 @@ test("a duel that isn't with your target wins nothing, and its kill still counts
 
     h:SetTarget(enemy)
     h:EnterCombat()
-    h:Fire("DUEL_FINISHED") -- a duel request declined nearby
+    -- a duel request declined nearby
+    h:Fire("DUEL_FINISHED")
     eq(Played(h, "FlawlessVictory.ogg"), 0, "no duel with your target")
     h:HitPlayer(10)
     enemy.dead = true
@@ -632,7 +659,8 @@ test("damage the live signal missed stops the victory counting, though the sound
 
     h:SetTarget(enemy)
     h:EnterCombat()
-    h:MeterAdd({ amounts = { DamageTaken = 120 }, unit = "player" }) -- no UNIT_HEALTH on you: say a shield absorbed it
+    -- no UNIT_HEALTH on you: say a shield absorbed it
+    h:MeterAdd({ amounts = { DamageTaken = 120 }, unit = "player" })
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
     eq(Played(h, "FlawlessVictory.ogg"), 1)
@@ -684,10 +712,13 @@ end)
 test("finish him alone never tracks targets for classes without a finisher", function()
     local _, addon = Load({ classFile = "MAGE" })
 
-    addon.State:Set("Warband.enabled", false) -- Warband watches targets too
+    -- Warband watches targets too
+    addon.State:Set("Warband.enabled", false)
+
     for _, row in ipairs({ "flawlessVictory", "chooseYourDestiny", "testYourMight", "superbVictory" }) do
         addon.State:Set("Kombat." .. row, false)
     end
+
     falsy(Registered(addon, "PLAYER_TARGET_CHANGED"))
 end)
 
@@ -730,7 +761,8 @@ test("a new character's 0 copper is a real baseline", function()
 
     h.player.money = 0
     h:LoadAddon("TheLanKrewToolKit")
-    h:Relog(600) -- short: no welcome card ahead of the Ding! card
+    -- short: no welcome card ahead of the Ding! card
+    h:Relog(600)
     h.player.money = 6000
     h.player.level = (h.player.level + 1)
     h:LevelUp(h.player.level)

@@ -1,10 +1,11 @@
--- The harness's fidelity rules for Blizzard UI addons extend (tests/harness/ui.lua): right-click
--- menus and the unit tooltip.
+-- The harness's fidelity rules for Blizzard UI addons extend (tests/harness/ui.lua): right-click menus and the unit
+-- tooltip.
 
 local function EnemyPlayer(fields)
     local unit = { canAttack = true, classFile = "ROGUE", faction = "Alliance", isPlayer = true, level = 60, name = "Bob" }
 
     for key, value in pairs(fields or {}) do unit[key] = value end
+
     return unit
 end
 
@@ -18,10 +19,12 @@ test("Menu.ModifyMenu callbacks run for their tag with owner, root and contextDa
         eq(root:GetTag(), "MENU_UNIT_ENEMY_PLAYER")
         root:CreateDivider()
         root:CreateTitle("Warband")
+
         root:CreateButton("Mark for death", function(data, input, menu)
             got.data, got.input, got.menu = data, input, menu
         end, "payload")
     end)
+
     env.Menu.ModifyMenu("MENU_UNIT_SELF", function() got.self = true end)
     h:SetTarget(EnemyPlayer({ realm = "Away", surname = "Stone" }))
     local menu = h:OpenMenu("MENU_UNIT_ENEMY_PLAYER", { unit = "target" })
@@ -59,6 +62,7 @@ test("a disabled element does nothing; a checkbox answers Refresh; submenus nest
 
         sub:CreateButton("Skull", function() clicks = (clicks + 10); return MenuResponse.CloseAll end)
     end)
+
     h:SetTarget({ name = "Hogger" })
     local menu = h:OpenMenu("MENU_UNIT_TARGET", { unit = "target" })
 
@@ -87,6 +91,7 @@ test("queued titles appear only before a later element; unknown description meth
         root:QueueTitle("Dropped")
         root:CreateFooBar()
     end)
+
     h:ExpectErrors("menu description method CreateFooBar")
     local menu = h:OpenMenu("MENU_UNIT_SELF", { unit = "player" })
 
@@ -99,6 +104,7 @@ test("a callback registered after a menu opened runs at once against it; Unregis
 
     h:OpenMenu("MENU_UNIT_SELF", { unit = "player" })
     local runs = 0
+
     local handle = env.Menu.ModifyMenu("MENU_UNIT_SELF", function(_, _, contextData)
         runs = (runs + 1)
         eq(contextData.which, "SELF")
@@ -132,6 +138,7 @@ test("the target frame's menu tag follows TargetFrame_OpenMenu", function()
             tags[#tags + 1] = (which .. ((contextData.fromTargetFrame and "+frame") or ""))
         end)
     end
+
     h:SetTarget(EnemyPlayer())
     h:OpenTargetMenu()
     h:SetTarget(EnemyPlayer({ canAttack = false }))
@@ -160,7 +167,9 @@ test("a unit tooltip runs post calls (all types first) with GameTooltip and the 
         tooltip:AddLine("Grudge")
         tooltip:AddDoubleLine("Kills", "3")
     end)
-    env.TooltipDataProcessor.AddTooltipPostCall("ALL", function() order[#order + 1] = "all" end) -- AllTypes
+
+    -- AllTypes
+    env.TooltipDataProcessor.AddTooltipPostCall("ALL", function() order[#order + 1] = "all" end)
     env.TooltipDataProcessor.AddTooltipPostCall(env.Enum.TooltipDataType.Item, function() order[#order + 1] = "item" end)
     local plate = h:AddNamePlate(EnemyPlayer())
     local data = h:ShowUnitTooltip(plate)
@@ -248,6 +257,7 @@ test("menus and tooltip post calls belong to the UI session: a reload drops them
         Menu.ModifyMenu("MENU_UNIT_SELF", function(_, root) root:CreateButton("Probe", function() end) end)
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tip) tip:AddLine("probe") end)
     ]] } })
+
     h:LoadAddon("UiProbe")
     h:Reload()
     eq(table.concat(h:OpenMenu("MENU_UNIT_SELF", { unit = "player" }):Texts(), ","), "Probe", "registered once again")
@@ -260,6 +270,7 @@ test("MenuUtil.CreateContextMenu runs the generator, opens a menu to click, and 
     local env = h.env
     local row = env.CreateFrame("Button", nil, env.UIParent)
     local got, clicked = {}, 0
+
     local proxy = env.MenuUtil.CreateContextMenu(row, function(owner, root, extra)
         got.owner, got.extra = owner, extra
         root:CreateTitle("Bob")
@@ -302,14 +313,17 @@ test("an empty context menu opens nothing; a tagged one runs Menu.ModifyMenu; a 
         modified = contextData
         root:CreateButton("Added", function() end)
     end)
+
     env.MenuUtil.CreateContextMenu(nil, function(_, root) root:SetTag("MENU_HARNESS_ROW", { row = 3 }) end)
     eq(modified.row, 3)
     eq(table.concat(h:OpenContextMenu():Texts(), ","), "Added", "the callback's entries count")
     h:ExpectErrors("boom")
+
     env.MenuUtil.CreateContextMenu(nil, function(_, root)
         root:CreateButton("Before", function() end)
         error("boom")
     end)
+
     eq(table.concat(h:OpenContextMenu():Texts(), ","), "Before", "a failing generator is reported, the menu opens")
 end)
 
@@ -327,5 +341,6 @@ test("RAID_CLASS_COLORS holds the client's classes: r, g, b and colorStr", funct
     local count = 0
 
     for _ in pairs(env.RAID_CLASS_COLORS) do count = (count + 1) end
+
     eq(count, 9)
 end)

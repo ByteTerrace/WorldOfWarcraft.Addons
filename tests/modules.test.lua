@@ -11,6 +11,7 @@ test("a module with an active rule runs only while the rule holds", function()
     local fired = 0
 
     addon:Module("Master", { label = "Master" })
+
     local dependent = addon:Module("Dependent", { active = { reads = { "Master.enabled" }, when = function(s) return s:Get("Master.enabled") end },
         OnEnable = function(m) m:On("PLAYER_TARGET_CHANGED", function() fired = (fired + 1) end) end, toggle = false })
 
@@ -29,6 +30,7 @@ test("character-scoped rows persist to the per-character table", function()
 
     h.declared.TestCharDB = true
     rawset(h.env, "TestCharDB", h.saved.TestCharDB)
+
     local m = addon:Module("M", { state = {
             { default = 0, kind = "number", name = "count", scope = "character" },
             { default = 0, kind = "number", name = "shared" },
@@ -53,6 +55,7 @@ end)
 
 test("a row locked by another row refuses writes from code, slash and the window", function()
     local h, addon = NewAddOn()
+
     local m = addon:Module("M", { state = {
             { default = false, kind = "boolean", name = "locked", persist = false },
             { default = "a", kind = "string", label = "Mode", lockedBy = "M.locked", name = "mode", values = { "a", "b" } },
@@ -113,6 +116,7 @@ local function NewLedger(saved)
     local m = addon:Module("Ledger", { records = { People }, toggle = false })
 
     Start(h)
+
     return h, addon, m.Records.people
 end
 
@@ -141,10 +145,12 @@ test("a change moves the collection's version row, once per batch", function()
     local runs = 0
 
     addon.State:Watch({ "Ledger.people" }, function() runs = (runs + 1) end, true)
+
     addon:Batch(function()
         people:Set("A", { seen = 1 })
         people:Set("B", { seen = 2 })
     end)
+
     eq(runs, 1)
     people:Set("A", { seen = 1 })
     eq(runs, 1, "an unchanged write isn't a change")
@@ -193,10 +199,12 @@ test("a collection saved in the other scope, or as something other than a table,
 
     h.declared.TestCharDB = true
     rawset(h.env, "TestCharDB", h.saved.TestCharDB)
+
     local kid = addon:Module("Kid", { records = { {
         fields = People.fields, limit = 3, name = "people", scope = "character",
     } },
         toggle = false })
+
     local ledger = addon:Module("Ledger", { records = { People }, toggle = false })
 
     Start(h)
@@ -221,6 +229,7 @@ end)
 test("kept keys are never evicted; a collection of only kept keys refuses new ones", function()
     local h, addon = NewAddOn()
     local kept = { A = true }
+
     local m = addon:Module("Ledger", { records = { {
         evict = "seen", fields = { { default = 0, kind = "number", name = "seen" } },
         keep = function(key) return kept[key] end, limit = 2, name = "people",
@@ -241,6 +250,7 @@ end)
 
 test("record specs are validated at declaration", function()
     local _, addon = NewAddOn()
+
     local ok, err = pcall(addon.Module, addon, "Bad", { records = {
             { evict = "nope", fields = { { default = {}, kind = "table", name = "a" } }, limit = 0, name = "x" } },
         toggle = false })
@@ -250,15 +260,18 @@ test("record specs are validated at declaration", function()
     truthy(err:find("Bad.x.a: unknown kind table", 1, true), err)
     truthy(err:find("Bad.x: limit must be a positive whole number", 1, true), err)
     truthy(err:find("Bad.x: evict must name a number field", 1, true), err)
+
     ok, err = pcall(addon.Module, addon, "Worse", { records = { { fields = { { default = 0, kind = "number", name = "a" }, { default = 0, kind = "number", name = "a" },
             { default = 0, kind = "number", name = "two words" } },
         keep = true, limit = 1, name = "y" } },
         toggle = false })
+
     falsy(ok)
     err = tostring(err)
     truthy(err:find("Worse.y: duplicate field a", 1, true), err)
     truthy(err:find("Worse.y: field name 'two words' must be an identifier", 1, true), err)
     truthy(err:find("Worse.y: keep must be a function(key)", 1, true), err)
+
     throws(function() addon:Module("Empty", { records = { { limit = 1, name = "z" } }, toggle = false }) end,
         "Empty.z: a collection needs fields")
 end)
@@ -277,21 +290,28 @@ test("a module spec that can't be declared is refused, naming what's wrong", fun
     local ByteTerrace = h.env.ByteTerrace
 
     throws(function() ByteTerrace.NewAddOn({ name = "Other" }) end, "needs a name and a savedVariable")
+
     throws(function() ByteTerrace.NewAddOn({ facts = { "weather" }, name = "Other", savedVariable = "OtherDB" }) end,
         "unknown fact weather")
+
     addon:Module("M", { toggle = false })
     throws(function() addon:Module("M", { toggle = false }) end, "duplicate module M")
     throws(function() addon:Module("A", { active = { reads = { "M.x" } } }) end, "active must be")
     throws(function() addon:Module("U", { uses = "target" }) end, "uses must be a list")
+
     throws(function() addon:Module("R", { label = "R", state = { { default = true, kind = "boolean", name = "enabled" } } }) end,
         "duplicate state row R.enabled")
+
     throws(function() addon:Module("C", { records = { { limit = 1, name = "a.b" } } }) end,
         "records name 'a.b' in module C must be an identifier")
+
     throws(function() addon:Module("N", { commands = { { label = "Go", name = "go now", run = function() end } } }) end,
         "command name in module N must be an identifier")
+
     throws(function() addon:Module("D", { commands = {
         { label = "Go", name = "go", run = function() end }, { label = "Again", name = "go", run = function() end },
     } }) end, "duplicate command D.go")
+
     Start(h)
     truthy(addon.Started, "the refused declarations left nothing behind")
 end)

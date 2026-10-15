@@ -1,14 +1,13 @@
--- Quests in the fake client: the quest log, the quest giver's dialog, and the other NPC windows
--- (gossip, and those Blizzard's interaction manager opens). See wow.lua for the rest.
+-- Quests in the fake client: the quest log, the quest giver's dialog, and the other NPC windows (gossip, and those
+-- Blizzard's interaction manager opens). See wow.lua for the rest.
 --
--- State: h.questLog (the quests in the log, in order: { id, title, text, goal, objectives, header,
--- level }), h.questTitles ([questID] = title, for every quest the client has seen) and h.questDialog
--- (nil, or { panel = "detail" | "reward", quest, reward }) with the giver as the "questnpc" and
--- "npc" units while it's open. A quest spec is { id, title, text (the description), goal (the
--- objective summary), objectives = { { text (what the objective names: an item, a creature, a
--- task), required, type ("item" unless given), uncached } }, header (the log's zone header),
--- level }; missing fields get stand-ins. h.gossip is the open gossip window's NPC (or nil), and
--- h.interactions the open interaction manager windows ([Enum.PlayerInteractionType value] = true).
+-- State: h.questLog (the quests in the log, in order: { id, title, text, goal, objectives, header, level }),
+-- h.questTitles ([questID] = title, for every quest the client has seen) and h.questDialog (nil, or { panel = "detail"
+-- | "reward", quest, reward }) with the giver as the "questnpc" and "npc" units while it's open. A quest spec is { id,
+-- title, text (the description), goal (the objective summary), objectives = { { text (what the objective names: an
+-- item, a creature, a task), required, type ("item" unless given), uncached } }, header (the log's zone header), level
+-- }; missing fields get stand-ins. h.gossip is the open gossip window's NPC (or nil), and h.interactions the open
+-- interaction manager windows ([Enum.PlayerInteractionType value] = true).
 --
 --   h:OfferQuest(spec, giver)     the giver's offer panel: QUEST_DETAIL(0)
 --   h:AcceptQuest()               accepts the offer: QUEST_ACCEPTED(id), QUEST_LOG_UPDATE, QUEST_FINISHED
@@ -23,8 +22,8 @@
 --                                 its Enum.PlayerInteractionType name ("Merchant", "MailInfo", ...):
 --                                 PLAYER_INTERACTION_MANAGER_FRAME_SHOW / _HIDE(type)
 --
--- Modeling decisions ([D] documented or seen in Blizzard's Forever UI source, [P] probed in game,
--- [G] a guess where neither says):
+-- Modeling decisions ([D] documented or seen in Blizzard's Forever UI source, [P] probed in game, [G] a guess where
+-- neither says):
 --   Dialogs     [D] Forever loads the Mainline QuestFrame (Blizzard_UIPanels_Game's TOC, [Family]):
 --               QUEST_DETAIL shows QuestFrameDetailPanel, which reads GetTitleText, GetQuestText
 --               and GetObjectiveText; QUEST_COMPLETE shows QuestFrameRewardPanel (GetRewardText);
@@ -71,17 +70,36 @@ local QuestInfoFields = {
 
 local QuestSerial = 0
 
-function Harness:InitQuests()
-    self.questLog = {}
-    self.questTitles = {}
-    self.questDialog = nil
-    self.gossip = nil
-    self.interactions = {}
+-- The log's entries as the client lists them: each header, then its quests.
+local function Entries(h)
+    local entries, headers, order = {}, {}, {}
+
+    for _, quest in ipairs(h.questLog) do
+        if not headers[quest.header] then
+            headers[quest.header] = {}
+            order[#order + 1] = quest.header
+        end
+
+        local list = headers[quest.header]
+
+        list[#list + 1] = quest
+    end
+
+    for _, header in ipairs(order) do
+        entries[#entries + 1] = { header = header }
+
+        for _, quest in ipairs(headers[header]) do
+            entries[#entries + 1] = { quest = quest }
+        end
+    end
+
+    return entries
 end
 
 -- A quest spec with its stand-ins filled in, as a fresh table.
 local function FillQuest(spec)
     QuestSerial = (QuestSerial + 1)
+
     local quest = {
         goal = (spec.goal or "Do what is asked."), header = (spec.header or "Elwynn Forest"),
         id = (spec.id or (1000 + QuestSerial)), level = (spec.level or 5), objectives = {},
@@ -92,29 +110,26 @@ local function FillQuest(spec)
         quest.objectives[i] = { required = (objective.required or 1), text = objective.text,
             type = (objective.type or "item"), uncached = (objective.uncached == true) }
     end
+
     return quest
 end
 
--- The log's entries as the client lists them: each header, then its quests.
-local function Entries(h)
-    local entries, headers, order = {}, {}, {}
+local function Info(entry, index)
+    local info = {}
 
-    for _, quest in ipairs(h.questLog) do
-        if not headers[quest.header] then
-            headers[quest.header] = {}
-            order[#order + 1] = quest.header
-        end
-        local list = headers[quest.header]
+    for key, value in pairs(QuestInfoFields) do
+        info[key] = value
+    end
 
-        list[#list + 1] = quest
+    info.questLogIndex = index
+
+    if entry.header then
+        info.isHeader, info.title, info.questID, info.level = true, entry.header, 0, 0
+    else
+        info.isHeader, info.title, info.questID, info.level = false, entry.quest.title, entry.quest.id, entry.quest.level
     end
-    for _, header in ipairs(order) do
-        entries[#entries + 1] = { header = header }
-        for _, quest in ipairs(headers[header]) do
-            entries[#entries + 1] = { quest = quest }
-        end
-    end
-    return entries
+
+    return info
 end
 
 local function LogQuest(h, questID)
@@ -125,23 +140,24 @@ local function LogQuest(h, questID)
     end
 end
 
-local function Info(entry, index)
-    local info = {}
-
-    for key, value in pairs(QuestInfoFields) do
-        info[key] = value
-    end
-    info.questLogIndex = index
-    if entry.header then
-        info.isHeader, info.title, info.questID, info.level = true, entry.header, 0, 0
-    else
-        info.isHeader, info.title, info.questID, info.level = false, entry.quest.title, entry.quest.id, entry.quest.level
-    end
-    return info
+function Harness:InitQuests()
+    self.questLog = {}
+    self.questTitles = {}
+    self.questDialog = nil
+    self.gossip = nil
+    self.interactions = {}
 end
 
 -- The GlobalString an objective's text is written with, by its type (see the header).
 local ObjectiveFormats = { monster = "QUEST_MONSTERS_KILLED", object = "QUEST_OBJECTS_FOUND" }
+
+local function AddToLog(h, quest)
+    assert(not LogQuest(h, quest.id), "the quest is already in the log: " .. quest.id)
+    h.questLog[#h.questLog + 1] = quest
+    h.questTitles[quest.id] = quest.title
+    h:Fire("QUEST_ACCEPTED", quest.id)
+    h:Fire("QUEST_LOG_UPDATE")
+end
 
 -- format with its positional conversions ("%2$d/%3$d %1$s") filled from the arguments.
 local function FormatPositional(format, ...)
@@ -149,8 +165,18 @@ local function FormatPositional(format, ...)
 
     return (format:gsub("%%(%d*)%$?([sd])", function(index)
         position = (position + 1)
+
         return tostring(args[tonumber(index) or position])
     end))
+end
+
+-- An Enum.PlayerInteractionType value by name.
+local function InteractionType(name)
+    local value = __snapshot.enums.PlayerInteractionType[name]
+
+    assert(value, "unknown Enum.PlayerInteractionType " .. tostring(name))
+
+    return value
 end
 
 local function Objectives(h, quest)
@@ -158,13 +184,15 @@ local function Objectives(h, quest)
 
     for i, objective in ipairs(quest.objectives) do
         local format = rawget(h.env, ObjectiveFormats[objective.type] or "QUEST_ITEMS_NEEDED")
-        local name = ((objective.uncached and "") or objective.text) -- an unloaded name is empty
+        -- an unloaded name is empty
+        local name = ((objective.uncached and "") or objective.text)
 
         list[i] = {
-            text = FormatPositional(format, name, 0, objective.required), type = objective.type,
             finished = false, numFulfilled = 0, numRequired = objective.required,
+            text = FormatPositional(format, name, 0, objective.required), type = objective.type,
         }
     end
+
     return list
 end
 
@@ -176,14 +204,6 @@ local function SetPanel(h, panel)
     h:SetWidgetShown(rawget(env, "QuestFrameRewardPanel"), panel == "reward")
 end
 
-local function OpenDialog(h, dialog, giver)
-    h.questDialog = dialog
-    local unit = Harness.FillUnit(((type(giver) == "table") and giver) or { level = 30, name = (giver or "Marshal Dughan") })
-
-    h.units.questnpc, h.units.npc = unit, unit
-    SetPanel(h, dialog.panel)
-end
-
 local function CloseDialog(h)
     h.questDialog = nil
     h.units.questnpc, h.units.npc = nil, nil
@@ -191,19 +211,12 @@ local function CloseDialog(h)
     h:Fire("QUEST_FINISHED")
 end
 
---- Opens a quest giver's offer panel for spec; giver is a unit table or a name.
-function Harness:OfferQuest(spec, giver)
-    assert(not self.questDialog, "OfferQuest: a quest dialog is already open")
-    OpenDialog(self, { panel = "detail", quest = FillQuest(spec) }, giver)
-    self:Fire("QUEST_DETAIL", 0)
-end
+local function OpenDialog(h, dialog, giver)
+    h.questDialog = dialog
+    local unit = Harness.FillUnit(((type(giver) == "table") and giver) or { level = 30, name = (giver or "Marshal Dughan") })
 
-local function AddToLog(h, quest)
-    assert(not LogQuest(h, quest.id), "the quest is already in the log: " .. quest.id)
-    h.questLog[#h.questLog + 1] = quest
-    h.questTitles[quest.id] = quest.title
-    h:Fire("QUEST_ACCEPTED", quest.id)
-    h:Fire("QUEST_LOG_UPDATE")
+    h.units.questnpc, h.units.npc = unit, unit
+    SetPanel(h, dialog.panel)
 end
 
 --- Accepts the open offer: the quest joins the log and the dialog closes.
@@ -220,16 +233,29 @@ function Harness:AutoAcceptQuest(spec)
     local quest = FillQuest(spec)
 
     AddToLog(self, quest)
+
     return quest.id
 end
 
---- Opens the reward panel of a quest in the log; ender is a unit table or a name.
-function Harness:OpenTurnIn(questID, ender, reward)
-    assert(not self.questDialog, "OpenTurnIn: a quest dialog is already open")
-    local quest = assert(LogQuest(self, questID), "OpenTurnIn: quest " .. tostring(questID) .. " isn't in the log")
+--- Closes the open gossip window.
+function Harness:CloseGossip()
+    assert(self.gossip, "CloseGossip: no gossip window is open")
+    self.gossip = nil
+    self.units.npc = nil
+    self:Fire("GOSSIP_CLOSED", false)
+end
 
-    OpenDialog(self, { panel = "reward", quest = quest, reward = (reward or "Well done.") }, ender)
-    self:Fire("QUEST_COMPLETE")
+--- Closes a window the interaction manager showed; the flight master's map also fires TAXIMAP_CLOSED.
+function Harness:CloseInteraction(name)
+    local value = InteractionType(name)
+
+    assert(self.interactions[value], "CloseInteraction: " .. name .. " isn't open")
+    self.interactions[value] = nil
+    self:Fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", value)
+
+    if name == "TaxiNode" then
+        self:Fire("TAXIMAP_CLOSED")
+    end
 end
 
 --- Completes the quest whose reward panel is open: it leaves the log and the dialog closes.
@@ -242,13 +268,34 @@ function Harness:CompleteQuest(xp, money)
     for i, quest in ipairs(self.questLog) do
         if quest.id == id then
             table.remove(self.questLog, i)
+
             break
         end
     end
+
     self:Fire("QUEST_TURNED_IN", id, xp or 100, money or 0)
     self:Fire("QUEST_REMOVED", id, false)
     self:Fire("QUEST_LOG_UPDATE")
     CloseDialog(self)
+end
+
+-- The client has loaded the item and creature names the log's objectives lacked: they read whole, and QUEST_LOG_UPDATE
+-- fires.
+function Harness:LoadQuestNames()
+    for _, quest in ipairs(self.questLog) do
+        for _, objective in ipairs(quest.objectives) do
+            objective.uncached = false
+        end
+    end
+
+    self:Fire("QUEST_LOG_UPDATE")
+end
+
+--- Opens a quest giver's offer panel for spec; giver is a unit table or a name.
+function Harness:OfferQuest(spec, giver)
+    assert(not self.questDialog, "OfferQuest: a quest dialog is already open")
+    OpenDialog(self, { panel = "detail", quest = FillQuest(spec) }, giver)
+    self:Fire("QUEST_DETAIL", 0)
 end
 
 --- Opens an NPC's gossip window; npc is a unit table or a name (the "npc" unit while it's open).
@@ -257,22 +304,6 @@ function Harness:OpenGossip(npc)
     self.gossip = Harness.FillUnit(((type(npc) == "table") and npc) or { level = 30, name = (npc or "Innkeeper Farley") })
     self.units.npc = self.gossip
     self:Fire("GOSSIP_SHOW", nil)
-end
-
---- Closes the open gossip window.
-function Harness:CloseGossip()
-    assert(self.gossip, "CloseGossip: no gossip window is open")
-    self.gossip = nil
-    self.units.npc = nil
-    self:Fire("GOSSIP_CLOSED", false)
-end
-
--- An Enum.PlayerInteractionType value by name.
-local function InteractionType(name)
-    local value = __snapshot.enums.PlayerInteractionType[name]
-
-    assert(value, "unknown Enum.PlayerInteractionType " .. tostring(name))
-    return value
 end
 
 --- Opens a window the interaction manager shows, by its Enum.PlayerInteractionType name.
@@ -284,27 +315,13 @@ function Harness:OpenInteraction(name)
     self:Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", value)
 end
 
---- Closes a window the interaction manager showed; the flight master's map also fires TAXIMAP_CLOSED.
-function Harness:CloseInteraction(name)
-    local value = InteractionType(name)
+--- Opens the reward panel of a quest in the log; ender is a unit table or a name.
+function Harness:OpenTurnIn(questID, ender, reward)
+    assert(not self.questDialog, "OpenTurnIn: a quest dialog is already open")
+    local quest = assert(LogQuest(self, questID), "OpenTurnIn: quest " .. tostring(questID) .. " isn't in the log")
 
-    assert(self.interactions[value], "CloseInteraction: " .. name .. " isn't open")
-    self.interactions[value] = nil
-    self:Fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", value)
-    if name == "TaxiNode" then
-        self:Fire("TAXIMAP_CLOSED")
-    end
-end
-
--- The client has loaded the item and creature names the log's objectives lacked: they read whole,
--- and QUEST_LOG_UPDATE fires.
-function Harness:LoadQuestNames()
-    for _, quest in ipairs(self.questLog) do
-        for _, objective in ipairs(quest.objectives) do
-            objective.uncached = false
-        end
-    end
-    self:Fire("QUEST_LOG_UPDATE")
+    OpenDialog(self, { panel = "reward", quest = quest, reward = (reward or "Well done.") }, ender)
+    self:Fire("QUEST_COMPLETE")
 end
 
 -- The quest fakes, merged into the env (env.lua) before it wraps them.
@@ -316,6 +333,7 @@ function Harness:QuestFakes(uiParent)
 
         return ((dialog and (not panel or (dialog.panel == panel)) and dialog) or nil)
     end
+
     local fakes = {
         C_QuestLog = {
             GetInfo = function(index)
@@ -329,6 +347,7 @@ function Harness:QuestFakes(uiParent)
                         return index
                     end
                 end
+
                 return nil
             end,
             GetNumQuestLogEntries = function()
@@ -362,6 +381,7 @@ function Harness:QuestFakes(uiParent)
             if not (entry and entry.quest) then
                 return "", ""
             end
+
             return entry.quest.text, entry.quest.goal
         end,
         GetQuestText = function()
@@ -380,15 +400,18 @@ function Harness:QuestFakes(uiParent)
             return ((dialog and dialog.quest.title) or "")
         end,
     }
+
     local frame = h:CreateWidget("Frame", "QuestFrame", uiParent)
 
     Harness.State(frame).shown = false
     fakes.QuestFrame = frame
+
     for _, name in ipairs({ "QuestFrameDetailPanel", "QuestFrameRewardPanel" }) do
         local panel = h:CreateWidget("Frame", name, frame)
 
         Harness.State(panel).shown = false
         fakes[name] = panel
     end
+
     return fakes
 end

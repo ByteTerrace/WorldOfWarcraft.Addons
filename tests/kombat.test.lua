@@ -1,5 +1,5 @@
--- The sound bank's variants, the Mortal Kombat announcer and the Unreal Tournament kill streaks,
--- end to end through the real addon files.
+-- The sound bank's variants, the Mortal Kombat announcer and the Unreal Tournament kill streaks, end to end through the
+-- real addon files.
 
 local Kit = use("toolkit")
 
@@ -10,16 +10,11 @@ local Notices = Kit.Notices
 local Prefix = Kit.Prefix
 local Sent = Kit.Sent
 
-local function Media(h, ...)
-    for i = 1, select("#", ...) do
-        h:AddMedia(MediaPath .. select(i, ...))
-    end
-end
-
 local function EnemyPlayer(fields)
     local unit = { canAttack = true, isPlayer = true, name = "Bob", playerControlled = true }
 
     for key, value in pairs(fields or {}) do unit[key] = value end
+
     return unit
 end
 
@@ -30,6 +25,7 @@ local function Heard(h)
     for _, sound in ipairs(h.sounds) do
         names[#names + 1] = sound.path:sub(#MediaPath + 1)
     end
+
     return table.concat(names, " ")
 end
 
@@ -38,11 +34,19 @@ local function Kill(h, enemy, hit)
     if not h.inCombat then
         h:EnterCombat()
     end
+
     if hit then
         h:HitPlayer(10)
     end
+
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
+end
+
+local function Media(h, ...)
+    for i = 1, select("#", ...) do
+        h:AddMedia(MediaPath .. select(i, ...))
+    end
 end
 
 test("a sound plays one of its present variants at random, and /tlk sound can pick one", function()
@@ -50,9 +54,11 @@ test("a sound plays one of its present variants at random, and /tlk sound can pi
 
     h:SeedRandom(3)
     Media(h, "FinishHim.ogg", "FinishHim3.mp3")
+
     for _ = 1, 20 do
         h:Slash("/tlk sound finish")
     end
+
     local base, third = select(2, Heard(h):gsub("FinishHim%.ogg", "")), select(2, Heard(h):gsub("FinishHim3%.mp3", ""))
 
     eq(base + third, 20, "every play found a present variant")
@@ -94,9 +100,11 @@ test("rogues hear each combo point, and finish him at five on an enemy player", 
 
     Media(h, "ComboPoint1.ogg", "ComboPoint2.ogg", "ComboPoint3.ogg", "ComboPoint4.ogg", "ComboPoint5.ogg", "FinishHim.ogg")
     h:SetTarget(EnemyPlayer())
+
     for points = 1, 5 do
         h:SetComboPoints(points)
     end
+
     eq(Heard(h), "ComboPoint1.ogg ComboPoint2.ogg ComboPoint3.ogg ComboPoint4.ogg FinishHim.ogg")
     h:SetComboPoints(0)
     h:SetComboPoints(0)
@@ -111,7 +119,8 @@ test("combo callouts are rogues' and druids' only, and switch off with their set
     local _, warrior = Load({ classFile = "WARRIOR", powerType = 1 })
 
     falsy(warrior.Events.Frame:IsEventRegistered("UNIT_POWER_FREQUENT"), "warriors have no combo points")
-    local h, addon = Load({ classFile = "DRUID", powerType = 0 }) -- caster form: the fuck-o-meter stays off
+    -- caster form: the fuck-o-meter stays off
+    local h, addon = Load({ classFile = "DRUID", powerType = 0 })
 
     Media(h, "ComboPoint1.ogg")
     h:SetTarget({ canAttack = true })
@@ -135,7 +144,8 @@ test("a kill after finish him is a fatality; flawless still comes first", functi
     Kill(h, enemy, true)
     eq(Heard(h), "FinishHim.ogg Fatality.ogg")
     h:LeaveCombat()
-    h:Advance(5) -- the last fight's hit is long past
+    -- the last fight's hit is long past
+    h:Advance(5)
     h.sounds = {}
     enemy = EnemyPlayer()
     h:SetTarget(enemy)
@@ -207,10 +217,12 @@ test("dying ends the spree; bonus honor isn't a kill", function()
     local h, addon = Load()
 
     Media(h, "KillingSpree.ogg")
+
     for i = 1, 4 do
         Blow(h, "Foe" .. i)
         h:Advance(20)
     end
+
     h:AwardHonor(100)
     eq(addon.State:Get("Streaks.streak"), 4)
     h:Die()
@@ -242,10 +254,12 @@ test("first blood and a spree in progress survive a /reload; the next login star
     local h = Load()
 
     Media(h, "FirstBlood.ogg", "KillingSpree.ogg")
+
     for i = 1, 4 do
         Blow(h, "Foe" .. i)
         h:Advance(20)
     end
+
     eq(Heard(h), "FirstBlood.ogg")
     h:Reload()
     Blow(h, "Foe5")
@@ -281,14 +295,17 @@ test("the Krew hears your first blood, sprees and a spree's end, and yours yield
     h:Advance(2)
     h:ReceiveAddonMessage(Prefix, "STREAK:firstBlood\t1", "PARTY", "Mom")
     eq(Notices(h), "Mom Doe drew first blood!")
+
     for i = 1, 5 do
         Blow(h, "Foe" .. i)
         h:Advance(20)
     end
+
     eq(#Sent(h, "STREAK"), 1, "first blood was Mom's")
     eq(Sent(h, "STREAK")[1], "STREAK:killingSpree\t5")
     h:Die()
-    h:Advance(4) -- no death recap: after the wait, the spree ends with no killer named
+    -- no death recap: after the wait, the spree ends with no killer named
+    h:Advance(4)
     eq(Sent(h, "STREAK")[2], "STREAK:ended\t5")
     h:ReceiveAddonMessage(Prefix, "STREAK:rampage\t10", "PARTY", "Mom")
     truthy(Notices(h):find("Mom Doe is on a rampage! (10 kills)", 1, true))
@@ -299,10 +316,12 @@ test("the Krew hears your first blood, sprees and a spree's end, and yours yield
     eq(select(2, Notices(h):gsub("\n", "")), 2, "malformed messages show nothing")
     addon.State:Set("Streaks.share", false)
     h:Revive()
+
     for i = 6, 10 do
         Blow(h, "Foe" .. i)
         h:Advance(20)
     end
+
     eq(#Sent(h, "STREAK"), 2, "sharing off")
 end)
 
@@ -322,11 +341,13 @@ test("a duel you were hit in may be one you lost: it plays nothing", function()
     local rival = EnemyPlayer({ canAttack = false })
 
     h:SetTarget(rival)
-    rival.canAttack = true -- the duel starts
+    -- the duel starts
+    rival.canAttack = true
     h:Fire("UNIT_FLAGS", "target")
     h:EnterCombat()
     h:HitPlayer(h.player.health - 1)
-    h:Fire("DUEL_FINISHED") -- you lost at 1 HP; your opponent is alive and still attackable
+    -- you lost at 1 HP; your opponent is alive and still attackable
+    h:Fire("DUEL_FINISHED")
     eq(Heard(h), "")
 end)
 
@@ -335,14 +356,18 @@ test("the fifth combo point calls out again on a second build, and when finish h
 
     Media(h, "ComboPoint1.ogg", "ComboPoint2.ogg", "ComboPoint3.ogg", "ComboPoint4.ogg", "ComboPoint5.ogg", "FinishHim.ogg")
     h:SetTarget(EnemyPlayer())
+
     for points = 1, 5 do
         h:SetComboPoints(points)
     end
+
     h:SetComboPoints(0)
     h.sounds = {}
+
     for points = 1, 5 do
         h:SetComboPoints(points)
     end
+
     eq(Heard(h), "ComboPoint1.ogg ComboPoint2.ogg ComboPoint3.ogg ComboPoint4.ogg ComboPoint5.ogg", "finish him was the first build's")
     h = Load({ classFile = "ROGUE", powerType = 3 })
     Media(h, "ComboPoint4.ogg", "ComboPoint5.ogg")
@@ -359,15 +384,18 @@ test("a death ends the spree and the multi kill at once, even before the recap n
     h:Echo(false)
     h:Advance(2)
     Media(h, "DoubleKill.ogg")
+
     for i = 1, 7 do
         Blow(h, "Foe" .. i)
         h:Advance(20)
     end
+
     Blow(h, "Foe8")
     h:Advance(3)
     h:Die()
     h:Advance(1)
-    Blow(h, "Foe9") -- the group's kill, credited while you're dead
+    -- the group's kill, credited while you're dead
+    Blow(h, "Foe9")
     h:Advance(4)
     eq(Heard(h), "", "a death between two kills ends the multi kill")
     local sent = Sent(h, "STREAK")
@@ -382,7 +410,8 @@ test("a kill streak counts your killing blows and your pet's, not a groupmate's 
     h:SetUnit("pet", pet)
     local mom = { isPlayer = true, name = "Mom" }
 
-    h:HonorKill("Ann", "Private", 10) -- honor credit for a groupmate's kill
+    -- honor credit for a groupmate's kill
+    h:HonorKill("Ann", "Private", 10)
     h:Fire("PARTY_KILL", h:GUID(mom), h:GUID({ isPlayer = true, name = "Ben" }))
     h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ name = "Kobold" }))
     eq(addon.State:Get("kills.blows"), 0)

@@ -8,23 +8,28 @@ local Start = Kit.Start
 test("mixed unit filters check secret tokens regardless of registration order and keep publishing", function()
     for _, unfilteredFirst in ipairs({ true, false }) do
         local h, addon = NewAddOn()
+
         local general = addon:Module("General", { state = {
                 { default = 0, kind = "number", name = "count", persist = false },
             },
             toggle = false })
+
         local player = addon:Module("Player", { toggle = false })
 
         Start(h)
         local published, filtered, secretChecks = 0, 0, 0
 
         general:Watch({ "count" }, function() published = (published + 1) end, true)
+
         local function General()
             secretChecks = h:CountApiCalls("issecretvalue")
             general:Set("count", general:Get("count") + 1)
         end
+
         local function Player()
             filtered = (filtered + 1)
         end
+
         if unfilteredFirst then
             general:On("UNIT_AURA", General)
             player:On("UNIT_AURA", Player, "player")
@@ -32,6 +37,7 @@ test("mixed unit filters check secret tokens regardless of registration order an
             player:On("UNIT_AURA", Player, "player")
             general:On("UNIT_AURA", General)
         end
+
         h.apiCalls = {}
         h:Fire("UNIT_AURA", Secret("player"), {})
         eq(#h.errors, 0)
@@ -49,6 +55,7 @@ end)
 
 test("a module whose declaration fails partway keeps its saved rows and records", function()
     local h, addon = NewAddOn({ harness = { saved = { TestDB = { ["Ledger.note"] = "kept", ["Ledger.people"] = { Bob = { deaths = 3 } } } } } })
+
     local ok = pcall(addon.Module, addon, "Ledger", {
         records = { { fields = { { default = "oops", kind = "number", name = "deaths" } }, limit = 5, name = "people" } },
         state = { { default = "", kind = "string", name = "note" } },
@@ -71,13 +78,16 @@ test("a rule registered while deferred rules take their first verdict gets its o
     local Always = function() return true end
 
     state:BeginBatch()
+
     state:Rule({ changed = function()
             state:Rule({ changed = function() lateRuns = (lateRuns + 1) end, initial = true, reads = { "M.a" }, when = Always })
         end,
         initial = true, reads = { "M.a" }, when = Always })
+
     for _ = 1, 3 do
         state:Rule({ changed = function() end, initial = true, reads = { "M.a" }, when = Always })
     end
+
     state:EndBatch()
     eq(lateRuns, 1)
 end)
@@ -96,15 +106,18 @@ test("a watcher registered mid-batch hears a row return to the value it register
             s:Set("M.n", 2)
         end
     end, true)
+
     state:BeginBatch()
     state:Set("M.n", 1)
     state:Watch({ "M.n" }, function(s) seen[#seen + 1] = s:Get("M.n") end, true)
+
     state:Watch({ "M.n" }, function(s)
         if (s:Get("M.n") == 2) and not bounced then
             bounced = true
             s:Set("M.n", 1)
         end
     end, true)
+
     state:EndBatch()
     eq(state:Get("M.n"), 1)
     eq(table.concat(seen, ","), "2,1", "it hears the row move off its baseline, and back")
@@ -121,6 +134,7 @@ test("stopping a module from its own OnDisable stops it once and releases each d
             module:SetEnabled(false)
         end,
         uses = { "Fact" } })
+
     Start(h)
     addon.State:Set("User.enabled", false)
     eq(stops, 1)
@@ -132,6 +146,7 @@ end)
 test("a module can't register handlers or watchers while stopping or stopped", function()
     local h, addon = NewAddOn()
     local results = {}
+
     local module = addon:Module("M", { label = "M", OnDisable = function(stopping)
         results.on = pcall(stopping.On, stopping, "PLAYER_TARGET_CHANGED", function() end)
         results.watch = pcall(stopping.Watch, stopping, { "M.enabled" }, function() end)
@@ -153,6 +168,7 @@ test("a locked runtime row is refused at compile: stopping couldn't reset it", f
             { default = 0, kind = "number", lockedBy = "M.lock", name = "fact", persist = false },
         },
         toggle = false })
+
     h:ExpectErrors("lockedBy only applies to persisted rows")
     Start(h)
     falsy(addon.Started)
@@ -165,6 +181,7 @@ test("a character collection without a per-character variable is refused by name
             { fields = { { default = 0, kind = "number", name = "n" } }, limit = 5, name = "people", scope = "character" },
         },
         toggle = false })
+
     h:ExpectErrors("needs the addon's savedVariablePerCharacter")
     Start(h)
     falsy(addon.Started)
@@ -177,6 +194,7 @@ test("releasing a held button after its module stopped says nothing", function()
     addon:Module("M", { commands = {
             { held = true, label = "Hold", name = "hold", run = function(_, phase) phases[#phases + 1] = phase end } },
         label = "M" })
+
     Start(h)
     addon.Commands:Run("M.hold", nil, "down", "gamepad")
     addon.State:Set("M.enabled", false)
@@ -226,6 +244,7 @@ test("trimming a collection far over its limit asks keep once per key", function
     for i = 1, 40 do
         people[("P%02d"):format(i)] = { seen = i }
     end
+
     local h, addon = NewAddOn({ harness = { saved = { TestDB = { ["M.people"] = people } } } })
     local asked = 0
 
@@ -234,10 +253,12 @@ test("trimming a collection far over its limit asks keep once per key", function
                 { default = 0, kind = "number", name = "seen" } },
         keep = function(key)
             asked = (asked + 1)
+
             return (key == "P01")
         end,
         limit = 10, name = "people" } },
         toggle = false })
+
     Start(h)
     local records = addon.Modules.M.Records.people
 
@@ -247,7 +268,7 @@ test("trimming a collection far over its limit asks keep once per key", function
     eq(asked, 40)
 end)
 
-Harness.DefineAddOn("HalfLoaded", { savedVariables = { "HalfDB" }, dependencies = { "ByteTerrace_Core" }, sources = {
+Harness.DefineAddOn("HalfLoaded", { dependencies = { "ByteTerrace_Core" }, savedVariables = { "HalfDB" }, sources = {
     [[local addon = ByteTerrace.NewAddOn({ name = "HalfLoaded", savedVariable = "HalfDB" })
       addon:Module("Good", { toggle = false, state = { { name = "n", kind = "number", default = 0 } } })
       local addonName, ns = ...
@@ -314,6 +335,7 @@ test("a rule registered in a batch's last publish round still takes its first ve
                 when = function() return true end })
         end
     end, true)
+
     state:Set("M.n", 1)
     eq(verdicts, 1, "the batch settled: nothing to report")
 end)
@@ -326,6 +348,7 @@ test("an extra EndBatch in a watcher is refused and leaves publishing intact", f
             { default = 0, kind = "number", name = "b", persist = false },
         },
         toggle = false })
+
     Start(h)
     local state, heard = addon.State, 0
 
@@ -357,7 +380,9 @@ test("a keep function that errors while a collection loads costs the addon nothi
     addon:Module("M", { records = { { evict = "seen", fields = { { default = 0, kind = "number", name = "seen" } },
         keep = function() error("keep broke") end, limit = 2, name = "people" } },
         toggle = false })
-    h:ExpectErrors("keep broke", "keep broke", "keep broke") -- asked once per record
+
+    -- asked once per record
+    h:ExpectErrors("keep broke", "keep broke", "keep broke")
     Start(h)
     truthy(addon.Started)
     eq(addon.Modules.M.Records.people:Count(), 2)

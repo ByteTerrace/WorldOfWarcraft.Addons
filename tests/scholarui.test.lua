@@ -18,8 +18,10 @@ local function Watch(h)
 
     view.Show = function(puzzle, info)
         watched.puzzle = puzzle
+
         return show(puzzle, info)
     end
+
     return watched
 end
 
@@ -46,10 +48,12 @@ test("the right answer earns a star, closes the riddle and resets the timer", fu
     local h, addon = LoadKid({ ["Scholar.pending"] = true })
 
     truthy(Showing(h), "a pending riddle appears at login")
+
     -- Try every key; exactly one is right.
     for key = 1, 4 do
         h:Key(tostring(key), true)
     end
+
     h:Advance(2)
     falsy(Showing(h))
     eq(addon.State:Get("Scholar.stars"), 1)
@@ -63,11 +67,13 @@ test("a star that reaches a new rank shows a card once the celebration ends", fu
 
         return (((card ~= nil) and card:IsShown() and Reveal(Harness.State(card.Title).text)) or nil)
     end
+
     local h = LoadKid({ ["Scholar.pending"] = true, ["Scholar.stars"] = 9 })
 
     for key = 1, 4 do
         h:Key(tostring(key), true)
     end
+
     eq(Card(h), nil, "not over the celebration")
     h:Advance(2)
     eq(Card(h), "New rank: Journeyman!")
@@ -76,6 +82,7 @@ test("a star that reaches a new rank shows a card once the celebration ends", fu
     for key = 1, 4 do
         later:Key(tostring(key), true)
     end
+
     later:Advance(2)
     eq(later.ns.Addon.State:Get("Scholar.stars"), 11)
     eq(Card(later), nil, "a star within a rank shows none")
@@ -87,6 +94,7 @@ test("turning the challenge off right after a right answer still finishes the ri
     for key = 1, 4 do
         h:Key(tostring(key), true)
     end
+
     eq(addon.State:Get("Scholar.stars"), 1)
     addon.State:Set("Scholar.enabled", false)
     eq(addon.State:Get("Scholar.pending"), false, "the solved riddle isn't due again")
@@ -117,8 +125,10 @@ test("a riddle that comes back after a fight keeps its wrong answers and its Ski
 
     view.Show = function(shown, info)
         puzzle = shown
+
         return show(shown, info)
     end
+
     h:Slash("/tlk puzzle")
     local wrong = (((puzzle.answer == 1) and 2) or 1)
 
@@ -190,6 +200,7 @@ test("the controller answers with face buttons", function()
         h:Gamepad(key, true)
         h:Gamepad(key, false)
     end
+
     h:Advance(2)
     eq(addon.State:Get("Scholar.stars"), 1)
     falsy(Showing(h))
@@ -216,6 +227,7 @@ test("a parent's PIN locks the settings until unlocked", function()
     for i, page in ipairs(window.Pages) do
         if page.name == "Scholar's challenge" then window:Show(i) end
     end
+
     local button = window.Controls[addon.State:Id("Scholar.mode")]
     local label = button.Label:GetText()
 
@@ -274,8 +286,10 @@ test("lock and unlock say what's wrong, and a bare lock locks again with the par
 
     local function Said(line)
         h:Slash(line)
+
         return h.printed[#h.printed]
     end
+
     truthy(Said("/tlk unlock 2468"):find("aren't locked", 1, true), "no PIN yet")
     truthy(Said("/tlk lock"):find("Usage: /tlk lock <pin>", 1, true), "no PIN to lock with")
     truthy(Said("/tlk lock 12"):find("Usage: /tlk lock <pin> (4 to 8 digits)", 1, true))
@@ -379,6 +393,7 @@ test("a /reload during the celebration doesn't ask another riddle", function()
     for key = 1, 4 do
         h:Key(tostring(key), true)
     end
+
     truthy(Showing(h), "the celebration is still on screen")
     eq(h.env.TheLanKrewToolKitCharDB["Scholar.pending"], nil, "the riddle is no longer due in the saved variables")
     h:Reload()
@@ -392,6 +407,7 @@ test("a fight during the celebration sends it away for good", function()
     for key = 1, 4 do
         h:Key(tostring(key), true)
     end
+
     h:EnterCombat()
     falsy(Showing(h), "steps aside")
     h:LeaveCombat()
@@ -405,15 +421,18 @@ test("stars reach the Krew", function()
     local h = LoadKid({ ["Scholar.pending"] = true })
 
     h:JoinGroup("party", { "Mom" })
+
     for key = 1, 4 do
         h:Key(tostring(key), true)
     end
+
     h:Advance(3)
     local shared = false
 
     for _, message in ipairs(h.addonMessages) do
         if message.message == "SCHOLAR:1" then shared = true end
     end
+
     truthy(shared)
 end)
 
@@ -431,6 +450,7 @@ local function Screen()
 
     view.Show(Shares, { canSpeak = true, gentle = false, keys = { "1", "2", "3", "4" }, nextAt = 10,
         nextRank = "Journeyman", progress = 0.2, rank = "Apprentice", stars = 2, streak = 2 })
+
     return h, view, view.Frame()
 end
 
@@ -480,8 +500,10 @@ test("right and wrong answers look different, and the hint says so", function()
     falsy(frame.Buttons[1]:IsEnabled())
     truthy(Text(frame.Feedback.Text):find("Hint:", 1, true))
     eq(frame.Buttons[1].State, "wrong")
+
     view.Correct(3, Shares.explanation, { earned = 1, levelUp = true, nextAt = 10, nextRank = "Journeyman",
         progress = 0.3, rank = "Apprentice", stars = 3, streak = 3 })
+
     truthy(Text(frame.Feedback.Text):find("Correct!", 1, true))
     eq(frame.Buttons[3].State, "right")
     eq(frame.Buttons[2].State, "dim")
@@ -495,6 +517,7 @@ test("long answers get a smaller font than short ones", function()
         hint = "", kind = "reading.vocab", prompt = "What does \"brave\" mean?", subject = "reading",
         title = "Word Wizard" },
         { gentle = true, keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 0 })
+
     truthy(Harness.State(frame.Buttons[1].Text).fontObject ~= short)
     truthy(Text(frame.Tag):find("READING", 1, true))
 end)
@@ -513,10 +536,12 @@ test("a right answer raises a +1 and the streak says the riddles got harder", fu
 
     view.Correct(3, Shares.explanation, { earned = 1, levelUp = true, nextAt = 10, nextRank = "Journeyman",
         progress = 0.3, rank = "Apprentice", stars = 3, streak = 3 })
+
     eq(Text(frame.Gain), "+1")
     truthy(frame.Rise:IsPlaying())
     eq(Text(frame.Stars), "3")
     truthy(Text(frame.Streak):find("harder riddles", 1, true))
+
     for _, button in ipairs(frame.Buttons) do
         falsy(button:IsEnabled(), "no more answers after the right one")
     end
@@ -537,6 +562,7 @@ test("an answer glows under the mouse, a missed one doesn't, and so do the foote
 
         return ("%.2f,%.2f,%.2f"):format(color[1], color[2], color[3])
     end
+
     local gold, edge = "1.00,0.82,0.00", "0.45,0.36,0.17"
     local button = frame.Buttons[1]
 
@@ -580,6 +606,7 @@ test("a groups riddle is drawn as bags of items", function()
         prompt = "Pip the gnome fills 5 bags with 6 apples in each bag. How many apples is that?", subject = "math",
         title = "Stacks and Stacks" },
         { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 3 })
+
     local shown = 0
 
     for _, icon in ipairs(frame.Pictures.Icons) do
@@ -588,12 +615,14 @@ test("a groups riddle is drawn as bags of items", function()
             truthy(Harness.State(icon).texture:find("INV_Misc_Food_19", 1, true), "apples look like apples")
         end
     end
+
     eq(shown, 30)
     local bags = 0
 
     for _, card in ipairs(frame.Pictures.Cards) do
         if card:IsShown() then bags = (bags + 1) end
     end
+
     eq(bags, 5)
     view.Show(Shares, { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 3 })
     falsy(frame.Pictures:IsShown(), "no picture, no picture area")
@@ -608,11 +637,14 @@ test("a picture draws the riddle's own item, whatever words its story uses", fun
         for _, icon in ipairs(frame.Pictures.Icons) do
             if icon:IsShown() then seen[Harness.State(icon).texture] = true end
         end
+
         local list = {}
 
         for texture in pairs(seen) do list[#list + 1] = texture end
+
         return table.concat(list, ",")
     end
+
     local riddle = { answer = 1, choices = { "5", "6", "4", "7" }, explanation = "", hint = "", kind = "math.add",
         picture = { a = 3, b = 2, item = "mushroom", kind = "join" },
         prompt = "In Barrow Den, Pip picks 3 mushrooms. Then Pip picks 2 more. How many mushrooms is that?",
@@ -633,11 +665,13 @@ test("taking away crosses out the ones taken", function()
         prompt = "A basket holds 7 apples. A grumpy murloc grabs 3 and waddles away. How many apples are left?",
         subject = "math", title = "Take Away" },
         { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 3 })
+
     local crossed = 0
 
     for _, icon in ipairs(frame.Pictures.Icons) do
         if icon:IsShown() and icon.Cross:IsShown() then crossed = (crossed + 1) end
     end
+
     eq(crossed, 3)
 end)
 
@@ -669,6 +703,7 @@ local function PadKid(extra)
     local char = { ["Scholar.enabled"] = true, ["Scholar.pending"] = true }
 
     for key, value in pairs(extra or {}) do char[key] = value end
+
     local h = Harness.New({ saved = { TheLanKrewToolKitCharDB = char } })
 
     h.labelStyle = "Letters"
@@ -748,6 +783,7 @@ test("Read aloud and Skip live in the footer, never over the question", function
     view.Show({ answer = 1, choices = { "hat", "dog", "sun", "cup" }, explanation = "", hint = "",
         kind = "reading.rhyme", prompt = "Which word rhymes with \"cat\"?", subject = "reading", title = "Rhyme Time" },
         { actions = { hint = "H", skip = "Esc", speak = "R" }, canSpeak = true, keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 1 })
+
     local speak, hint = Point(frame.Speak), Point(frame.Hint)
 
     eq(speak.point, "TOPRIGHT")
@@ -773,11 +809,13 @@ test("an unscramble shows its letters as tiles, not in the question text", funct
         prompt = "A gnome mixed up the letters of a word!\nR O F E T S\nClue: Lots and lots of trees.\nWhich word is it?",
         subject = "reading", tiles = { "R", "O", "F", "E", "T", "S" }, title = "Scrambled Scroll" },
         { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 1 })
+
     local letters = {}
 
     for _, tile in ipairs(frame.Pictures.Tiles) do
         if tile:IsShown() then letters[#letters + 1] = Text(tile.Letter) end
     end
+
     eq(table.concat(letters), "ROFETS")
     eq(Text(frame.Question), "Which word is it?")
     falsy(Text(frame.Story):find("R O F", 1, true), "the letters aren't repeated in the text")
@@ -785,11 +823,14 @@ test("an unscramble shows its letters as tiles, not in the question text", funct
     falsy(Text(frame.Story):find("Clue:", 1, true))
     view.Wrong(1, "Clue: Lots and lots of trees.", false)
     falsy(Text(frame.Feedback.Text):find("Clue:", 1, true), "no \"Hint: Clue:\"")
+
     view.Show({ answer = 1, choices = { "4", "5", "3", "6" }, explanation = "", hint = "", kind = "math.count",
         picture = { kind = "count", n = 4, row = "* * * *" },
         prompt = "Count the stars:\n* * * *\nHow many stars are there?", subject = "math", title = "Count Them" },
         { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 1 })
+
     truthy(frame.Pictures:IsVisible(), "the next riddle has a picture")
+
     for _, tile in ipairs(frame.Pictures.Tiles) do
         falsy(tile:IsVisible(), "and none of the last riddle's tiles")
     end
@@ -802,11 +843,13 @@ test("a counting riddle draws its items instead of a row of symbols", function()
         picture = { kind = "count", n = 4, row = "* * * *" },
         prompt = "Count the stars:\n* * * *\nHow many stars are there?", subject = "math", title = "Count Them" },
         { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 1 })
+
     local shown = 0
 
     for _, icon in ipairs(frame.Pictures.Icons) do
         if icon:IsShown() then shown = (shown + 1) end
     end
+
     eq(shown, 4)
     falsy(Text(frame.Story):find("*", 1, true))
 end)
@@ -817,6 +860,7 @@ test("dimmed and wrong answers dim their keycaps too", function()
     local function Red(button)
         return Harness.State(button.Keycap).color[1]
     end
+
     local normal = Red(frame.Buttons[1])
 
     view.Wrong(1, Shares.hint, false)

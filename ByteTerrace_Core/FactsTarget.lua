@@ -1,5 +1,5 @@
--- The target fact (Facts.lua): what your target is, for features that react to it. A demand
--- fact: it runs only while a module that uses it runs (uses = { "target" }).
+-- The target fact (Facts.lua): what your target is, for features that react to it. A demand fact: it runs only while a
+-- module that uses it runs (uses = { "target" }).
 --
 --   target.serial       bumps on every target change.
 --   target.enemyPlayer  the target is an attackable player (re-checked when a duel or PvP flag
@@ -13,14 +13,14 @@
 --                       it counts for a target that became attackable while you targeted it (the
 --                       duel starting), never for one attackable when you targeted it or reloaded.
 --
--- Health changes are the hot path in a fight: they only re-read whether the target lives (one
--- API call). Attackability and rank re-read on the events that change them, and attackability on
--- health changes too while the target is a player who isn't an enemy yet (a duel about to start),
--- in case the client doesn't say so otherwise. Whether the target is a player is read once per
--- target, and its rank once per target too, only when it's attackable.
+-- Health changes are the hot path in a fight: they only re-read whether the target lives (one API call). Attackability
+-- and rank re-read on the events that change them, and attackability on health changes too while the target is a player
+-- who isn't an enemy yet (a duel about to start), in case the client doesn't say so otherwise. Whether the target is a
+-- player is read once per target, and its rank once per target too, only when it's attackable.
 
 local FormidableClassifications = { elite = true, rareelite = true, worldboss = true }
-local SkullLevel = -1 -- UnitLevel of a unit too far above you to show its level
+-- UnitLevel of a unit too far above you to show its level
+local SkullLevel = -1
 
 local issecretvalue, UnitCanAttack, UnitClassification = issecretvalue, UnitCanAttack, UnitClassification
 local UnitExists, UnitIsBossMob, UnitIsDeadOrGhost = UnitExists, UnitIsBossMob, UnitIsDeadOrGhost
@@ -37,9 +37,11 @@ local function IsFormidable()
     if not issecretvalue(classification) and FormidableClassifications[classification] then
         return true
     end
+
     if IsTrue(UnitIsBossMob("target")) then
         return true
     end
+
     local level = UnitLevel("target")
 
     return (not issecretvalue(level) and (level == SkullLevel))
@@ -51,31 +53,38 @@ ByteTerrace.Facts.target = {
         local state = module.Addon.State
         local serial, enemy, formidable = module:Id("serial"), module:Id("enemyPlayer"), module:Id("formidable")
         local alive, died, duelEnded = module:Id("alive"), module:Id("died"), module:Id("duelEnded")
-        local isPlayer = false -- the target is a player, as of the last target change
-        local rank             -- the target's rank is formidable; nil until read for this target
-        local dueling = false  -- the target became attackable while targeted: your duel partner
+        -- the target is a player, as of the last target change
+        local isPlayer = false
+        -- the target's rank is formidable; nil until read for this target
+        local rank
+        -- the target became attackable while targeted: your duel partner
+        local dueling = false
 
         -- Whether the target is an attackable player, formidable, and alive.
         local function Read()
             if not IsTrue(UnitExists("target")) then
                 return false, false, false
             end
+
             local hostile = IsTrue(UnitCanAttack("player", "target"))
 
             if hostile and (rank == nil) then
                 rank = IsFormidable()
             end
+
             return (hostile and isPlayer), (hostile and rank), not IsTrue(UnitIsDeadOrGhost("target"))
         end
 
-        -- The same target lives or dies; wasEnemy says it was an enemy player while alive (one may
-        -- stop being attackable as it dies).
+        -- The same target lives or dies; wasEnemy says it was an enemy player while alive (one may stop being
+        -- attackable as it dies).
         local function Live(isAlive, wasEnemy)
             if isAlive and not state.Values[alive] then
-                state:Set(died, false) -- resurrected: a death from here on counts again
+                -- resurrected: a death from here on counts again
+                state:Set(died, false)
             elseif not isAlive and state.Values[alive] and wasEnemy and not IsTrue(UnitIsFeignDeath("target")) then
                 state:Set(died, true)
             end
+
             state:Set(alive, isAlive)
         end
 
@@ -84,9 +93,11 @@ ByteTerrace.Facts.target = {
             local isEnemy, isFormidable, isAlive = Read()
 
             Live(isAlive, isEnemy or state.Values[enemy])
+
             if isEnemy and isAlive and not state.Values[enemy] then
                 dueling = true
             end
+
             state:Set(enemy, isEnemy)
             state:Set(formidable, isFormidable)
         end
@@ -113,29 +124,35 @@ ByteTerrace.Facts.target = {
             state:Set(alive, isAlive)
         end)
 
-        -- Duels end at 1 HP. Fleeing out of bounds forfeits, so that doesn't count. DUEL_FINISHED
-        -- names no one (it also ends a declined request), so it counts only for your duel partner.
+        -- Duels end at 1 HP. Fleeing out of bounds forfeits, so that doesn't count. DUEL_FINISHED names no one (it also
+        -- ends a declined request), so it counts only for your duel partner.
         local outOfBounds = false
 
         module:On("DUEL_OUTOFBOUNDS", function() outOfBounds = true end)
         module:On("DUEL_INBOUNDS", function() outOfBounds = false end)
+
         module:On("DUEL_FINISHED", function()
             if dueling and state.Values[enemy] and state.Values[alive] and not outOfBounds then
                 state:Set(duelEnded, true)
             end
+
             outOfBounds = false
         end)
+
         module:On("UNIT_FACTION", Refresh, "target")
         module:On("UNIT_FLAGS", Refresh, "target")
+
         local function RankChanged()
             rank = nil
             Refresh()
         end
+
         module:On("UNIT_CLASSIFICATION_CHANGED", RankChanged, "target")
         module:On("UNIT_LEVEL", RankChanged, "target")
         isPlayer = IsTrue(UnitIsPlayer("target"))
         Refresh()
-        dueling = false -- an attackable target at a /reload may be anyone
+        -- an attackable target at a /reload may be anyone
+        dueling = false
     end,
     state = {
         { default = 0, kind = "number", name = "serial", persist = false },

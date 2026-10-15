@@ -11,7 +11,7 @@ import { buildOf } from "./wow.mjs";
 
 // The harness files (tests/harness), in the order they run; every file there is one of them.
 export const HARNESS_FILES = [
-    "wow.lua", "secrets.lua", "widgets.lua", "input.lua", "group.lua", "units.lua", "world.lua", "ui.lua", "meter.lua",
+    "wow.lua", "secrets.lua", "layout.lua", "widgets.lua", "input.lua", "group.lua", "units.lua", "world.lua", "ui.lua", "meter.lua",
     "speech.lua", "quests.lua", "env.lua", "probes.lua",
 ];
 

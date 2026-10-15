@@ -4,6 +4,7 @@ local function Enemy(fields)
     local unit = { canAttack = true, isPlayer = true }
 
     for key, value in pairs(fields or {}) do unit[key] = value end
+
     return unit
 end
 
@@ -30,22 +31,23 @@ test("secret values are opaque userdata that refuse every computation", function
     eq(Reveal(health), 100)
 end)
 
--- secrets.operations: the client lets addon code concatenate, tostring and format a secret, and
--- each result is a secret string.
+-- secrets.operations: the client lets addon code concatenate, tostring and format a secret, and each result is a secret
+-- string.
 test("concatenation, tostring and format turn a secret into a secret string", function()
     local h = Harness.New()
     local env = h.env
     local health = env.UnitHealth("player")
+
     local results = {
-        concat = ("hp: " .. health), concatRight = (health .. " hp"), tostring = env.tostring(health),
-        format = env.string.format("%d", health), formatGlobal = env.format("%s", health),
-        method = ("%d hp"):format(health),
+        concat = ("hp: " .. health), concatRight = (health .. " hp"), format = env.string.format("%d", health),
+        formatGlobal = env.format("%s", health), method = ("%d hp"):format(health), tostring = env.tostring(health),
     }
 
     for name, result in pairs(results) do
         truthy(env.issecretvalue(result), name .. " is secret")
         eq(env.type(result), "string", name .. " is a string")
     end
+
     eq(Reveal(results.concat), "hp: 100")
     eq(Reveal(results.method), "100 hp")
     eq(("%d"):format(7), "7", "plain formatting is untouched")
@@ -74,8 +76,8 @@ test("wrapping keeps return arity: nil stays nil and trailing values survive", f
     eq(Reveal(surname), Harness.DEFAULT_SURNAME, "the trailing surname survives")
 end)
 
--- UnitIsAFK is secret during chat messaging lockdown (encounter, challenge mode, PvP match,
--- restricted map, chat): the witness for a restriction being enforced.
+-- UnitIsAFK is secret during chat messaging lockdown (encounter, challenge mode, PvP match, restricted map, chat): the
+-- witness for a restriction being enforced.
 local function Restricted(h)
     return h.env.issecretvalue(h.env.UnitIsAFK("player"))
 end
@@ -96,10 +98,12 @@ test("restriction changes fire Activating, then Active once enforced, and Inacti
     local frame = env.CreateFrame("Frame")
 
     frame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+
     frame:SetScript("OnEvent", function(_, _, kind, state)
         seen[#seen + 1] = ("%d:%d active=%s secret=%s"):format(kind, state,
             tostring(env.C_RestrictedActions.IsAddOnRestrictionActive(kind)), tostring(Restricted(h)))
     end)
+
     h:SetRestriction("Encounter", true)
     truthy(env.C_RestrictedActions.IsAddOnRestrictionActive(env.Enum.AddOnRestrictionType.Encounter))
     h:SetRestriction("Encounter", false)
@@ -149,7 +153,8 @@ test("addon code is tainted: a secret argument is refused unless the API allows 
     truthy(h.env.issecretvalue(health), "issecretvalue takes it by reference")
     local text = frame:CreateFontString()
 
-    text:SetText(health) -- AllowedWhenTainted
+    -- AllowedWhenTainted
+    text:SetText(health)
     local bar = h.env.CreateFrame("StatusBar")
 
     bar:SetValue(health)
@@ -179,8 +184,8 @@ test("SetFormattedText formats a secret into a secret string", function()
     eq(Reveal(text:GetText()), "42%")
 end)
 
--- Blizzard_Game routes ADDON_ACTION_BLOCKED to a "blocked" message and ADDON_ACTION_FORBIDDEN to
--- a popup; the client itself skips the call and the caller keeps running.
+-- Blizzard_Game routes ADDON_ACTION_BLOCKED to a "blocked" message and ADDON_ACTION_FORBIDDEN to a popup; the client
+-- itself skips the call and the caller keeps running.
 local function WatchBlocked(h)
     local seen = {}
     local frame = h.env.CreateFrame("Frame")
@@ -188,13 +193,15 @@ local function WatchBlocked(h)
     frame:RegisterEvent("ADDON_ACTION_BLOCKED")
     frame:RegisterEvent("ADDON_ACTION_FORBIDDEN")
     frame:SetScript("OnEvent", function(_, event, addon, fn) seen[#seen + 1] = (event .. ":" .. addon .. ":" .. fn) end)
+
     return seen
 end
 
 test("protected methods on protected frames are blocked during lockdown: the call does nothing, the caller continues", function()
     local h = Harness.New()
 
-    h:ExpectBlocked(2) -- the calls under test
+    -- the calls under test
+    h:ExpectBlocked(2)
     local seen = WatchBlocked(h)
     local secure = h.env.CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
     local holder = h.env.CreateFrame("Frame")
@@ -224,7 +231,8 @@ end)
 test("opening Blizzard's settings panel from addon code is forbidden: it froze the client on close", function()
     local h = Harness.New()
 
-    h:ExpectBlocked(3) -- the calls under test
+    -- the calls under test
+    h:ExpectBlocked(3)
     h.env.Settings.OpenToCategory(7)
     h.env.SettingsPanel:OpenToCategory(7)
     h.env.SettingsPanel:Open()
@@ -235,7 +243,8 @@ end)
 test("a protected global is forbidden to addon code at any time", function()
     local h = Harness.New()
 
-    h:ExpectBlocked(1) -- the calls under test
+    -- the calls under test
+    h:ExpectBlocked(1)
     local seen = WatchBlocked(h)
     local ran = false
     local compare = h:WrapFunction("C_TooltipComparison.CompareItem", function() ran = true end)
@@ -249,15 +258,18 @@ end)
 test("HasRestrictions: a specific marker replaces the lockdown rule, otherwise lockdown blocks", function()
     local h = Harness.New()
 
-    h:ExpectBlocked(1) -- the calls under test
+    -- the calls under test
+    h:ExpectBlocked(1)
     local calls = 0
     local send = h:WrapFunction("C_ChatInfo.SendChatMessage", function() calls = (calls + 1) end)
     local propagate = h.env.CreateFrame("Frame")
 
     h:EnterCombat()
-    send("hi", "PARTY") -- RestrictedForMacroChatMessages: macros only
+    -- RestrictedForMacroChatMessages: macros only
+    send("hi", "PARTY")
     eq(calls, 1)
-    propagate:SetPropagateKeyboardInput(true) -- HasRestrictions, no marker: blocked in lockdown
+    -- HasRestrictions, no marker: blocked in lockdown
+    propagate:SetPropagateKeyboardInput(true)
     eq(h.blocked[1], "Frame:SetPropagateKeyboardInput (SimpleFrameAPI)")
 end)
 
@@ -431,6 +443,7 @@ test("Advance refuses a timer that keeps rescheduling itself", function()
     local n = 0
 
     local function Tick() n = (n + 1); h.env.C_Timer.After(0, Tick) end
+
     h.env.C_Timer.After(0, Tick)
     throws(function() h:Advance(0) end, "keeps rescheduling itself")
     eq(n, Harness.MAX_TIMER_CALLBACKS)
@@ -480,12 +493,14 @@ test("a dispatch goes to the frames registered when it starts, and handler error
     local first = h.env.CreateFrame("Frame")
 
     first:RegisterEvent("PLAYER_TARGET_CHANGED")
+
     first:SetScript("OnEvent", function()
         late = h.env.CreateFrame("Frame")
         late:RegisterEvent("PLAYER_TARGET_CHANGED")
         late:SetScript("OnEvent", function() late.got = true end)
         error("first handler fails")
     end)
+
     local second = h.env.CreateFrame("Frame")
 
     second:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -509,8 +524,10 @@ test("a test fires only payloads the event documents: every value, no extras, se
     throws(function() h:Fire("PLAYER_LEVEL_UP", unpack(level)) end, "PLAYER_LEVEL_UP has no secret flags, so payload #1 can't be secret")
     throws(function() h:Fire("CHAT_MSG_ADDON", "TLK", "hi", "PARTY", 42, "", 0, 0, "", 0) end, "payload #4 is a cstring %(string%), got a number")
     h:Fire("PLAYER_LEVEL_UP", 12, 0, 0, 0, 0, 0, 0, 0, 0)
-    h:Fire("RUNE_POWER_UPDATE", Secret(1), true) -- SecretPayloads
-    h:FireChat("CHAT_MSG_SAY", "hi", "Bob Doe") -- every value, discordInfo included
+    -- SecretPayloads
+    h:Fire("RUNE_POWER_UPDATE", Secret(1), true)
+    -- every value, discordInfo included
+    h:FireChat("CHAT_MSG_SAY", "hi", "Bob Doe")
     h:Fire("PLAYER_DEAD")
 end)
 
@@ -520,11 +537,13 @@ test("a documented function's arguments that aren't nilable can't be nil; a Defa
 
     throws(function() speak(nil, "hi", 0, 100) end, "C_VoiceChat.SpeakText: argument #1 %(number%) isn't nilable")
     throws(function() speak(0, "hi", 0) end, "argument #4 %(number%) isn't nilable")
-    speak(0, "hi", 0, 100) -- overlap has a Default
+    -- overlap has a Default
+    speak(0, "hi", 0, 100)
     falsy(h.env.issecretvalue(nil), "issecretvalue takes any value, nil included")
     local frame = h.env.CreateFrame("Frame")
 
-    frame:SetPoint("CENTER") -- widget methods have overloads the docs can't state
+    -- widget methods have overloads the docs can't state
+    frame:SetPoint("CENTER")
     eq(#h.spoken, 1)
 end)
 
@@ -562,7 +581,8 @@ test("only real API is allowed", function()
 
     throws(function() frame:RegisterEvent("NOT_A_REAL_EVENT") end, "unknown event")
     throws(function() frame:NotARealMethod() end, "no method")
-    throws(function() frame:SetVertexColor(1, 1, 1) end, "no method") -- a Region method, not a Frame's
+    -- a Region method, not a Frame's
+    throws(function() frame:SetVertexColor(1, 1, 1) end, "no method")
     throws(function() return h.env.NotARealGlobal end, "undefined global")
     eq(h.env.string.dump, nil, "the client has no string.dump")
     throws(function() return h.env.SOUNDKIT.NOT_MODELED end, "SOUNDKIT")
@@ -753,6 +773,7 @@ test("UnitPowerType returns the token for each type", function()
     local _, token = h.env.UnitPowerType("player")
 
     eq(token, "RAGE")
+
     for powerType, expected in pairs({ [0] = "MANA", [2] = "FOCUS", [3] = "ENERGY", [6] = "RUNIC_POWER" }) do
         h.player.powerType = powerType
         eq(select(2, h.env.UnitPowerType("player")), expected)

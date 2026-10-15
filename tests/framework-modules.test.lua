@@ -1,5 +1,5 @@
--- ByteTerrace framework: what a module owns beyond handlers and watchers (timers, rising counts,
--- demand dependencies, group messages, sounds), names, slash registration and the debug command.
+-- ByteTerrace framework: what a module owns beyond handlers and watchers (timers, rising counts, demand dependencies,
+-- group messages, sounds), names, slash registration and the debug command.
 
 local Kit = use("framework")
 
@@ -9,6 +9,7 @@ local Start = Kit.Start
 
 test("a module's timer runs its callback as one state batch", function()
     local h, addon = NewAddOn()
+
     local module = addon:Module("M", { label = "M", state = {
         { default = 0, kind = "number", name = "a" }, { default = 0, kind = "number", name = "b" } } })
 
@@ -16,10 +17,12 @@ test("a module's timer runs its callback as one state batch", function()
     local runs = 0
 
     addon.State:Watch({ "M.a", "M.b" }, function() runs = (runs + 1) end, true)
+
     module:After(2, function()
         module:Set("a", 1)
         module:Set("b", 1)
     end)
+
     h:Advance(1)
     eq(runs, 0, "not due yet")
     h:Advance(1)
@@ -71,6 +74,7 @@ test("scheduling a timer from OnDisable is an error, not a timer that silently n
     addon:Module("M", { label = "M", OnDisable = function(module)
         scheduled = pcall(module.After, module, 1, function() end)
     end })
+
     Start(h)
     addon.State:Set("M.enabled", false)
     eq(scheduled, false)
@@ -98,6 +102,7 @@ test("OnIncrease runs when a count rises, not when it falls or holds", function(
     addon:Module("Reader", { label = "Reader", OnEnable = function(reader)
         reader:OnIncrease("M.count", function(_, count, previous) seen[#seen + 1] = (previous .. ">" .. count) end)
     end })
+
     Start(h)
     module:Set("count", 1)
     module:Set("count", 3)
@@ -109,6 +114,7 @@ end)
 test("a demand module runs only while a module that uses it runs", function()
     local h, addon = NewAddOn()
     local order = {}
+
     local fact = addon:Module("Fact", { demand = true,
         OnEnable = function(module)
             order[#order + 1] = "fact"
@@ -116,6 +122,7 @@ test("a demand module runs only while a module that uses it runs", function()
             module:Set("value", 7)
         end,
         state = { { default = 0, kind = "number", name = "value", persist = false } }, toggle = false })
+
     local firstReading
 
     addon:Module("A", { label = "A",
@@ -125,6 +132,7 @@ test("a demand module runs only while a module that uses it runs", function()
             module:On("PLAYER_TARGET_CHANGED", function() order[#order + 1] = "A handler" end)
         end,
         uses = { "Fact" } })
+
     addon:Module("B", { default = false, label = "B", uses = { "Fact" } })
     Start(h)
     truthy(fact.Enabled)
@@ -147,8 +155,10 @@ test("a user declared before its dependency starts it fully, and stopping resets
     local h, addon = NewAddOn()
 
     addon:Module("User", { label = "User", uses = { "Late" } })
+
     local late = addon:Module("Late", { demand = true, OnEnable = function(module) module:Set("value", 5) end,
         state = { { default = 0, kind = "number", name = "value", persist = false } }, toggle = false, uses = { "Base" } })
+
     local base = addon:Module("Base", { demand = true, toggle = false })
 
     Start(h)
@@ -219,9 +229,11 @@ test("group messages keep one per interval from a bounded queue, and nothing whi
     module.Comms:Listen("PING", function() got = (got + 1) end)
     Start(h)
     h:JoinGroup("party", { "Bob" })
+
     for i = 1, 5 do
         module.Comms:Send("PING", i)
     end
+
     eq(#h.addonMessages, 1, "the first goes at once")
     eq(module.Comms:Queued(), 3, "3 wait their turn; the fifth was dropped")
     h:Advance(2)
@@ -244,6 +256,7 @@ local function Messages(h, from)
     for i = from or 1, #h.addonMessages do
         texts[#texts + 1] = h.addonMessages[i].message
     end
+
     return table.concat(texts, " ")
 end
 
@@ -254,9 +267,11 @@ test("an urgent message takes the newest ordinary message's place in a full queu
     Start(h)
     h:JoinGroup("party", { "Bob" })
     h:Slash("/test debug")
+
     for i = 1, 4 do
         module.Comms:Send("PING", i)
     end
+
     eq(module.Comms:Queued(), 3, "full")
     module.Comms:Send("RALLY", "now", true)
     eq(module.Comms:Queued(), 3)
@@ -264,11 +279,14 @@ test("an urgent message takes the newest ordinary message's place in a full queu
     module.Comms:Send("HELP", "me", true)
     h:Advance(10)
     eq(Messages(h), "PING:1 HELP:me RALLY:now PING:2", "urgent first; PING:4, then PING:3, made room")
+
     for i = 1, 5 do
         module.Comms:Send("SOS", i, true)
     end
+
     truthy(Printed(h):find("TestApp1 message SOS dropped: the queue is full", 1, true),
         "with every queued message urgent, the newcomer is dropped")
+
     h:Advance(10)
     eq(Messages(h, 5), "SOS:1 SOS:4 SOS:3 SOS:2", "the first went at once; the fifth found no room")
 end)
@@ -328,7 +346,8 @@ end)
 test("an alias the chat frame already imported is taken too", function()
     local h, addon = NewAddOn()
 
-    h.env.hash_SlashCmdList["/TEST"] = function() end -- the chat frame empties SlashCmdList into it on first use
+    -- the chat frame empties SlashCmdList into it on first use
+    h.env.hash_SlashCmdList["/TEST"] = function() end
     h:ExpectErrors("already taken")
     Start(h)
     truthy(addon.Started)
@@ -342,8 +361,10 @@ test("finding taken aliases never walks every global", function()
         if t == h.env then
             walks = (walks + 1)
         end
+
         return pairs(t)
     end)
+
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
     rawset(h.env, "TestDB", h.saved.TestDB)
@@ -358,6 +379,7 @@ test("debug status names running, stopped and demand modules, their records and 
     addon:Module("Fact", { demand = true, toggle = false })
     addon:Module("On", { label = "On", uses = { "Fact" } })
     addon:Module("Off", { default = false, label = "Off" })
+
     local ledger = addon:Module("Ledger", { records = { {
         fields = { { default = 0, kind = "number", name = "seen" } }, limit = 5, name = "people",
     } },
@@ -384,18 +406,22 @@ test("debug toggles debug output, explains itself, and lists at most a screenful
     for i = 1, 41 do
         rows[i] = { default = 0, kind = "number", name = ("row" .. i), persist = false }
     end
+
     for name, entry in pairs(__snapshot.events) do
         if not entry.HasRestrictions then
             events[#events + 1] = name
         end
     end
+
     table.sort(events)
+
     addon:Module("Big", { OnEnable = function(module)
             for i = 1, 41 do
                 module:On(events[i], function() end)
             end
         end,
         state = rows, toggle = false })
+
     Start(h)
     h:Slash("/test debug")
     eq(addon.State:Get("addon.debug"), true)
@@ -414,6 +440,7 @@ test("debug toggles debug output, explains itself, and lists at most a screenful
     h:Slash("/test debug trace nothing")
     truthy(Printed(h):find("No row matches 'nothing'.", 1, true), Printed(h))
     h:Slash("/test debug bogus")
+
     truthy(Printed(h):find("Usage: /test debug [status | events | work | rows <text> | trace <text> | trace off | cpu | profile | reset]", 1, true),
         Printed(h))
 end)
@@ -424,19 +451,24 @@ test("a sound bank plays only what's switched on, and defines each sound and tes
 
     throws(function() ByteTerrace.NewSoundBank(addon, { master = "Sounds.enabled" }) end,
         "needs the master and channel row names")
+
     local sounds = ByteTerrace.NewSoundBank(addon, { channel = "Sounds.channel", master = "Sounds.enabled" })
 
     sounds:Define("cheer", { file = "Cheer", label = "Cheer", row = "Sounds.cheer", word = "cheer" })
     sounds:Define("boo", { file = "Boo", label = "Boo", row = "Sounds.boo", word = "boo" })
+
     throws(function() sounds:Define("cheer", { file = "Yay", label = "Yay", row = "Sounds.cheer", word = "yay" }) end,
         "sound cheer %(yay%) is already defined")
+
     throws(function() sounds:Define("hiss", { file = "Hiss", label = "Hiss", row = "Sounds.boo", word = "boo" }) end,
         "sound hiss %(boo%) is already defined")
+
     addon:Module("Sounds", { label = "Sounds", state = {
         { default = "SFX", kind = "string", label = "Channel", name = "channel", values = { "Master", "SFX" } },
         sounds:Row("cheer", "Cheer", "When you win.", { "cheer" }),
         sounds:Row("boo", "Boo", "When you lose.", { "boo" }),
     } })
+
     h.files["Interface\\AddOns\\TestApp\\Media\\Cheer.ogg"] = true
     h.files["Interface\\AddOns\\TestApp\\Media\\Boo.ogg"] = true
     Start(h)
@@ -457,10 +489,13 @@ test("debug events counts dispatches per registered event; reset zeroes them", f
         module:On("UNIT_POWER_FREQUENT", function() end, "player")
         module:On("UNIT_POWER_FREQUENT", function() end, "target")
     end })
+
     Start(h)
+
     for _ = 1, 3 do
         h:Fire("PLAYER_TARGET_CHANGED")
     end
+
     h:Slash("/test debug events")
     local text = Printed(h)
 
@@ -474,6 +509,7 @@ end)
 
 test("debug rows shows values; debug trace prints changes until turned off", function()
     local h, addon = NewAddOn()
+
     local module = addon:Module("M", { label = "M", state = {
         { default = 0, kind = "number", name = "count", persist = false },
         { default = 0, kind = "number", name = "other", persist = false } } })
@@ -530,6 +566,7 @@ test("the counts cost no registrations: a quiet addon registers only what it han
     for event in pairs(Harness.State(addon.Events.Frame).events) do
         registered[#registered + 1] = event
     end
+
     table.sort(registered)
     eq(table.concat(registered, ","), "", "the client frame has no event registered")
 end)
@@ -538,6 +575,7 @@ test("an addon whose slash key another addon took reports it and registers no al
     local h, addon = NewAddOn()
 
     local function Theirs() end
+
     h.env.SlashCmdList.TESTAPP = Theirs
     h:ExpectErrors("slash command key TESTAPP is already registered; slash commands are off")
     Start(h)

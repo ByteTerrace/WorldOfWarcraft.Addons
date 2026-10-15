@@ -1,6 +1,6 @@
--- The death fact (Facts.lua): your deaths and who dealt them, for features that react to them. A
--- demand fact: it runs only while a module that uses it runs (uses = { "death" }). React with
--- module:OnIncrease on death.count (you died) or death.attributed (the killer rows are set).
+-- The death fact (Facts.lua): your deaths and who dealt them, for features that react to them. A demand fact: it runs
+-- only while a module that uses it runs (uses = { "death" }). React with module:OnIncrease on death.count (you died) or
+-- death.attributed (the killer rows are set).
 --
 --   death.count          your deaths this session.
 --   death.attributed     the death.count the killer rows describe; it rises once per death, after
@@ -14,29 +14,33 @@
 --   death.killerSpell    the killing blow's spell name; "" for a melee swing or unknown.
 --   death.killerDamage   the killing blow's damage; 0 when unknown.
 --
--- Who killed you comes from Blizzard's death recap: the damage meter's Deaths lists (the current
--- session, else the overall one) hold your death with its recap ID (readable even in combat).
--- This adapter uses events[1] as the killing blow, following Gethe/wow-ui-source's forever branch:
--- Interface/AddOns/Blizzard_DeathRecap/Mainline/Blizzard_DeathRecap.lua,
--- DeathRecapMixin:BuildDataProvider iterates C_DeathRecap.GetRecapEvents with ipairs and sets
--- elementData.causedDeath = i == 1. Its TOC gates it with [AllowLoadGameType mainline], which
--- covers camelot: Forever's TOCs add [ExcludeLoadGameType camelot] wherever mainline shouldn't.
--- An attacker the recap hides (hideCaster, which Blizzard's recap window honors) is unknown. The
--- recap may land a moment after PLAYER_DEAD, so the fact looks again on the meter's updates and at
--- RecapRetries, at most RecapWait seconds, then publishes the death as unknown. Recap IDs rise
--- with each death, so deaths take the new recaps in order: each new ID, oldest first, belongs to
--- the oldest death still owed one. A death that gave up still takes its recap if it comes within
--- LateWait, and sets it aside, so a later death never takes another death's recap.
+-- Who killed you comes from Blizzard's death recap: the damage meter's Deaths lists (the current session, else the
+-- overall one) hold your death with its recap ID (readable even in combat). This adapter uses events[1] as the killing
+-- blow, following Gethe/wow-ui-source's forever branch:
+-- Interface/AddOns/Blizzard_DeathRecap/Mainline/Blizzard_DeathRecap.lua, DeathRecapMixin:BuildDataProvider iterates
+-- C_DeathRecap.GetRecapEvents with ipairs and sets elementData.causedDeath = i == 1. Its TOC gates it with
+-- [AllowLoadGameType mainline], which covers camelot: Forever's TOCs add [ExcludeLoadGameType camelot] wherever
+-- mainline shouldn't. An attacker the recap hides (hideCaster, which Blizzard's recap window honors) is unknown. The
+-- recap may land a moment after PLAYER_DEAD, so the fact looks again on the meter's updates and at RecapRetries, at
+-- most RecapWait seconds, then publishes the death as unknown. Recap IDs rise with each death, so deaths take the new
+-- recaps in order: each new ID, oldest first, belongs to the oldest death still owed one. A death that gave up still
+-- takes its recap if it comes within LateWait, and sets it aside, so a later death never takes another death's recap.
 
-local LateWait = 30 -- seconds after that in which a late recap is still your last death's
-local PlayerControlled = 0x100 -- COMBATLOG_OBJECT_CONTROL_PLAYER in a combat log event's flags
-local RecapRetries = { 0.3, 1 } -- seconds after the death to look again, whatever the meter says
-local RecapWait = 3 -- seconds to wait for the damage meter to record your death
+-- seconds after that in which a late recap is still your last death's
+local LateWait = 30
+-- COMBATLOG_OBJECT_CONTROL_PLAYER in a combat log event's flags
+local PlayerControlled = 0x100
+
 -- UnitRace's raceFile for each race a Forever character can be, by faction.
 local RaceFactions = {
     Dwarf = "Alliance", Gnome = "Alliance", Human = "Alliance", NightElf = "Alliance", Orc = "Horde", Scourge = "Horde",
     Tauren = "Horde", Troll = "Horde",
 }
+
+-- seconds after the death to look again, whatever the meter says
+local RecapRetries = { 0.3, 1 }
+-- seconds to wait for the damage meter to record your death
+local RecapWait = 3
 
 local ByteTerrace = ByteTerrace
 local C_DamageMeter, C_DeathRecap, Enum = C_DamageMeter, C_DeathRecap, Enum
@@ -48,6 +52,7 @@ local function Plain(value, kind)
     if issecretvalue(value) or (type(value) ~= kind) then
         return nil
     end
+
     return value
 end
 
@@ -58,6 +63,7 @@ local function DeathsIn(sessionType, after, found)
     if issecretvalue(session) or (type(session) ~= "table") then
         return
     end
+
     for _, source in ipairs(Plain(session.combatSources, "table") or {}) do
         local id = Plain(source.deathRecapID, "number")
 
@@ -77,22 +83,18 @@ local function DeathsAfter(after)
         DeathsIn(types.Current, after, found)
         DeathsIn(types.Overall, after, found)
     end
+
     for id in pairs(found) do
         list[#list + 1] = id
     end
+
     sort(list)
+
     return list
 end
 
--- The recap ID of your newest death in the damage meter, or 0.
-local function NewestDeath()
-    local list = DeathsAfter(0)
-
-    return (list[#list] or 0)
-end
-
--- What the killing blow of a recap says about your killer: { name, kind, class, faction, spell,
--- damage }, or nil for a recap without events.
+-- What the killing blow of a recap says about your killer: { name, kind, class, faction, spell, damage }, or nil for a
+-- recap without events.
 local function Killer(recapID)
     local events = Plain(C_DeathRecap.GetRecapEvents(recapID), "table")
     local blow = (events and Plain(events[1], "table"))
@@ -100,9 +102,12 @@ local function Killer(recapID)
     if not blow then
         return nil
     end
+
     local guid, flags = Plain(blow.sourceGUID, "string"), Plain(blow.sourceFlags, "number")
-    local killer = { name = (Plain(blow.sourceName, "string") or ""), kind = "", class = "", faction = "",
-        spell = (Plain(blow.spellName, "string") or ""), damage = (Plain(blow.amount, "number") or 0) }
+
+    local killer = { class = "", damage = (Plain(blow.amount, "number") or 0), faction = "", kind = "",
+        name = (Plain(blow.sourceName, "string") or ""), spell = (Plain(blow.spellName, "string") or "") }
+
     local me = UnitGUID("player")
 
     if guid and not issecretvalue(me) and (guid == me) then
@@ -118,10 +123,19 @@ local function Killer(recapID)
     elseif guid then
         killer.kind = "npc"
     end
+
     if (killer.name == "") or Plain(blow.hideCaster, "boolean") then
         killer.name, killer.kind, killer.class, killer.faction = "", "", "", ""
     end
+
     return killer
+end
+
+-- The recap ID of your newest death in the damage meter, or 0.
+local function NewestDeath()
+    local list = DeathsAfter(0)
+
+    return (list[#list] or 0)
 end
 
 ByteTerrace.Facts.death = {
@@ -129,9 +143,12 @@ ByteTerrace.Facts.death = {
     OnEnable = function(module)
         local state = module.Addon.State
         local count = module:Id("count")
-        local handled = NewestDeath() -- the highest recap ID a death took (or there at start)
-        local owed = {} -- the deaths still owed a recap, oldest first: { number, gaveUp, settled, timers }
-        local waitHandle -- the meter-update handler while any death is owed a recap
+        -- the highest recap ID a death took (or there at start)
+        local handled = NewestDeath()
+        -- the deaths still owed a recap, oldest first: { number, gaveUp, settled, timers }
+        local owed = {}
+        -- the meter-update handler while any death is owed a recap
+        local waitHandle
 
         -- Publishes the killer of death number (nil: unknown).
         local function Attribute(number, killer)
@@ -148,22 +165,25 @@ ByteTerrace.Facts.death = {
         -- A death stops being owed a recap: its timers go, and the meter handler with the last one.
         local function Settle(death)
             death.settled = true
+
             for i = #owed, 1, -1 do
                 if owed[i] == death then
                     remove(owed, i)
                 end
             end
+
             for _, timer in ipairs(death.timers) do
                 module:Cancel(timer)
             end
+
             if (#owed == 0) and waitHandle then
                 module:Off(waitHandle)
                 waitHandle = nil
             end
         end
 
-        -- Gives each new recap, oldest first, to the oldest death owed one; a death that gave up
-        -- takes it without a word. A recap no death is owed (none waiting) only moves handled.
+        -- Gives each new recap, oldest first, to the oldest death owed one; a death that gave up takes it without a
+        -- word. A recap no death is owed (none waiting) only moves handled.
         local function TryRecap()
             for _, id in ipairs(DeathsAfter(handled)) do
                 handled = id
@@ -171,6 +191,7 @@ ByteTerrace.Facts.death = {
 
                 if death then
                     Settle(death)
+
                     if not death.gaveUp then
                         Attribute(death.number, Killer(id))
                     end
@@ -186,13 +207,18 @@ ByteTerrace.Facts.death = {
 
             owed[#owed + 1] = death
             TryRecap()
+
             if death.settled then
-                return -- its recap was already there
+                -- its recap was already there
+                return
             end
+
             waitHandle = (waitHandle or module:On("DAMAGE_METER_COMBAT_SESSION_UPDATED", TryRecap))
+
             for i, delay in ipairs(RecapRetries) do
                 death.timers[i] = module:After(delay, TryRecap)
             end
+
             death.timers[#death.timers + 1] = module:After(RecapWait, function()
                 death.gaveUp = true
                 Attribute(number, nil)
@@ -200,6 +226,7 @@ ByteTerrace.Facts.death = {
                 death.timers[#death.timers + 1] = module:After(LateWait, function() Settle(death) end)
             end)
         end)
+
         -- After a /reload, deaths already in the session aren't new.
         module:On("PLAYER_ENTERING_WORLD", function()
             if #owed == 0 then

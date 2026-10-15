@@ -1,8 +1,7 @@
--- Blizzard's damage meter (C_DamageMeter) and death recaps (C_DeathRecap) in the fake client (see
--- wow.lua for the rest). Sources: DamageMeterDocumentation.lua, DamageMeterConstantsDocumentation.lua
--- and DeathRecapDocumentation.lua, and how Blizzard_DamageMeter and Blizzard_DeathRecap (the
--- forever branch of Gethe/wow-ui-source) consume them. [D] marks a documented decision, [G] a guess
--- where the docs and Blizzard's code are silent.
+-- Blizzard's damage meter (C_DamageMeter) and death recaps (C_DeathRecap) in the fake client (see wow.lua for the
+-- rest). Sources: DamageMeterDocumentation.lua, DamageMeterConstantsDocumentation.lua and DeathRecapDocumentation.lua,
+-- and how Blizzard_DamageMeter and Blizzard_DeathRecap (the forever branch of Gethe/wow-ui-source) consume them. [D]
+-- marks a documented decision, [G] a guess where the docs and Blizzard's code are silent.
 --
 -- Sessions:
 --   [G] Every combat is a session: h:EnterCombat starts one (the next sessionID, counting from 1)
@@ -80,11 +79,11 @@
 --       for the killing blow). An unknown ID returns no events and max health 0.
 --       [D] A nil ID means your latest death: Blizzard's death popup calls HasRecapEvents() and
 --       OpenDeathRecapUI() with none (GameDialogDefs.lua). [G] Deaths of other units don't count.
--- Availability: [D] IsDamageMeterAvailable returns isAvailable, failureReason; true, "" by default
--- (the real client returned true in game). h:SetMeterAvailable(false, reason) changes it.
+-- Availability: [D] IsDamageMeterAvailable returns isAvailable, failureReason; true, "" by default (the real client
+-- returned true in game). h:SetMeterAvailable(false, reason) changes it.
 --
--- Scripting a fight (see the functions below): h:MeterFight{ name, duration, endCombat, sources =
--- { source, ... } } with a source:
+-- Scripting a fight (see the functions below): h:MeterFight{ name, duration, endCombat, sources = { source, ... } }
+-- with a source:
 --   { unit = "player" or a unit table (fills name, GUID, class, isLocalPlayer, faction),
 --     name, guid, creatureID, classFilename, specIconID, isLocalPlayer, classification,
 --     factionGroup, sourceDisplayType,
@@ -94,9 +93,8 @@
 --       isDeadly, details = { unitName, unitClassFilename, classification, isPet, isMob, amount,
 --       specIconID, unit (a unit table: the recap's attacker is that unit, GUID and all) } }, ... } },
 --     death = { time, maxHealth, events = { oldest first, each { event, amount, sourceName, ... } } } }
--- A type with spells but no amount gets the spells' sum. A death without events gets one event
--- per DamageTaken spell (SWING_DAMAGE for Auto Attack, SPELL_DAMAGE otherwise, in the given
--- order, the last the killing blow).
+-- A type with spells but no amount gets the spells' sum. A death without events gets one event per DamageTaken spell
+-- (SWING_DAMAGE for Auto Attack, SPELL_DAMAGE otherwise, in the given order, the last the killing blow).
 
 local Snapshot = __snapshot
 local DisplayTypes = Snapshot.enums.DamageMeterSourceDisplayType
@@ -108,26 +106,104 @@ local Base = { [Types.Dps] = Types.DamageDone, [Types.Hps] = Types.HealingDone }
 local Rate = { [Types.DamageDone] = Types.Dps, [Types.HealingDone] = Types.Hps }
 
 local AutoAttack = 6603
+-- Combat log object flags (COMBATLOG_OBJECT_*): a hostile outsider NPC, player and player's pet, and you.
+local Flags = { enemyPet = 0x1148, enemyPlayer = 0x548, mob = 0xA48, player = 0x511 }
 local NeverSecretDetails = { classification = true, specIconID = true, unitClassFilename = true }
 local NeverSecretSource = { classFilename = true, classification = true, deathRecapID = true, isLocalPlayer = true, specIconID = true }
+
 local RecapFields = {
     "timestamp", "event", "hideCaster", "sourceGUID", "sourceName", "sourceFlags", "sourceRaidFlags", "destGUID",
     "destName", "destFlags", "destRaidFlags", "spellId", "spellName", "spellSchool", "environmentalType", "amount",
     "overkill", "school", "resisted", "blocked", "absorbed", "critical", "glancing", "crushing", "isOffHand",
     "currentHP", "avoidable", "deadly",
 }
-local RecapSpellFields = { avoidable = true, deadly = true, spellId = true, spellName = true, spellSchool = true }
--- Combat log object flags (COMBATLOG_OBJECT_*): a hostile outsider NPC, player and player's pet,
--- and you.
-local Flags = { enemyPet = 0x1148, enemyPlayer = 0x548, mob = 0xA48, player = 0x511 }
 
-function Harness:InitMeter()
-    self.meter = { available = true, failureReason = "", nextID = 1, nextRecap = 1, recaps = {}, sessions = {} }
-    self.meterGUIDs = (self.meterGUIDs or {}) -- [name], or ["mob:"|"player:" .. name] for a recap attacker, = its GUID
+local RecapSpellFields = { avoidable = true, deadly = true, spellId = true, spellName = true, spellSchool = true }
+
+local function Duration(h, session)
+    return ((session.finish or h.time) - session.start)
 end
 
-function Harness:SetMeterAvailable(isAvailable, failureReason)
-    self.meter.available, self.meter.failureReason = ((isAvailable and true) or false), (failureReason or "")
+-- A source's identity from its spec (see the header).
+local function Identity(h, spec)
+    local unit = (((type(spec.unit) == "string") and assert(h:Unit(spec.unit), "MeterAdd: no unit " .. spec.unit)) or spec.unit)
+
+    local id = {
+        classFilename = spec.classFilename, classification = (spec.classification or ""),
+        factionGroup = spec.factionGroup, isLocalPlayer = spec.isLocalPlayer, name = spec.name,
+        sourceCreatureID = spec.creatureID, sourceDisplayType = (spec.sourceDisplayType or DisplayTypes.None),
+        sourceGUID = spec.guid, specIconID = spec.specIconID,
+    }
+
+    if unit then
+        id.name = (id.name or unit.name)
+        id.classFilename = (id.classFilename or unit.classFile)
+
+        if id.isLocalPlayer == nil then id.isLocalPlayer = (unit == h.player) end
+
+        if unit ~= h.player then
+            id.factionGroup = (id.factionGroup or unit.faction)
+        end
+
+        if unit.isPlayer or unit.playerControlled then
+            id.sourceGUID = (id.sourceGUID or h:GUID(unit))
+        else
+            id.sourceCreatureID = (id.sourceCreatureID or unit.npcID or 0)
+        end
+    end
+
+    assert(id.name, "MeterAdd: a source needs a name or a unit")
+    id.classFilename = (id.classFilename or "")
+    id.isLocalPlayer = (id.isLocalPlayer == true)
+
+    if (id.sourceGUID == nil) and (id.sourceCreatureID == nil) then
+        h.meterGUIDs[id.name] = (h.meterGUIDs[id.name] or h:GUID({ isPlayer = true }))
+        id.sourceGUID = h.meterGUIDs[id.name]
+    end
+
+    id.key = (id.sourceGUID or ("Creature-" .. id.sourceCreatureID .. "-" .. id.name))
+
+    return id
+end
+
+-- The sources of a list of sessions, merged by key in order of first appearance, and their total duration (nil for no
+-- sessions).
+local function Merge(h, sessions)
+    local records, order, duration = {}, {}, nil
+
+    for _, session in ipairs(sessions) do
+        duration = ((duration or 0) + Duration(h, session))
+
+        for _, key in ipairs(session.order) do
+            local r = session.sources[key]
+            local merged = records[key]
+
+            if not merged then
+                merged = { amounts = {}, deaths = {}, spells = {} }
+
+                for field, value in pairs(r) do
+                    if type(value) ~= "table" then merged[field] = value end
+                end
+
+                records[key] = merged
+                order[#order + 1] = merged
+            end
+
+            for t, amount in pairs(r.amounts) do
+                merged.amounts[t] = ((merged.amounts[t] or 0) + amount)
+            end
+
+            for t, spells in pairs(r.spells) do
+                merged.spells[t] = (merged.spells[t] or {})
+
+                for _, spell in ipairs(spells) do table.insert(merged.spells[t], spell) end
+            end
+
+            for _, death in ipairs(r.deaths) do table.insert(merged.deaths, death) end
+        end
+    end
+
+    return order, duration
 end
 
 -- A DamageMeterType from its value or name.
@@ -139,105 +215,21 @@ local function MeterType(key)
             return value
         end
     end
+
     error("unknown DamageMeterType " .. tostring(key), 3)
 end
 
-local function Duration(h, session)
-    return ((session.finish or h.time) - session.start)
+local function PerSecond(amount, duration)
+    return ((((duration or 0) > 0) and (amount / duration)) or 0)
 end
 
--- The session in progress, or nil.
-function Harness:MeterActive()
-    local latest = self.meter.sessions[#self.meter.sessions]
-
-    if latest and not latest.finish then
-        return latest
-    end
-end
-
--- Starts a session (h:EnterCombat calls this) and fires DAMAGE_METER_CURRENT_SESSION_UPDATED.
-function Harness:MeterStartSession()
-    local m = self.meter
-    local session = { id = m.nextID, name = ("Combat " .. m.nextID), order = {}, sources = {}, start = self.time, startServer = self.serverTime }
-
-    m.nextID = (m.nextID + 1)
-    m.sessions[#m.sessions + 1] = session
-    self:Fire("DAMAGE_METER_CURRENT_SESSION_UPDATED")
-    return session
-end
-
--- Ends the session in progress (h:LeaveCombat calls this); fires nothing.
-function Harness:MeterEndSession()
-    local session = self:MeterActive()
-
-    if session then
-        session.finish = self.time
-    end
-end
-
--- The sessions a DamageMeterSessionType covers.
-local function SessionsOfType(h, sessionType)
-    local list = h.meter.sessions
-
-    if sessionType == SessionTypes.Overall then
-        return list
-    elseif sessionType == SessionTypes.Current then
-        return { list[#list] }
-    elseif sessionType == SessionTypes.Expired then
-        return {}
-    end
-    error("C_DamageMeter: unknown DamageMeterSessionType " .. tostring(sessionType), 4)
-end
-
--- A source's identity from its spec (see the header).
-local function Identity(h, spec)
-    local unit = (((type(spec.unit) == "string") and assert(h:Unit(spec.unit), "MeterAdd: no unit " .. spec.unit)) or spec.unit)
-    local id = {
-        classFilename = spec.classFilename, classification = (spec.classification or ""),
-        factionGroup = spec.factionGroup, isLocalPlayer = spec.isLocalPlayer, name = spec.name,
-        sourceCreatureID = spec.creatureID, sourceDisplayType = (spec.sourceDisplayType or DisplayTypes.None),
-        sourceGUID = spec.guid, specIconID = spec.specIconID,
-    }
-
-    if unit then
-        id.name = (id.name or unit.name)
-        id.classFilename = (id.classFilename or unit.classFile)
-        if id.isLocalPlayer == nil then id.isLocalPlayer = (unit == h.player) end
-        if unit ~= h.player then
-            id.factionGroup = (id.factionGroup or unit.faction)
-        end
-        if unit.isPlayer or unit.playerControlled then
-            id.sourceGUID = (id.sourceGUID or h:GUID(unit))
-        else
-            id.sourceCreatureID = (id.sourceCreatureID or unit.npcID or 0)
-        end
-    end
-    assert(id.name, "MeterAdd: a source needs a name or a unit")
-    id.classFilename = (id.classFilename or "")
-    id.isLocalPlayer = (id.isLocalPlayer == true)
-    if (id.sourceGUID == nil) and (id.sourceCreatureID == nil) then
-        h.meterGUIDs[id.name] = (h.meterGUIDs[id.name] or h:GUID({ isPlayer = true }))
-        id.sourceGUID = h.meterGUIDs[id.name]
-    end
-    id.key = (id.sourceGUID or ("Creature-" .. id.sourceCreatureID .. "-" .. id.name))
-    return id
-end
-
-local function Spell(spell)
-    assert(type(spell.spellID) == "number", "MeterAdd: a spell needs a spellID")
-    local total = (spell.totalAmount or 0)
-    local d = (spell.details or {})
-
+local function Entry(record, total, duration)
     return {
-        creatureName = (spell.creatureName or ""),
-        details = {
-            amount = (d.amount or total), classification = (d.classification or ""), isMob = (d.isMob == true),
-            isPet = (d.isPet == true), specIconID = d.specIconID, unit = d.unit,
-            unitClassFilename = (d.unitClassFilename or ""), unitName = (d.unitName or ""),
-        },
-        isAvoidable = (spell.isAvoidable == true), isDeadly = (spell.isDeadly == true), name = spell.name,
-        overkillAmount = (spell.overkillAmount or 0), school = spell.school, spellID = spell.spellID,
-        totalAmount = total,
+        amountPerSecond = PerSecond(total, duration), classFilename = record.classFilename,
+        classification = record.classification, deathRecapID = 0, deathTimeSeconds = 0,
+        factionGroup = record.factionGroup, isLocalPlayer = record.isLocalPlayer, name = record.name,
+        sourceCreatureID = record.sourceCreatureID, sourceDisplayType = record.sourceDisplayType,
+        sourceGUID = record.sourceGUID, specIconID = record.specIconID, totalAmount = total,
     }
 end
 
@@ -254,6 +246,7 @@ local function RecapEvents(h, session, record, death, time, victim)
                     event[field] = given[field]
                 end
             end
+
             event.timestamp = (event.timestamp or (session.startServer + (given.time or time)))
             table.insert(events, 1, event)
         end
@@ -264,6 +257,7 @@ local function RecapEvents(h, session, record, death, time, victim)
         for _, spell in ipairs(spells) do
             health = ((health + spell.totalAmount) - spell.overkillAmount)
         end
+
         for _, spell in ipairs(spells) do
             local d = spell.details
             local from = (((d.unitName ~= "") and d.unitName) or spell.creatureName)
@@ -271,227 +265,59 @@ local function RecapEvents(h, session, record, death, time, victim)
 
             if d.unit then
                 h.meterGUIDs[key] = h:GUID(d.unit)
-                from = h:FullName(d.unit) -- [G] a recap names a player as chat does
+                -- [G] a recap names a player as chat does
+                from = h:FullName(d.unit)
             end
+
             h.meterGUIDs[key] = (h.meterGUIDs[key] or h:GUID({ isPlayer = not d.isMob }))
             health = ((health - spell.totalAmount) + spell.overkillAmount)
             local swing = (spell.spellID == AutoAttack)
 
             table.insert(events, 1, {
-                timestamp = (session.startServer + time), event = ((swing and "SWING_DAMAGE") or "SPELL_DAMAGE"),
-                hideCaster = false, sourceGUID = h.meterGUIDs[key], sourceName = from,
-                sourceFlags = ((d.isPet and Flags.enemyPet) or (d.isMob and Flags.mob) or Flags.enemyPlayer), sourceRaidFlags = 0,
-                destGUID = (record.sourceGUID or (victim and h:GUID(victim)) or ""), destName = record.name,
-                destFlags = Flags.player, destRaidFlags = 0, spellId = ((not swing and spell.spellID) or nil),
+                amount = spell.totalAmount, avoidable = ((not swing or nil) and spell.isAvoidable), critical = false,
+                crushing = false, currentHP = math.max(health, 0), deadly = ((not swing or nil) and spell.isDeadly),
+                destFlags = Flags.player, destGUID = (record.sourceGUID or (victim and h:GUID(victim)) or ""),
+                destName = record.name, destRaidFlags = 0, event = ((swing and "SWING_DAMAGE") or "SPELL_DAMAGE"),
+                glancing = false, hideCaster = false, isOffHand = false, overkill = spell.overkillAmount,
+                school = (spell.school or 1),
+                sourceFlags = ((d.isPet and Flags.enemyPet) or (d.isMob and Flags.mob) or Flags.enemyPlayer),
+                sourceGUID = h.meterGUIDs[key], sourceName = from, sourceRaidFlags = 0,
+                spellId = ((not swing and spell.spellID) or nil),
                 spellName = ((not swing and (spell.name or h.spellNames[spell.spellID])) or nil),
-                spellSchool = ((not swing and (spell.school or 1)) or nil),
-                avoidable = ((not swing or nil) and spell.isAvoidable), deadly = ((not swing or nil) and spell.isDeadly),
-                amount = spell.totalAmount, overkill = spell.overkillAmount, school = (spell.school or 1),
-                critical = false, glancing = false, crushing = false, isOffHand = false, currentHP = math.max(health, 0),
+                spellSchool = ((not swing and (spell.school or 1)) or nil), timestamp = (session.startServer + time),
             })
         end
     end
+
     return events
 end
 
-local function Sorted(set)
-    local list = {}
+-- The sessions a DamageMeterSessionType covers.
+local function SessionsOfType(h, sessionType)
+    local list = h.meter.sessions
 
-    for t in pairs(set) do list[#list + 1] = t end
-    table.sort(list)
-    return list
-end
-
--- Adds a source's amounts, spells and death to the session in progress and fires
--- DAMAGE_METER_COMBAT_SESSION_UPDATED for each changed type. fightLeft (seconds still to come,
--- h:MeterFight's duration) places a death without a time at the fight's end. Returns the
--- source's record and its death's recap ID, if any.
-function Harness:MeterAdd(spec, fightLeft)
-    local session = assert(self:MeterActive(), "MeterAdd: no damage meter session (enter combat first)")
-    local id = Identity(self, spec)
-    local record = session.sources[id.key]
-
-    if not record then
-        record = { amounts = {}, deaths = {}, spells = {} }
-        session.sources[id.key] = record
-        session.order[#session.order + 1] = id.key
+    if sessionType == SessionTypes.Overall then
+        return list
+    elseif sessionType == SessionTypes.Current then
+        return { list[#list] }
+    elseif sessionType == SessionTypes.Expired then
+        return {}
     end
-    for field, value in pairs(id) do
-        record[field] = value
-    end
-    local touched, given = {}, {}
 
-    for key, amount in pairs(spec.amounts or {}) do
-        local t = MeterType(key)
-
-        assert(not Base[t] and (t ~= Types.Deaths), "MeterAdd: give DamageDone/HealingDone (Dps/Hps read them) and deaths as death")
-        record.amounts[t] = ((record.amounts[t] or 0) + amount)
-        given[t], touched[t] = true, true
-    end
-    for key, spells in pairs(spec.spells or {}) do
-        local t = MeterType(key)
-
-        record.spells[t] = (record.spells[t] or {})
-        for _, raw in ipairs(spells) do
-            local spell = Spell(raw)
-
-            table.insert(record.spells[t], spell)
-            if not given[t] then
-                record.amounts[t] = ((record.amounts[t] or 0) + spell.totalAmount)
-            end
-        end
-        touched[t] = true
-    end
-    local recapID
-
-    if spec.death then
-        local m, death = self.meter, spec.death
-
-        recapID = m.nextRecap
-        m.nextRecap = (m.nextRecap + 1)
-        local time = (death.time or (Duration(self, session) + (fightLeft or 0)))
-
-        record.deaths[#record.deaths + 1] = { recapID = recapID, time = time }
-        if record.isLocalPlayer then
-            m.latestLocal = recapID
-        end
-        local unit = (((type(spec.unit) == "string") and self:Unit(spec.unit)) or spec.unit)
-
-        m.recaps[recapID] = {
-            maxHealth = (death.maxHealth or (unit and unit.maxHealth) or 0),
-            events = RecapEvents(self, session, record, death, time, unit),
-        }
-        touched[Types.Deaths] = true
-    end
-    for t, rate in pairs(Rate) do
-        if touched[t] then touched[rate] = true end
-    end
-    for _, t in ipairs(Sorted(touched)) do
-        self:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", t, 0)
-        self:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", t, session.id)
-    end
-    return record, recapID
-end
-
--- A source spec split in two: everything but its DamageTaken and death, and its identity with
--- only those.
-local function SplitDamageTaken(source)
-    local during, after = { amounts = {}, spells = {} }, { amounts = {}, death = source.death, spells = {} }
-
-    for key, value in pairs(source) do
-        if (key ~= "amounts") and (key ~= "spells") and (key ~= "death") then
-            during[key], after[key] = value, value
-        end
-    end
-    for _, field in ipairs({ "amounts", "spells" }) do
-        for key, value in pairs(source[field] or {}) do
-            local side = (((MeterType(key) == Types.DamageTaken) and after) or during)
-
-            side[field][key] = value
-        end
-    end
-    return during, after
-end
-
--- Scripts a whole fight: enters combat (starting a session) unless already in combat, names the
--- session, adds every source (h:MeterAdd), lets duration seconds pass (h:Advance), then, unless
--- endCombat is false, ends combat: h:Die() when the local player's source died, adding that source
--- after PLAYER_DEAD (see the header), else h:LeaveCombat(). Returns { sessionID, recaps =
--- { [source name] = recapID } }.
-function Harness:MeterFight(spec)
-    if not self.inCombat then
-        self:EnterCombat()
-    end
-    local session = assert(self:MeterActive(), "MeterFight: no damage meter session")
-
-    session.name = (spec.name or session.name)
-    local fight, dying = { recaps = {}, sessionID = session.id }, nil
-
-    local function Add(source, fightLeft)
-        local record, recapID = self:MeterAdd(source, fightLeft)
-
-        if recapID then
-            fight.recaps[record.name] = recapID
-        end
-    end
-    local alive = (not self.player.dead and not self.player.ghost)
-
-    for _, source in ipairs(spec.sources or {}) do
-        local isLocal = (source.isLocalPlayer or ((source.isLocalPlayer == nil) and ((source.unit == "player") or (source.unit == self.player))))
-
-        if source.death and isLocal and alive and (spec.endCombat ~= false) and not dying then
-            -- What you dealt reaches the meter in the fight; the hits on you and your death after PLAYER_DEAD.
-            local during
-
-            during, dying = SplitDamageTaken(source)
-            Add(during, spec.duration or 0)
-        else
-            Add(source, spec.duration or 0)
-        end
-    end
-    self:Advance(spec.duration or 0)
-    if dying then
-        self:Die(function() Add(dying, 0) end)
-    elseif (spec.endCombat ~= false) and self.inCombat then
-        self:LeaveCombat()
-    end
-    return fight
-end
-
--- The sources of a list of sessions, merged by key in order of first appearance, and their
--- total duration (nil for no sessions).
-local function Merge(h, sessions)
-    local records, order, duration = {}, {}, nil
-
-    for _, session in ipairs(sessions) do
-        duration = ((duration or 0) + Duration(h, session))
-        for _, key in ipairs(session.order) do
-            local r = session.sources[key]
-            local merged = records[key]
-
-            if not merged then
-                merged = { amounts = {}, deaths = {}, spells = {} }
-                for field, value in pairs(r) do
-                    if type(value) ~= "table" then merged[field] = value end
-                end
-                records[key] = merged
-                order[#order + 1] = merged
-            end
-            for t, amount in pairs(r.amounts) do
-                merged.amounts[t] = ((merged.amounts[t] or 0) + amount)
-            end
-            for t, spells in pairs(r.spells) do
-                merged.spells[t] = (merged.spells[t] or {})
-                for _, spell in ipairs(spells) do table.insert(merged.spells[t], spell) end
-            end
-            for _, death in ipairs(r.deaths) do table.insert(merged.deaths, death) end
-        end
-    end
-    return order, duration
-end
-
-local function PerSecond(amount, duration)
-    return ((((duration or 0) > 0) and (amount / duration)) or 0)
+    error("C_DamageMeter: unknown DamageMeterSessionType " .. tostring(sessionType), 4)
 end
 
 -- Largest first; equal amounts keep their order.
 local function SortByAmount(list)
     for i, entry in ipairs(list) do entry.__order = i end
+
     table.sort(list, function(a, b)
         if a.totalAmount ~= b.totalAmount then return (a.totalAmount > b.totalAmount) end
+
         return (a.__order < b.__order)
     end)
-    for _, entry in ipairs(list) do entry.__order = nil end
-end
 
-local function Entry(record, total, duration)
-    return {
-        sourceGUID = record.sourceGUID, sourceCreatureID = record.sourceCreatureID, name = record.name,
-        classFilename = record.classFilename, specIconID = record.specIconID, totalAmount = total,
-        amountPerSecond = PerSecond(total, duration), isLocalPlayer = record.isLocalPlayer, deathRecapID = 0,
-        deathTimeSeconds = 0, classification = record.classification, sourceDisplayType = record.sourceDisplayType,
-        factionGroup = record.factionGroup,
-    }
+    for _, entry in ipairs(list) do entry.__order = nil end
 end
 
 -- A DamageMeterCombatSession of these sessions for a type.
@@ -518,9 +344,11 @@ local function CombatSession(h, sessions, meterType, overall)
             end
         end
     end
+
     if t ~= Types.Deaths then
         SortByAmount(sources)
     end
+
     return { combatSources = sources, durationSeconds = duration, maxAmount = max, totalAmount = sum }
 end
 
@@ -539,21 +367,74 @@ local function SessionSource(h, sessions, meterType, guid, creatureID)
                 local d = spell.details
 
                 result.combatSpells[#result.combatSpells + 1] = {
-                    spellID = spell.spellID, totalAmount = spell.totalAmount,
-                    amountPerSecond = PerSecond(spell.totalAmount, duration), creatureName = spell.creatureName,
-                    overkillAmount = spell.overkillAmount, isAvoidable = spell.isAvoidable, isDeadly = spell.isDeadly,
+                    amountPerSecond = PerSecond(spell.totalAmount, duration),
                     combatSpellDetails = {
                         amount = d.amount, classification = d.classification, isMob = d.isMob, isPet = d.isPet,
                         specIconID = d.specIconID, unitClassFilename = d.unitClassFilename, unitName = d.unitName,
                     },
+                    creatureName = spell.creatureName, isAvoidable = spell.isAvoidable, isDeadly = spell.isDeadly,
+                    overkillAmount = spell.overkillAmount, spellID = spell.spellID, totalAmount = spell.totalAmount,
                 }
+
                 result.maxAmount = math.max(result.maxAmount, spell.totalAmount)
             end
+
             result.totalAmount = (record.amounts[t] or 0)
         end
     end
+
     SortByAmount(result.combatSpells)
+
     return result
+end
+
+local function Sorted(set)
+    local list = {}
+
+    for t in pairs(set) do list[#list + 1] = t end
+
+    table.sort(list)
+
+    return list
+end
+
+local function Spell(spell)
+    assert(type(spell.spellID) == "number", "MeterAdd: a spell needs a spellID")
+    local total = (spell.totalAmount or 0)
+    local d = (spell.details or {})
+
+    return {
+        creatureName = (spell.creatureName or ""),
+        details = {
+            amount = (d.amount or total), classification = (d.classification or ""), isMob = (d.isMob == true),
+            isPet = (d.isPet == true), specIconID = d.specIconID, unit = d.unit,
+            unitClassFilename = (d.unitClassFilename or ""), unitName = (d.unitName or ""),
+        },
+        isAvoidable = (spell.isAvoidable == true), isDeadly = (spell.isDeadly == true), name = spell.name,
+        overkillAmount = (spell.overkillAmount or 0), school = spell.school, spellID = spell.spellID,
+        totalAmount = total,
+    }
+end
+
+-- A source spec split in two: everything but its DamageTaken and death, and its identity with only those.
+local function SplitDamageTaken(source)
+    local during, after = { amounts = {}, spells = {} }, { amounts = {}, death = source.death, spells = {} }
+
+    for key, value in pairs(source) do
+        if (key ~= "amounts") and (key ~= "spells") and (key ~= "death") then
+            during[key], after[key] = value, value
+        end
+    end
+
+    for _, field in ipairs({ "amounts", "spells" }) do
+        for key, value in pairs(source[field] or {}) do
+            local side = (((MeterType(key) == Types.DamageTaken) and after) or during)
+
+            side[field][key] = value
+        end
+    end
+
+    return during, after
 end
 
 -- Per-field secrecy (see the header and Harness.SECRET_SHAPES in secrets.lua).
@@ -567,19 +448,195 @@ end
 
 local function ShapeSession(session)
     WrapFields(session, {})
+
     for _, source in ipairs(session.combatSources) do
         WrapFields(source, NeverSecretSource)
     end
+
     return session
 end
 
 local function ShapeSessionSource(source)
     WrapFields(source, {})
+
     for _, spell in ipairs(source.combatSpells) do
         WrapFields(spell, {})
         WrapFields(spell.combatSpellDetails, NeverSecretDetails)
     end
+
     return source
+end
+
+function Harness:InitMeter()
+    self.meter = { available = true, failureReason = "", nextID = 1, nextRecap = 1, recaps = {}, sessions = {} }
+    -- [name], or ["mob:"|"player:" .. name] for a recap attacker, = its GUID
+    self.meterGUIDs = (self.meterGUIDs or {})
+end
+
+-- The session in progress, or nil.
+function Harness:MeterActive()
+    local latest = self.meter.sessions[#self.meter.sessions]
+
+    if latest and not latest.finish then
+        return latest
+    end
+end
+
+-- Adds a source's amounts, spells and death to the session in progress and fires DAMAGE_METER_COMBAT_SESSION_UPDATED
+-- for each changed type. fightLeft (seconds still to come, h:MeterFight's duration) places a death without a time at
+-- the fight's end. Returns the source's record and its death's recap ID, if any.
+function Harness:MeterAdd(spec, fightLeft)
+    local session = assert(self:MeterActive(), "MeterAdd: no damage meter session (enter combat first)")
+    local id = Identity(self, spec)
+    local record = session.sources[id.key]
+
+    if not record then
+        record = { amounts = {}, deaths = {}, spells = {} }
+        session.sources[id.key] = record
+        session.order[#session.order + 1] = id.key
+    end
+
+    for field, value in pairs(id) do
+        record[field] = value
+    end
+
+    local touched, given = {}, {}
+
+    for key, amount in pairs(spec.amounts or {}) do
+        local t = MeterType(key)
+
+        assert(not Base[t] and (t ~= Types.Deaths), "MeterAdd: give DamageDone/HealingDone (Dps/Hps read them) and deaths as death")
+        record.amounts[t] = ((record.amounts[t] or 0) + amount)
+        given[t], touched[t] = true, true
+    end
+
+    for key, spells in pairs(spec.spells or {}) do
+        local t = MeterType(key)
+
+        record.spells[t] = (record.spells[t] or {})
+
+        for _, raw in ipairs(spells) do
+            local spell = Spell(raw)
+
+            table.insert(record.spells[t], spell)
+
+            if not given[t] then
+                record.amounts[t] = ((record.amounts[t] or 0) + spell.totalAmount)
+            end
+        end
+
+        touched[t] = true
+    end
+
+    local recapID
+
+    if spec.death then
+        local m, death = self.meter, spec.death
+
+        recapID = m.nextRecap
+        m.nextRecap = (m.nextRecap + 1)
+        local time = (death.time or (Duration(self, session) + (fightLeft or 0)))
+
+        record.deaths[#record.deaths + 1] = { recapID = recapID, time = time }
+
+        if record.isLocalPlayer then
+            m.latestLocal = recapID
+        end
+
+        local unit = (((type(spec.unit) == "string") and self:Unit(spec.unit)) or spec.unit)
+
+        m.recaps[recapID] = {
+            events = RecapEvents(self, session, record, death, time, unit),
+            maxHealth = (death.maxHealth or (unit and unit.maxHealth) or 0),
+        }
+
+        touched[Types.Deaths] = true
+    end
+
+    for t, rate in pairs(Rate) do
+        if touched[t] then touched[rate] = true end
+    end
+
+    for _, t in ipairs(Sorted(touched)) do
+        self:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", t, 0)
+        self:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", t, session.id)
+    end
+
+    return record, recapID
+end
+
+-- Ends the session in progress (h:LeaveCombat calls this); fires nothing.
+function Harness:MeterEndSession()
+    local session = self:MeterActive()
+
+    if session then
+        session.finish = self.time
+    end
+end
+
+-- Scripts a whole fight: enters combat (starting a session) unless already in combat, names the session, adds every
+-- source (h:MeterAdd), lets duration seconds pass (h:Advance), then, unless endCombat is false, ends combat: h:Die()
+-- when the local player's source died, adding that source after PLAYER_DEAD (see the header), else h:LeaveCombat().
+-- Returns { sessionID, recaps = { [source name] = recapID } }.
+function Harness:MeterFight(spec)
+    if not self.inCombat then
+        self:EnterCombat()
+    end
+
+    local session = assert(self:MeterActive(), "MeterFight: no damage meter session")
+
+    session.name = (spec.name or session.name)
+    local fight, dying = { recaps = {}, sessionID = session.id }, nil
+
+    local function Add(source, fightLeft)
+        local record, recapID = self:MeterAdd(source, fightLeft)
+
+        if recapID then
+            fight.recaps[record.name] = recapID
+        end
+    end
+
+    local alive = (not self.player.dead and not self.player.ghost)
+
+    for _, source in ipairs(spec.sources or {}) do
+        local isLocal = (source.isLocalPlayer or ((source.isLocalPlayer == nil) and ((source.unit == "player") or (source.unit == self.player))))
+
+        if source.death and isLocal and alive and (spec.endCombat ~= false) and not dying then
+            -- What you dealt reaches the meter in the fight; the hits on you and your death after PLAYER_DEAD.
+            local during
+
+            during, dying = SplitDamageTaken(source)
+            Add(during, spec.duration or 0)
+        else
+            Add(source, spec.duration or 0)
+        end
+    end
+
+    self:Advance(spec.duration or 0)
+
+    if dying then
+        self:Die(function() Add(dying, 0) end)
+    elseif (spec.endCombat ~= false) and self.inCombat then
+        self:LeaveCombat()
+    end
+
+    return fight
+end
+
+-- Starts a session (h:EnterCombat calls this) and fires DAMAGE_METER_CURRENT_SESSION_UPDATED.
+function Harness:MeterStartSession()
+    local m = self.meter
+    local session = { id = m.nextID, name = ("Combat " .. m.nextID), order = {}, sources = {}, start = self.time, startServer = self.serverTime }
+
+    m.nextID = (m.nextID + 1)
+    m.sessions[#m.sessions + 1] = session
+    self:Fire("DAMAGE_METER_CURRENT_SESSION_UPDATED")
+
+    return session
+end
+
+function Harness:SetMeterAvailable(isAvailable, failureReason)
+    self.meter.available, self.meter.failureReason = ((isAvailable and true) or false), (failureReason or "")
 end
 
 Harness.SECRET_SHAPES["C_DamageMeter.GetCombatSessionFromType"] = ShapeSession
@@ -592,8 +649,10 @@ local function CopyEvents(events)
         local copy = {}
 
         for field, value in pairs(event) do copy[field] = value end
+
         out[i] = copy
     end
+
     return out
 end
 
@@ -602,14 +661,16 @@ function Harness:MeterFakes()
     local h = self
 
     local function Recap(id) return h.meter.recaps[((id == nil) and h.meter.latestLocal) or id] end
+
     return {
         C_DamageMeter = {
             GetAvailableCombatSessions = function()
                 local list = {}
 
                 for i, session in ipairs(h.meter.sessions) do
-                    list[i] = { sessionID = session.id, name = session.name, durationSeconds = Duration(h, session) }
+                    list[i] = { durationSeconds = Duration(h, session), name = session.name, sessionID = session.id }
                 end
+
                 return list
             end,
             GetCombatSessionFromType = function(sessionType, meterType)

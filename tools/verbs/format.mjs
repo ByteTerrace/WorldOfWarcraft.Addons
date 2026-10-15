@@ -2,19 +2,24 @@
 // Puck's formatter passes mapped to Lua). It covers every addon's Lua and the tests' Lua, not
 // tests/fixtures, whose files are deliberately as they are.
 //
-//   format [paths...] [--check] [--only <pass,...>]
+//   format [paths...] [--check] [--only <pass,...>] [--sort-calls]
 //
-// --check writes nothing and exits 1 when a file would change, naming the first line that would.
+// --check writes nothing and exits 1 when a file would change, naming the first line that would,
+// or holds a constructor whose named fields aren't alphabetical and that format won't sort (ORDER:
+// a value calls something, or a comment sits between fields), unless `-- order: <why>` says why.
+// --sort-calls sorts those constructors too: for a sweep whose diff is reviewed, since a call can
+// change what another field reads.
 // A file that doesn't parse, or that a pass would break, exits 2 and is left alone.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { FormatError, PASSES, firstDifference, formatLua } from "../lib/format-lua.mjs";
+import { FormatError, PASSES, firstDifference, formatLua, orderFindings } from "../lib/format-lua.mjs";
 import { findAddons, repoRoot, toPosix } from "../lib/repo.mjs";
 
 export const options = {
     check: { type: "boolean", default: false },
     only: { type: "string" },
+    "sort-calls": { type: "boolean", default: false },
 };
 
 /** Every Lua file the format verb owns under root, as absolute paths, sorted. */
@@ -31,10 +36,11 @@ export function formatFiles(root = repoRoot) {
 }
 
 /**
- * Formats each file; returns its findings ({ path, line, message }) and the files it changed.
- * @param {{ files: string[], check?: boolean, passes?: string[], root?: string }} options
+ * Formats each file; returns its findings ({ path, line, rule, message }: FORMAT or ORDER) and the
+ * files it changed. ORDER findings come with check, from the formatted text.
+ * @param {{ files: string[], check?: boolean, passes?: string[], root?: string, sortCalls?: boolean }} options
  */
-export function formatRepository({ files, check = false, passes = PASSES, root = repoRoot }) {
+export function formatRepository({ files, check = false, passes = PASSES, root = repoRoot, sortCalls = false }) {
     const findings = [];
     const changed = [];
     for (const file of files) {
@@ -43,15 +49,20 @@ export function formatRepository({ files, check = false, passes = PASSES, root =
         const text = readFileSync(file, "latin1");
         let formatted;
         try {
-            formatted = formatLua(text, passes);
+            formatted = formatLua(text, passes, { sortCalls });
         } catch (error) {
             if (!(error instanceof FormatError)) throw error;
-            findings.push({ path, line: 1, message: error.message, broken: true });
+            findings.push({ path, line: 1, rule: "FORMAT", message: error.message, broken: true });
             continue;
+        }
+        if (check) {
+            for (const { line } of orderFindings(formatted)) {
+                findings.push({ path, line, rule: "ORDER", message: "named fields aren't alphabetical and format won't sort them (a value calls something, or a comment sits between fields): sort them, or say why their order matters with -- order: <why>" });
+            }
         }
         if (formatted === text) continue;
         changed.push(path);
-        if (check) findings.push({ path, line: firstDifference(text, formatted), message: "isn't formatted: run node tools/tlk.mjs format" });
+        if (check) findings.push({ path, line: firstDifference(text, formatted), rule: "FORMAT", message: "isn't formatted: run node tools/tlk.mjs format" });
         else writeFileSync(file, formatted, "latin1");
     }
     return { findings, changed };
@@ -71,8 +82,8 @@ export async function run(values, positionals) {
         console.error(`No Lua file the format verb owns is under ${positionals.join(", ")}`);
         return 2;
     }
-    const { findings, changed } = formatRepository({ files, check: values.check, passes });
-    for (const finding of findings) console.log(`${finding.path}:${finding.line}: FORMAT ${finding.message}`);
+    const { findings, changed } = formatRepository({ files, check: values.check, passes, sortCalls: values["sort-calls"] });
+    for (const finding of findings) console.log(`${finding.path}:${finding.line}: ${finding.rule} ${finding.message}`);
     if (findings.some((finding) => finding.broken)) return 2;
     if (values.check) {
         console.log(findings.length ? `${findings.length} of ${files.length} files aren't formatted` : `${files.length} files formatted`);

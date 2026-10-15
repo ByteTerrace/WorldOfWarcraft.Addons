@@ -1,13 +1,13 @@
--- The addon's settings view (ByteTerrace_Core/SettingsWindow.lua): its two hosts, page layout,
--- controls, state changes and bare slash commands. Blizzard's panel gets one canvas page that the
--- controller UI ignores and no setting controls, whose focus freezes the client on close
--- (tools/api/forbidden.json).
+-- The addon's settings view (ByteTerrace_Core/SettingsWindow.lua): its two hosts, page layout, controls, state changes
+-- and bare slash commands. Blizzard's panel gets one canvas page that the controller UI ignores and no setting
+-- controls, whose focus freezes the client on close (tools/api/forbidden.json).
 
 local function NewAddOn()
     local h = Harness.New()
 
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
+
     local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", slash = { "/test" },
         title = "Test App" })
 
@@ -18,12 +18,15 @@ local function NewAddOn()
                 values = { "wide", "wider", "widest" } },
             { default = 0.5, kind = "number", label = "Volume", max = 1, min = 0, name = "volume", step = 0.25 },
         } })
+
     addon:Module("Riddles", { label = "Riddles", page = "Riddles", state = {
         { default = false, kind = "boolean", name = "locked", persist = false },
         { default = 30, kind = "number", label = "Minutes", lockedBy = "Riddles.locked", max = 120, min = 10,
             name = "minutes", step = 5 },
     } })
+
     h:Fire("ADDON_LOADED", "TestApp", false)
+
     return h, addon
 end
 
@@ -129,9 +132,11 @@ test("number steppers move by the row's step and stop at its bounds", function()
     control.Plus:Click()
     eq(state:Get("Meter.volume"), 1, "stops at max")
     eq(control.Label:GetText(), "1")
+
     for _ = 1, 6 do
         control.Minus:Click()
     end
+
     eq(state:Get("Meter.volume"), 0, "stops at min")
 end)
 
@@ -203,12 +208,14 @@ test("the page list's buttons switch pages, and the close button closes the wind
     local riddles
 
     for _, child in ipairs({ window.View:GetChildren() }) do
-        local label = rawget(child, "Label") -- the content frame has none
+        -- the content frame has none
+        local label = rawget(child, "Label")
 
         if label and (label:GetText() == "Riddles") then
             riddles = child
         end
     end
+
     truthy(h:Click(riddles), "the Riddles button is in the page list")
     eq(window:Page(), 2)
     truthy(window.Controls[addon.State:Id("Riddles.minutes")]:IsVisible())
@@ -264,6 +271,7 @@ test("number steppers stay on the row's grid and inside its bounds, whatever the
             { default = 2, kind = "number", label = "Free", max = 2.5, min = 0.5, name = "free" },
         },
         toggle = false })
+
     h:Fire("ADDON_LOADED", "TestApp", false)
     local window, state = addon.SettingsWindow, addon.State
 

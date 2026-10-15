@@ -1,23 +1,20 @@
 -- Secret values and the addon restriction model of the fake client (see wow.lua for the rest).
 --
--- A secret is a userdata proxy (newproxy), as opaque as the client's: indexing it, taking its
--- length, comparing it with another secret, arithmetic and calling it all throw, and
--- pairs/ipairs/tonumber/print refuse it (the env wraps the last two). As in the client
--- (secrets.operations), concatenation, tostring and string.format (the env's, and the string
--- methods') accept secrets and return secret strings. The env's type() reports the underlying
--- type, like the client. Four misuses the client refuses but Lua 5.1 can't route through a
--- metamethod aren't caught here, so the static SECRET rule covers them: a boolean test (`if
--- secret then`, always true; the client refuses it only for a secret boolean), `secret ==
--- nonSecret` (mixed types compare false without consulting __eq), a secret compared with itself
--- (`x == x` is true without __eq; the client refuses it, secrets.rawOperations: compare) and a
--- secret as a table key (the client refuses it, secrets.rawOperations: tableKey).
+-- A secret is a userdata proxy (newproxy), as opaque as the client's: indexing it, taking its length, comparing it with
+-- another secret, arithmetic and calling it all throw, and pairs/ipairs/tonumber/print refuse it (the env wraps the
+-- last two). As in the client (secrets.operations), concatenation, tostring and string.format (the env's, and the
+-- string methods') accept secrets and return secret strings. The env's type() reports the underlying type, like the
+-- client. Four misuses the client refuses but Lua 5.1 can't route through a metamethod aren't caught here, so the
+-- static SECRET rule covers them: a boolean test (`if secret then`, always true; the client refuses it only for a
+-- secret boolean), `secret == nonSecret` (mixed types compare false without consulting __eq), a secret compared with
+-- itself (`x == x` is true without __eq; the client refuses it, secrets.rawOperations: compare) and a secret as a table
+-- key (the client refuses it, secrets.rawOperations: tableKey).
 --
--- Restrictions (h.restrictions) mirror Enum.AddOnRestrictionType: Combat, Encounter,
--- ChallengeMode, PvPMatch, Map, Chat. Whether a flagged API returns secrets is decided per call
--- by the predicate for each of its flags. [D] marks a predicate that follows its
--- SecretPredicatesDocumentation text; [E] marks behavior observed in the real client that
--- narrows the doc; [C] marks a conservative fallback where the doc is silent
--- or leaves the condition open (per-spell or per-token exceptions the harness doesn't model):
+-- Restrictions (h.restrictions) mirror Enum.AddOnRestrictionType: Combat, Encounter, ChallengeMode, PvPMatch, Map,
+-- Chat. Whether a flagged API returns secrets is decided per call by the predicate for each of its flags. [D] marks a
+-- predicate that follows its SecretPredicatesDocumentation text; [E] marks behavior observed in the real client that
+-- narrows the doc; [C] marks a conservative fallback where the doc is silent or leaves the condition open (per-spell or
+-- per-token exceptions the harness doesn't model):
 --
 --   SecretReturns                     [E] always: UnitHealth and UnitHealthPercent came back secret
 --                                         with no restriction at all (unitHealth.player,
@@ -60,12 +57,12 @@
 --   SecretWhenAnchoringSecret         [C] (methods) the widget holds any secret aspect
 --   anything else                     [C] any restriction is active
 --
--- When a predicate holds, every return value is secret, except for structures with a shape
--- (Harness.SECRET_SHAPES, below): C_DamageMeter's structures keep their NeverSecret fields plain
--- and wrap every other field, lists and nested structures staying plain tables (meter.lua).
+-- When a predicate holds, every return value is secret, except for structures with a shape (Harness.SECRET_SHAPES,
+-- below): C_DamageMeter's structures keep their NeverSecret fields plain and wrap every other field, lists and nested
+-- structures staying plain tables (meter.lua).
 --
--- A unit-based predicate is false for a unit that doesn't exist: the API returns nothing to
--- hide (UnitExists is false, not secret).
+-- A unit-based predicate is false for a unit that doesn't exist: the API returns nothing to hide (UnitExists is false,
+-- not secret).
 --
 -- Two more conservative rules [C], where the docs name a restriction without saying how it works:
 --   UnitTokenPvPRestrictedForAddOns   an argument of this type is restricted for addons during a
@@ -75,8 +72,8 @@
 --   Secret in, secret out             a function that accepts a secret argument (AllowedWhenTainted)
 --                                     returns secrets: UnitName(secretToken) is secret.
 --
--- Every wrapped API (a fake whose name the snapshot documents, and every widget method) also
--- enforces, from the snapshot entry:
+-- Every wrapped API (a fake whose name the snapshot documents, and every widget method) also enforces, from the
+-- snapshot entry:
 --   SecretArguments      addon code is tainted, so a secret argument (or a secret held one level
 --                        deep in a table argument, like a color's r/g/b) is an error unless the
 --                        policy is "AllowedWhenTainted" (a missing policy means NotAllowed).
@@ -133,20 +130,10 @@ SecretMeta.__div, SecretMeta.__mod, SecretMeta.__pow = Refuse("compute with"), R
 SecretMeta.__unm = Refuse("compute with")
 SecretMeta.__call = Refuse("call")
 
-SecretMeta.__tostring = function() return "<secret>" end -- harness diagnostics; the env's tostring refuses
+-- harness diagnostics; the env's tostring refuses
+SecretMeta.__tostring = function() return "<secret>" end
 
 SecretMeta.__metatable = false
-
--- Wraps a value as a secret (nil stays nil: an API that returns nothing returns nothing).
-function Secret(value)
-    if value == nil then
-        return nil
-    end
-    local box = newproxy(Template)
-
-    Boxes[box] = { value = value }
-    return box
-end
 
 function IsSecret(value)
     return ((type(value) == "userdata") and (Boxes[value] ~= nil))
@@ -156,11 +143,25 @@ function Reveal(value)
     if IsSecret(value) then
         return Boxes[value].value
     end
+
     return value
 end
 
--- Concatenation with a secret yields a secret string [E] (secrets.operations: concat). Lua's own
--- rules still apply: only strings and numbers concatenate.
+-- Wraps a value as a secret (nil stays nil: an API that returns nothing returns nothing).
+function Secret(value)
+    if value == nil then
+        return nil
+    end
+
+    local box = newproxy(Template)
+
+    Boxes[box] = { value = value }
+
+    return box
+end
+
+-- Concatenation with a secret yields a secret string [E] (secrets.operations: concat). Lua's own rules still apply:
+-- only strings and numbers concatenate.
 SecretMeta.__concat = function(left, right)
     local a, b = Reveal(left), Reveal(right)
 
@@ -171,13 +172,13 @@ SecretMeta.__concat = function(left, right)
             error("attempt to concatenate a " .. kind .. " value", 2)
         end
     end
+
     return Secret(a .. b)
 end
 
--- string.format that takes secrets, as the client's does: a secret format or argument makes the
--- result a secret string [E] (secrets.operations: format, formatString). A precision on %s with a
--- secret input is refused [C]: the client closed it in 12.0.1 (warcraft.wiki.gg Patch_12.0.1/
--- API_changes), and no probe covers it yet.
+-- string.format that takes secrets, as the client's does: a secret format or argument makes the result a secret string
+-- [E] (secrets.operations: format, formatString). A precision on %s with a secret input is refused [C]: the client
+-- closed it in 12.0.1 (warcraft.wiki.gg Patch_12.0.1/ API_changes), and no probe covers it yet.
 local RawFormat = string.format
 
 function SecretFormat(fmt, ...)
@@ -190,14 +191,17 @@ function SecretFormat(fmt, ...)
             args[i] = Reveal(args[i])
         end
     end
+
     if not secret then
         return RawFormat(fmt, ...)
     end
+
     local plainFormat = Reveal(fmt)
 
     if (type(plainFormat) == "string") and plainFormat:find("%%[-+ #0]*%d*%.%d*s") then
         error("attempt to format a secret value with a precision", 2)
     end
+
     return Secret(RawFormat(plainFormat, unpack(args, 1, n)))
 end
 
@@ -206,6 +210,7 @@ function SecretToString(value, ...)
     if IsSecret(value) then
         return Secret(tostring(Reveal(value)))
     end
+
     return tostring(value, ...)
 end
 
@@ -216,12 +221,12 @@ local Chat = { "Encounter", "ChallengeMode", "PvPMatch", "Map", "Chat" }
 -- The restrictions of instanced content, under which unit identity is hidden [E].
 local Instance = { "Encounter", "ChallengeMode", "PvPMatch" }
 
--- Power types flagged never secret (Enum.PowerType): combo points, runes, soul shards, holy
--- power, chi, arcane charges, essence.
+-- Power types flagged never secret (Enum.PowerType): combo points, runes, soul shards, holy power, chi, arcane charges,
+-- essence.
 Harness.NEVER_SECRET_POWER = { [4] = true, [5] = true, [7] = true, [9] = true, [12] = true, [16] = true, [19] = true }
 
--- The power type an API reads when it takes no PowerType argument: GetComboPoints reads combo
--- points (Enum.PowerType.ComboPoints), not the unit's primary power.
+-- The power type an API reads when it takes no PowerType argument: GetComboPoints reads combo points
+-- (Enum.PowerType.ComboPoints), not the unit's primary power.
 Harness.IMPLIED_POWER_TYPE = { GetComboPoints = 4 }
 
 local function AnyOf(h, list)
@@ -230,6 +235,7 @@ local function AnyOf(h, list)
             return true
         end
     end
+
     return false
 end
 
@@ -237,18 +243,12 @@ local function AnyRestriction(h)
     return AnyOf(h, Harness.RESTRICTIONS)
 end
 
--- A missing unit has nothing to hide.
-local function PlayerControlled(h, token)
-    local unit = h:Unit(token)
-
-    return ((unit == nil) or (unit.playerControlled == true))
-end
-
 -- The unit a call names: its unit argument, else the unit with its WOWGUID argument.
 local function ContextUnit(h, ctx)
     if (ctx.unit == nil) and (ctx.guid ~= nil) then
         return h:UnitTokenForGUID(ctx.guid)
     end
+
     return ctx.unit
 end
 
@@ -258,6 +258,13 @@ local function IdentityAccessible(h, token)
     return ((unit == nil) or (unit.playerControlled == true) or (unit.inGroup == true))
 end
 
+-- A missing unit has nothing to hide.
+local function PlayerControlled(h, token)
+    local unit = h:Unit(token)
+
+    return ((unit == nil) or (unit.playerControlled == true))
+end
+
 local Predicates = {
     SecretInActivePvPMatch = function(h) return h.restrictions.PvPMatch end,
     SecretInChatMessagingLockdown = function(h) return AnyOf(h, Chat) end,
@@ -265,8 +272,10 @@ local Predicates = {
     SecretReturns = function() return true end,
     SecretWhenAnchoringSecret = function(h, ctx)
         if ctx.widget then
-            return (next(ctx.widget.secretAspects) ~= nil) -- ctx.widget is the widget's state
+            -- ctx.widget is the widget's state
+            return (next(ctx.widget.secretAspects) ~= nil)
         end
+
         return AnyRestriction(h)
     end,
     SecretWhenAurasRestricted = function(h) return AnyOf(h, Aura) end,
@@ -280,9 +289,10 @@ local Predicates = {
         if not AnyOf(h, Instance) then
             return false
         end
+
         if (ctx.unit == nil) and ctx.guids then
-            -- Every GUID counts (PARTY_KILL carries two). A GUID names someone even when the
-            -- harness has no unit for them, so an unknown one is restricted [C].
+            -- Every GUID counts (PARTY_KILL carries two). A GUID names someone even when the harness has no unit for
+            -- them, so an unknown one is restricted [C].
             for _, guid in ipairs(ctx.guids) do
                 local token = h:UnitTokenForGUID(guid)
 
@@ -290,19 +300,23 @@ local Predicates = {
                     return true
                 end
             end
+
             return false
         end
+
         return not IdentityAccessible(h, ContextUnit(h, ctx))
     end,
     SecretWhenUnitNameIdentityRestricted = function(h, ctx)
         if not AnyOf(h, Instance) then
             return false
         end
+
         local unit = h:Unit(ctx.unit)
 
         if h.restrictions.PvPMatch and unit and unit.isPlayer then
             return false
         end
+
         return not IdentityAccessible(h, ctx.unit)
     end,
     SecretWhenUnitPossessionRestricted = function(h, ctx)
@@ -316,9 +330,11 @@ local Predicates = {
         if (powerType == nil) and unit then
             powerType = unit.powerType
         end
+
         if not unit or Harness.NEVER_SECRET_POWER[powerType] then
             return false
         end
+
         return not (unit.power and (unit.power[powerType] == nil))
     end,
     SecretWhenUnitSpellCastRestricted = function(h, ctx)
@@ -339,6 +355,7 @@ function Harness:SecretFor(flags, ctx)
     if not flags then
         return false
     end
+
     for flag in pairs(flags) do
         local predicate = (Predicates[flag] or AnyRestriction)
 
@@ -346,13 +363,14 @@ function Harness:SecretFor(flags, ctx)
             return true
         end
     end
+
     return false
 end
 
 -- Structures whose docs mark fields NeverSecret or ConditionalSecret are secret field by field:
--- Harness.SECRET_SHAPES[api name] = function(result) returns the result with its secret fields
--- wrapped (it may wrap in place: every call returns fresh tables). Lists and structures stay
--- plain tables. An API without a shape wraps each whole return value.
+-- Harness.SECRET_SHAPES[api name] = function(result) returns the result with its secret fields wrapped (it may wrap in
+-- place: every call returns fresh tables). Lists and structures stay plain tables. An API without a shape wraps each
+-- whole return value.
 Harness.SECRET_SHAPES = {}
 
 -- Secrecy the real client showed that no flag predicate explains (see the header), by API name.
@@ -360,12 +378,18 @@ Harness.OBSERVED_SECRET = {
     UnitHealthMax = function(h, ctx)
         local unit = h:Unit(ctx.unit)
 
-        return ((unit ~= nil) and (unit ~= h.player)) -- a unit that doesn't exist has nothing to hide
+        -- a unit that doesn't exist has nothing to hide
+        return ((unit ~= nil) and (unit ~= h.player))
     end,
 }
 
 local function Pack(...)
     return { n = select("#", ...), ... }
+end
+
+-- A vararg repeats the last documented type (StrideIndex).
+local function TypeAt(types, i)
+    return (types[i] or types[#types])
 end
 
 -- An entry's documented argument (or payload) types, in order; parsed once per entry.
@@ -375,17 +399,15 @@ local function Types(entry, key)
 
     if not list then
         list = {}
+
         for kind in (entry[key] or ""):gmatch("[^,]+") do
             list[#list + 1] = kind
         end
+
         entry[cacheKey] = list
     end
-    return list
-end
 
--- A vararg repeats the last documented type (StrideIndex).
-local function TypeAt(types, i)
-    return (types[i] or types[#types])
+    return list
 end
 
 Harness.Types, Harness.TypeAt = Types, TypeAt
@@ -396,20 +418,22 @@ local PayloadLuaTypes = {
     string = "string", time_t = "number", WOWGUID = "string",
 }
 
--- Errors (at Fire's caller) on a payload the client couldn't send: more values than the event
--- documents, a nil where the docs say Nilable = false (missing trailing values included), a
--- secret in an event without secret flags, or a primitive of another type than documented.
+-- Errors (at Fire's caller) on a payload the client couldn't send: more values than the event documents, a nil where
+-- the docs say Nilable = false (missing trailing values included), a secret in an event without secret flags, or a
+-- primitive of another type than documented.
 function Harness.CheckPayload(event, entry, payload)
     local types = Types(entry, "Payload")
 
     if payload.n > #types then
         error(("Fire: %s documents %d payload values, got %d"):format(event, #types, payload.n), 3)
     end
+
     for i = 1, #types do
         if (payload[i] == nil) and not entry.PayloadNilable[i] then
             error(("Fire: %s payload #%d (%s) isn't nilable"):format(event, i, types[i]), 3)
         end
     end
+
     for i = 1, payload.n do
         local value, want = payload[i], PayloadLuaTypes[types[i]]
 
@@ -423,8 +447,8 @@ function Harness.CheckPayload(event, entry, payload)
     end
 end
 
--- Arguments passed by reference: the client never reads them, so a secret passes through (this
--- is how issecretvalue, AllowedWhenUntainted, still takes a secret from addon code).
+-- Arguments passed by reference: the client never reads them, so a secret passes through (this is how issecretvalue,
+-- AllowedWhenUntainted, still takes a secret from addon code).
 local PassThrough = { LuaValueReference = true }
 
 local function IsUnitType(kind)
@@ -439,6 +463,7 @@ local function HoldsSecret(value)
     if IsSecret(value) then
         return true
     end
+
     if (type(value) == "table") and not Harness.State(value) then
         for k, v in next, value do
             if IsSecret(k) or IsSecret(v) then
@@ -446,13 +471,14 @@ local function HoldsSecret(value)
             end
         end
     end
+
     return false
 end
 
 Harness.HoldsSecret = HoldsSecret
 
--- The predicate context for a call or event: the unit arguments (by documented type; without
--- types, the first string argument), the PowerType argument and the widget's state.
+-- The predicate context for a call or event: the unit arguments (by documented type; without types, the first string
+-- argument), the PowerType argument and the widget's state.
 function Harness.CallContext(entry, key, args, widgetState)
     local types = Types(entry, key)
     local ctx = { args = args, units = {}, widget = widgetState }
@@ -462,6 +488,7 @@ function Harness.CallContext(entry, key, args, widgetState)
 
         if kind and IsUnitType(kind) and (type(args[i]) == "string") then
             ctx.units[#ctx.units + 1] = args[i]
+
             if kind == "UnitTokenPvPRestrictedForAddOns" then
                 ctx.pvpRestricted = (ctx.pvpRestricted or {})
                 ctx.pvpRestricted[#ctx.pvpRestricted + 1] = args[i]
@@ -474,21 +501,25 @@ function Harness.CallContext(entry, key, args, widgetState)
             ctx.powerType = args[i]
         end
     end
+
     if (#types == 0) and (type(args[1]) == "string") then
         ctx.units[1] = args[1]
     end
+
     ctx.unit = ctx.units[1]
+
     return ctx
 end
 
--- The UnitTokenPvPRestrictedForAddOns rule (see the header): during a PvP match, a restricted
--- token naming a unit outside the player's control and group makes the results secret.
+-- The UnitTokenPvPRestrictedForAddOns rule (see the header): during a PvP match, a restricted token naming a unit
+-- outside the player's control and group makes the results secret.
 local UnderControl = { pet = true, player = true, vehicle = true }
 
 function Harness:PvPRestrictedToken(ctx)
     if not self.restrictions.PvPMatch or not ctx.pvpRestricted then
         return false
     end
+
     for _, token in ipairs(ctx.pvpRestricted) do
         local unit = self:Unit(token)
 
@@ -496,11 +527,12 @@ function Harness:PvPRestrictedToken(ctx)
             return true
         end
     end
+
     return false
 end
 
--- Fakes that are Lua (Lua's base library, or Blizzard's Lua) rather than client C API: exempt
--- from the undocumented default. A secret refuses whatever they do with it by itself.
+-- Fakes that are Lua (Lua's base library, or Blizzard's Lua) rather than client C API: exempt from the undocumented
+-- default. A secret refuses whatever they do with it by itself.
 Harness.LUA_FAKES = {
     assert = true, CreateColor = true, date = true, error = true, format = true, getmetatable = true,
     GetMoneyString = true, ipairs = true, next = true, pairs = true, pcall = true, print = true, random = true,
@@ -521,53 +553,62 @@ local function HasSpecificRestriction(entry)
             return true
         end
     end
+
     return false
 end
 
--- Functions the Forever client refused to addon code when tried in game, though the docs don't
--- mark them IsProtectedFunction (see the header): tools/api/forbidden.json.
+-- Functions the Forever client refused to addon code when tried in game, though the docs don't mark them
+-- IsProtectedFunction (see the header): tools/api/forbidden.json.
 Harness.FORBIDDEN_IN_GAME = (((type(__forbidden) == "string") and assert(loadstring("return " .. __forbidden))()) or {})
+
+-- The client's response to a blocked call: the call does nothing, the event fires, and the caller keeps running.
+-- h.blocked records every blocked or forbidden call; h.forbidden the latter.
+function Harness:BlockAction(event, name)
+    self.blocked[#self.blocked + 1] = name
+
+    if event == "ADDON_ACTION_FORBIDDEN" then
+        self.forbidden[#self.forbidden + 1] = name
+    end
+
+    self:Fire(event, self.mainAddon or self.loadOrder[#self.loadOrder] or "AddOn", name)
+end
 
 -- The event a call fires instead of running (nil = it runs): addon code is always tainted.
 function Harness:BlockedBy(entry, isMethod, widget, name)
     if not isMethod and Harness.FORBIDDEN_IN_GAME[name] then
         return "ADDON_ACTION_FORBIDDEN"
     end
+
     if entry.IsProtectedFunction and not isMethod then
         return "ADDON_ACTION_FORBIDDEN"
     end
+
     if not self.lockdown then
         return nil
     end
+
     if entry.IsProtectedFunction and self:IsProtectedWidget(widget) then
         return "ADDON_ACTION_BLOCKED"
     end
+
     if entry.HasRestrictions and not HasSpecificRestriction(entry) then
         return "ADDON_ACTION_BLOCKED"
     end
+
     return nil
 end
 
--- The client's response to a blocked call: the call does nothing, the event fires, and the
--- caller keeps running. h.blocked records every blocked or forbidden call; h.forbidden the latter.
-function Harness:BlockAction(event, name)
-    self.blocked[#self.blocked + 1] = name
-    if event == "ADDON_ACTION_FORBIDDEN" then
-        self.forbidden[#self.forbidden + 1] = name
-    end
-    self:Fire(event, self.mainAddon or self.loadOrder[#self.loadOrder] or "AddOn", name)
-end
-
--- Wraps fn as the API `name` documented by `entry` (a snapshot entry; nil = undocumented, which
--- gets the default policy unless the fake is Lua). For a widget method, the first argument is
--- the widget.
+-- Wraps fn as the API `name` documented by `entry` (a snapshot entry; nil = undocumented, which gets the default policy
+-- unless the fake is Lua). For a widget method, the first argument is the widget.
 function Harness:WrapApi(name, entry, fn, isMethod)
     if not entry then
         if Harness.LUA_FAKES[name] then
             return fn
         end
+
         entry = Undocumented
     end
+
     local h = self
     local policy = entry.SecretArguments
     local preconditions = (entry.Preconditions or {})
@@ -576,6 +617,7 @@ function Harness:WrapApi(name, entry, fn, isMethod)
         if not isMethod then
             h.apiCalls[name] = ((h.apiCalls[name] or 0) + 1)
         end
+
         local args = Pack(...)
         local widget = ((isMethod and args[1]) or nil)
         local first = ((isMethod and 2) or 1)
@@ -583,44 +625,55 @@ function Harness:WrapApi(name, entry, fn, isMethod)
 
         if blocked then
             h:BlockAction(blocked, name)
+
             return
         end
+
         local receivedSecret = false
         local types = Types(entry, "Arguments")
         local nilable = entry.ArgumentsNilable
 
-        if nilable and not isMethod then -- widget methods have overloads the docs can't state (SetPoint("CENTER"))
+        -- widget methods have overloads the docs can't state (SetPoint("CENTER"))
+        if nilable and not isMethod then
             for i = 1, #types do
-                if (args[(first + i) - 1] == nil) and not nilable[i] and not PassThrough[types[i]] then -- a reference may be nil
+                -- a reference may be nil
+                if (args[(first + i) - 1] == nil) and not nilable[i] and not PassThrough[types[i]] then
                     error(("%s: argument #%d (%s) isn't nilable"):format(name, i, types[i]), 2)
                 end
             end
         end
+
         for i = first, args.n do
             if not PassThrough[TypeAt(types, (i - first) + 1) or ""] and HoldsSecret(args[i]) then
                 if policy ~= "AllowedWhenTainted" then
                     error(("%s: secret argument #%d refused (SecretArguments %s; addon code is tainted)")
                         :format(name, (i - first) + 1, policy or "missing, so NotAllowed"), 2)
                 end
+
                 receivedSecret = true
             end
         end
+
         local state = (widget and Harness.State(widget))
 
         if preconditions.RequiresFontStringTextAccess and state and state.secretAspects.Text then
-            return -- FailureMode ReturnNothing for a tainted caller
+            -- FailureMode ReturnNothing for a tainted caller
+            return
         end
+
         if receivedSecret and state and entry.SecretArgumentsAddAspect then
             for aspect in pairs(entry.SecretArgumentsAddAspect) do
                 state.secretAspects[aspect] = true
             end
         end
+
         local results = Pack(fn(...))
         local callArgs = ((isMethod and Pack(select(2, ...))) or args)
         local ctx = Harness.CallContext(entry, "Arguments", callArgs, state)
 
         ctx.powerType = (ctx.powerType or Harness.IMPLIED_POWER_TYPE[name])
         local observed = Harness.OBSERVED_SECRET[name]
+
         local secret = (((entry.secret ~= nil) and h:SecretFor(entry.secret, ctx)) or h:PvPRestrictedToken(ctx)
             or ((observed ~= nil) and observed(h, ctx))
             or (receivedSecret and not isMethod))
@@ -632,6 +685,7 @@ function Harness:WrapApi(name, entry, fn, isMethod)
                 end
             end
         end
+
         if secret then
             local shape = Harness.SECRET_SHAPES[name]
 
@@ -643,6 +697,7 @@ function Harness:WrapApi(name, entry, fn, isMethod)
                 end
             end
         end
+
         return unpack(results, 1, results.n)
     end
 end

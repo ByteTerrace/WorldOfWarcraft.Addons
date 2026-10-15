@@ -6,8 +6,7 @@ local addonName, ns = ...
 --              Cleared when the module stops and at logout.
 --   Rumble     vibrates strongly when combat starts and lightly when it ends.
 --
--- Blizzard's gamepad UI uses neither, so nothing conflicts. Both are harmless with no controller
--- connected.
+-- Blizzard's gamepad UI uses neither, so nothing conflicts. Both are harmless with no controller connected.
 
 local C_GamePad, CreateColor = C_GamePad, CreateColor
 
@@ -34,6 +33,7 @@ ns.Addon:Module("LightBar", {
                 C_GamePad.SetLedColor(NeutralColor)
             end
         end
+
         module:Watch({ combat, afk }, Apply)
         module:On("GAME_PAD_CONNECTED", Apply)
         module:On("PLAYER_LOGOUT", C_GamePad.ClearLedColor)

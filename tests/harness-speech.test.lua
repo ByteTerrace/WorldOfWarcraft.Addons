@@ -1,5 +1,4 @@
--- The harness's fidelity rules for spoken text (tests/harness/speech.lua): combat audio alerts
--- and text to speech.
+-- The harness's fidelity rules for spoken text (tests/harness/speech.lua): combat audio alerts and text to speech.
 
 test("combat audio alerts speak only when the player turned them on, and refuse secret text", function()
     local h = Harness.New()

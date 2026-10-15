@@ -1,6 +1,6 @@
 # Lua conventions
 
-ByteTerrace addons follow Puck's C# conventions, mapped to Lua. `node tools/tlk.mjs check` enforces what a parser can decide (the NAMING, COMMENT and FORMAT rules); the rest is review.
+ByteTerrace addons follow Puck's C# conventions, mapped to Lua. `node tools/tlk.mjs check` enforces what a parser can decide (the NAMING, COMMENT, FORMAT and ORDER rules); the rest is review.
 
 ## Naming
 
@@ -58,21 +58,28 @@ The rules are Puck's: a comment earns its place by stating what the code can't, 
 
 ## Formatting
 
-`node tools/tlk.mjs format` writes the one canonical form, and `check`'s FORMAT rule fails a file it would change. Its passes are Puck's `puck format` passes, mapped to Lua:
+`node tools/tlk.mjs format` writes the one canonical form, and `check`'s FORMAT rule fails a file it would change. Its passes are Puck's `puck format` passes, mapped to Lua, plus the habits Puck's own code keeps that its formatter doesn't write (blank lines around blocks and before a `return`, no trailing comments, comments filled toward 120 columns, members in alphabetical order):
 
 | Pass | Rewrite |
 | --- | --- |
+| `trailing-comments` | A comment after code moves onto its own line above that code, at the line's indentation. |
 | `paren-clarity` | Every binary and logical expression is parenthesized for explicit precedence: `local visible = (UnitPowerType("player") == Energy)`, `if (a == nil) or (a == "ENERGY") then`. It stays bare where something already delimits it: its own parentheses, an `if`, `elseif`, `while` or `until` condition, a call's arguments, an index's brackets and a numeric `for`'s bounds. An operand of the same `and`, `or` or `..` stays bare, so `a and b and c` is one flat group. Unary operators are left alone. |
-| `init-order` | A table constructor whose every field is `name = value` is sorted alphabetically by name, ignoring case (`commands`, `label`, `OnEnable`), when no value calls anything. A constructor with positional or `[key] =` fields, a duplicate key, or a comment between its fields stays as written. Across lines, fields that each had a line keep one, and packed fields are packed again up to 120 columns. |
+| `init-order` | A table constructor whose every field is `name = value` is sorted alphabetically by name, ignoring case (`commands`, `label`, `OnEnable`), when no value calls anything. In a constructor with a field to a line, the comment lines directly above a field move with it. Across lines, fields that each had a line keep one, and packed fields are packed again up to 120 columns. |
 | `trailing-comma` | A multi-line table constructor's last field ends with a comma. |
 | `alias-order` | A file-level `local a, b = x, y` whose values call nothing is sorted by name, names and values together. |
-| `local-order` | A run of file-level `local` statements on consecutive lines (no comment line between, no values that call anything or hold a function) is sorted by name. A statement never moves past one whose value reads it, or past one that it read as a global before. A blank line, a comment line or a call ends the run, so blank lines are how a file keeps groups apart. |
+| `export-order` | A run of file-level `Table.member = value` lines (values are names or literals) is sorted by target, each line's own pairs first. |
+| `local-order` | A run of file-level `local` statements on consecutive lines (no values that call anything or hold a function) is sorted by name; the comment lines directly above a statement are its own and move with it. A statement never moves past one whose value reads it, or past one that it read as a global before. A blank line or a call ends the run, so blank lines are how a file keeps groups apart. |
+| `function-order` | A run of file-level functions (local functions, locals holding one, and functions stored in tables), each with its comment lines, is sorted: local ones first, then the rest, each alphabetically. A function never moves past one whose name it reads, so a helper stays above its callers. Any other statement, or a comment with a blank line after it, ends the run. |
 | `decl-spacing` | One blank line between a run of `local` statements and the statement after it, unless a comment leads that statement. |
+| `block-spacing` | One blank line before and after a block (`if`, a loop, `do`, a function) or a statement spanning lines, and before a `return` or `break`, between statements of one block, above the later statement's comment lines. |
 | `member-spacing` | One blank line between a file-level function and its neighbors, above the function's leading comment. |
+| `comment-fill` | A paragraph of full-line comments (plain prose: no lists, aligned columns or annotations) fills its lines up to 120 columns. A line starting in lower case after one that ends a sentence is a note of its own. |
 | `string-merge` | `"a" .. "b"` of two double-quoted literals on one line becomes one literal. |
 | `blank-lines` | No more than one blank line in a row, and none at the start of a file. |
 
-Like Puck's, the passes move nothing a comment could be attached to, the result must parse, and running them again changes nothing. `format --check` writes nothing; `--only <pass,...>` runs some of them.
+Like Puck's, the reordering passes move nothing a comment could be misattached by, the result must parse, and running them again changes nothing. `format --check` writes nothing; `--only <pass,...>` runs some of them.
+
+A constructor `init-order` won't sort (a value calls something, or a comment sits between packed fields) is check's ORDER finding: sort it by hand, or say why its order matters with `-- order: <why>` on its line or alone above it (a table grouped under section comments, say). `format --sort-calls` sorts the calling ones too; a call can change what another field reads, so its diff is for review.
 
 Review covers the rest:
 

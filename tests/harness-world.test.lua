@@ -1,5 +1,5 @@
--- The harness's fidelity rules for the world (tests/harness/world.lua): location, maps and
--- waypoints, honor and raid warnings.
+-- The harness's fidelity rules for the world (tests/harness/world.lua): location, maps and waypoints, honor and raid
+-- warnings.
 
 local Kit = use("harness")
 
@@ -13,6 +13,7 @@ local function WithMaps()
     h:AddMap(Hillsbrad, { mapType = "Zone", name = "Hillsbrad Foothills", parentMapID = 1415 })
     h:AddMap(1415, { mapType = "Continent", name = "Eastern Kingdoms" })
     h:AddMap(229, { mapType = "Dungeon", name = "Deadmines" })
+
     return h
 end
 
@@ -141,7 +142,8 @@ test("RaidWarningUtil.AddMessage records the message with its color", function()
     eq(color.r, 1)
     eq(color.b, 0)
     env.RaidWarningUtil.AddMessage("RALLY!", color, 5)
-    env.RaidWarningUtil.AddMessage("Second", { r = Secret(1), g = 0, b = 0 }) -- colors take secrets
+    -- colors take secrets
+    env.RaidWarningUtil.AddMessage("Second", { b = 0, g = 0, r = Secret(1) })
     eq(#h.raidNotices, 2)
     eq(h.raidNotices[1].text, "RALLY!")
     eq(h.raidNotices[1].color, color)

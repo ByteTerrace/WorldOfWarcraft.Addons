@@ -1,13 +1,11 @@
--- The world around the player in the fake client: location and maps, the user waypoint, honor,
--- raid warnings and boss encounters (see wow.lua for the rest). Only what the addons call is
--- modeled.
+-- The world around the player in the fake client: location and maps, the user waypoint, honor, raid warnings and boss
+-- encounters (see wow.lua for the rest). Only what the addons call is modeled.
 --
--- State: h.zone, h.subZone (GetRealZoneText, GetSubZoneText), h.mapID (the uiMapID the player is on),
--- h.mapPosition = { x, y } (normalized to h.mapID), h.instance (nil, or IsInInstance's type:
--- "party", "raid", "pvp", "arena", "scenario"), h.maps = { [uiMapID] = { name, mapType, parentMapID,
--- flags, canSetWaypoint } } (h:AddMap), h.waypoint ({ uiMapID, x, y, z } or nil), h.superTracked
--- (the user waypoint is super tracked) and h.raidNotices ({ text, color, displayTime } per raid
--- warning message).
+-- State: h.zone, h.subZone (GetRealZoneText, GetSubZoneText), h.mapID (the uiMapID the player is on), h.mapPosition = {
+-- x, y } (normalized to h.mapID), h.instance (nil, or IsInInstance's type: "party", "raid", "pvp", "arena",
+-- "scenario"), h.maps = { [uiMapID] = { name, mapType, parentMapID, flags, canSetWaypoint } } (h:AddMap), h.waypoint ({
+-- uiMapID, x, y, z } or nil), h.superTracked (the user waypoint is super tracked) and h.raidNotices ({ text, color,
+-- displayTime } per raid warning message).
 --
 -- Modeling decisions ([D] documented, [G] a guess where the docs are silent):
 --   Zones       [D] ZONE_CHANGED_NEW_AREA fires on entering a new zone, ZONE_CHANGED on entering
@@ -90,8 +88,8 @@ function Harness:InitWorld(player)
     self.encounterWarnings = { available = false, enabled = false }
 end
 
--- A boss encounter starts: spec = { id, name, difficultyID, groupSize } (defaults 1, "Encounter",
--- 1, 5). The Encounter restriction activates, then ENCOUNTER_START fires (see the header).
+-- A boss encounter starts: spec = { id, name, difficultyID, groupSize } (defaults 1, "Encounter", 1, 5). The Encounter
+-- restriction activates, then ENCOUNTER_START fires (see the header).
 function Harness:StartEncounter(spec)
     spec = (spec or {})
     self:SetRestriction("Encounter", true)
@@ -104,29 +102,50 @@ local SecretWarningFields = {
     targetName = true, text = true, tooltipSpellID = true,
 }
 
--- Fires ENCOUNTER_WARNING with an EncounterWarningInfo from spec (any of its fields; see the
--- header for the defaults and which are secret).
+local function GetXY(vector)
+    return vector.x, vector.y
+end
+
+-- UiMapPoint (Blizzard_ObjectAPI/Mainline/UiMapPoint.lua); only CreateFromCoordinates is modeled.
+local function UiMapPoint()
+    return {
+        CreateFromCoordinates = function(mapID, x, y, z)
+            return { position = Harness.Vector2D(x, y), uiMapID = mapID, z = z }
+        end,
+    }
+end
+
+-- A vector as CreateVector2D (Blizzard_SharedXML/Vector2D.lua) makes it: x, y and Vector2DMixin's methods copied in.
+-- Only GetXY is modeled; the rest of the mixin is absent.
+function Harness.Vector2D(x, y)
+    return { GetXY = GetXY, x = x, y = y }
+end
+
+-- Fires ENCOUNTER_WARNING with an EncounterWarningInfo from spec (any of its fields; see the header for the defaults
+-- and which are secret).
 function Harness:EncounterWarning(spec)
     local info = {
-        text = "", casterGUID = "", casterName = "", targetGUID = "", targetName = "", iconFileID = 0,
-        tooltipSpellID = 0, isDeadly = false, color = self.env.CreateColor(1, 1, 1, 1), duration = 0,
-        severity = self.env.Enum.EncounterEventSeverity.Medium, shouldPlaySound = true,
-        shouldShowChatMessage = true, shouldShowWarning = true,
+        casterGUID = "", casterName = "", color = self.env.CreateColor(1, 1, 1, 1), duration = 0, iconFileID = 0,
+        isDeadly = false, severity = self.env.Enum.EncounterEventSeverity.Medium, shouldPlaySound = true,
+        shouldShowChatMessage = true, shouldShowWarning = true, targetGUID = "", targetName = "", text = "",
+        tooltipSpellID = 0,
     }
 
     for key, value in pairs(spec or {}) do
         assert(info[key] ~= nil, "EncounterWarning: EncounterWarningInfo has no field " .. tostring(key))
         info[key] = value
     end
+
     for key in pairs(SecretWarningFields) do
         info[key] = Secret(info[key])
     end
+
     self:Fire("ENCOUNTER_WARNING", info)
 end
 
--- Moves the player: spec = { zone, subZone, mapID, x, y, instance } (a missing field keeps its
--- value; subZone = "" leaves subzones; instance = false leaves an instance). Fires
--- ZONE_CHANGED_NEW_AREA when the zone changes, otherwise ZONE_CHANGED when the subzone does.
+-- Moves the player: spec = { zone, subZone, mapID, x, y, instance } (a missing field keeps its value; subZone = ""
+-- leaves subzones; instance = false leaves an instance). Fires ZONE_CHANGED_NEW_AREA when the zone changes, otherwise
+-- ZONE_CHANGED when the subzone does.
 function Harness:SetLocation(spec)
     local zoneChanged = ((spec.zone ~= nil) and (spec.zone ~= self.zone))
     local subZoneChanged = ((spec.subZone ~= nil) and (spec.subZone ~= self.subZone))
@@ -135,15 +154,19 @@ function Harness:SetLocation(spec)
         assert((spec.instance == false) or InstanceTypes[spec.instance], "SetLocation: unknown instance type " .. tostring(spec.instance))
         self.instance = (spec.instance or nil)
     end
+
     if spec.mapID ~= nil then
         self.mapID = spec.mapID
     end
+
     if (spec.x ~= nil) or (spec.y ~= nil) then
         assert(spec.x and spec.y, "SetLocation: give both x and y")
         self.mapPosition = { x = spec.x, y = spec.y }
     end
+
     self.zone = (spec.zone or self.zone)
     self.subZone = (spec.subZone or self.subZone)
+
     if zoneChanged then
         self:Fire("ZONE_CHANGED_NEW_AREA")
     elseif subZoneChanged then
@@ -151,62 +174,39 @@ function Harness:SetLocation(spec)
     end
 end
 
-local function GetXY(vector)
-    return vector.x, vector.y
-end
-
--- A vector as CreateVector2D (Blizzard_SharedXML/Vector2D.lua) makes it: x, y and Vector2DMixin's
--- methods copied in. Only GetXY is modeled; the rest of the mixin is absent.
-function Harness.Vector2D(x, y)
-    return { GetXY = GetXY, x = x, y = y }
-end
-
--- UiMapPoint (Blizzard_ObjectAPI/Mainline/UiMapPoint.lua); only CreateFromCoordinates is modeled.
-local function UiMapPoint()
-    return {
-        CreateFromCoordinates = function(mapID, x, y, z)
-            return { uiMapID = mapID, position = Harness.Vector2D(x, y), z = z }
-        end,
-    }
-end
-
 local WaypointMapTypes = { Continent = true, Micro = true, Zone = true }
 
--- Adds a map the C_Map fakes know: spec = { name, mapType (an Enum.UIMapType name, "Zone"),
--- parentMapID, flags (Enum.UIMapFlag bits), canSetWaypoint (overrides the mapType rule) }.
-function Harness:AddMap(mapID, spec)
-    assert((type(mapID) == "number") and (type(spec) == "table") and (type(spec.name) == "string"), "AddMap(mapID, { name, mapType, ... })")
-    local mapType = __snapshot.enums.UIMapType[spec.mapType or "Zone"]
+-- RaidWarningFrameMixin:AddMessage's checks on its arguments (see the header), then the record.
+local function AddRaidNotice(h, text, colorInfo, displayTime)
+    if type(colorInfo) ~= "table" then
+        error("attempt to index local 'colorInfo' (a " .. type(Reveal(colorInfo)) .. " value)", 3)
+    end
 
-    assert(mapType, "AddMap: unknown mapType " .. tostring(spec.mapType) .. " (an Enum.UIMapType name)")
-    self.maps[mapID] = { canSetWaypoint = spec.canSetWaypoint, flags = spec.flags, mapType = mapType, name = spec.name,
-        parentMapID = spec.parentMapID }
+    if IsSecret(displayTime) then
+        error("attempt to compare a secret value (RaidWarningFrame's hold time reads displayTime)", 3)
+    end
+
+    if IsSecret(text) then
+        error("attempt to compute with a secret value (RaidWarningFrame adds up GetNumLines, secret with secret text)", 3)
+    end
+
+    h.raidNotices[#h.raidNotices + 1] = { color = colorInfo, displayTime = displayTime, text = text }
 end
 
--- Whether the user waypoint may go on mapID (a map the test didn't add doesn't exist).
-function Harness:CanSetWaypointOn(mapID)
-    local map = self.maps[mapID]
+-- ChatTypeInfo (Blizzard_ChatFrameBase/Shared/ChatTypeInfoConstants.lua); only RAID_WARNING is modeled, reading any
+-- other type is an error.
+local function ChatTypeInfo()
+    local info = {
+        RAID_WARNING = { b = 0, flashTab = false, flashTabOnGeneral = false, g = 0.282, ignoreChatTypeProcessing = false, r = 1, sticky = 0 },
+    }
 
-    if not map then
-        return false
-    end
-    if map.canSetWaypoint ~= nil then
-        return (map.canSetWaypoint == true)
-    end
-    local enums = __snapshot.enums
-
-    for name, value in pairs(enums.UIMapType) do
-        if (value == map.mapType) and WaypointMapTypes[name] then
-            return true
-        end
-    end
-    local always = enums.UIMapFlag.AlwaysAllowUserWaypoints
-
-    return ((math.floor((map.flags or 0) / always) % 2) == 1)
+    return setmetatable(info, {
+        __index = function(_, key) error("ChatTypeInfo." .. tostring(key) .. " isn't modeled by the harness", 2) end,
+    })
 end
 
--- The map and position GetBestMapForUnit / GetPlayerMapPosition see for a unit: the player's,
--- or a party member's mapID / mapPosition; nothing for anyone else.
+-- The map and position GetBestMapForUnit / GetPlayerMapPosition see for a unit: the player's, or a party member's mapID
+-- / mapPosition; nothing for anyone else.
 local function Located(h, token)
     local unit = h:Unit(token)
 
@@ -214,14 +214,6 @@ local function Located(h, token)
         return h.mapID, h.mapPosition
     elseif unit and unit.inGroup then
         return unit.mapID, unit.mapPosition
-    end
-end
-
-local function SetSuperTracked(h, tracked)
-    tracked = (tracked and (h.waypoint ~= nil))
-    if h.superTracked ~= tracked then
-        h.superTracked = tracked
-        h:Fire("SUPER_TRACKING_CHANGED")
     end
 end
 
@@ -233,27 +225,86 @@ local function MapFakes(h)
             local unitMap, position = Located(h, token)
 
             if h.instance or not position or (unitMap ~= mapID) then return nil end
+
             return Harness.Vector2D(position.x, position.y)
         end,
         SetUserWaypoint = function(point)
             assert((type(point) == "table") and (type(point.position) == "table"), "C_Map.SetUserWaypoint: point must be a UiMapPoint")
+
             if not h:CanSetWaypointOn(point.uiMapID) then return false end
+
             local x, y = point.position.x, point.position.y
 
             h.waypoint = { uiMapID = point.uiMapID, x = x, y = y, z = point.z }
             h:Fire("USER_WAYPOINT_UPDATED")
+
             return true
         end,
     }
 end
 
--- A chat event (CHAT_MSG_SAY, CHAT_MSG_CHANNEL, ...) with the documented 18-field payload around
--- text and sender ("First Last", or "" for a system message): the other fields are empty
--- ("" / 0 / false), guid is "" (documented non-nil) and the lineID counts up from 1.
--- [P] discordInfo (names.chatDiscordInfo): for a message that isn't from Discord, a table of empty
--- strings, false flags and two numbers, without lastOnlineGUID; [G] the numbers are 0.
+local function SetSuperTracked(h, tracked)
+    tracked = (tracked and (h.waypoint ~= nil))
+
+    if h.superTracked ~= tracked then
+        h.superTracked = tracked
+        h:Fire("SUPER_TRACKING_CHANGED")
+    end
+end
+
+-- Adds a map the C_Map fakes know: spec = { name, mapType (an Enum.UIMapType name, "Zone"), parentMapID, flags
+-- (Enum.UIMapFlag bits), canSetWaypoint (overrides the mapType rule) }.
+function Harness:AddMap(mapID, spec)
+    assert((type(mapID) == "number") and (type(spec) == "table") and (type(spec.name) == "string"), "AddMap(mapID, { name, mapType, ... })")
+    local mapType = __snapshot.enums.UIMapType[spec.mapType or "Zone"]
+
+    assert(mapType, "AddMap: unknown mapType " .. tostring(spec.mapType) .. " (an Enum.UIMapType name)")
+
+    self.maps[mapID] = { canSetWaypoint = spec.canSetWaypoint, flags = spec.flags, mapType = mapType, name = spec.name,
+        parentMapID = spec.parentMapID }
+end
+
+-- Bonus honor: COMBATLOG_HONORAWARD (honor). Returns the text.
+function Harness:AwardHonor(honor)
+    local text = Harness.GLOBAL_STRINGS.COMBATLOG_HONORAWARD:format(honor)
+
+    self:FireHonorMessage(text)
+
+    return text
+end
+
+-- Whether the user waypoint may go on mapID (a map the test didn't add doesn't exist).
+function Harness:CanSetWaypointOn(mapID)
+    local map = self.maps[mapID]
+
+    if not map then
+        return false
+    end
+
+    if map.canSetWaypoint ~= nil then
+        return (map.canSetWaypoint == true)
+    end
+
+    local enums = __snapshot.enums
+
+    for name, value in pairs(enums.UIMapType) do
+        if (value == map.mapType) and WaypointMapTypes[name] then
+            return true
+        end
+    end
+
+    local always = enums.UIMapFlag.AlwaysAllowUserWaypoints
+
+    return ((math.floor((map.flags or 0) / always) % 2) == 1)
+end
+
+-- A chat event (CHAT_MSG_SAY, CHAT_MSG_CHANNEL, ...) with the documented 18-field payload around text and sender
+-- ("First Last", or "" for a system message): the other fields are empty ("" / 0 / false), guid is "" (documented
+-- non-nil) and the lineID counts up from 1. [P] discordInfo (names.chatDiscordInfo): for a message that isn't from
+-- Discord, a table of empty strings, false flags and two numbers, without lastOnlineGUID; [G] the numbers are 0.
 function Harness:FireChat(event, text, sender)
     self.chatLineID = (self.chatLineID + 1)
+
     local discordInfo = {
         forwardedMessage = "", fromDiscord = false, globalName = "", hasAttachment = false, hasEmbed = false,
         hasEmoji = false, hasError = false, hasForwardedMessage = false, hasPoll = false, hasSticker = false,
@@ -269,8 +320,8 @@ function Harness:FireHonorMessage(text)
     self:FireChat("CHAT_MSG_COMBAT_HONOR_GAIN", text)
 end
 
--- An honorable kill: COMBATLOG_HONORGAIN (victim, rank, honor), or COMBATLOG_HONORGAIN_NO_RANK
--- (victim, honor) when rank is nil. Returns the text.
+-- An honorable kill: COMBATLOG_HONORGAIN (victim, rank, honor), or COMBATLOG_HONORGAIN_NO_RANK (victim, honor) when
+-- rank is nil. Returns the text.
 function Harness:HonorKill(victimName, rank, honor)
     local strings = Harness.GLOBAL_STRINGS
     local text
@@ -280,68 +331,38 @@ function Harness:HonorKill(victimName, rank, honor)
     else
         text = strings.COMBATLOG_HONORGAIN:format(victimName, rank, honor)
     end
-    self:FireHonorMessage(text)
-    return text
-end
-
--- Bonus honor: COMBATLOG_HONORAWARD (honor). Returns the text.
-function Harness:AwardHonor(honor)
-    local text = Harness.GLOBAL_STRINGS.COMBATLOG_HONORAWARD:format(honor)
 
     self:FireHonorMessage(text)
+
     return text
-end
-
--- RaidWarningFrameMixin:AddMessage's checks on its arguments (see the header), then the record.
-local function AddRaidNotice(h, text, colorInfo, displayTime)
-    if type(colorInfo) ~= "table" then
-        error("attempt to index local 'colorInfo' (a " .. type(Reveal(colorInfo)) .. " value)", 3)
-    end
-    if IsSecret(displayTime) then
-        error("attempt to compare a secret value (RaidWarningFrame's hold time reads displayTime)", 3)
-    end
-    if IsSecret(text) then
-        error("attempt to compute with a secret value (RaidWarningFrame adds up GetNumLines, secret with secret text)", 3)
-    end
-    h.raidNotices[#h.raidNotices + 1] = { color = colorInfo, displayTime = displayTime, text = text }
-end
-
--- ChatTypeInfo (Blizzard_ChatFrameBase/Shared/ChatTypeInfoConstants.lua); only RAID_WARNING is
--- modeled, reading any other type is an error.
-local function ChatTypeInfo()
-    local info = {
-        RAID_WARNING = { b = 0, flashTab = false, flashTabOnGeneral = false, g = 0.282, ignoreChatTypeProcessing = false, r = 1, sticky = 0 },
-    }
-
-    return setmetatable(info, {
-        __index = function(_, key) error("ChatTypeInfo." .. tostring(key) .. " isn't modeled by the harness", 2) end,
-    })
 end
 
 -- The world fakes, merged into the env (env.lua) before it wraps them.
 function Harness:WorldFakes()
     local h = self
+
     local fakes = {
-        C_Map = MapFakes(h),
-        C_SuperTrack = {
-            SetSuperTrackedUserWaypoint = function(tracked) SetSuperTracked(h, tracked) end,
-        },
-        IsInInstance = function()
-            return (h.instance ~= nil), (h.instance or "none")
-        end,
         C_EncounterWarnings = {
             IsFeatureAvailable = function() return h.encounterWarnings.available end,
             IsFeatureEnabled = function() return (h.encounterWarnings.available and h.encounterWarnings.enabled) end,
         },
-        UiMapPoint = UiMapPoint(),
+        C_Map = MapFakes(h),
+        C_SuperTrack = {
+            SetSuperTrackedUserWaypoint = function(tracked) SetSuperTracked(h, tracked) end,
+        },
         ChatTypeInfo = ChatTypeInfo(),
+        IsInInstance = function()
+            return (h.instance ~= nil), (h.instance or "none")
+        end,
         RaidWarningUtil = {
             AddMessage = function(text, colorInfo, displayTime)
                 AddRaidNotice(h, text, colorInfo, displayTime)
             end,
         },
+        UiMapPoint = UiMapPoint(),
     }
 
     for name, value in pairs(Harness.GLOBAL_STRINGS) do fakes[name] = value end
+
     return fakes
 end

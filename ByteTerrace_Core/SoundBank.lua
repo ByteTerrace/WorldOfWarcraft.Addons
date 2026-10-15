@@ -1,11 +1,10 @@
--- SoundBank: player-supplied sounds bound to game moments. An addon ships no audio: players drop
--- files named after each sound (FinishHim.ogg; .ogg wins if both exist) into the addon's media
--- folder and restart the game (the client only sees files that existed at launch). Numbered
--- copies up to MaxVariants (FinishHim2.ogg ... FinishHim5.ogg) are variants: each time a sound
--- plays, one of its present files is picked at random. Which files are present comes from
--- C_UIFileAsset.IsKnownFile, as boss mods check external sounds (it knows loose addon files,
--- probed in game), asked once per sound. PlaySoundFile also says no for a muted channel, so its
--- answer alone can't tell a missing file from a muted one.
+-- SoundBank: player-supplied sounds bound to game moments. An addon ships no audio: players drop files named after each
+-- sound (FinishHim.ogg; .ogg wins if both exist) into the addon's media folder and restart the game (the client only
+-- sees files that existed at launch). Numbered copies up to MaxVariants (FinishHim2.ogg ... FinishHim5.ogg) are
+-- variants: each time a sound plays, one of its present files is picked at random. Which files are present comes from
+-- C_UIFileAsset.IsKnownFile, as boss mods check external sounds (it knows loose addon files, probed in game), asked
+-- once per sound. PlaySoundFile also says no for a muted channel, so its answer alone can't tell a missing file from a
+-- muted one.
 --
 --   local sounds = ByteTerrace.NewSoundBank(addon, { master = "Sounds.enabled", channel = "Sounds.channel",
 --                                                     folder = "Interface\\AddOns\\MyAddon\\Media\\" }) -- optional
@@ -23,8 +22,8 @@
 --   sounds:Test(arg)           the "<word> [variant]" test command: plays regardless of switches
 --                              and says why nothing played; no word lists every sound.
 --
--- master names the boolean row that switches every sound, channel the string row naming the
--- volume channel they play on (Master, SFX, Music, Ambience, Dialog).
+-- master names the boolean row that switches every sound, channel the string row naming the volume channel they play on
+-- (Master, SFX, Music, Ambience, Dialog).
 
 local Extensions = { ".ogg", ".mp3" }
 local FadeOutMilliseconds = 1000
@@ -40,32 +39,42 @@ local SoundBank = {}
 
 SoundBank.__index = SoundBank
 
+local function Applies(state, sound)
+    return ((state:Get(sound.row) and (not sound.needs or state:Get(sound.needs)) and true) or false)
+end
+
 local function FileName(sound, variant)
     return (((variant == 1) and sound.file) or (sound.file .. variant))
 end
 
--- A sound's files, read once: the client only sees files that existed at launch. files[variant] is
--- the path the client knows for that variant (.ogg first) or false; present lists the known ones.
+-- A sound's files, read once: the client only sees files that existed at launch. files[variant] is the path the client
+-- knows for that variant (.ogg first) or false; present lists the known ones.
 local function Files(self, sound)
     local files = sound.files
 
     if files then
         return files, sound.present
     end
+
     files, sound.present = {}, {}
+
     for variant = 1, MaxVariants do
         local name = (self.m_folder .. FileName(sound, variant))
 
         files[variant] = false
+
         for _, extension in ipairs(Extensions) do
             if C_UIFileAsset.IsKnownFile(name .. extension) then
                 files[variant] = (name .. extension)
                 sound.present[#sound.present + 1] = (name .. extension)
+
                 break
             end
         end
     end
+
     sound.files = files
+
     return files, sound.present
 end
 
@@ -76,13 +85,10 @@ local function PlayAny(self, sound)
     if #present == 0 then
         return false
     end
+
     local willPlay, handle = PlaySoundFile(present[random(#present)], self.m_addon.State:Get(self.m_channel))
 
     return ((willPlay and true) or false), handle
-end
-
-local function Applies(state, sound)
-    return ((state:Get(sound.row) and (not sound.needs or state:Get(sound.needs)) and true) or false)
 end
 
 --- Creates an addon's sound bank.
@@ -93,15 +99,20 @@ function ByteTerrace.NewSoundBank(addon, options)
     if (type(options.master) ~= "string") or (type(options.channel) ~= "string") then
         error("NewSoundBank needs the master and channel row names", 2)
     end
+
     return setmetatable({
         m_addon = addon,
-        m_master = options.master,
+        -- [word] = spec
+        m_byWord = {},
+        -- [key] = the sound's spec
+        m_catalog = {},
         m_channel = options.channel,
         m_folder = (options.folder or ("Interface\\AddOns\\" .. addon.Name .. "\\Media\\")),
-        m_catalog = {},    -- [key] = the sound's spec
-        m_order = {},      -- keys in definition order, for Test
-        m_byWord = {},     -- [word] = spec
-        m_lastPlayed = {}, -- [key] = GetTime() when it last played, for cooldowns
+        -- [key] = GetTime() when it last played, for cooldowns
+        m_lastPlayed = {},
+        m_master = options.master,
+        -- keys in definition order, for Test
+        m_order = {},
     }, SoundBank)
 end
 
@@ -112,42 +123,16 @@ function SoundBank:Define(key, spec)
     if self.m_catalog[key] or self.m_byWord[spec.word] then
         error(self.m_addon.Name .. ": sound " .. key .. " (" .. tostring(spec.word) .. ") is already defined", 2)
     end
+
     local own = { key = key }
 
     for field, value in pairs(spec) do
         own[field] = value
     end
+
     self.m_catalog[key] = own
     self.m_byWord[own.word] = own
     self.m_order[#self.m_order + 1] = key
-end
-
---- The boolean setting row that switches one sound, or a family of sounds sharing it; its
---- description names their files.
----@param name string the row's name in its module
----@param label string
----@param description string when the sounds play
----@param keys string[] the sounds it switches
----@return table row
-function SoundBank:Row(name, label, description, keys)
-    local howTo
-
-    if #keys == 1 then
-        local sound = self.m_catalog[keys[1]]
-        local slash = ((self.m_addon.Slash and self.m_addon.Slash[1]) or "")
-
-        howTo = ("Put %s.ogg or %s.mp3 in the addon's Media folder (%s2 to %s%d for variety), then restart the game. Test with %s sound %s.")
-            :format(sound.file, sound.file, sound.file, sound.file, MaxVariants, slash, sound.word)
-    else
-        local files = {}
-
-        for i, key in ipairs(keys) do
-            files[i] = self.m_catalog[key].file
-        end
-        howTo = ("Files: %s (.ogg or .mp3; numbered copies add variety) in the addon's Media folder, then restart the game.")
-            :format(concat(files, ", "))
-    end
-    return { default = true, description = (description .. " " .. howTo), kind = "boolean", label = label, name = name }
 end
 
 --- Whether a sound would play now, cooldown aside: the master switch, its row and its needs row.
@@ -168,54 +153,52 @@ function SoundBank:Play(key)
     if not self:IsOn(key) then
         return nil
     end
+
     local now = GetTime()
     local last = self.m_lastPlayed[key]
 
     if sound.cooldown and last and ((now - last) < sound.cooldown) then
         return nil
     end
+
     local played, handle = PlayAny(self, sound)
 
     if played then
         self.m_lastPlayed[key] = now
         self.m_addon:Debug("Sound:", sound.label)
     end
+
     return handle
 end
 
---- An active rule: the master switch, and any of the sounds' rows (with their needs) on. A module
---- that serves only these sounds registers nothing while none of them could play.
----@param ... string sound keys
----@return table rule { reads, when }
-function SoundBank:WhileOn(...)
-    local master, sounds = self.m_master, {}
-    local reads, seen = { master }, { [master] = true }
+--- The boolean setting row that switches one sound, or a family of sounds sharing it; its description names their
+--- files.
+---@param name string the row's name in its module
+---@param label string
+---@param description string when the sounds play
+---@param keys string[] the sounds it switches
+---@return table row
+function SoundBank:Row(name, label, description, keys)
+    local howTo
 
-    for i = 1, select("#", ...) do
-        local sound = self.m_catalog[(select(i, ...))]
+    if #keys == 1 then
+        local sound = self.m_catalog[keys[1]]
+        local slash = ((self.m_addon.Slash and self.m_addon.Slash[1]) or "")
 
-        sounds[i] = sound
-        for _, row in ipairs({ sound.row, sound.needs }) do
-            if not seen[row] then
-                seen[row] = true
-                reads[#reads + 1] = row
-            end
+        howTo = ("Put %s.ogg or %s.mp3 in the addon's Media folder (%s2 to %s%d for variety), then restart the game. Test with %s sound %s.")
+            :format(sound.file, sound.file, sound.file, sound.file, MaxVariants, slash, sound.word)
+    else
+        local files = {}
+
+        for i, key in ipairs(keys) do
+            files[i] = self.m_catalog[key].file
         end
+
+        howTo = ("Files: %s (.ogg or .mp3; numbered copies add variety) in the addon's Media folder, then restart the game.")
+            :format(concat(files, ", "))
     end
-    return {
-        reads = reads,
-        when = function(state)
-            if not state:Get(master) then
-                return false
-            end
-            for _, sound in ipairs(sounds) do
-                if Applies(state, sound) then
-                    return true
-                end
-            end
-            return false
-        end,
-    }
+
+    return { default = true, description = (description .. " " .. howTo), kind = "boolean", label = label, name = name }
 end
 
 --- Fades out a sound that Play started.
@@ -224,8 +207,8 @@ function SoundBank:Stop(handle)
     StopSound(handle, FadeOutMilliseconds)
 end
 
---- The test command: "<word> [variant]" plays that sound (a variant, or one at random) whatever
---- the switches say, and says why when nothing played; no word lists every sound.
+--- The test command: "<word> [variant]" plays that sound (a variant, or one at random) whatever the switches say, and
+--- says why when nothing played; no word lists every sound.
 ---@param arg string?
 function SoundBank:Test(arg)
     local addon = self.m_addon
@@ -234,11 +217,14 @@ function SoundBank:Test(arg)
 
     if not sound then
         addon:Print("Test a sound with " .. ((addon.Slash and addon.Slash[1]) or "") .. " sound <name> [variant]:")
+
         for _, key in ipairs(self.m_order) do
             print(("  %s - %s.ogg or .mp3"):format(self.m_catalog[key].word, self.m_catalog[key].file))
         end
+
         return
     end
+
     local channel = addon.State:Get(self.m_channel)
     local files, present = Files(self, sound)
     local variant = tonumber(which)
@@ -252,6 +238,7 @@ function SoundBank:Test(arg)
         known = (#present > 0)
         played = PlayAny(self, sound)
     end
+
     local file = ((variant and FileName(sound, variant)) or sound.file)
 
     if played then
@@ -263,4 +250,43 @@ function SoundBank:Test(arg)
         addon:Print(("No sound played. Put %s.ogg or %s.mp3 in %s, restart the game, and check the %s channel isn't muted.")
             :format(file, file, self.m_folder:sub(1, -2), channel))
     end
+end
+
+--- An active rule: the master switch, and any of the sounds' rows (with their needs) on. A module that serves only
+--- these sounds registers nothing while none of them could play.
+---@param ... string sound keys
+---@return table rule { reads, when }
+function SoundBank:WhileOn(...)
+    local master, sounds = self.m_master, {}
+    local reads, seen = { master }, { [master] = true }
+
+    for i = 1, select("#", ...) do
+        local sound = self.m_catalog[(select(i, ...))]
+
+        sounds[i] = sound
+
+        for _, row in ipairs({ sound.row, sound.needs }) do
+            if not seen[row] then
+                seen[row] = true
+                reads[#reads + 1] = row
+            end
+        end
+    end
+
+    return {
+        reads = reads,
+        when = function(state)
+            if not state:Get(master) then
+                return false
+            end
+
+            for _, sound in ipairs(sounds) do
+                if Applies(state, sound) then
+                    return true
+                end
+            end
+
+            return false
+        end,
+    }
 end

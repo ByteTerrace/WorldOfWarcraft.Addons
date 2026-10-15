@@ -302,7 +302,7 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
                 if (dir === "tests" && file.endsWith(".lua")) checkStyleRules(path, text, report);
             }
         }
-        for (const finding of formatFindings(root)) report(join(root, finding.path), finding.line, "FORMAT", finding.message);
+        for (const finding of formatFindings(root)) report(join(root, finding.path), finding.line, finding.rule, finding.message);
     }
 
     if (!quiet) {

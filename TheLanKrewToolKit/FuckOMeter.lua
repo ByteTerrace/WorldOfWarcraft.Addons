@@ -1,16 +1,15 @@
 local addonName, ns = ...
 
--- FuckOMeter: a comically oversized energy bar across the middle of the screen, shown while the
--- player's power type is energy. /tlk fom turns the module off and on again.
+-- FuckOMeter: a comically oversized energy bar across the middle of the screen, shown while the player's power type is
+-- energy. /tlk fom turns the module off and on again.
 --
--- The player's primary power is secret in combat and out (probed: power.player), so energy never
--- enters state: UnitPower/UnitPowerMax results go straight to the bar and text (both accept
--- secrets) and are never compared or computed with.
--- Power events are registered only while the meter is visible. The bar eases toward each new value
+-- The player's primary power is secret in combat and out (probed: power.player), so energy never enters state:
+-- UnitPower/UnitPowerMax results go straight to the bar and text (both accept secrets) and are never compared or
+-- computed with. Power events are registered only while the meter is visible. The bar eases toward each new value
 -- (Enum.StatusBarInterpolation.ExponentialEaseOut) in the same SetValue call: no extra work per tick.
 --
--- The meter frame is the global TheLanKrewToolKitFuckOMeter: its name (Label) centered on the
--- bar, and the energy in Bar and in Value at the bar's right end.
+-- The meter frame is the global TheLanKrewToolKitFuckOMeter: its name (Label) centered on the bar, and the energy in
+-- Bar and in Value at the bar's right end.
 
 local Ease = Enum.StatusBarInterpolation.ExponentialEaseOut
 local Energy = Enum.PowerType.Energy
@@ -28,12 +27,14 @@ local function CreateMeter()
     frame:SetPoint("RIGHT", UIParent, "RIGHT", -SideInset, 0)
     frame:SetHeight(Height)
     frame:SetFrameStrata("MEDIUM")
+
     frame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         edgeSize = 16,
         insets = { bottom = 4, left = 4, right = 4, top = 4 },
     })
+
     frame:SetBackdropColor(0, 0, 0, 0.6)
     frame:Hide()
 
@@ -66,13 +67,15 @@ end
 -- Power events carry the power token; other resources (a druid's mana) are ignored.
 local function UpdateRange(_, powerToken)
     if (powerToken == nil) or (powerToken == "ENERGY") then
-        Meter.Bar:SetMinMaxValues(0, UnitPowerMax("player", Energy)) -- secret: widget sink
+        -- secret: widget sink
+        Meter.Bar:SetMinMaxValues(0, UnitPowerMax("player", Energy))
     end
 end
 
 local function UpdateValue(_, powerToken)
     if (powerToken == nil) or (powerToken == "ENERGY") then
-        local current = UnitPower("player", Energy) -- secret: widget sink
+        -- secret: widget sink
+        local current = UnitPower("player", Energy)
 
         Meter.Bar:SetValue(current, Ease)
         Meter.Value:SetText(current)
@@ -103,6 +106,7 @@ ns.Addon:Module("FuckOMeter", {
                     module:On("UNIT_MAXPOWER", UpdateRange, "player"),
                     module:On("UNIT_POWER_FREQUENT", UpdateValue, "player"),
                 }
+
                 UpdateRange()
                 UpdateValue()
                 Meter:Show()
@@ -117,11 +121,13 @@ ns.Addon:Module("FuckOMeter", {
         -- After a loading screen, a visible meter re-reads range and value too.
         module:On("PLAYER_ENTERING_WORLD", function()
             UpdateVisibility()
+
             if powerHandles then
                 UpdateRange()
                 UpdateValue()
             end
         end)
+
         module:On("UNIT_DISPLAYPOWER", UpdateVisibility, "player")
         UpdateVisibility()
     end,

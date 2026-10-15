@@ -1,5 +1,5 @@
--- The harness's fidelity rules for keyboard input, mouse coverage, frame strata and random
--- numbers (tests/harness/input.lua, widgets.lua).
+-- The harness's fidelity rules for keyboard input, mouse coverage, frame strata and random numbers
+-- (tests/harness/input.lua, widgets.lua).
 
 test("keyboard input: a keyboard-enabled frame consumes keys unless it propagates them", function()
     local h = Harness.New()
@@ -17,10 +17,13 @@ test("keyboard input: a keyboard-enabled frame consumes keys unless it propagate
     falsy(top:IsKeyboardEnabled(), "off by default")
     falsy(top:GetPropagateKeyboardInput(), "doesn't propagate by default")
     top:EnableKeyboard(true)
+
     top:SetScript("OnKeyDown", function(self, key)
         log[#log + 1] = ("top:" .. key)
-        self:SetPropagateKeyboardInput((key ~= "ESCAPE") and (key ~= "1")) -- decided per key, after the script
+        -- decided per key, after the script
+        self:SetPropagateKeyboardInput((key ~= "ESCAPE") and (key ~= "1"))
     end)
+
     top:SetScript("OnKeyUp", function(_, key) log[#log + 1] = ("topUp:" .. key) end)
     truthy(h:Key("1", true), "consumed")
     h:Key("ENTER", true)
@@ -48,8 +51,10 @@ test("keyboard order follows strata, then level, then creation", function()
         f:EnableKeyboard(true)
         f:SetPropagateKeyboardInput(true)
         f:SetScript("OnKeyDown", function() order[#order + 1] = name end)
+
         return f
     end
+
     local overlay = Receiver("overlay")
 
     overlay:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -66,7 +71,8 @@ end)
 test("EnableKeyboard is blocked in combat only on protected frames; SetPropagateKeyboardInput on any", function()
     local h = Harness.New()
 
-    h:ExpectBlocked(2) -- the calls under test
+    -- the calls under test
+    h:ExpectBlocked(2)
     local env = h.env
     local plain = env.CreateFrame("Frame")
     local secure = env.CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
@@ -89,7 +95,8 @@ end)
 test("frame strata and levels: set, inherited, validated", function()
     local h = Harness.New()
 
-    h:ExpectBlocked(1) -- the calls under test
+    -- the calls under test
+    h:ExpectBlocked(1)
     local env = h.env
     local parent = env.CreateFrame("Frame", nil, env.UIParent)
     local child = env.CreateFrame("Frame", nil, parent)
@@ -160,8 +167,11 @@ test("SeedRandom makes math.random deterministic, even through an addon's local 
     local first = {}
 
     for i = 1, 20 do first[i] = ns.Roll() end
+
     h:SeedRandom(42)
+
     for i = 1, 20 do eq(ns.Roll(), first[i], "roll " .. i) end
+
     local seen = {}
 
     for _ = 1, 200 do
@@ -170,7 +180,9 @@ test("SeedRandom makes math.random deterministic, even through an addon's local 
         truthy((roll >= 1) and (roll <= 6) and (roll == math.floor(roll)), "in range")
         seen[roll] = true
     end
+
     for face = 1, 6 do truthy(seen[face], "face " .. face) end
+
     local r = h.env.math.random()
 
     truthy((r >= 0) and (r < 1))
@@ -181,6 +193,7 @@ test("SeedRandom makes math.random deterministic, even through an addon's local 
     local other = Harness.New()
 
     other:SeedRandom(42)
+
     eq(other.env.math.random(1, 1000000), (function() h:SeedRandom(42); return h.env.math.random(1, 1000000) end)(),
         "independent of Lua's global random state")
 end)
@@ -209,11 +222,15 @@ test("C_GamePad answers the connected controller's mapped state as fresh typed a
     eq(state.axisCount, #state.axes)
     eq(state.stickCount, #state.sticks)
     truthy((state.buttonCount > 0) and (state.axisCount > 0) and (state.stickCount > 0))
+
     for _, button in ipairs(state.buttons) do eq(type(button), "boolean") end
+
     for _, axis in ipairs(state.axes) do eq(type(axis), "number") end
+
     for _, stick in ipairs(state.sticks) do
         eq(type(stick.x) .. type(stick.y) .. type(stick.len), "numbernumbernumber")
     end
+
     state.buttons[1], state.axes[1], state.sticks[1].x = true, 1, 1
     local again = gamePad.GetDeviceMappedState(1)
 

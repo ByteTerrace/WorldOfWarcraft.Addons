@@ -17,15 +17,14 @@ local addonName, ns = ...
 --   fatality           it dies in your fight after finish him was announced on it.
 --   superbVictory      any other enemy player kill in your fight.
 --   deathTaunt         you die.
--- A kill plays one victory sound: flawless, else fatality, else superb, the first that's on. A duel
--- only plays flawless: a duel you were hit in may be one you lost.
+-- A kill plays one victory sound: flawless, else fatality, else superb, the first that's on. A duel only plays
+-- flawless: a duel you were hit in may be one you lost.
 --
--- Modules, each running only while a sound needs it (their active rules come from
--- SoundBank:WhileOn). Adapters (event handlers) are the only code that reads the WoW API; the
--- sounds are rules over the rows they publish. What your target is comes from ByteTerrace_Core's
--- target fact (target.serial, target.enemyPlayer, target.formidable, target.alive, target.died,
--- target.duelEnded), which runs only while a module here uses it. DUEL_FINISHED doesn't say who
--- won, but you can't lose a duel you took no damage in, so Victory only counts a flawless one.
+-- Modules, each running only while a sound needs it (their active rules come from SoundBank:WhileOn). Adapters (event
+-- handlers) are the only code that reads the WoW API; the sounds are rules over the rows they publish. What your target
+-- is comes from ByteTerrace_Core's target fact (target.serial, target.enemyPlayer, target.formidable, target.alive,
+-- target.died, target.duelEnded), which runs only while a module here uses it. DUEL_FINISHED doesn't say who won, but
+-- you can't lose a duel you took no damage in, so Victory only counts a flawless one.
 --   Kombat    the settings, and class facts: Kombat.execute (warriors), Kombat.combo (rogues and
 --             druids) and Kombat.finisher (either).
 --   Destiny   plays choose your destiny and test your might as your target changes.
@@ -44,8 +43,10 @@ local addonName, ns = ...
 --   DeathTaunt  plays deathTaunt on PLAYER_DEAD.
 
 local ExecuteSpellID = 5308
-local FullComboPoints = 5 -- Forever's rogues and druids hold at most 5 (ComboFrame shows 5 unless the max is 6 or 9)
-local OpeningHitWindow = 1 -- seconds: a hit this soon before combat starts opened the fight
+-- Forever's rogues and druids hold at most 5 (ComboFrame shows 5 unless the max is 6 or 9)
+local FullComboPoints = 5
+-- seconds: a hit this soon before combat starts opened the fight
+local OpeningHitWindow = 1
 local TargetCooldown = 10
 
 local C_DamageMeter, C_Spell, Enum, GetComboPoints, GetTime = C_DamageMeter, C_Spell, Enum, GetComboPoints, GetTime
@@ -54,24 +55,35 @@ local ipairs, issecretvalue, type, UnitClass = ipairs, issecretvalue, type, Unit
 local Addon = ns.Addon
 local SoundBank = ns.SoundBank
 
+-- Whether a UNIT_COMBAT payload on you is a hit that got through: a WOUND, unless its amount is a plain 0 (fully
+-- absorbed, blocked or resisted).
+local function IsHit(action, amount)
+    if issecretvalue(action) or (action ~= "WOUND") then
+        return false
+    end
+
+    return (issecretvalue(amount) or (amount ~= 0))
+end
+
 local function IsTrue(value)
     return (not issecretvalue(value) and (value == true))
 end
 
--- The damage you took in the fight that just ended, from Blizzard's damage meter, or nil when
--- the meter can't say (it's off, or its numbers are secret). The session's combatSources list
--- stays a plain table in combat (probed: damageMeter.currentInCombat); only the numbers in it
--- turn secret.
+-- The damage you took in the fight that just ended, from Blizzard's damage meter, or nil when the meter can't say (it's
+-- off, or its numbers are secret). The session's combatSources list stays a plain table in combat (probed:
+-- damageMeter.currentInCombat); only the numbers in it turn secret.
 local function DamageTakenLastFight()
     if not C_DamageMeter.IsDamageMeterAvailable() then
         return nil
     end
+
     local types = Enum.DamageMeterSessionType
     local session = C_DamageMeter.GetCombatSessionFromType(types.Current, Enum.DamageMeterType.DamageTaken)
 
     if issecretvalue(session) or (type(session) ~= "table") then
         return nil
     end
+
     for _, source in ipairs(session.combatSources) do
         if IsTrue(source.isLocalPlayer) then
             local total = source.totalAmount
@@ -79,32 +91,29 @@ local function DamageTakenLastFight()
             if issecretvalue(total) then
                 return nil
             end
+
             return total
         end
     end
-    return 0
-end
 
--- Whether a UNIT_COMBAT payload on you is a hit that got through: a WOUND, unless its amount is a
--- plain 0 (fully absorbed, blocked or resisted).
-local function IsHit(action, amount)
-    if issecretvalue(action) or (action ~= "WOUND") then
-        return false
-    end
-    return (issecretvalue(amount) or (amount ~= 0))
+    return 0
 end
 
 SoundBank:Define("chooseYourDestiny", { cooldown = TargetCooldown, file = "ChooseYourDestiny",
     label = "Choose your destiny", row = "Kombat.chooseYourDestiny", word = "destiny" })
+
 SoundBank:Define("testYourMight", { cooldown = TargetCooldown, file = "TestYourMight", label = "Test your might",
     row = "Kombat.testYourMight", word = "might" })
+
 SoundBank:Define("finishHim", { file = "FinishHim", label = "Finish him", needs = "Kombat.finisher",
     row = "Kombat.finishHim", word = "finish" })
+
 for points = 1, FullComboPoints do
     SoundBank:Define("comboPoint" .. points, { file = ("ComboPoint" .. points),
         label = (points .. " combo point" .. (((points > 1) and "s") or "")), needs = "Kombat.combo",
         row = "Kombat.comboPoints", word = ("combo" .. points) })
 end
+
 SoundBank:Define("flawlessVictory", { file = "FlawlessVictory", label = "Flawless victory", row = "Kombat.flawlessVictory", word = "flawless" })
 SoundBank:Define("fatality", { file = "Fatality", label = "Fatality", needs = "Kombat.finisher", row = "Kombat.fatality", word = "fatality" })
 SoundBank:Define("superbVictory", { file = "SuperbVictory", label = "Superb victory", row = "Kombat.superbVictory", word = "superb" })
@@ -118,8 +127,20 @@ end
 
 Addon:Module("Kombat", {
     label = "Mortal Kombat",
+    OnEnable = function(module)
+        local _, class = UnitClass("player")
+
+        if issecretvalue(class) then
+            return
+        end
+
+        local execute, combo = (class == "WARRIOR"), ((class == "ROGUE") or (class == "DRUID"))
+
+        module:Set("execute", execute)
+        module:Set("combo", combo)
+        module:Set("finisher", execute or combo)
+    end,
     page = "Sounds",
-    toggle = false,
     state = {
         SoundBank:Row("chooseYourDestiny", "Choose your destiny",
             "When a living enemy player becomes your target, or your target becomes one (a duel starts). At most every 10 seconds.",
@@ -144,30 +165,17 @@ Addon:Module("Kombat", {
         { default = false, kind = "boolean", name = "combo", persist = false },
         { default = false, kind = "boolean", name = "finisher", persist = false },
     },
-    OnEnable = function(module)
-        local _, class = UnitClass("player")
-
-        if issecretvalue(class) then
-            return
-        end
-        local execute, combo = (class == "WARRIOR"), ((class == "ROGUE") or (class == "DRUID"))
-
-        module:Set("execute", execute)
-        module:Set("combo", combo)
-        module:Set("finisher", execute or combo)
-    end,
+    toggle = false,
 })
 
 Addon:Module("Destiny", {
-    toggle = false,
-    uses = { "target" },
     active = SoundBank:WhileOn("chooseYourDestiny", "testYourMight"),
     OnEnable = function(module)
         local serial, enemy = module:Id("target.serial"), module:Id("target.enemyPlayer")
         local formidable, alive = module:Id("target.formidable"), module:Id("target.alive")
 
-        -- A foe worth announcing appears as the target: a new target, or the same one becoming
-        -- attackable. Test your might wins over destiny; if it's off or has no file, destiny plays.
+        -- A foe worth announcing appears as the target: a new target, or the same one becoming attackable. Test your
+        -- might wins over destiny; if it's off or has no file, destiny plays.
         local lastSerial, wasMighty, wasEnemy = module:Get(serial), false, module:Get(enemy)
 
         module:Watch({ serial, enemy, formidable, alive }, function(state)
@@ -179,20 +187,16 @@ Addon:Module("Destiny", {
             if not played and isEnemy and (fresh or not wasEnemy) then
                 SoundBank:Play("chooseYourDestiny")
             end
+
             lastSerial, wasMighty, wasEnemy = state.Values[serial], isMighty, isEnemy
         end, true)
     end,
+    toggle = false,
+    uses = { "target" },
 })
 
 Addon:Module("Finish", {
-    toggle = false,
-    uses = { "target" },
     active = SoundBank:WhileOn("finishHim", "comboPoint1", "fatality"),
-    state = {
-        { default = 0, kind = "number", name = "comboPoints", persist = false },
-        { default = false, kind = "boolean", name = "ready", persist = false },
-        { default = -1, kind = "number", name = "announced", persist = false },
-    },
     OnEnable = function(module)
         local state = Addon.State
         local points, ready, announced = module:Id("comboPoints"), module:Id("ready"), module:Id("announced")
@@ -208,23 +212,26 @@ Addon:Module("Finish", {
                 inRange = ((state.Values[points] >= FullComboPoints)
                     or (executeName and IsTrue((C_Spell.IsSpellUsable(executeName)))) or false)
             end
+
             state:Set(ready, inRange)
         end
 
-        -- Combo points sit on the target (Blizzard's ComboFrame reads GetComboPoints("player",
-        -- "target") on UNIT_POWER_FREQUENT and PLAYER_TARGET_CHANGED). Points that move to
-        -- another unit keep their count and fire only COMBO_TARGET_CHANGED.
+        -- Combo points sit on the target (Blizzard's ComboFrame reads GetComboPoints("player", "target") on
+        -- UNIT_POWER_FREQUENT and PLAYER_TARGET_CHANGED). Points that move to another unit keep their count and fire
+        -- only COMBO_TARGET_CHANGED.
         local function ReadPoints(_, powerType)
             if powerType and (powerType ~= "COMBO_POINTS") then
-                return -- a druid's mana or energy tick
+                -- a druid's mana or energy tick
+                return
             end
+
             local count = GetComboPoints("player", "target")
 
             state:Set(points, (not issecretvalue(count) and count) or 0)
         end
 
-        -- Execute's usability only matters while an enemy player target lives; SPELL_UPDATE_USABLE
-        -- fires on every rage change, so it's heard only then.
+        -- Execute's usability only matters while an enemy player target lives; SPELL_UPDATE_USABLE fires on every rage
+        -- change, so it's heard only then.
         if executeName then
             local usable
 
@@ -240,6 +247,7 @@ Addon:Module("Finish", {
                         for i = 1, #usable do
                             module:Off(usable[i])
                         end
+
                         usable = nil
                     end
                 end,
@@ -247,12 +255,14 @@ Addon:Module("Finish", {
                 when = function(current) return (current.Values[enemy] and current.Values[alive]) end,
             })
         end
+
         if combo then
             module:On("UNIT_POWER_FREQUENT", ReadPoints, "player")
             module:On("PLAYER_TARGET_CHANGED", ReadPoints)
             module:On("COMBO_TARGET_CHANGED", ReadPoints)
             ReadPoints()
         end
+
         module:Watch({ enemy, alive, serial, points }, Update)
 
         -- A callout for each point added to the same target; spending or losing them is silent.
@@ -260,12 +270,14 @@ Addon:Module("Finish", {
 
         module:Watch({ points, serial }, function(state)
             local count, same = state.Values[points], (state.Values[serial] == pointsSerial)
+
             local finishing = ((count == FullComboPoints) and state.Values[enemy] and state.Values[alive]
                 and (state.Values[announced] ~= state.Values[serial]) and SoundBank:IsOn("finishHim"))
 
             if same and (count > lastPoints) and (count <= FullComboPoints) and not finishing then
                 SoundBank:Play(ComboSounds[count])
             end
+
             lastPoints, pointsSerial = count, state.Values[serial]
         end, true)
 
@@ -273,29 +285,34 @@ Addon:Module("Finish", {
         module:Watch({ ready, serial }, function(state)
             if state.Values[ready] and (state.Values[announced] ~= state.Values[serial]) then
                 state:Set(announced, state.Values[serial])
+
                 if not SoundBank:Play("finishHim") and (state.Values[points] >= FullComboPoints) then
-                    SoundBank:Play(ComboSounds[FullComboPoints]) -- finish him has no file: the fifth point still calls out
+                    -- finish him has no file: the fifth point still calls out
+                    SoundBank:Play(ComboSounds[FullComboPoints])
                 end
             end
         end, true)
     end,
+    state = {
+        { default = 0, kind = "number", name = "comboPoints", persist = false },
+        { default = false, kind = "boolean", name = "ready", persist = false },
+        { default = -1, kind = "number", name = "announced", persist = false },
+    },
+    toggle = false,
+    uses = { "target" },
 })
 
 Addon:Module("Victory", {
-    toggle = false,
-    uses = { "target" },
     active = SoundBank:WhileOn("flawlessVictory", "fatality", "superbVictory"),
-    state = {
-        { default = false, kind = "boolean", name = "flawless", persist = false },
-        { default = 0, kind = "number", name = "flawlessWins", persist = false },
-    },
     OnEnable = function(module)
         local state = Addon.State
         local flawless, combat = module:Id("flawless"), module:Id("combat.active")
         local died, duelEnded = module:Id("target.died"), module:Id("target.duelEnded")
         local serial, announced = module:Id("target.serial"), module:Id("Finish.announced")
-        local wins = 0 -- flawless kills this fight, counted when it ends
-        local lastHit = -math.huge -- GetTime() of your last hit
+        -- flawless kills this fight, counted when it ends
+        local wins = 0
+        -- GetTime() of your last hit
+        local lastHit = -math.huge
 
         -- Counts a fight's flawless kills unless the meter says you took damage.
         local function Confirm(count)
@@ -312,6 +329,7 @@ Addon:Module("Victory", {
             elseif (state.Values[announced] == state.Values[serial]) and SoundBank:IsOn("fatality") then
                 return "fatality"
             end
+
             return "superbVictory"
         end
 
@@ -319,14 +337,18 @@ Addon:Module("Victory", {
             if not IsHit(action, amount) then
                 return
             end
+
             lastHit = GetTime()
+
             if state.Values[combat] and state.Values[flawless] then
                 state:Set(flawless, false)
             end
         end, "player")
+
         module:Rule({
             changed = function(active)
                 state:Set(flawless, active and ((GetTime() - lastHit) > OpeningHitWindow))
+
                 if active then
                     wins = 0
                 elseif wins > 0 then
@@ -336,33 +358,45 @@ Addon:Module("Victory", {
             end,
             reads = { combat }, when = function(state) return state.Values[combat] end,
         })
+
         module:Rule({
             changed = function(active, state)
                 if not active or not state.Values[combat] then
-                    return -- someone else's kill, out of combat
+                    -- someone else's kill, out of combat
+                    return
                 end
+
                 local outcome = Outcome()
 
                 if state.Values[duelEnded] and not state.Values[died] and (outcome ~= "flawlessVictory") then
-                    return -- a duel you were hit in may be one you lost
+                    -- a duel you were hit in may be one you lost
+                    return
                 end
+
                 if outcome == "flawlessVictory" then
                     wins = (wins + 1)
                 end
+
                 SoundBank:Play(outcome)
             end,
             reads = { died, duelEnded },
             when = function(state) return (state.Values[died] or state.Values[duelEnded]) end,
         })
     end,
+    state = {
+        { default = false, kind = "boolean", name = "flawless", persist = false },
+        { default = 0, kind = "number", name = "flawlessWins", persist = false },
+    },
+    toggle = false,
+    uses = { "target" },
 })
 
 Addon:Module("DeathTaunt", {
-    toggle = false,
     active = SoundBank:WhileOn("deathTaunt"),
     OnEnable = function(module)
         module:On("PLAYER_DEAD", function()
             SoundBank:Play("deathTaunt")
         end)
     end,
+    toggle = false,
 })

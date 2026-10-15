@@ -1,14 +1,14 @@
 local addonName, ns = ...
 
--- Word banks, stories and flavor text for the Scholar puzzles, as ns.ScholarWords: the puzzle
--- files (ScholarPuzzles.lua and its generators) read it; this file only holds data. Everything is
--- original, kid-friendly plain ASCII.
+-- Word banks, stories and flavor text for the Scholar puzzles, as ns.ScholarWords: the puzzle files (ScholarPuzzles.lua
+-- and its generators) read it; this file only holds data. Everything is original, kid-friendly plain ASCII.
 --
--- A tier (t) scales difficulty inside a grade band: 1 is easiest. Story and sentence templates
--- use {hero} and {place}; the defaults beside them fill in when the player's context doesn't.
--- Quest riddles (ScholarQuests.lua) ask about the player's own quests, in the words below; their
--- banks are wrong answers to mix in when the player's own quests don't give three.
+-- A tier (t) scales difficulty inside a grade band: 1 is easiest. Story and sentence templates use {hero} and {place};
+-- the defaults beside them fill in when the player's context doesn't. Quest riddles (ScholarQuests.lua) ask about the
+-- player's own quests, in the words below; their banks are wrong answers to mix in when the player's own quests don't
+-- give three.
 
+-- order: grouped by subject and grade, beside the words each group's puzzles read
 ns.ScholarWords = {
     -- Puzzle kinds per subject and grade.
     kinds = {
@@ -120,9 +120,9 @@ ns.ScholarWords = {
         ["quest.blank"] = { "The Quest Text", "Every Word Counts", "Read It Closely" },
     },
 
-    -- Puzzle text. {name} is filled from the puzzle's variables. In word problems a number {a}
-    -- also comes counted with an item as {A} ("3 apples"), plus {Hero} (first mention), {hero},
-    -- {place} and {items}. expr is the calculation behind the answer, in ASCII.
+    -- Puzzle text. {name} is filled from the puzzle's variables. In word problems a number {a} also comes counted with
+    -- an item as {A} ("3 apples"), plus {Hero} (first mention), {hero}, {place} and {items}. expr is the calculation
+    -- behind the answer, in ASCII.
     math = {
         addBig = {
             explain = "{a} + {b} = {v}.", expr = "{a} + {b}", hint = "Add the ones first, then add the tens.",
@@ -427,22 +427,9 @@ ns.ScholarWords = {
 
     -- Quest riddle text. {title} is the quest's title; the quest book holds every answer.
     quest = {
-        giver = {
-            explain = "{answer} gave you \"{title}\".", hint = "Open the quest book: it says who sent you.",
-            prompt = "Who gave you the quest \"{title}\"?",
-        },
-        ender = {
-            explain = "You turned in \"{title}\" to {answer}.",
-            hint = "Open the quest book: it says who you reported to.",
-            prompt = "Who did you turn in the quest \"{title}\" to?",
-        },
-        place = {
-            explain = "You took \"{title}\" in {answer}.", hint = "Open the quest book: it says where it began.",
-            prompt = "Where were you when you took the quest \"{title}\"?",
-        },
-        endPlace = {
-            explain = "You turned it in at {answer}.", hint = "Open the quest book: it says where you finished.",
-            prompt = "Where did you turn in the quest \"{title}\"?",
+        blank = {
+            explain = "The quest says: \"{filled}\"", hint = "Open the quest book and find that sentence.",
+            prompt = "From the quest \"{title}\":\n\"{sentence}\"\nWhich word is missing?",
         },
         -- Objectives by kind: an item to bring, a foe to defeat, or a task to do.
         count = {
@@ -460,6 +447,19 @@ ns.ScholarWords = {
                 prompt = "The quest \"{title}\" asked for \"{objective}\". How many?",
             },
         },
+        ender = {
+            explain = "You turned in \"{title}\" to {answer}.",
+            hint = "Open the quest book: it says who you reported to.",
+            prompt = "Who did you turn in the quest \"{title}\" to?",
+        },
+        endPlace = {
+            explain = "You turned it in at {answer}.", hint = "Open the quest book: it says where you finished.",
+            prompt = "Where did you turn in the quest \"{title}\"?",
+        },
+        giver = {
+            explain = "{answer} gave you \"{title}\".", hint = "Open the quest book: it says who sent you.",
+            prompt = "Who gave you the quest \"{title}\"?",
+        },
         objective = {
             foe = {
                 explain = "\"{title}\" asked you to defeat {answer}.",
@@ -476,47 +476,47 @@ ns.ScholarWords = {
                 prompt = "What did the quest \"{title}\" ask you to do?",
             },
         },
+        place = {
+            explain = "You took \"{title}\" in {answer}.", hint = "Open the quest book: it says where it began.",
+            prompt = "Where were you when you took the quest \"{title}\"?",
+        },
         title = {
             explain = "{giver} gave you \"{answer}\".", hint = "Open the quest book: it names who gave you this one.",
             prompt = "{giver} gave you a quest. Which one?",
         },
-        blank = {
-            explain = "The quest says: \"{filled}\"", hint = "Open the quest book and find that sentence.",
-            prompt = "From the quest \"{title}\":\n\"{sentence}\"\nWhich word is missing?",
-        },
     },
-    -- Wrong answers for quest riddles, by the player's faction (Alliance when it's unknown): the
-    -- real givers, quests (each with its real giver, so one is never offered as another quest of the
-    -- riddle's own giver), places (never a whole zone, which could be true of the right place too)
-    -- and objectives of the lands a new character of that faction quests in.
+    -- Wrong answers for quest riddles, by the player's faction (Alliance when it's unknown): the real givers, quests
+    -- (each with its real giver, so one is never offered as another quest of the riddle's own giver), places (never a
+    -- whole zone, which could be true of the right place too) and objectives of the lands a new character of that
+    -- faction quests in.
     questBanks = {
         Alliance = {
-            names = {
-                "Marshal Dughan", "Deputy Willem", "Marshal McBride", "Brother Paxton", "Eagan Peltskinner",
-                "Innkeeper Farley", "Farmer Saldean", "Gryan Stoutmantle", "Captain Grayson", "Guard Thomas",
-            },
-            titles = {
-                { "Kobold Camp Cleanup", "Marshal McBride" }, { "Wolves Across the Border", "Eagan Peltskinner" },
-                { "The Fargodeep Mine", "Marshal Dughan" }, { "Report to Goldshire", "Marshal McBride" },
-                { "The Jasperlode Mine", "Marshal Dughan" }, { "A Threat Within", "Deputy Willem" },
-                { "Lost Necklace", "Billy Maclure" }, { "Bounty on Murlocs", "Guard Thomas" },
-            },
-            places = {
-                "Northshire Abbey", "Goldshire", "Fargodeep Mine", "Jasperlode Mine", "Eastvale Logging Camp",
-                "Kharanos", "Coldridge Valley", "Shadowglen", "Dolanaar", "Sentinel Hill",
+            foes = {
+                "Kobold Vermin", "Young Wolf", "Defias Thug", "Murloc Forager", "Mangy Wolf", "Kobold Worker",
+                "Kobold Laborer", "Frostmane Troll Whelp",
             },
             -- Objectives of each kind: items to bring, foes to defeat, tasks.
             items = {
                 "Tough Wolf Meat", "Kobold Candle", "Gold Dust", "Murloc Fin", "Linen Cloth", "Red Burlap Bandana",
                 "Milly's Harvest", "Wolf Fang",
             },
-            foes = {
-                "Kobold Vermin", "Young Wolf", "Defias Thug", "Murloc Forager", "Mangy Wolf", "Kobold Worker",
-                "Kobold Laborer", "Frostmane Troll Whelp",
+            names = {
+                "Marshal Dughan", "Deputy Willem", "Marshal McBride", "Brother Paxton", "Eagan Peltskinner",
+                "Innkeeper Farley", "Farmer Saldean", "Gryan Stoutmantle", "Captain Grayson", "Guard Thomas",
+            },
+            places = {
+                "Northshire Abbey", "Goldshire", "Fargodeep Mine", "Jasperlode Mine", "Eastvale Logging Camp",
+                "Kharanos", "Coldridge Valley", "Shadowglen", "Dolanaar", "Sentinel Hill",
             },
             tasks = {
                 "Report to Marshal Dughan", "Sit near the campfire", "Speak with the innkeeper", "Light the signal fire",
                 "Search the old wagon", "Find the lost necklace",
+            },
+            titles = {
+                { "Kobold Camp Cleanup", "Marshal McBride" }, { "Wolves Across the Border", "Eagan Peltskinner" },
+                { "The Fargodeep Mine", "Marshal Dughan" }, { "Report to Goldshire", "Marshal McBride" },
+                { "The Jasperlode Mine", "Marshal Dughan" }, { "A Threat Within", "Deputy Willem" },
+                { "Lost Necklace", "Billy Maclure" }, { "Bounty on Murlocs", "Guard Thomas" },
             },
         },
         Horde = {

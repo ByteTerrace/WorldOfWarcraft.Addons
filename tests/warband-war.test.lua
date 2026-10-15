@@ -34,9 +34,11 @@ test("a guild showing up in numbers alerts once, not once per member", function(
     local h = Grouped()
 
     h:Slash("/tlk war Knights of Light")
+
     for i = 1, 4 do
         h:AddNamePlate(Enemy("Knight" .. i, { guild = "Knights of Light" }))
     end
+
     eq(#h.raidNotices, 1)
 end)
 
@@ -123,7 +125,8 @@ local function Badge(h, plate)
     local frame = h.env.C_NamePlate.GetNamePlateForUnit(plate)
 
     for _, child in ipairs({ frame:GetChildren() }) do
-        if rawget(child, "Icon") then -- Blizzard's UnitFrame rides on the plate too
+        -- Blizzard's UnitFrame rides on the plate too
+        if rawget(child, "Icon") then
             return child
         end
     end
@@ -179,6 +182,7 @@ test("a ledger change repaints the badges on screen without reading anyone again
     for i = 1, 10 do
         plates[i] = h:AddNamePlate(Enemy("Foe" .. i))
     end
+
     h.apiCalls = {}
     h:Slash("/tlk mark Foe3 Doe")
     eq(h:CountApiCalls("UnitClass"), 0, "no plate is read again")
@@ -228,6 +232,7 @@ local function Rows(h)
             names[#names + 1] = (Reveal(Harness.State(row.Name).text) .. " | " .. Reveal(Harness.State(row.Detail).text))
         end
     end
+
     return names
 end
 
@@ -239,7 +244,8 @@ test("enemies you see are listed, marked ones first, and the list empties after 
     truthy(Window(h):IsShown(), "the first sighting shows the window at once")
     h:Advance(1)
     h:AddNamePlate(Enemy("Cara", { classFile = "MAGE", level = 58 }))
-    h:Advance(1) -- the next tick draws her
+    -- the next tick draws her
+    h:Advance(1)
     local rows = Rows(h)
 
     eq(rows[1], "Cara Doe | 58 - 1s")
@@ -254,13 +260,14 @@ end)
 
 test("an enemy who leaves the list before their turn to be shared isn't shared", function()
     local h = Grouped()
-    -- Long names: three to a message, one message every ten seconds, so the last wait past the
-    -- two minutes they stay listed.
+    -- Long names: three to a message, one message every ten seconds, so the last wait past the two minutes they stay
+    -- listed.
     local total = 45
 
     for i = 1, total do
         h:SetMouseover(Enemy(("B"):rep(53) .. string.char(64 + math.ceil(i / 26)) .. string.char((96 + ((i - 1) % 26)) + 1)))
     end
+
     h:Advance(130)
     local shared = 0
 
@@ -269,6 +276,7 @@ test("an enemy who leaves the list before their turn to be shared isn't shared",
 
         shared = (shared + count)
     end
+
     truthy((shared > 0) and (shared < total), shared)
     falsy(Window(h):IsShown(), "everyone has left the list")
     local sent = #Sent(h, "NEARBY")
@@ -340,12 +348,15 @@ test("a redraw touches only the rows in use", function()
         local total = 0
 
         for _, count in pairs(Harness.State(unused).calls) do total = (total + count) end
+
         return total
     end
+
     local before = Calls()
 
     h:AddNamePlate(Enemy("Cara"))
-    h:Advance(5) -- five redraws on the ticker
+    -- five redraws on the ticker
+    h:Advance(5)
     eq(Calls(), before, "a row nobody uses isn't touched")
 end)
 
@@ -362,20 +373,23 @@ end)
 test("nearby enemies go out in messages that fit, however many there are", function()
     local h = Grouped()
 
-    h:SetLocation({ zone = ("Z"):rep(60), subZone = ("S"):rep(60) })
+    h:SetLocation({ subZone = ("S"):rep(60), zone = ("Z"):rep(60) })
     local names = {}
 
     for i = 1, 8 do
         names[i] = (("Aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"):sub(1, 20 + i) .. string.char(96 + i))
         h:AddNamePlate(Enemy(names[i]))
     end
+
     h:Advance(25)
     local nearby = table.concat(Sent(h, "NEARBY"), "\n")
 
     eq(#Sent(h, "NEARBY"), 2)
+
     for _, message in ipairs(Sent(h, "NEARBY")) do
         truthy(#message <= 255, #message)
     end
+
     for _, name in ipairs(names) do
         truthy(nearby:find(Key(h, name) .. ";ROGUE;60", 1, true), name)
     end
@@ -390,11 +404,13 @@ local function RadarCalls(h)
         widgets[#widgets + 1], widgets[#widgets + 2] = row, row.Icon
         widgets[#widgets + 1], widgets[#widgets + 2] = row.Name, row.Detail
     end
+
     for _, widget in ipairs(widgets) do
         for _, count in pairs(Harness.State(widget).calls) do
             total = (total + count)
         end
     end
+
     return total
 end
 
@@ -407,7 +423,8 @@ test("a sighting only notes the enemy; a tick sets only the texts that moved", f
     h:Advance(1)
     local dan = Enemy("Dan")
 
-    h:AddNamePlate(dan) -- the most recent, so seeing him again keeps the order
+    -- the most recent, so seeing him again keeps the order
+    h:AddNamePlate(dan)
     h:Advance(1)
     h:ResetCalls()
     h:SetMouseover(dan)
@@ -422,20 +439,25 @@ test("full rivalry records make room a hundred strangers at a time, keeping ledg
     local people = Collection(addon, "people")
 
     h:Slash("/tlk grudge Old Doe")
+
     for i = 1, 999 do
         people:Set("Foe" .. i .. " Doe", { seen = i })
     end
+
     people:Set("Old Doe", { seen = 0 })
     eq(people:Count(), 1000)
     local keep, calls = people.Keep, 0
 
     people.Keep = function(key)
         calls = (calls + 1)
+
         return keep(key)
     end
+
     for i = 1, 10 do
         h:RemoveNamePlate(h:AddNamePlate(Enemy("New" .. i)))
     end
+
     truthy(calls <= 1000, calls .. " keep checks for 10 new faces")
     eq(people:Count(), 910)
     truthy(people:Has("Old Doe"), "the grudge's record stays")

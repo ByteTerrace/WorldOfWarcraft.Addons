@@ -1,27 +1,29 @@
--- ByteTerrace facts: the demand facts (target, kills, death) run only while used, and cost as
--- little as their events allow.
+-- ByteTerrace facts: the demand facts (target, kills, death) run only while used, and cost as little as their events
+-- allow.
 
 local Kit = use("framework")
 
 local Start = Kit.Start
 
--- A harness with the framework and an addon declaring every fact, with one module (User) that
--- uses the demand facts while its switch is on. Not yet started.
+local function EnemyPlayer()
+    return { canAttack = true, isPlayer = true, name = "Bob", playerControlled = true }
+end
+
+-- A harness with the framework and an addon declaring every fact, with one module (User) that uses the demand facts
+-- while its switch is on. Not yet started.
 local function NewAddOn()
     local h = Harness.New()
 
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
     rawset(h.env, "TestDB", h.saved.TestDB)
+
     local addon = h.env.ByteTerrace.NewAddOn({ facts = { "combat", "afk", "target", "kills", "death" },
         name = "TestApp", savedVariable = "TestDB", slash = { "/test" } })
 
     addon:Module("User", { label = "User", uses = { "target", "kills", "death" } })
-    return h, addon
-end
 
-local function EnemyPlayer()
-    return { canAttack = true, isPlayer = true, name = "Bob", playerControlled = true }
+    return h, addon
 end
 
 test("demand facts register nothing while no module uses them", function()
@@ -33,10 +35,12 @@ test("demand facts register nothing while no module uses them", function()
     truthy(frame:IsEventRegistered("PARTY_KILL"))
     truthy(frame:IsEventRegistered("UNIT_HEALTH"))
     addon.State:Set("User.enabled", false)
+
     for _, event in ipairs({ "UNIT_HEALTH", "PLAYER_TARGET_CHANGED", "PARTY_KILL", "PLAYER_DEAD",
         "CHAT_MSG_COMBAT_HONOR_GAIN", "DUEL_FINISHED" }) do
         falsy(frame:IsEventRegistered(event), event)
     end
+
     truthy(frame:IsEventRegistered("PLAYER_REGEN_DISABLED"), "the combat fact always runs")
 end)
 
@@ -49,9 +53,11 @@ test("the target's health events cost one API call each", function()
     h:SetTarget(enemy)
     truthy(addon.State:Get("target.enemyPlayer"))
     h.apiCalls = {}
+
     for _ = 1, 5 do
         h:Fire("UNIT_HEALTH", "target")
     end
+
     local reads = {}
 
     for name, count in pairs(h.apiCalls) do
@@ -59,6 +65,7 @@ test("the target's health events cost one API call each", function()
             reads[#reads + 1] = (name .. "=" .. count)
         end
     end
+
     eq(table.concat(reads, " "), "UnitIsDeadOrGhost=5", "nothing else is read while the target lives")
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
@@ -77,7 +84,9 @@ local function Reads(h, step)
             reads[#reads + 1] = (name .. "=" .. count)
         end
     end
+
     table.sort(reads)
+
     return table.concat(reads, " ")
 end
 
@@ -89,6 +98,7 @@ test("a target is read once when chosen; a flag change re-reads attackability, n
 
     eq(Reads(h, function() h:SetTarget(elite) end),
         "UnitCanAttack=1 UnitClassification=1 UnitExists=1 UnitIsDeadOrGhost=1 UnitIsPlayer=1")
+
     truthy(addon.State:Get("target.formidable"))
     elite.canAttack = false
     eq(Reads(h, function() h:Fire("UNIT_FLAGS", "target") end), "UnitCanAttack=1 UnitExists=1 UnitIsDeadOrGhost=1")
@@ -112,7 +122,8 @@ test("a player who becomes attackable is an enemy by their next health change", 
     duelist.canAttack = false
     h:SetTarget(duelist)
     falsy(addon.State:Get("target.enemyPlayer"))
-    duelist.canAttack = true -- a duel starts; say the client fires nothing else
+    -- a duel starts; say the client fires nothing else
+    duelist.canAttack = true
     h:Fire("UNIT_HEALTH", "target")
     truthy(addon.State:Get("target.enemyPlayer"))
 end)
@@ -121,17 +132,21 @@ test("a duel ends only for the target that became attackable while you targeted 
     local h, addon = NewAddOn()
 
     Start(h)
-    h:SetTarget(EnemyPlayer()) -- a bystander of the other faction, attackable from the start
-    h:Fire("DUEL_FINISHED")    -- someone else's duel, or a declined request
+    -- a bystander of the other faction, attackable from the start
+    h:SetTarget(EnemyPlayer())
+    -- someone else's duel, or a declined request
+    h:Fire("DUEL_FINISHED")
     falsy(addon.State:Get("target.duelEnded"), "not your duel")
     local duelist = EnemyPlayer()
 
     duelist.canAttack = false
     h:SetTarget(duelist)
-    duelist.canAttack = true -- the duel starts
+    -- the duel starts
+    duelist.canAttack = true
     h:Fire("UNIT_FLAGS", "target")
     h:Fire("DUEL_OUTOFBOUNDS")
-    h:Fire("DUEL_INBOUNDS") -- back before the countdown ran out: no forfeit
+    -- back before the countdown ran out: no forfeit
+    h:Fire("DUEL_INBOUNDS")
     h:Fire("DUEL_FINISHED")
     truthy(addon.State:Get("target.duelEnded"), "your duel")
 end)
@@ -192,8 +207,10 @@ test("killing blows count yours on players, not a groupmate's or a creature's, a
     local victim = h:GUID({ isPlayer = true, name = "Bob" })
 
     h:Fire("PARTY_KILL", me, victim)
-    h:Fire("PARTY_KILL", h:GUID({ isPlayer = true, name = "Ann" }), victim) -- a groupmate's blow
-    h:Fire("PARTY_KILL", me, h:GUID({ name = "Wolf" })) -- a creature
+    -- a groupmate's blow
+    h:Fire("PARTY_KILL", h:GUID({ isPlayer = true, name = "Ann" }), victim)
+    -- a creature
+    h:Fire("PARTY_KILL", me, h:GUID({ name = "Wolf" }))
     eq(addon.State:Get("kills.blows"), 1)
     h:Die()
     eq(addon.State:Get("kills.blows"), 1)
@@ -245,10 +262,12 @@ local function RestrictionAddOn()
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
     rawset(h.env, "TestDB", h.saved.TestDB)
+
     local addon = h.env.ByteTerrace.NewAddOn({ facts = { "restriction" }, name = "TestApp", savedVariable = "TestDB",
         slash = { "/test" } })
 
     addon:Module("User", { label = "User", uses = { "restriction" } })
+
     return h, addon
 end
 
@@ -263,6 +282,7 @@ local function Restricted(addon)
             active[#active + 1] = row
         end
     end
+
     return table.concat(active, " ")
 end
 
@@ -274,8 +294,10 @@ test("each restriction's row turns true as it activates and false when it's lift
 
     truthy(frame:IsEventRegistered("ADDON_RESTRICTION_STATE_CHANGED"))
     h.apiCalls = {}
+
     for restriction, row in pairs(RestrictionRows) do
         local seen
+
         local watcher = addon.State:Watch({ addon.State:Id("restriction." .. row) }, function(state)
             seen = state:Get("restriction." .. row)
         end, true)
@@ -287,13 +309,16 @@ test("each restriction's row turns true as it activates and false when it's lift
         eq(Restricted(addon), "", restriction .. " lifted")
         addon.State:Unwatch(watcher)
     end
+
     h:EnterCombat()
     eq(Restricted(addon), "combat", "Forever sends Combat Activating and no Active: Activating counts")
     h:LeaveCombat()
     eq(Restricted(addon), "")
+
     for name in pairs(h.apiCalls) do
         eq(name, "issecretvalue", "events read no API but State's secret check")
     end
+
     addon.State:Set("User.enabled", false)
     falsy(frame:IsEventRegistered("ADDON_RESTRICTION_STATE_CHANGED"), "nothing registered while unused")
 end)

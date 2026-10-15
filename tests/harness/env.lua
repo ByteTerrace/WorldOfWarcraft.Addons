@@ -1,20 +1,19 @@
--- The global environment an addon sees inside the harness: fakes for the WoW API it uses,
--- backed by the Harness world state (see wow.lua). Every fake names a real global (the test
--- runner checks each against the client dump); every global and C_* fake is wrapped by
--- Harness:WrapFunction, so secret returns, secret arguments and restrictions follow its snapshot
--- entry, and an undocumented one (PlaySoundFile, PlaySound, StopSound) refuses secret arguments.
+-- The global environment an addon sees inside the harness: fakes for the WoW API it uses, backed by the Harness world
+-- state (see wow.lua). Every fake names a real global (the test runner checks each against the client dump); every
+-- global and C_* fake is wrapped by Harness:WrapFunction, so secret returns, secret arguments and restrictions follow
+-- its snapshot entry, and an undocumented one (PlaySoundFile, PlaySound, StopSound) refuses secret arguments.
 --
--- Formatting helpers (GetMoneyString, SecondsToTime) are deterministic stand-ins, not
--- Blizzard's exact output (no coin textures, English unit names). date() and time() run in UTC.
+-- Formatting helpers (GetMoneyString, SecondsToTime) are deterministic stand-ins, not Blizzard's exact output (no coin
+-- textures, English unit names). date() and time() run in UTC.
 --
--- Names [E]: Forever's names are regionally unique "First Last". UnitName, UnitNameUnmodified and
--- UnitFullName return (first, surname) for a player and (name, nil) for an NPC; no realm.
--- GetPlayerInfoByGUID's name is "First Last" with realm "" on your realm.
+-- Names [E]: Forever's names are regionally unique "First Last". UnitName, UnitNameUnmodified and UnitFullName return
+-- (first, surname) for a player and (name, nil) for an NPC; no realm. GetPlayerInfoByGUID's name is "First Last" with
+-- realm "" on your realm.
 
 local Snapshot = __snapshot
 
--- [E] The client build the API snapshot was dumped from ("1.60.1 (70374)"), so the harness is the
--- client its snapshot describes and probes record that build. [G] The build date, which nothing reads.
+-- [E] The client build the API snapshot was dumped from ("1.60.1 (70374)"), so the harness is the client its snapshot
+-- describes and probes record that build. [G] The build date, which nothing reads.
 Harness.BUILD = (((__build ~= "") and __build) or "0.0.0 (0)")
 local BuildVersion, BuildNumber = Harness.BUILD:match("^(%S+) %((%d+)%)$")
 
@@ -41,8 +40,8 @@ local Classes = {
     WARLOCK = { "Warlock", 9 }, WARRIOR = { "Warrior", 1 },
 }
 
--- A few real SOUNDKIT entries (Blizzard_SharedXML/Mainline/SoundKitConstants.lua). Reading any
--- other key is an error: add it here, with its real value, when an addon needs it.
+-- A few real SOUNDKIT entries (Blizzard_SharedXML/Mainline/SoundKitConstants.lua). Reading any other key is an error:
+-- add it here, with its real value, when an addon needs it.
 local Soundkits = {
     IG_QUEST_LIST_COMPLETE = 878, IG_QUEST_LOG_OPEN = 844, IG_SPELLBOOK_OPEN = 829, LFG_REWARDS = 17316,
     RAID_WARNING = 8959, READY_CHECK = 8960, UI_EPICLOOT_TOAST = 31578,
@@ -56,34 +55,12 @@ local Libraries = {
     table = { "concat", "insert", "maxn", "remove", "sort" },
 }
 
-local function Refuse(name, ...)
-    for i = 1, select("#", ...) do
-        if IsSecret((select(i, ...))) then
-            error(name .. ": argument #" .. i .. " is a secret value", 3)
-        end
-    end
-end
-
-local function Library(name)
-    local lib = {}
-
-    for _, member in ipairs(Libraries[name]) do
-        lib[member] = _G[name][member]
-    end
-    return lib
-end
-
-local function Strtrim(s, chars)
-    local set = ((chars and ("[" .. chars:gsub("[%]%[%^%-%%]", "%%%0") .. "]")) or "%s")
-
-    return (s:gsub("^" .. set .. "+", ""):gsub(set .. "+$", ""))
-end
-
 -- Seconds since the epoch for a UTC date table (time{...} in the harness's UTC world).
 local function EpochFromDate(t)
     local year, month = t.year, t.month
 
     if month <= 2 then year, month = (year - 1), (month + 12) end
+
     local era = math.floor(year / 400)
     local yoe = (year - (era * 400))
     local doy = ((math.floor(((153 * (month - 3)) + 2) / 5) + t.day) - 1)
@@ -93,14 +70,41 @@ local function EpochFromDate(t)
     return ((((days * 86400) + ((t.hour or 12) * 3600)) + ((t.min or 0) * 60)) + (t.sec or 0))
 end
 
+local function Library(name)
+    local lib = {}
+
+    for _, member in ipairs(Libraries[name]) do
+        lib[member] = _G[name][member]
+    end
+
+    return lib
+end
+
 local function MoneyString(money)
     local gold, silver, copper = math.floor(money / 10000), (math.floor(money / 100) % 100), (money % 100)
     local parts = {}
 
     if gold > 0 then parts[#parts + 1] = (gold .. "g") end
+
     if silver > 0 then parts[#parts + 1] = (silver .. "s") end
+
     if (copper > 0) or (#parts == 0) then parts[#parts + 1] = (copper .. "c") end
+
     return table.concat(parts, " ")
+end
+
+local function Refuse(name, ...)
+    for i = 1, select("#", ...) do
+        if IsSecret((select(i, ...))) then
+            error(name .. ": argument #" .. i .. " is a secret value", 3)
+        end
+    end
+end
+
+local function Strtrim(s, chars)
+    local set = ((chars and ("[" .. chars:gsub("[%]%[%^%-%%]", "%%%0") .. "]")) or "%s")
+
+    return (s:gsub("^" .. set .. "+", ""):gsub(set .. "+$", ""))
 end
 
 local TimeUnits = {
@@ -124,46 +128,82 @@ local function SecondsToTime(seconds, noSeconds, notAbbreviated, maxCount)
             seconds = (seconds - (count * unit[1]))
         end
     end
+
     return table.concat(parts, " ")
+end
+
+-- Every fake's name ("Name" or "Table.member"), for the test runner's check that each one exists in the client dump.
+-- Tables whose members are data (Enum values, SOUNDKIT) list one level.
+function Harness.FakeNames()
+    local h = Harness.New()
+
+    Harness.created = {}
+    local names = {}
+
+    for name, value in pairs(h.env) do
+        names[#names + 1] = name
+
+        if (type(value) == "table") and (name ~= "_G") and not Harness.State(value) then
+            for member in pairs(value) do
+                if type(member) == "string" then
+                    names[#names + 1] = (name .. "." .. member)
+                end
+            end
+        end
+    end
+
+    table.sort(names)
+
+    return table.concat(names, "\n")
 end
 
 function Harness:BuildEnvironment()
     local h = self
 
     local function Unit(token) return h:Unit(token) end
+
     local function Field(token, name, default)
         local unit = Unit(token)
 
         if unit == nil then
             return default
         end
+
         return unit[name]
     end
-    -- A unit's amount from one of its power tables (power or powerMax), of powerType or else its
-    -- primary power type. A unit without power has none.
+
+    -- A unit's amount from one of its power tables (power or powerMax), of powerType or else its primary power type. A
+    -- unit without power has none.
     local function Power(token, field, powerType)
         local unit = Unit(token)
 
         if not unit then return 0 end
+
         return ((unit[field] or {})[powerType or unit.powerType or 0] or 0)
     end
+
     local function Handle(entry)
         local handle = {}
 
         function handle.Cancel() entry.cancelled = true end
+
         function handle.IsCancelled() return (entry.cancelled == true) end
+
         return handle
     end
+
     local function PlayKit(kit, channel)
         assert(type(kit) == "number", "PlaySound: soundKitID must be a number, got " .. type(kit))
         h.handles = (h.handles + 1)
         h.soundKits[#h.soundKits + 1] = { channel = (channel or "SFX"), handle = h.handles, kit = kit }
+
         return true, h.handles
     end
 
+    -- order: grouped by the part of the client each fake models
     local fakes = {
-        -- Lua, as the client exposes it. type() reports a secret's underlying type, like the
-        -- client; tostring, tonumber, print and string.format refuse secrets.
+        -- Lua, as the client exposes it. type() reports a secret's underlying type, like the client; tostring,
+        -- tonumber, print and string.format refuse secrets.
         assert = assert, error = error, ipairs = ipairs, next = next, pairs = pairs, pcall = pcall,
         select = select, setmetatable = setmetatable, getmetatable = getmetatable, rawget = rawget, rawset = rawset,
         rawequal = rawequal, unpack = unpack,
@@ -179,6 +219,7 @@ function Harness:BuildEnvironment()
         tostring = SecretToString,
         tonumber = function(value, base)
             Refuse("tonumber", value)
+
             return tonumber(value, base)
         end,
         math = Library("math"), string = Library("string"), table = Library("table"),
@@ -190,6 +231,7 @@ function Harness:BuildEnvironment()
             local parts = {}
 
             for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+
             h.printed[#h.printed + 1] = table.concat(parts, " ")
         end,
 
@@ -198,23 +240,25 @@ function Harness:BuildEnvironment()
             return function(message) h:ReportError(message) end
         end,
         GetTime = function() return h.time end,
-        -- [G] The client's high-resolution clock in milliseconds; the snapshot records only that it
-        -- exists. It runs with GetTime, plus h.workTime: the milliseconds a test says the work in
-        -- the current frame has taken, since GetTime holds still within a frame and this clock
-        -- doesn't. debugprofilestart, which resets it for every addon, isn't faked.
+        -- [G] The client's high-resolution clock in milliseconds; the snapshot records only that it exists. It runs
+        -- with GetTime, plus h.workTime: the milliseconds a test says the work in the current frame has taken, since
+        -- GetTime holds still within a frame and this clock doesn't. debugprofilestart, which resets it for every
+        -- addon, isn't faked.
         debugprofilestop = function() return ((h.time * 1000) + h.workTime) end,
         GetServerTime = function() return h.serverTime end,
         time = function(t) return ((t and EpochFromDate(t)) or h.serverTime) end,
         date = function(fmt, t)
             fmt = (fmt or "%c")
+
             if fmt:sub(1, 1) == "!" then fmt = fmt:sub(2) end
+
             return os.date("!" .. fmt, t or h.serverTime)
         end,
         InCombatLockdown = function() return h.lockdown end,
         IsLoggedIn = function() return h.loggedIn end,
         GetBuildInfo = function() return BuildVersion, BuildNumber, "Oct 1 2026", 16001 end,
-        -- The harness is an enUS client: its GlobalStrings (world.lua) are the enUS ones. A test of
-        -- another locale sets h.locale and rawsets the GlobalStrings it reads to that locale's.
+        -- The harness is an enUS client: its GlobalStrings (world.lua) are the enUS ones. A test of another locale sets
+        -- h.locale and rawsets the GlobalStrings it reads to that locale's.
         GetLocale = function() return h.locale end,
 
         -- Frames.
@@ -224,11 +268,13 @@ function Harness:BuildEnvironment()
             if name then
                 rawset(h.env, name, frame)
             end
+
             return frame
         end,
         CreateColor = Color,
         SlashCmdList = {},
-        hash_SlashCmdList = {}, -- the chat frame's imported commands, [uppercased alias] = handler
+        -- the chat frame's imported commands, [uppercased alias] = handler
+        hash_SlashCmdList = {},
 
         -- Units.
         UnitExists = function(u) return Field(u, "exists", false) end,
@@ -238,12 +284,12 @@ function Harness:BuildEnvironment()
         UnitIsAFK = function(u) return Field(u, "afk", false) end,
         UnitHealth = function(u) return Field(u, "health", 0) end,
         UnitHealthMax = function(u) return Field(u, "maxHealth", 0) end,
-        -- [D] UnitHealthMax() - UnitHealth() (its doc string). Predicted healing isn't modeled, so
-        -- usePredicted changes nothing.
+        -- [D] UnitHealthMax() - UnitHealth() (its doc string). Predicted healing isn't modeled, so usePredicted changes
+        -- nothing.
         UnitHealthMissing = function(u) return (Field(u, "maxHealth", 0) - Field(u, "health", 0)) end,
-        -- [D] "percent of health remaining", scaled by an optional curve. [G] Without a curve it's the
-        -- 0-1 fraction (the client's CurveConstants offer ScaleTo100), and 0 for a unit without max
-        -- health. Curves aren't modeled: passing one is a harness error.
+        -- [D] "percent of health remaining", scaled by an optional curve. [G] Without a curve it's the 0-1 fraction
+        -- (the client's CurveConstants offer ScaleTo100), and 0 for a unit without max health. Curves aren't modeled:
+        -- passing one is a harness error.
         UnitHealthPercent = function(u, _, curve)
             assert(curve == nil, "UnitHealthPercent: the harness doesn't model curves")
             local max = Field(u, "maxHealth", 0)
@@ -274,8 +320,7 @@ function Harness:BuildEnvironment()
         GetNumGroupMembers = function(category)
             return ((h:InGroupCategory(category) and (#h.group.members + 1)) or 0)
         end,
-        -- A unit's classFile is its classFile field; className defaults to
-        -- the class's enUS name.
+        -- A unit's classFile is its classFile field; className defaults to the class's enUS name.
         UnitClass = function(u)
             local unit = Unit(u)
             local classFile = (unit and unit.classFile)
@@ -288,6 +333,7 @@ function Harness:BuildEnvironment()
             local unit = h.guidUnits[guid]
 
             if not unit or not unit.isPlayer or not unit.name then return end
+
             local class, race = Classes[unit.classFile or ""], (unit.race and Harness.RACES[unit.race])
             local realm = ((((unit.realm == nil) or (unit.realm == h.player.realm)) and "") or unit.realm)
 
@@ -311,7 +357,8 @@ function Harness:BuildEnvironment()
         IsResting = function() return h.player.resting end,
         GetMoney = function() return h.player.money end,
         UnitPowerType = function(u)
-            local powerType = (Field(u, "powerType", 0) or 0) -- every unit has a primary power type
+            -- every unit has a primary power type
+            local powerType = (Field(u, "powerType", 0) or 0)
 
             return powerType, (PowerTokens[powerType] or "MANA")
         end,
@@ -338,6 +385,7 @@ function Harness:BuildEnvironment()
                 local state = h.usable[name]
 
                 if not state then return false, false end
+
                 return state[1], state[2]
             end,
         },
@@ -353,18 +401,23 @@ function Harness:BuildEnvironment()
 
                 local function Tick()
                     if remaining then remaining = (remaining - 1) end
+
                     if not remaining or (remaining > 0) then
                         local nextEntry = h:Schedule(seconds, Tick)
 
                         state.current = nextEntry
                     end
+
                     callback(handle)
                 end
+
                 state.current = h:Schedule(seconds, Tick)
+
                 handle = {
                     Cancel = function() state.cancelled = true; state.current.cancelled = true end,
                     IsCancelled = function() return (state.cancelled == true) end,
                 }
+
                 return handle
             end,
             NewTimer = function(seconds, callback)
@@ -372,6 +425,7 @@ function Harness:BuildEnvironment()
                 local entry = h:Schedule(seconds, function() callback(handle) end)
 
                 handle = Handle(entry)
+
                 return handle
             end,
         },
@@ -381,8 +435,10 @@ function Harness:BuildEnvironment()
             if not h.files[path] or h.mutedChannels[channel or "SFX"] then
                 return false, nil
             end
+
             h.handles = (h.handles + 1)
             h.sounds[#h.sounds + 1] = { channel = channel, handle = h.handles, path = path }
+
             return true, h.handles
         end,
         C_UIFileAsset = { IsKnownFile = function(path) return (h.files[path] == true) end },
@@ -400,18 +456,19 @@ function Harness:BuildEnvironment()
             ClearLedColor = function() h.led = nil end,
             GetActiveDeviceID = function() return ((h.labelStyle and 1) or 0) end,
             GetDeviceMappedState = function(id) return h:GamePadMappedState(id) end,
-            -- [D] The device's Enum.GamePadPowerLevel (GamePadDocumentation; the ID is Nilable).
-            -- [G] h.powerLevel for the connected controller, Unknown without one.
+            -- [D] The device's Enum.GamePadPowerLevel (GamePadDocumentation; the ID is Nilable). [G] h.powerLevel for
+            -- the connected controller, Unknown without one.
             GetPowerLevel = function()
-                return ((h.labelStyle and h.powerLevel) or 5) -- 5: Enum.GamePadPowerLevel.Unknown
+                -- 5: Enum.GamePadPowerLevel.Unknown
+                return ((h.labelStyle and h.powerLevel) or 5)
             end,
             SetLedColor = function(color) h.led = { color:GetRGB() } end,
             SetVibration = function(kind, intensity) h.vibrations[#h.vibrations + 1] = { kind, intensity } end,
             StopVibration = function() h.vibrationsStopped = (h.vibrationsStopped + 1) end,
         },
 
-        -- [D] The interface style, an Enum.InputDeviceInterfaceType (InputInterfaceStyle docs).
-        -- [G] h.interfaceStyle, mouse and keyboard unless a test sets it.
+        -- [D] The interface style, an Enum.InputDeviceInterfaceType (InputInterfaceStyle docs). [G] h.interfaceStyle,
+        -- mouse and keyboard unless a test sets it.
         C_InputInterfaceStyle = {
             GetCurrentStyle = function() return h.interfaceStyle end,
         },
@@ -427,8 +484,8 @@ function Harness:BuildEnvironment()
             end,
         },
 
-        -- The addon profiler and memory (Blizzard_AddOnList reads them). Metrics come from
-        -- h.profiler: numbers keyed by Enum.AddOnProfilerMetric value, 0 when unset.
+        -- The addon profiler and memory (Blizzard_AddOnList reads them). Metrics come from h.profiler: numbers keyed by
+        -- Enum.AddOnProfilerMetric value, 0 when unset.
         C_AddOnProfiler = {
             GetAddOnMetric = function(name, metric) return ((h.profiler.addons[name] or {})[metric] or 0) end,
             GetApplicationMetric = function(metric) return (h.profiler.application[metric] or 0) end,
@@ -441,8 +498,7 @@ function Harness:BuildEnvironment()
         -- Addon messages (group.lua); the rest of C_ChatInfo is merged in below.
         C_ChatInfo = h:AddonMessageFakes(),
 
-        -- Restrictions.
-        -- IsAddOnRestrictionActive is false during ADDON_RESTRICTION_STATE_CHANGED (its doc).
+        -- Restrictions. IsAddOnRestrictionActive is false during ADDON_RESTRICTION_STATE_CHANGED (its doc).
         C_RestrictedActions = {
             IsAddOnRestrictionActive = function(kind)
                 local name = Harness.RESTRICTIONS[(kind or -1) + 1]
@@ -457,12 +513,15 @@ function Harness:BuildEnvironment()
         PowerBarColor = { ENERGY = { b = 0, g = 1, r = 1 } },
         LE_PARTY_CATEGORY_INSTANCE = Harness.PARTY_CATEGORY.INSTANCE,
     }
+
     -- math.random and random are Lua's until h:SeedRandom (see wow.lua).
     fakes.math.random = function(...) return h:Random(...) end
     fakes.random = fakes.math.random
+
     for key, value in pairs(Soundkits) do
         rawset(fakes.SOUNDKIT, key, value)
     end
+
     fakes.string.trim = Strtrim
     fakes.string.format = SecretFormat
     fakes.format = SecretFormat
@@ -473,29 +532,34 @@ function Harness:BuildEnvironment()
 
     -- Enum, from the documented enumerations.
     fakes.Enum = {}
+
     for name, fields in pairs(Snapshot.enums) do
         local enum = {}
 
         for field, value in pairs(fields) do
             enum[field] = value
         end
+
         fakes.Enum[name] = enum
     end
 
     fakes.UIParent = h:CreateWidget("Frame", "UIParent")
-    -- [G] The screen at UI scale 1: 768 high, whatever the resolution, and 16:9 wide. A test can
-    -- change it (h.env.UIParent:SetSize).
+    -- [G] The screen at UI scale 1: 768 high, whatever the resolution, and 16:9 wide. A test can change it
+    -- (h.env.UIParent:SetSize).
     Harness.State(fakes.UIParent).width, Harness.State(fakes.UIParent).height = 1366, 768
-    -- Blizzard's settings frame carries SettingsPanelMixin (Blizzard_SettingsPanel.lua). Addon code
-    -- that opened it froze the client when it closed, so Open and OpenToCategory are forbidden
-    -- (tools/api/forbidden.json); the player opens it from Esc > Options.
+    -- Blizzard's settings frame carries SettingsPanelMixin (Blizzard_SettingsPanel.lua). Addon code that opened it
+    -- froze the client when it closed, so Open and OpenToCategory are forbidden (tools/api/forbidden.json); the player
+    -- opens it from Esc > Options.
     fakes.SettingsPanel = h:CreateWidget("Frame", "SettingsPanel", fakes.UIParent)
+
     fakes.SettingsPanel.Open = function()
         h:BlockAction("ADDON_ACTION_FORBIDDEN", "SettingsPanel:Open")
     end
+
     fakes.SettingsPanel.OpenToCategory = function()
         h:BlockAction("ADDON_ACTION_FORBIDDEN", "SettingsPanel:OpenToCategory")
     end
+
     -- units.lua, world.lua, ui.lua, meter.lua, speech.lua and quests.lua; a name defined twice is a harness bug.
     local sources = {
         h:UnitFakes(), h:WorldFakes(), h:InterfaceFakes(fakes.UIParent), h:MeterFakes(), h:SpeechFakes(),
@@ -508,6 +572,7 @@ function Harness:BuildEnvironment()
             fakes[name] = value
         end
     end
+
     fakes._G = fakes
 
     -- Documented fakes follow their snapshot entry (secrets, secret arguments, restrictions).
@@ -520,6 +585,7 @@ function Harness:BuildEnvironment()
             end
         end
     end
+
     fakes.Settings = h:BuildSettings(fakes)
 
     return setmetatable(fakes, {
@@ -527,6 +593,7 @@ function Harness:BuildEnvironment()
             if h.declared[key] then
                 return nil
             end
+
             error("read of undefined global " .. tostring(key), 2)
         end,
     })
@@ -539,8 +606,8 @@ end
 -- - OpenToCategory calls C_SettingsUtil.OpenSettingsPanel, as Blizzard_Settings.lua does, which
 --   addon code must never call (tools/api/forbidden.json).
 -- - The SettingsPanel global (a frame, see the env) refuses addon code's Open and OpenToCategory.
--- What tests read: h.categories (every category registered, { name, canvas }, in order) and
--- h.category (the RegisterAddOnCategory argument).
+-- What tests read: h.categories (every category registered, { name, canvas }, in order) and h.category (the
+-- RegisterAddOnCategory argument).
 function Harness:BuildSettings(env)
     local h = self
 
@@ -556,50 +623,31 @@ function Harness:BuildSettings(env)
             local category = { canvas = frame, GetID = function() return id end, name = name }
 
             h.categories[id] = category
+
             return category, { frame = frame }
         end,
     }
 end
 
--- Every fake's name ("Name" or "Table.member"), for the test runner's check that each one exists
--- in the client dump. Tables whose members are data (Enum values, SOUNDKIT) list one level.
-function Harness.FakeNames()
-    local h = Harness.New()
-
-    Harness.created = {}
-    local names = {}
-
-    for name, value in pairs(h.env) do
-        names[#names + 1] = name
-        if (type(value) == "table") and (name ~= "_G") and not Harness.State(value) then
-            for member in pairs(value) do
-                if type(member) == "string" then
-                    names[#names + 1] = (name .. "." .. member)
-                end
-            end
-        end
-    end
-    table.sort(names)
-    return table.concat(names, "\n")
-end
-
 -- Tables whose functions are Lua's own library: the runner doesn't ask whether an addon calls them.
 local LuaLibraries = { _G = true, math = true, string = true, table = true }
 
--- Every fake that's a function ("Name", or "Table.member" at any depth), for the test runner's check that an
--- addon calls each one. Lua's functions (Harness.LUA_FAKES, Lua's libraries) and widgets'
--- methods aren't listed.
+-- Every fake that's a function ("Name", or "Table.member" at any depth), for the test runner's check that an addon
+-- calls each one. Lua's functions (Harness.LUA_FAKES, Lua's libraries) and widgets' methods aren't listed.
 function Harness.FakeFunctionNames()
     local h = Harness.New()
 
     Harness.created = {}
     local names, seen = {}, {}
+
     -- The functions in a plain table, nested tables included (each table once; widgets aside).
     local function Walk(path, t)
         if seen[t] or Harness.State(t) then
             return
         end
+
         seen[t] = true
+
         for member, value in pairs(t) do
             if type(member) == "string" then
                 if type(value) == "function" then
@@ -610,6 +658,7 @@ function Harness.FakeFunctionNames()
             end
         end
     end
+
     for name, value in pairs(h.env) do
         if (type(value) == "function") and not Harness.LUA_FAKES[name] then
             names[#names + 1] = name
@@ -617,6 +666,8 @@ function Harness.FakeFunctionNames()
             Walk(name, value)
         end
     end
+
     table.sort(names)
+
     return table.concat(names, "\n")
 end

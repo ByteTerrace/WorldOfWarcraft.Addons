@@ -1,5 +1,5 @@
--- ByteTerrace framework: controller labels and maps (a map belongs to its module, and held commands
--- keep their phases in order, whatever their own handlers do to the maps).
+-- ByteTerrace framework: controller labels and maps (a map belongs to its module, and held commands keep their phases
+-- in order, whatever their own handlers do to the maps).
 
 local Kit = use("framework")
 
@@ -12,10 +12,12 @@ test("a stopping module's maps stop capturing: a stopped feature never keeps the
     addon:Module("Menu", { bindings = { { command = "Menu.pick", map = "menu", source = "gamepad.south" } },
         commands = { { label = "Pick", name = "pick", run = function() end } }, label = "Menu",
         OnDisable = function() error("OnDisable broke before it gave the controller back") end })
+
     local picks = 0
 
     addon:Module("Pad", { bindings = { { command = "Pad.pick", map = "pad", source = "gamepad.east" } },
         commands = { { label = "Pick", name = "pick", run = function() picks = (picks + 1) end } }, label = "Pad" })
+
     Start(h)
     throws(function() addon.Input:SetActiveMaps({ "menu", "nope" }) end, "unknown input map nope")
     addon.Input:SetActiveMaps({ "menu", "pad" })
@@ -34,11 +36,13 @@ test("a map that binds two modules' commands is refused: a map belongs to one mo
     local h, addon = NewAddOn()
 
     addon:Module("A", { commands = { { label = "Go", name = "go", run = function() end } }, toggle = false })
+
     addon:Module("B", { bindings = {
             { command = "A.go", map = "shared", source = "gamepad.south" },
             { command = "B.go", map = "shared", source = "gamepad.east" },
         },
         commands = { { label = "Go", name = "go", run = function() end } }, toggle = false })
+
     h:ExpectErrors("shared: binds commands of more than one module")
     Start(h)
     falsy(addon.Started)
@@ -52,6 +56,7 @@ test("a held command that changes maps in its own down gets cancel after that do
         commands = { { held = true, label = "Enter", name = "enter",
             run = function(_, phase)
                 log[#log + 1] = phase
+
                 if phase == "down" then
                     addon.Input:SetActiveMaps({})
                     holding = true
@@ -60,6 +65,7 @@ test("a held command that changes maps in its own down gets cancel after that do
                 end
             end } },
         toggle = false })
+
     Start(h)
     addon.Input:SetActiveMaps({ "menu" })
     h:Gamepad("PAD1", true)
@@ -72,6 +78,7 @@ test("a held command can't have a slash word: slash text only ever presses it", 
 
     addon:Module("M", { commands = { { held = true, label = "Hold", name = "hold", run = function() end, slash = "hold" } },
         toggle = false })
+
     h:ExpectErrors("held command can't have a slash word")
     Start(h)
     falsy(addon.Started)
@@ -94,6 +101,7 @@ test("a transport faster than the client's throttle regains messages, or without
 
     throws(function() addon:Module("Chat", { comms = { interval = 0.05, prefix = "TestApp1" }, label = "Chat" }) end,
         "interval must be at least 1 second")
+
     throws(function() addon:Module("Chat", { comms = { prefix = "TestApp1", queue = 0 }, label = "Chat" }) end,
         "queue must be a positive whole number")
 end)
@@ -102,9 +110,11 @@ test("a prefix the client won't register is reported", function()
     local h, addon = NewAddOn()
 
     addon:Module("Chat", { comms = { prefix = "TestApp1" }, label = "Chat" })
+
     for i = 1, Harness.MAX_PREFIXES do
         h.env.C_ChatInfo.RegisterAddonMessagePrefix("Other" .. i)
     end
+
     h:ExpectErrors("TestApp1 can't be registered: MaxPrefixes")
     Start(h)
 end)
@@ -141,6 +151,7 @@ test("bindings to unknown sources or commands, or a source bound twice in a map,
             { command = "M.go", map = "menu", source = "gamepad.south" },
         },
         commands = { { label = "Go", name = "go", run = function() end } }, toggle = false })
+
     h:ExpectErrors(1)
     Start(h)
     falsy(addon.Started)

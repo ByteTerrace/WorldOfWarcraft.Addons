@@ -1,11 +1,11 @@
 local addonName, ns = ...
 
--- Sounds: player-supplied sounds bound to game moments. The addon ships no audio: players drop
--- files named after each sound into the Media folder (ByteTerrace_Core's SoundBank.lua has the
--- rules: .ogg or .mp3, numbered variants, a restart to see new files).
+-- Sounds: player-supplied sounds bound to game moments. The addon ships no audio: players drop files named after each
+-- sound into the Media folder (ByteTerrace_Core's SoundBank.lua has the rules: .ogg or .mp3, numbered variants, a
+-- restart to see new files).
 --
--- ns.SoundBank is the toolkit's bank, the one way any feature plays them. Define sounds at file
--- load, before a module's state uses SoundBank:Row.
+-- ns.SoundBank is the toolkit's bank, the one way any feature plays them. Define sounds at file load, before a module's
+-- state uses SoundBank:Row.
 --
 -- Modules:
 --   Sounds            the master switch, the channel, and the combat start sound's settings.
@@ -31,9 +31,13 @@ end
 SoundBank:Define("combatStart", { file = "CombatStart", label = "Combat start", row = "Sounds.combatStart", word = "start" })
 
 Addon:Module("Sounds", {
+    commands = {
+        { always = true, label = "List or test your sounds: sound [name] [variant]", name = "test",
+            run = function(arg) SoundBank:Test(arg) end, slash = "sound" },
+    },
+    description = "Play your own sounds for game moments. Each sound also has its own toggle below.",
     label = "Sounds",
     page = "Sounds",
-    description = "Play your own sounds for game moments. Each sound also has its own toggle below.",
     state = {
         { default = "Master",
             description = "Volume channel your sounds play on. Master plays even when game music is off.",
@@ -45,15 +49,12 @@ Addon:Module("Sounds", {
         { default = true, description = "Fade out the combat start sound when you leave combat.", kind = "boolean",
             label = "Stop combat start sound when combat ends", name = "stopOnCombatEnd" },
     },
-    commands = {
-        { always = true, label = "List or test your sounds: sound [name] [variant]", name = "test",
-            run = function(arg) SoundBank:Test(arg) end, slash = "sound" },
-    },
 })
 
 Addon:Module("CombatStartSound", {
-    toggle = false,
     active = SoundBank:WhileOn("combatStart"),
+    -- turning the sound off stops it mid-play
+    OnDisable = StopCombatStart,
     OnEnable = function(module)
         local combat = module:Id("combat.active")
 
@@ -69,5 +70,5 @@ Addon:Module("CombatStartSound", {
             reads = { combat }, when = function(state) return state.Values[combat] end,
         })
     end,
-    OnDisable = StopCombatStart, -- turning the sound off stops it mid-play
+    toggle = false,
 })

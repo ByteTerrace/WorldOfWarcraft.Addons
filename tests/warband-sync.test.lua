@@ -48,17 +48,22 @@ test("a raid's worth of Krew members joining hears your marks and wars once; a n
 
     h:JoinGroup("raid", names)
     h:Echo(false)
+
     for _, name in ipairs({ "Bob", "Cara", "Dan" }) do
         h:Slash("/tlk mark " .. name .. " Doe")
     end
+
     for _, guild in ipairs({ "Red", "Blue", "Gold" }) do
         h:Slash("/tlk war " .. guild)
     end
+
     h:Advance(20)
     eq(#Sent(h, "MARKS") + #Sent(h, "WARS"), 0)
+
     for _, name in ipairs(names) do
         Receive(h, name, "HELLO", "0.1.0")
     end
+
     h:Advance(30)
     eq(#Sent(h, "MARKS"), 1, "one sync for the burst, so the send queue has room")
     eq(#Sent(h, "WARS"), 1)
@@ -77,9 +82,11 @@ test("a sync packs three marks and three wars into two messages, and a Krew memb
         h:SetTarget(Enemy(name))
         h:Slash("/tlk mark")
     end
+
     for _, guild in ipairs({ "Red", "Blue", "Gold" }) do
         h:Slash("/tlk war " .. guild)
     end
+
     h:Advance(20)
     local before = #h.addonMessages
 
@@ -90,18 +97,25 @@ test("a sync packs three marks and three wars into two messages, and a Krew memb
     for i = before + 1, #h.addonMessages do
         synced[#synced + 1] = h.addonMessages[i].message
     end
+
     eq(#synced, 2, table.concat(synced, " | "))
-    local function Entries(text, kind) -- the message's entries, sorted: marks placed in one second tie
+
+    -- the message's entries, sorted: marks placed in one second tie
+    local function Entries(text, kind)
         local entries = {}
 
         for entry in text:gsub("^" .. kind .. ":", ""):gmatch("[^\t]+") do
             entries[#entries + 1] = entry
         end
+
         table.sort(entries)
+
         return table.concat(entries, " | ")
     end
+
     eq(Entries(synced[1], "MARKS"), "Bob Doe;ROGUE;60;Alliance | Cara Doe;ROGUE;60;Alliance | Dan Doe;ROGUE;60;Alliance",
         "each with what its record knows")
+
     local realm = h.env.GetNormalizedRealmName()
 
     eq(Entries(synced[2], "WARS"), ("Blue-%s | Gold-%s | Red-%s"):format(realm, realm, realm))
@@ -111,11 +125,13 @@ test("a sync packs three marks and three wars into two messages, and a Krew memb
     for _, text in ipairs(synced) do
         other:ReceiveAddonMessage(Prefix, text, "PARTY", "Mom")
     end
+
     for _, name in ipairs({ "Bob", "Cara", "Dan" }) do
         eq(Ledger(otherAddon):Field(Key(other, name), "kind"), "mark", name)
         eq(Ledger(otherAddon):Field(Key(other, name), "by"), "Mom Doe")
         eq(People(otherAddon):Field(Key(other, name), "class"), "ROGUE")
     end
+
     for _, guild in ipairs({ "Red", "Blue", "Gold" }) do
         truthy(otherAddon.Modules.Warband.Records.wars:Has(guild .. "-" .. realm), guild)
     end
@@ -126,10 +142,12 @@ test("marks too long for one message go in as few as fit", function()
     local names = {}
 
     for i, letter in ipairs({ "A", "B", "C" }) do
-        names[i] = (letter .. string.rep("a", 55)) -- "Aaaa... Doe": 60 bytes, so an entry is 84
+        -- "Aaaa... Doe": 60 bytes, so an entry is 84
+        names[i] = (letter .. string.rep("a", 55))
         h:SetTarget(Enemy(names[i], { classFile = "DEATHKNIGHT" }))
         h:Slash("/tlk mark")
     end
+
     h:Advance(20)
     Receive(h, "Mom", "HELLO", "0.1.0", "1")
     h:Advance(10)
@@ -142,6 +160,7 @@ test("marks too long for one message go in as few as fit", function()
     for _, text in ipairs(sent) do
         other:ReceiveAddonMessage(Prefix, text, "PARTY", "Mom")
     end
+
     for _, name in ipairs(names) do
         eq(Ledger(otherAddon):Field(Key(other, name), "kind"), "mark", name)
     end

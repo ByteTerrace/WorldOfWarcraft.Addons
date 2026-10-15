@@ -8,19 +8,19 @@ local addonName, ns = ...
 --                  every tenth level and at max level.
 --   /tlk journal   this session's highlights so far.
 --
--- Cards come from ns.Cards (Cards.lua): they wait out combat, hold on hover, dismiss on click.
--- Deaths come from the death fact (death.count), which runs while the journal does.
+-- Cards come from ns.Cards (Cards.lua): they wait out combat, hold on hover, dismiss on click. Deaths come from the
+-- death fact (death.count), which runs while the journal does.
 --
--- The session lives in per-character rows. A /reload continues it; the next login looks back on
--- it. Played time is summed from GetTime deltas while the journal runs; time away is server time.
+-- The session lives in per-character rows. A /reload continues it; the next login looks back on it. Played time is
+-- summed from GetTime deltas while the journal runs; time away is server time.
 
 local ContinueWindowSeconds = 120
 local DingIcon = "Interface\\Icons\\Spell_Holy_SurgeOfLight"
 local JournalIcon = "Interface\\Icons\\INV_Misc_Book_09"
-local MinAwaySeconds = (30 * 60)
-local MinRestedPercent = 1
 -- { one, many }, for Tally.
 local Levels = { "level", "levels" }
+local MinAwaySeconds = (30 * 60)
+local MinRestedPercent = 1
 local Quests = { "quest", "quests" }
 local Trips = { "trip to the spirit healer", "trips to the spirit healer" }
 
@@ -39,6 +39,7 @@ for _, name in ipairs({
 }) do
     Rows[#Rows + 1] = { default = 0, kind = "number", name = name, scope = "character" }
 end
+
 -- -1: no baseline yet (a new character's 0 copper is a real baseline).
 Rows[#Rows + 1] = { default = -1, kind = "number", name = "levelStartMoney", scope = "character" }
 -- Whether the level's counters began at a ding (false: since the journal started).
@@ -54,32 +55,38 @@ local Addon = ns.Addon
 local Count = ns.Puzzles.Kit.Count
 local ShowCard = ns.Cards.Show
 
-local Journal -- the Journal module, declared last
+-- the Journal module, declared last
+local Journal
 
 -- Played time since the last checkpoint is folded into the session and level totals.
 local SegmentStart = GetTime()
 
--- Set once this UI load has begun (or continued) a session, so disabling and re-enabling the
--- journal within one load keeps the session.
+-- Set once this UI load has begun (or continued) a session, so disabling and re-enabling the journal within one load
+-- keeps the session.
 local BegunThisLoad = false
+
+local function Add(row, amount)
+    Journal:Set(row, Journal:Get(row) + amount)
+end
+
+local function Checkpoint()
+    local elapsed = floor(GetTime() - SegmentStart)
+
+    SegmentStart = (SegmentStart + elapsed)
+    Add("sessionPlayed", elapsed)
+    Add("levelPlayed", elapsed)
+end
 
 local function Duration(seconds)
     if seconds < 60 then
         return "under a minute"
     end
+
     return SecondsToTime(seconds, true, true, 2)
 end
 
-local function Money(copper)
-    if copper == 0 then
-        return nil
-    end
-    return ((((copper > 0) and "+") or "-") .. GetMoneyString(abs(copper), true))
-end
-
--- "1 quest" or "3 quests"; nil for none, so Line leaves it out.
-local function Tally(number, item)
-    return (((number ~= 0) and Count(number, item)) or nil)
+local function Get(row)
+    return Journal:Get(row)
 end
 
 -- Joins the non-nil parts with a middle dot.
@@ -93,7 +100,24 @@ local function Line(...)
             parts[#parts + 1] = part
         end
     end
+
     return concat(parts, " · ")
+end
+
+local function Milestone(level)
+    if level >= GetMaxPlayerLevel() then
+        return "Max level. Legendary."
+    elseif (level % 10) == 0 then
+        return ("Level " .. level .. " is a milestone!")
+    end
+end
+
+local function Money(copper)
+    if copper == 0 then
+        return nil
+    end
+
+    return ((((copper > 0) and "+") or "-") .. GetMoneyString(abs(copper), true))
 end
 
 local function PlayerName()
@@ -102,6 +126,7 @@ local function PlayerName()
     if issecretvalue(name) or not name then
         return "adventurer"
     end
+
     return name
 end
 
@@ -112,23 +137,8 @@ local function RestedPercent(rested)
     if needed <= 0 then
         return 0
     end
+
     return ((rested * 100) / needed)
-end
-
-local function Get(row)
-    return Journal:Get(row)
-end
-
-local function Add(row, amount)
-    Journal:Set(row, Journal:Get(row) + amount)
-end
-
-local function Checkpoint()
-    local elapsed = floor(GetTime() - SegmentStart)
-
-    SegmentStart = (SegmentStart + elapsed)
-    Add("sessionPlayed", elapsed)
-    Add("levelPlayed", elapsed)
 end
 
 local function SaveSeen()
@@ -149,10 +159,65 @@ local function StartSession()
     Journal:Set("sessionStartMoney", money)
     Journal:Set("sessionQuests", 0)
     Journal:Set("sessionDeaths", 0)
+
     if Get("levelStartMoney") < 0 then
         Journal:Set("levelStartMoney", money)
     end
+
     SaveSeen()
+end
+
+-- "1 quest" or "3 quests"; nil for none, so Line leaves it out.
+local function Tally(number, item)
+    return (((number ~= 0) and Count(number, item)) or nil)
+end
+
+local function DingCard(level)
+    Checkpoint()
+    local deaths = Get("levelDeaths")
+
+    local lead = ((Get("levelFromDing") and ("Level " .. (level - 1) .. " took " .. Duration(Get("levelPlayed"))))
+        or ("Since the journal started: " .. Duration(Get("levelPlayed"))))
+
+    local body = Line(
+        lead,
+        Tally(Get("levelQuests"), Quests),
+        Money(GetMoney() - Get("levelStartMoney")),
+        ((deaths == 0) and "not a single death!") or Tally(deaths, Trips))
+
+    local milestone = Milestone(level)
+
+    if milestone then
+        body = (body .. "\n" .. milestone)
+    end
+
+    Journal:Set("levelPlayed", 0)
+    Journal:Set("levelQuests", 0)
+    Journal:Set("levelDeaths", 0)
+    Journal:Set("levelStartMoney", GetMoney())
+    Journal:Set("levelFromDing", true)
+
+    return { body = body, icon = DingIcon, sound = SOUNDKIT.LFG_REWARDS, title = ("Ding! Level " .. level) }
+end
+
+local function SessionCard()
+    Checkpoint()
+    local levels = (UnitLevel("player") - Get("sessionStartLevel"))
+
+    local summary = Line(
+        Duration(Get("sessionPlayed")),
+        Tally(Get("sessionQuests"), Quests),
+        Tally(levels, Levels),
+        Money(GetMoney() - Get("sessionStartMoney")),
+        Tally(Get("sessionDeaths"), Trips))
+
+    local rested = RestedPercent(GetXPExhaustion() or 0)
+
+    if rested >= MinRestedPercent then
+        summary = (summary .. "\nRested XP banked: " .. floor(rested) .. "% of a level.")
+    end
+
+    return { body = summary, icon = JournalIcon, sound = SOUNDKIT.IG_SPELLBOOK_OPEN, title = "This session" }
 end
 
 -- The welcome card for the previous session, or nil when there's nothing worth a card.
@@ -162,6 +227,7 @@ local function WelcomeCard()
     if (Get("sessionStart") == 0) or (away < MinAwaySeconds) then
         return nil
     end
+
     local restedGain = RestedPercent((GetXPExhaustion() or 0) - Get("sessionRested"))
     local levels = (Get("sessionEndLevel") - Get("sessionStartLevel"))
     local zone = Get("sessionZone")
@@ -170,62 +236,15 @@ local function WelcomeCard()
     if restedGain >= MinRestedPercent then
         first = (first .. " Rested up: +" .. floor(restedGain) .. "% of a level.")
     end
+
     local last = ((((zone ~= "") and ("Last time in " .. zone .. ": ")) or "Last time: ") .. Line(
         Duration(Get("sessionPlayed")),
         Tally(Get("sessionQuests"), Quests),
         Money(Get("sessionEndMoney") - Get("sessionStartMoney")),
         ((levels > 0) and ("reached level " .. Get("sessionEndLevel"))) or nil))
 
-    return { icon = JournalIcon, sound = SOUNDKIT.IG_SPELLBOOK_OPEN,
-        title = ("Welcome back, " .. PlayerName() .. "!"), body = (first .. "\n" .. last) }
-end
-
-local function SessionCard()
-    Checkpoint()
-    local levels = (UnitLevel("player") - Get("sessionStartLevel"))
-    local summary = Line(
-        Duration(Get("sessionPlayed")),
-        Tally(Get("sessionQuests"), Quests),
-        Tally(levels, Levels),
-        Money(GetMoney() - Get("sessionStartMoney")),
-        Tally(Get("sessionDeaths"), Trips))
-    local rested = RestedPercent(GetXPExhaustion() or 0)
-
-    if rested >= MinRestedPercent then
-        summary = (summary .. "\nRested XP banked: " .. floor(rested) .. "% of a level.")
-    end
-    return { body = summary, icon = JournalIcon, sound = SOUNDKIT.IG_SPELLBOOK_OPEN, title = "This session" }
-end
-
-local function Milestone(level)
-    if level >= GetMaxPlayerLevel() then
-        return "Max level. Legendary."
-    elseif (level % 10) == 0 then
-        return ("Level " .. level .. " is a milestone!")
-    end
-end
-
-local function DingCard(level)
-    Checkpoint()
-    local deaths = Get("levelDeaths")
-    local lead = ((Get("levelFromDing") and ("Level " .. (level - 1) .. " took " .. Duration(Get("levelPlayed"))))
-        or ("Since the journal started: " .. Duration(Get("levelPlayed"))))
-    local body = Line(
-        lead,
-        Tally(Get("levelQuests"), Quests),
-        Money(GetMoney() - Get("levelStartMoney")),
-        ((deaths == 0) and "not a single death!") or Tally(deaths, Trips))
-    local milestone = Milestone(level)
-
-    if milestone then
-        body = (body .. "\n" .. milestone)
-    end
-    Journal:Set("levelPlayed", 0)
-    Journal:Set("levelQuests", 0)
-    Journal:Set("levelDeaths", 0)
-    Journal:Set("levelStartMoney", GetMoney())
-    Journal:Set("levelFromDing", true)
-    return { body = body, icon = DingIcon, sound = SOUNDKIT.LFG_REWARDS, title = ("Ding! Level " .. level) }
+    return { body = (first .. "\n" .. last), icon = JournalIcon, sound = SOUNDKIT.IG_SPELLBOOK_OPEN,
+        title = ("Welcome back, " .. PlayerName() .. "!") }
 end
 
 Journal = Addon:Module("Journal", {
@@ -235,7 +254,8 @@ Journal = Addon:Module("Journal", {
     description = "Celebrates your play: a welcome-back card at login, a Ding! card at level-up, and /tlk journal for this session's highlights.",
     label = "Session journal",
     OnDisable = function()
-        SaveSeen() -- keep the played time so far
+        -- keep the played time so far
+        SaveSeen()
     end,
     OnEnable = function(module)
         SegmentStart = GetTime()
@@ -245,13 +265,16 @@ Journal = Addon:Module("Journal", {
                 local welcome = (Get("welcome") and WelcomeCard())
 
                 StartSession()
+
                 if welcome then
                     ShowCard(welcome)
                 end
             elseif not (BegunThisLoad or (isReload and (Get("sessionStart") ~= 0))
                 or ((Get("sessionStart") ~= 0) and ((GetServerTime() - Get("sessionSeen")) < ContinueWindowSeconds))) then
-                StartSession() -- enabled late with an older session on file: start fresh, no card
+                -- enabled late with an older session on file: start fresh, no card
+                StartSession()
             end
+
             BegunThisLoad = true
         end
 
@@ -260,17 +283,22 @@ Journal = Addon:Module("Journal", {
                 Begin(isInitialLogin, isReloadingUi)
             end
         end)
+
         if IsLoggedIn() and not BegunThisLoad then
-            Begin(false, false) -- enabled mid-session
+            -- enabled mid-session
+            Begin(false, false)
         end
+
         module:On("QUEST_TURNED_IN", function()
             Add("sessionQuests", 1)
             Add("levelQuests", 1)
         end)
+
         module:OnIncrease("death.count", function()
             Add("sessionDeaths", 1)
             Add("levelDeaths", 1)
         end)
+
         module:On("PLAYER_LEVEL_UP", function(level)
             local ding = DingCard(level)
 
@@ -278,6 +306,7 @@ Journal = Addon:Module("Journal", {
                 ShowCard(ding)
             end
         end)
+
         module:On("PLAYER_LOGOUT", SaveSeen)
     end,
     state = Rows,

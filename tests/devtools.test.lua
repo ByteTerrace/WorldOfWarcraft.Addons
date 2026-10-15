@@ -1,38 +1,17 @@
 -- ByteTerrace_DevTools' probe commands: /btdev probe records the probes whose needs are met into
--- ByteTerraceDevToolsDB.probes and lists what the rest need; /btdev probe list shows what's left,
--- in play-session order. DevTools also collects, from load, what the listening probes need: UNIT_COMBAT
--- payloads, the steps into and out of combat, UNIT_AURA tokens, addon messages and chat payloads.
-
-local function Printed(h, from)
-    return table.concat(h.printed, "\n", from or 1)
-end
-
-local function Load(saved)
-    local h = Harness.New({ saved = saved })
-
-    h:LoadAddon("ByteTerrace_DevTools")
-    return h
-end
-
-local function Records(h)
-    return h.env.ByteTerraceDevToolsDB.probes
-end
+-- ByteTerraceDevToolsDB.probes and lists what the rest need; /btdev probe list shows what's left, in play-session
+-- order. DevTools also collects, from load, what the listening probes need: UNIT_COMBAT payloads, the steps into and
+-- out of combat, UNIT_AURA tokens, addon messages and chat payloads.
 
 -- A record's contexts, sorted and joined by spaces.
 local function Contexts(record)
     local list = {}
 
     for context in pairs(record.contexts) do list[#list + 1] = context end
-    table.sort(list)
-    return table.concat(list, " ")
-end
 
-local function DieToDamage(h, spells)
-    h:MeterFight({ duration = 12, sources = {
-        { death = { maxHealth = 55 }, spells = { DamageTaken = spells }, unit = "player" },
-    } })
-    h:Slash("/btdev probe")
-    return Records(h)["deathRecap.events"].result
+    table.sort(list)
+
+    return table.concat(list, " ")
 end
 
 local function Hit(spellID, name)
@@ -40,6 +19,32 @@ local function Hit(spellID, name)
         details = { classification = "normal", isMob = true, unitName = "Kobold Vermin" }, isDeadly = true, name = name,
         overkillAmount = 5, spellID = spellID, totalAmount = 60,
     }
+end
+
+local function Load(saved)
+    local h = Harness.New({ saved = saved })
+
+    h:LoadAddon("ByteTerrace_DevTools")
+
+    return h
+end
+
+local function Printed(h, from)
+    return table.concat(h.printed, "\n", from or 1)
+end
+
+local function Records(h)
+    return h.env.ByteTerraceDevToolsDB.probes
+end
+
+local function DieToDamage(h, spells)
+    h:MeterFight({ duration = 12, sources = {
+        { death = { maxHealth = 55 }, spells = { DamageTaken = spells }, unit = "player" },
+    } })
+
+    h:Slash("/btdev probe")
+
+    return Records(h)["deathRecap.events"].result
 end
 
 test("death recap fields are kept per kind of event: the same for a kind, however you died", function()
@@ -56,11 +61,14 @@ test("death recap fields are kept per kind of event: the same for a kind, howeve
         eq(result.killingBlow.amount, "number")
         eq(result.killingBlow.sourceName, "string")
         eq(result.killingBlow.spellId, nil, "spell fields have their own event-kind probe")
+
         for kind, fields in pairs(result.fieldsByKind) do
             if byKind[kind] then eq(fields, byKind[kind], kind .. " carries the same fields in every death") end
+
             byKind[kind] = fields
         end
     end
+
     truthy(byKind.SWING_DAMAGE and byKind.SPELL_DAMAGE, "melee and spells each have their own list")
 end)
 
@@ -74,6 +82,7 @@ test("death recap spell-field probes require the event kind and keep false boole
     for _, field in ipairs({ "spellId", "spellName", "spellSchool", "avoidable", "deadly" }) do
         eq(swing[field], "nil", field)
     end
+
     local spellHarness = Load()
 
     DieToDamage(spellHarness, { Hit(11976, "Strike") })
@@ -104,13 +113,16 @@ test("scripted swing recaps carry no spell fields even when the damage fixture s
                 spellName = "Attack", spellSchool = 1 },
         } },
         unit = "player" } } })
+
     local event = h.env.C_DeathRecap.GetRecapEvents()[1]
 
     eq(event.event, "SWING_DAMAGE")
     eq(event.amount, 60)
+
     for _, field in ipairs({ "spellId", "spellName", "spellSchool", "avoidable", "deadly" }) do
         eq(event[field], nil, field)
     end
+
     h:Slash("/btdev probe")
     eq(Records(h)["deathRecap.swingFields"].result.spellId, "nil")
 end)
@@ -121,23 +133,29 @@ test("common recap fields exclude optional mitigation and require presence in ev
     local events = h.env.C_DeathRecap.GetRecapEvents()
 
     events[1].absorbed, events[1].blocked, events[2].resisted = 1, 2, 3
+
     local function Record()
         h:MeterFight({ duration = 1, sources = { { death = {
             events = { events[2], events[1] }, maxHealth = 55,
         },
             unit = "player" } } })
+
         h:Slash("/btdev probe")
+
         return Records(h)["deathRecap.events"].result
     end
+
     eq(#h.ns.Probes.Diff(baseline, Record()), 0, "optional mitigation doesn't alter common shapes")
     events[2].amount = nil
-    Records(h)["deathRecap.events"] = nil -- the record grows across deaths: start this one afresh
+    -- the record grows across deaths: start this one afresh
+    Records(h)["deathRecap.events"] = nil
     local result = Record()
     local missing = 0
 
     for _, fields in pairs(result.fieldsByKind) do
         if not ("," .. fields .. ","):find(",amount,", 1, true) then missing = (missing + 1) end
     end
+
     eq(missing, 1, "the kind whose event lacks amount drops it; the other keeps it")
     eq(result.killingBlow.amount, "number", "the killing blow retains its own shape")
 end)
@@ -150,14 +168,17 @@ test("spell-field probes reject inconsistent events and preserve secret markers"
             { event = "SPELL_DAMAGE", spellId = 11976, spellSchool = 1 },
         } },
         unit = "player" } } })
+
     h:Slash("/btdev probe")
     eq(Records(h)["deathRecap.spellFields"], nil, "inconsistent samples don't become calibrated evidence")
     truthy(Printed(h):find("SPELL_DAMAGE.spellName varies between recap events", 1, true), Printed(h))
     local secretHarness = Load()
 
-    secretHarness:MeterFight({ duration = 1, sources = { { unit = "player", death = { events = {
-        { event = "SPELL_DAMAGE", spellId = Secret(11976), amount = Secret(60) },
-    } } } } })
+    secretHarness:MeterFight({ duration = 1, sources = { { death = { events = {
+            { amount = Secret(60), event = "SPELL_DAMAGE", spellId = Secret(11976) },
+        } },
+        unit = "player" } } })
+
     secretHarness:Slash("/btdev probe")
     local result = Records(secretHarness)["deathRecap.spellFields"].result
 
@@ -201,6 +222,7 @@ test("running again merges: new probes are added, unchanged ones stay, changes a
     local before = 0
 
     for _ in pairs(Records(h)) do before = (before + 1) end
+
     Records(h)["chatTypeInfo.raidWarning"].result.g = 1
     Records(h)["chatTypeInfo.raidWarning"].result.r = { secret = true, type = "number" }
     h:SetTarget({ classFile = "WARRIOR", name = "Kobold Vermin" })
@@ -211,11 +233,14 @@ test("running again merges: new probes are added, unchanged ones stay, changes a
     local after = 0
 
     for _ in pairs(Records(h)) do after = (after + 1) end
+
     truthy(after > before, "the target's probes are added")
     truthy(text:find(("(%d new, 1 changed, 0 confirmed"):format(after - before), 1, true), "the summary counts what was added: " .. text)
     truthy(text:find("probe chatTypeInfo.raidWarning changed at result.g: was 1, now 72", 1, true), text)
+
     truthy(text:find('probe chatTypeInfo.raidWarning changed at result.r: was { secret = true, type = "number" }, now 255',
         1, true), "a table prints with its keys sorted: " .. text)
+
     truthy(Records(h)["unitIdentity.npcTarget"], "now recorded")
     truthy(Records(h)["unitClassification.npcTarget"], "now recorded")
     truthy(Records(h)["power.npcTarget"], "now recorded")
@@ -279,6 +304,7 @@ test("/btdev probe list prints its groups under the play-session steps, in order
         truthy(at > last, "steps print in order")
         last = at
     end
+
     local anywhere, questGiver = text:find("nothing: ", 1, true), text:find("a quest offer open", 1, true)
 
     truthy(anywhere < questGiver, "a probe that runs anywhere comes before one that needs a quest giver")
@@ -294,11 +320,14 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
             local names = {}
 
             for unit in pairs(((type(units) == "table") and units) or {}) do names[#names + 1] = unit end
+
             table.sort(names)
             registered[#registered + 1] = (event .. "(" .. table.concat(names, ",") .. ")")
         end
     end
+
     table.sort(registered)
+
     eq(table.concat(registered, " "), "ADDON_RESTRICTION_STATE_CHANGED() CHAT_MSG_ADDON() CHAT_MSG_CHANNEL() "
         .. "CHAT_MSG_GUILD() CHAT_MSG_PARTY() CHAT_MSG_RAID() CHAT_MSG_SAY() CHAT_MSG_WHISPER() CHAT_MSG_YELL() "
         .. "DAMAGE_METER_COMBAT_SESSION_UPDATED() ENCOUNTER_START() ENCOUNTER_WARNING() GAME_PAD_ACTIVE_CHANGED() "
@@ -308,6 +337,7 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
         .. "UNIT_AURA(player,target) UNIT_COMBAT(player,target) UNIT_DIED()",
         "the chat events, restriction changes and combat edges, UNIT_AURA and UNIT_COMBAT for two units, the kill "
         .. "events, deaths with the meter's updates, and encounters with their warnings")
+
     h:Fire("UNIT_COMBAT", "target", "WOUND", "CRITICAL", 42, 1)
     h:Fire("UNIT_COMBAT", "target", "DODGE", "", 0, 1)
     h:Slash("/btdev probe")
@@ -414,6 +444,7 @@ end)
 test("an accumulating probe's record grows across sessions and reloads", function()
     local record = { build = Harness.BUILD, contexts = { ["combat/Combat"] = true },
         result = { partyKill = { attacker = "pet", attackerKind = "Pet", target = "Creature" }, targetDied = true } }
+
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["kills.seen"] = record } } })
 
     h:Fire("PARTY_KILL", h:GUID(h.player), h:GUID({ isPlayer = true, name = "Cara" }))
@@ -464,6 +495,7 @@ end)
 test("a saved accumulating record keeps its items when a session saw a secret", function()
     local record = { build = Harness.BUILD, contexts = { ["idle/none"] = true },
         result = { CHAT_MSG_SAY = "Aa,Aa Aa" } }
+
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["names.chatSenders"] = record } } })
 
     h:FireChat("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
@@ -494,8 +526,10 @@ test("the latest recap matches the meter's, a differing field doesn't, and one t
         if (id == nil) and events[1] then
             Alter(events[1])
         end
+
         return events
     end)
+
     Alter = function(blow) blow.timestamp = Secret(blow.timestamp) end
     eq(latest.run().sameAsMeter, "secret")
     Alter = function(blow) blow.timestamp, blow.amount = Secret(blow.timestamp), (blow.amount + 1) end
@@ -536,6 +570,7 @@ test("/btdev probe again in a known context changes no record and reports nothin
     local before = {}
 
     for name, record in pairs(Records(h)) do before[name] = h.ns.Probes.Show(record) end
+
     local from = (#h.printed + 1)
 
     h:Slash("/btdev probe")
@@ -543,12 +578,14 @@ test("/btdev probe again in a known context changes no record and reports nothin
 
     truthy(text:find("(0 new, 0 changed, 0 confirmed in a new context or build)", 1, true), text)
     falsy(text:find("changed at", 1, true), text)
+
     for name, record in pairs(Records(h)) do eq(h.ns.Probes.Show(record), before[name], name) end
 end)
 
 test("a different result replaces the record and its contexts, and says which contexts it replaced", function()
     local stale = { build = Harness.BUILD, contexts = { ["combat/Combat"] = true, ["idle/none"] = true },
         result = { b = 0, g = 1, hasMetatable = true, r = 255, sticky = 0 } }
+
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["chatTypeInfo.raidWarning"] = stale } } })
 
     h:Slash("/btdev probe")
@@ -575,12 +612,14 @@ test("the meter's updates in the seconds after your death are kept by type, for 
     local h = Load()
     local types = h.env.Enum.DamageMeterType
 
-    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageDone, 1) -- no death yet: not kept
+    -- no death yet: not kept
+    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageDone, 1)
     h:Fire("PLAYER_DEAD")
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.Deaths, 1)
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageTaken, 1)
     h:Advance(6)
-    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.HealingDone, 1) -- too long after
+    -- too long after
+    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.HealingDone, 1)
     eq(h.ns.Probes.ByName["damageMeter.afterDeath"].run().types, "DamageTaken,Deaths")
 end)
 
@@ -594,6 +633,7 @@ test("the shape helpers record a secret as its marker and anything else by its t
         eq(marker.secret, true, helper)
         eq(marker.type, "number", helper)
     end
+
     eq(Probes.NameShape(42), "number")
     eq(Probes.Text(false), "boolean")
     eq(Probes.Byte(nil), "nil")
@@ -611,12 +651,14 @@ test("a result that can't be saved fails its probe with the path that's wrong, a
         { name = "test.function", needs = {}, run = function() return { fn = function() end } end },
         { name = "test.list", needs = {}, run = function() return { list = { "a" } } end },
     })
+
     h:Slash("/btdev probe")
     local text = Printed(h)
 
     truthy(text:find("probe test.secret failed: result.nested.health is a secret", 1, true), text)
     truthy(text:find("probe test.function failed: result.fn is a function", 1, true), text)
     truthy(text:find("probe test.list failed: result.list has a key that isn't a string", 1, true), text)
+
     for _, name in ipairs({ "test.secret", "test.function", "test.list" }) do
         eq(Records(h)[name], nil, name)
     end
@@ -655,8 +697,10 @@ test("an enemy hunter's Feign Death is recorded only while they feign or lie dea
             name = "Rexxar", race = "Orc" }
 
         for key, value in pairs(fields) do unit[key] = value end
+
         return unit
     end
+
     local h = Load()
 
     h:SetTarget(Hunter({}))
@@ -692,6 +736,7 @@ test("/btdev probe list says so when every probe has a result for this build", f
         records[probe.name] = { build = Harness.BUILD, contexts = { ["idle/none"] = true }, result = {},
             version = probe.version }
     end
+
     h.env.ByteTerraceDevToolsDB = { probes = records }
     local from = (#h.printed + 1)
 
@@ -704,6 +749,7 @@ local function ApiCalls(h)
     local total = 0
 
     for _, count in pairs(h.apiCalls) do total = (total + count) end
+
     return total
 end
 
@@ -720,9 +766,11 @@ test("the steps into and out of combat are kept in order with what each signal s
     eq(result.enter, "PLAYER_REGEN_DISABLED[lockdown=false affecting=true restricted=false] > "
         .. "Combat Activating[lockdown=false affecting=true restricted=false]",
         "as the client did: PLAYER_REGEN_DISABLED first, then Activating, and no Active")
+
     eq(result.leave, "Combat Inactive[lockdown=false affecting=false restricted=false] > "
         .. "PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false]",
         "the Combat restriction lifts before PLAYER_REGEN_ENABLED")
+
     h:EnterCombat()
     h:LeaveCombat()
     h:Slash("/btdev probe")
@@ -736,13 +784,17 @@ test("combat.edges keeps another order as it came, adds it to a saved record, an
     h:Fire("PLAYER_REGEN_DISABLED")
     h:Fire("PLAYER_REGEN_ENABLED")
     h:Fire("ADDON_RESTRICTION_STATE_CHANGED", types.Combat, states.Inactive)
-    h:Fire("ADDON_RESTRICTION_STATE_CHANGED", types.Map, states.Inactive) -- another restriction's change isn't a step
+    -- another restriction's change isn't a step
+    h:Fire("ADDON_RESTRICTION_STATE_CHANGED", types.Map, states.Inactive)
+
     local leave = ("PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false] > "
         .. "Combat Inactive[lockdown=false affecting=false restricted=false]")
 
     eq(h.ns.Probes.ByName["combat.edges"].run().leave, leave)
+
     local record = { build = Harness.BUILD, contexts = { ["idle/none"] = true },
         result = { enter = "PLAYER_REGEN_DISABLED[lockdown=false affecting=false restricted=false]", leave = leave } }
+
     local saved = Load({ ByteTerraceDevToolsDB = { probes = { ["combat.edges"] = record } } })
 
     saved:EnterCombat()
@@ -752,7 +804,9 @@ test("combat.edges keeps another order as it came, adds it to a saved record, an
     local harnessOrder = "Combat Inactive[lockdown=false affecting=false restricted=false] > PLAYER_REGEN_ENABLED"
 
     truthy(merged:find(leave, 1, true) and merged:find(harnessOrder, 1, true), "both orders are kept: " .. merged)
+
     for _ = 1, 10 do h:Fire("PLAYER_REGEN_DISABLED") end
+
     local _, separators = h.ns.Probes.ByName["combat.edges"].run().enter:gsub(" > ", "")
 
     eq(separators + 1, 8, "an edge keeps at most eight steps")
@@ -794,6 +848,7 @@ test("addon messages are kept as field shapes per restriction, for comms.addonMe
     local function Receive()
         h:Fire("CHAT_MSG_ADDON", "TLK", "HELLO", "PARTY", "Cara Doe", "", 0, 0, "", 0)
     end
+
     Receive()
     h:JoinGroup("party", { "Friend" })
     h:EnterCombat()
@@ -835,8 +890,10 @@ test("chat events' discordInfo is kept as shapes, with a table's fields, for nam
     h:Slash("/btdev probe")
     eq(Records(h)["names.chatDiscordInfo"], nil, "an addon message has no discordInfo and isn't chat heard")
     h:FireChat("CHAT_MSG_SAY", "hi", "Bob")
+
     h:Fire("CHAT_MSG_GUILD", "hi", "Bob", "", "", "", "", 0, 0, "", 0, 2, "", 0, false, false, false, false,
         { fromDiscord = true, globalName = "Bob", hasPoll = true, userID = 7 })
+
     h:Slash("/btdev probe")
     local result = Records(h)["names.chatDiscordInfo"].result
 
@@ -852,6 +909,7 @@ test("leaving combat in a PvP match keeps the meter's totals' shapes then and la
     local Probes, probe = h.ns.Probes, h.ns.Probes.ByName["damageMeter.pvpSecrecy"]
 
     local function Reads() return h:CountApiCalls("C_DamageMeter.GetCombatSessionFromType") end
+
     h:MeterFight({ duration = 10, sources = { { amounts = { DamageDone = 420 }, unit = "player" } } })
     h:Advance(Probes.PvPLaterSeconds + 1)
     eq(Reads(), 0, "a fight outside PvP reads nothing")
@@ -870,7 +928,8 @@ test("leaving combat in a PvP match keeps the meter's totals' shapes then and la
     eq(probe.run().leftCombat["arena/PvPMatch"].localTotalAmount, "none,number", "no entry of yours without damage dealt")
     h:EnterCombat()
     h:MeterAdd({ amounts = { DamageDone = 50 }, unit = "player" })
-    Probes.NotePvPLeftCombat() -- as if PLAYER_REGEN_ENABLED came while the Combat restriction held
+    -- as if PLAYER_REGEN_ENABLED came while the Combat restriction held
+    Probes.NotePvPLeftCombat()
     local read = probe.run().leftCombat["arena/Combat,PvPMatch"]
 
     eq(read.totalAmount .. " " .. read.localTotalAmount, "secret secret", "your entry is found by isLocalPlayer, never secret")
@@ -880,9 +939,11 @@ test("auraSound.api registers an aura sound and removes it, idle only; the fake 
     local h = Load()
 
     h:Slash("/btdev probe")
+
     eq(h.ns.Probes.Show(Records(h)["auraSound.api"].result), '{ addAuraSound = "function", added = { auraSoundID = '
         .. '"number", errors = false, removeErrors = false }, invalidThrottle = { auraSoundID = "nil", errors = false }, '
         .. 'removeAuraSound = "function" }', "a throttle past five seconds rejects registration without an error")
+
     eq(next(h.auraSounds), nil, "nothing stays registered")
     local auras, triggers = h.env.C_UnitAuras, h.env.Enum.UnitAuraSoundTrigger
     local sound = { soundFileID = 1, spellID = 1126, throttleSeconds = 0, unitToken = "player" }

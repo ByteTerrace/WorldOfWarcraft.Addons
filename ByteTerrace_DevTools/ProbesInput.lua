@@ -1,9 +1,9 @@
 local addonName, ns = ...
 
--- Calibration probes about controllers: the connected device, which vibration types the client
--- takes, what each controller reports about itself, and which input events fire. Blizzard's
--- Forever UI never calls C_GamePad.SetVibration, and GamePadDocumentation gives its vibrationType
--- only as a cstring, so the types are asked of the client (Candidates).
+-- Calibration probes about controllers: the connected device, which vibration types the client takes, what each
+-- controller reports about itself, and which input events fire. Blizzard's Forever UI never calls
+-- C_GamePad.SetVibration, and GamePadDocumentation gives its vibrationType only as a cstring, so the types are asked of
+-- the client (Candidates).
 --
 --   Probes.Rumble(kind, intensity, seconds?) -> ok, error   one vibration; with seconds, stopped
 --                                                           that long after (without, it plays
@@ -18,16 +18,18 @@ local addonName, ns = ...
 --   Probes.NoteWorldEntered()                               the first PLAYER_ENTERING_WORLD, so
 --                                                           input.events can say what fired before
 --
--- What a controller does when it vibrates can't be probed: /btdev rumble says what it played, and
--- the player says what they felt.
+-- What a controller does when it vibrates can't be probed: /btdev rumble says what it played, and the player says what
+-- they felt.
 
 local CandidateGap = 1.5
 local Candidates = { "High", "Low", "LTrigger", "RTrigger" }
 local CandidateSeconds = 0.5
+
 local InputEvents = {
     "GAME_PAD_ACTIVE_CHANGED", "GAME_PAD_CONFIGS_CHANGED", "GAME_PAD_CONNECTED", "GAME_PAD_DISCONNECTED",
     "GAME_PAD_POWER_CHANGED", "INPUT_DEVICE_INTERFACE_TRANSITION",
 }
+
 -- The label styles ByteTerrace_Core/Input.lua has labels for (its Labels table).
 local KnownLabelStyles = { Generic = true, Letters = true, Reverse = true, Shapes = true }
 
@@ -37,14 +39,28 @@ local IsUsingGamepad, pcall, tostring = IsUsingGamepad, pcall, tostring
 local Probes = ns.Probes
 local EnumName, Fields, Joined, Shape = Probes.EnumName, Probes.Fields, Probes.Joined, Probes.Shape
 
--- The candidates' answers: [kind] = true for each SetVibration took, and what each refused said.
-local Vibration = { accepted = {}, refused = {}, tried = false }
--- [event] = { payloads = { [shape] = true }, beforeWorld = whether it fired before the first
--- PLAYER_ENTERING_WORLD }.
+-- [event] = { payloads = { [shape] = true }, beforeWorld = whether it fired before the first PLAYER_ENTERING_WORLD }.
 local Heard = {}
-local WorldEntered = false
 -- Bumped by every Rumble, so a stop scheduled for an earlier one doesn't cut a later one short.
 local RumbleSerial = 0
+-- The candidates' answers: [kind] = true for each SetVibration took, and what each refused said.
+local Vibration = { accepted = {}, refused = {}, tried = false }
+local WorldEntered = false
+
+-- The active controller's label style as a value when it's one Blizzard's UI knows, else "other".
+local function LabelStyle(state)
+    local style = (((type(state) == "table") and state.labelStyle) or nil)
+
+    if not issecretvalue(style) and (type(style) == "string") and (KnownLabelStyles[style] == true) then
+        return style
+    end
+
+    return "other"
+end
+
+local function NoteWorldEntered()
+    WorldEntered = true
+end
 
 -- A payload value as a shape: enum values by name (interface type, power level).
 local function PayloadShape(event, value)
@@ -53,7 +69,31 @@ local function PayloadShape(event, value)
     elseif event == "GAME_PAD_POWER_CHANGED" then
         return (EnumName(Enum.GamePadPowerLevel, value) or Shape(value))
     end
+
     return Shape(value)
+end
+
+local function NoteInputEvent(event, ...)
+    local entry = Heard[event]
+
+    if not entry then
+        entry = { beforeWorld = false, payloads = {} }
+        Heard[event] = entry
+    end
+
+    if not WorldEntered then
+        entry.beforeWorld = true
+    end
+
+    local count = select("#", ...)
+
+    if count == 0 then
+        entry.payloads.none = true
+    end
+
+    for i = 1, count do
+        entry.payloads[PayloadShape(event, (select(i, ...)))] = true
+    end
 end
 
 local function StopRumble()
@@ -73,6 +113,7 @@ local function Rumble(kind, intensity, seconds)
             end
         end)
     end
+
     return ok, problem
 end
 
@@ -88,54 +129,22 @@ local function RumbleCandidates(say)
             Vibration.refused[kind] = true
             say(("%d/%d: %s refused: %s"):format(i, #Candidates, kind, tostring(problem)))
         end
+
         if i == #Candidates then
             Vibration.tried = true
         end
     end
 
     Play(1)
+
     for i = 2, #Candidates do
         C_Timer.After(((i - 1) * CandidateGap), function() Play(i) end)
     end
 end
 
-local function NoteInputEvent(event, ...)
-    local entry = Heard[event]
-
-    if not entry then
-        entry = { beforeWorld = false, payloads = {} }
-        Heard[event] = entry
-    end
-    if not WorldEntered then
-        entry.beforeWorld = true
-    end
-    local count = select("#", ...)
-
-    if count == 0 then
-        entry.payloads.none = true
-    end
-    for i = 1, count do
-        entry.payloads[PayloadShape(event, (select(i, ...)))] = true
-    end
-end
-
-local function NoteWorldEntered()
-    WorldEntered = true
-end
-
--- The active controller's label style as a value when it's one Blizzard's UI knows, else "other".
-local function LabelStyle(state)
-    local style = (((type(state) == "table") and state.labelStyle) or nil)
-
-    if not issecretvalue(style) and (type(style) == "string") and (KnownLabelStyles[style] == true) then
-        return style
-    end
-    return "other"
-end
-
-Probes.Rumble, Probes.StopRumble, Probes.RumbleCandidates = Rumble, StopRumble, RumbleCandidates
-Probes.NoteInputEvent, Probes.NoteWorldEntered = NoteInputEvent, NoteWorldEntered
 Probes.InputEvents = InputEvents
+Probes.NoteInputEvent, Probes.NoteWorldEntered = NoteInputEvent, NoteWorldEntered
+Probes.Rumble, Probes.RumbleCandidates, Probes.StopRumble = Rumble, RumbleCandidates, StopRumble
 
 Probes.AddNeeds({
     rumbleTried = {
@@ -153,8 +162,8 @@ Probes.AddNeeds({
 
 Probes.Define({
     {
-        -- The connected controller's shapes: its ID, its mapped state's fields and label style, the
-        -- interface style, and its power level (GetPowerLevel, Enum.GamePadPowerLevel).
+        -- The connected controller's shapes: its ID, its mapped state's fields and label style, the interface style,
+        -- and its power level (GetPowerLevel, Enum.GamePadPowerLevel).
         name = "gamePad.device",
         needs = { "controller" },
         run = function()
@@ -179,12 +188,12 @@ Probes.Define({
         end,
     },
     {
-        -- What each controller probed with says about itself, merged across controllers: label
-        -- styles, power levels and the interface style each was used in, by name.
+        accumulates = true,
+        -- What each controller probed with says about itself, merged across controllers: label styles, power levels and
+        -- the interface style each was used in, by name.
         harness = "these are your controllers' own answers: they become the input fact's cases",
         name = "gamePad.controllers",
         needs = { "controller" },
-        accumulates = true,
         run = function()
             local deviceID = C_GamePad.GetActiveDeviceID()
 
@@ -196,8 +205,8 @@ Probes.Define({
         end,
     },
     {
-        -- Which of Candidates C_GamePad.SetVibration took (accepted) and which raised an error
-        -- (refused), from /btdev rumble's run.
+        -- Which of Candidates C_GamePad.SetVibration took (accepted) and which raised an error (refused), from /btdev
+        -- rumble's run.
         name = "gamePad.vibration",
         needs = { "rumbleTried" },
         run = function()
@@ -208,13 +217,13 @@ Probes.Define({
         end,
     },
     {
-        -- The controller and interface events heard since load (DevTools.lua listens), each with
-        -- its payloads' shapes (enum values by name) and whether it fired before the first
-        -- PLAYER_ENTERING_WORLD: which ones the input fact can rely on at login.
+        accumulates = true,
+        -- The controller and interface events heard since load (DevTools.lua listens), each with its payloads' shapes
+        -- (enum values by name) and whether it fired before the first PLAYER_ENTERING_WORLD: which ones the input fact
+        -- can rely on at login.
         harness = "which events fire depends on what you did with your controllers",
         name = "input.events",
         needs = { "controller" },
-        accumulates = true,
         run = function()
             local result = { heard = "none" }
             local names = {}
@@ -223,9 +232,11 @@ Probes.Define({
                 names[event] = true
                 result[event] = { beforeWorld = entry.beforeWorld, payloads = Joined(entry.payloads) }
             end
+
             if next(names) then
                 result.heard = Joined(names)
             end
+
             return result
         end,
     },

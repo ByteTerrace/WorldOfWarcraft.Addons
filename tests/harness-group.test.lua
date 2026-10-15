@@ -46,8 +46,10 @@ test("group members are named, existing, identity-accessible units, even in comb
     eq(surname, Harness.DEFAULT_SURNAME, "a member named by first name gets the default surname")
     eq(table.concat({ env.UnitName("party2") }, ","), "Cara,Smith", "another realm's member: first and surname, no realm")
     eq(table.concat({ env.UnitFullName("party2") }, ","), "Cara,Smith", "UnitFullName: no realm either")
+
     eq(table.concat({ env.UnitFullName("player") }, ","), "Tester," .. Harness.DEFAULT_SURNAME,
         "UnitFullName gives the player's surname, not their realm")
+
     eq(select(2, env.UnitName("player")), Harness.DEFAULT_SURNAME)
     falsy(env.issecretvalue(env.UnitClass("party1")))
 end)
@@ -81,6 +83,7 @@ test("raids give raid tokens, the player a raid index too, and party tokens for 
     local names = {}
 
     for i = 1, 7 do names[i] = ("M" .. i) end
+
     h:JoinGroup("raid", names)
     truthy(env.IsInRaid())
     truthy(env.IsInRaid(Harness.PARTY_CATEGORY.HOME))
@@ -158,6 +161,7 @@ test("group chat types need that group", function()
     for _, chatType in ipairs({ "PARTY", "RAID", "INSTANCE_CHAT" }) do
         eq(chatInfo.SendAddonMessage("K", "hi", chatType), Result(h, "NotInGroup"), chatType .. " outside a group")
     end
+
     h:JoinGroup("party", { "Bob" })
     eq(chatInfo.SendAddonMessage("K", "hi", "PARTY"), Result(h, "Success"))
     eq(chatInfo.SendAddonMessage("K", "hi", "RAID"), Result(h, "NotInGroup"), "a party isn't a raid")
@@ -177,12 +181,14 @@ test("chat messaging lockdown refuses sends: encounter, challenge mode, PvP, map
     falsy(chatInfo.InChatMessagingLockdown(), "combat alone")
     eq(chatInfo.SendAddonMessage("K", "hi"), Result(h, "Success"))
     h:LeaveCombat()
+
     for _, name in ipairs({ "Encounter", "ChallengeMode", "PvPMatch", "Map", "Chat" }) do
         h:SetRestriction(name, true)
         truthy(chatInfo.InChatMessagingLockdown(), name)
         eq(chatInfo.SendAddonMessage("K", "hi"), Result(h, "AddOnMessageLockdown"), name)
         h:SetRestriction(name, false)
     end
+
     falsy(chatInfo.InChatMessagingLockdown())
 end)
 
@@ -191,9 +197,11 @@ test("each prefix may burst 10 messages and regains 1 per second; refused sends 
     local chatInfo = h.env.C_ChatInfo
 
     h:JoinGroup("party", { "Bob" })
+
     for i = 1, 10 do
         eq(chatInfo.SendAddonMessage("K", "m" .. i), Result(h, "Success"), "burst " .. i)
     end
+
     eq(chatInfo.SendAddonMessage("K", "m11"), Result(h, "AddonMessageThrottle"))
     eq(chatInfo.SendAddonMessage("Other", "x"), Result(h, "Success"), "the throttle is per prefix")
     h:Advance(0.5)
@@ -202,9 +210,11 @@ test("each prefix may burst 10 messages and regains 1 per second; refused sends 
     eq(chatInfo.SendAddonMessage("K", "m13"), Result(h, "Success"))
     eq(chatInfo.SendAddonMessage("K", "m14"), Result(h, "AddonMessageThrottle"))
     h:Advance(100)
+
     for i = 1, 10 do
         chatInfo.SendAddonMessage("K", "again" .. i)
     end
+
     eq(chatInfo.SendAddonMessage("K", "over"), Result(h, "AddonMessageThrottle"), "regains up to 10, no more")
 end)
 
@@ -222,8 +232,10 @@ test("received addon messages reach only registered prefixes, with the full docu
     local p = got[1]
 
     eq(p.n, 9)
+
     eq(table.concat({ p[1], p[2], p[3], p[4], ("[" .. p[5] .. "]"), p[6], p[7], ("[" .. p[8] .. "]"), p[9] }, "|"),
         "Krew|hi|PARTY|Bob Doe|[]|0|0|[]|0", "a sender on your realm is \"First Last\" with no realm")
+
     h:ReceiveAddonMessage("Krew", "psst", "WHISPER", "Cara Doe-Elsewhere")
     eq(got[2][4], "Cara Doe-Elsewhere", "another realm's sender keeps its realm")
     eq(got[2][5], "Cara Doe-Elsewhere", "a whisper's target is the sender, per the event's doc")

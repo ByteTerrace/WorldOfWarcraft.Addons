@@ -1,6 +1,5 @@
--- The harness's fidelity rules for Blizzard's damage meter and death recaps
--- (tests/harness/meter.lua): sessions per combat, per-field secrecy in combat, and recaps tied to
--- the deaths in a session.
+-- The harness's fidelity rules for Blizzard's damage meter and death recaps (tests/harness/meter.lua): sessions per
+-- combat, per-field secrecy in combat, and recaps tied to the deaths in a session.
 
 local Kit = use("harness")
 
@@ -31,17 +30,20 @@ test("a combat is a session: its events, its sources sorted by amount, and its r
     local env = h.env
     local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
     local seen = Watch(h, unpack(MeterEvents))
+
     local fight = h:MeterFight({ duration = 10, sources = {
         { amounts = { DamageDone = 1000 }, unit = "player" },
         { amounts = { [types.DamageDone] = 2000 }, classFilename = "MAGE", name = "Cara" },
     } })
 
     eq(fight.sessionID, 1)
+
     local pair = ("DAMAGE_METER_COMBAT_SESSION_UPDATED:0:0,DAMAGE_METER_COMBAT_SESSION_UPDATED:0:1,"
         .. "DAMAGE_METER_COMBAT_SESSION_UPDATED:1:0,DAMAGE_METER_COMBAT_SESSION_UPDATED:1:1")
 
     eq(table.concat(seen, ","), "DAMAGE_METER_CURRENT_SESSION_UPDATED," .. pair .. "," .. pair,
         "each source's change fires Overall (0) then the session, for DamageDone and Dps")
+
     falsy(h.inCombat, "the fight ends combat")
     local session = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone)
 
@@ -92,8 +94,10 @@ test("Bob hit me for 3000 and killed me; Mom healed 5000: deaths, spells and the
     eq(deaths[1].deathRecapID, recapID)
     eq(deaths[1].deathTimeSeconds, 12, "seconds into the session")
     eq(deaths[1].totalAmount, 0)
+
     eq(env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Overall, types.Deaths).combatSources[1].deathTimeSeconds, -1,
         "no timestamps for the overall session")
+
     local taken = env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageTaken)
 
     eq(taken.combatSources[1].totalAmount, 3000, "the spells sum to the amount")
@@ -139,6 +143,7 @@ end)
 test("scripted recap events come back newest first, with their fields", function()
     local h = Harness.New()
     local env = h.env
+
     local fight = h:MeterFight({ duration = 5, sources = {
         { classFilename = "PRIEST",
             death = { events = {
@@ -200,8 +205,10 @@ test("in combat every field is secret except the NeverSecret ones; the tables st
 
     falsy(env.issecretvalue(list[1].sessionID), "no secret flags")
     falsy(env.issecretvalue(env.C_DeathRecap.GetRecapMaxHealth(death.deathRecapID)))
+
     throws(function() env.C_DamageMeter.GetCombatSessionSourceFromType(sessionTypes.Current, types.DamageDone, death.sourceGUID) end,
         "secret argument #3 refused", "a secret GUID can't go back to the API")
+
     h:LeaveCombat()
     falsy(env.issecretvalue(env.C_DamageMeter.GetCombatSessionFromType(sessionTypes.Current, types.HealingDone).totalAmount))
 end)
@@ -216,13 +223,17 @@ test("Current is the latest fight, Expired is empty after ordinary fights (probe
     eq(damageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone).totalAmount, 0)
     eq(damageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone).durationSeconds, nil)
     eq(damageMeter.GetCombatSessionFromType(sessionTypes.Expired, types.DamageDone).durationSeconds, nil)
+
     h:MeterFight({ duration = 10, sources = {
         { amounts = { DamageDone = 1000 }, unit = "player" }, { amounts = { HealingDone = 50 }, name = "Mom" },
     } })
+
     h:Advance(30)
+
     h:MeterFight({ duration = 5, endCombat = false, sources = {
         { amounts = { DamageDone = 500 }, unit = "player" }, { amounts = { HealingDone = 70 }, name = "Mom" },
     } })
+
     h:LeaveCombat()
     h:EnterCombat()
     h:Advance(2)

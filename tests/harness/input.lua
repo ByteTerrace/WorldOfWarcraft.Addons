@@ -9,86 +9,33 @@
 --   * h:SeedRandom(n) makes the env's math.random (and random) deterministic.
 --   * h:GamePadMappedState(id) supplies the C_GamePad fake's connected controller state.
 
---- The connected controller's mapped state, or nil for an unavailable device.
-function Harness:GamePadMappedState(id)
-    if (id ~= 1) or not self.labelStyle then
-        return nil
-    end
-    -- [E] gamePad.device's fields; [D] GamePadMappedState and GamePadStick in
-    -- GamePadDocumentation.lua (forever). [G] A neutral pad with six axes and sixteen buttons.
-    local buttons, axes, sticks = {}, {}, {}
-
-    for i = 1, 16 do buttons[i] = false end
-    for i = 1, 6 do axes[i] = 0 end
-    for i = 1, 2 do sticks[i] = { len = 0, x = 0, y = 0 } end
-    return {
-        axes = axes, axisCount = #axes, buttonCount = #buttons, buttons = buttons, labelStyle = self.labelStyle,
-        name = "Test Controller", stickCount = #sticks, sticks = sticks,
-    }
-end
-
--- Presses (down = true) or releases a keyboard key like "W", "1", "ESCAPE" or "ENTER". Visible
--- frames (every ancestor shown) with the keyboard enabled get it topmost first: higher frame
--- strata, then higher frame level, then newest. Each runs its OnKeyDown (or OnKeyUp) script if it
--- has one; one that doesn't propagate keyboard input (SetPropagateKeyboardInput(false), the
--- default) consumes the key, read after its script runs, so a script may decide per key. One that
--- propagates passes it on. A key no frame consumes goes to the game's bindings and is recorded
--- in h.propagatedKeys. Returns whether a frame consumed it.
-function Harness:Key(key, down)
-    local script = ((down and "OnKeyDown") or "OnKeyUp")
-    local receivers = {}
-
-    for i, frame in ipairs(self.frames) do
-        if Harness.State(frame).keyboardEnabled and self:IsVisibleWidget(frame) then
-            receivers[#receivers + 1] = { frame = frame, strata = self:FrameStrataIndex(frame), level = self:FrameLevel(frame), index = i }
-        end
-    end
-    table.sort(receivers, function(a, b)
-        if a.strata ~= b.strata then return (a.strata > b.strata) end
-        if a.level ~= b.level then return (a.level > b.level) end
-        return (a.index > b.index)
-    end)
-    for _, receiver in ipairs(receivers) do
-        local frame = receiver.frame
-        local state = Harness.State(frame)
-
-        if state.keyboardEnabled and self:IsVisibleWidget(frame) then -- an earlier script may change either
-            local handler = state.scripts[script]
-
-            if handler then
-                self:Protect(handler, frame, key)
-            end
-            if not state.propagateKeyboard then
-                return true
-            end
-        end
-    end
-    self.propagatedKeys[#self.propagatedKeys + 1] = key
-    return false
-end
-
--- Whether a region covers the whole screen: it is UIParent, or it is anchored (SetAllPoints, or
--- two opposite corners on the same corners, flush or outside) to a region that does.
+-- Whether a region covers the whole screen: it is UIParent, or it is anchored (SetAllPoints, or two opposite corners on
+-- the same corners, flush or outside) to a region that does.
 local function CoversScreen(h, region, depth)
     if type(region) == "string" then
         region = rawget(h.env, region)
     end
+
     local s = ((type(region) == "table") and Harness.State(region))
 
     if not s or (depth > 20) then
         return false
     end
+
     if region == rawget(h.env, "UIParent") then
         return true
     end
+
     if s.allPoints then
         return CoversScreen(h, s.allPoints, depth + 1)
     end
+
     local byPoint = {}
 
     for _, p in ipairs(s.points) do
         byPoint[p.point] = p
     end
+
     -- sx, sy: the sign an offset may have to stay flush or push the corner outward.
     local function Corner(point, sx, sy)
         local p = byPoint[point]
@@ -97,6 +44,7 @@ local function CoversScreen(h, region, depth)
             return (p.relativeTo or s.parent)
         end
     end
+
     for _, pair in ipairs({ { "TOPLEFT", -1, 1, "BOTTOMRIGHT", 1, -1 }, { "TOPRIGHT", 1, 1, "BOTTOMLEFT", -1, -1 } }) do
         local a, b = Corner(pair[1], pair[2], pair[3]), Corner(pair[4], pair[5], pair[6])
 
@@ -104,32 +52,17 @@ local function CoversScreen(h, region, depth)
             return true
         end
     end
+
     return false
 end
 
--- True when a visible, mouse-enabled frame covers the screen, so a click can't reach the world.
--- A simple model: covering is SetAllPoints(UIParent) or corner anchors to it (see CoversScreen);
--- a frame sized to the screen with SetSize, alpha, strata and hit rect insets aren't considered.
-function Harness:WorldClickBlocked()
-    for _, frame in ipairs(self.frames) do
-        local state = Harness.State(frame)
-
-        if state.mouseEnabled and self:IsVisibleWidget(frame) and CoversScreen(self, frame, 0) then
-            return true
-        end
-    end
-    return false
-end
-
--- Drags a frame with the mouse button (default "LeftButton") by dx, dy. Only a visible,
--- mouse-enabled frame that registered the button with RegisterForDrag starts a drag ([D]
--- RegisterForDrag's page: dragging needs EnableMouse, since OnDragStart doesn't imply it). The
--- press runs OnMouseDown(frame, button) ([G]), then OnDragStart(frame, button); if the frame is
--- then moving (StartMoving), it follows the mouse: each anchor shifts by dx, dy (widgets.lua's
--- header says why). The release runs OnDragStop(frame); OnMouseUp and OnClick don't run ([D]
--- "Blocks OnMouseUp and OnClick when dragging with a registered button"). A frame the scripts
--- leave moving keeps following the mouse until StopMovingOrSizing, so a later h:Drag moves it
--- again. Returns whether the drag started.
+-- Drags a frame with the mouse button (default "LeftButton") by dx, dy. Only a visible, mouse-enabled frame that
+-- registered the button with RegisterForDrag starts a drag ([D] RegisterForDrag's page: dragging needs EnableMouse,
+-- since OnDragStart doesn't imply it). The press runs OnMouseDown(frame, button) ([G]), then OnDragStart(frame,
+-- button); if the frame is then moving (StartMoving), it follows the mouse: each anchor shifts by dx, dy (widgets.lua's
+-- header says why). The release runs OnDragStop(frame); OnMouseUp and OnClick don't run ([D] "Blocks OnMouseUp and
+-- OnClick when dragging with a registered button"). A frame the scripts leave moving keeps following the mouse until
+-- StopMovingOrSizing, so a later h:Drag moves it again. Returns whether the drag started.
 function Harness:Drag(frame, dx, dy, button)
     button = (button or "LeftButton")
     local s = Harness.State(frame)
@@ -137,50 +70,115 @@ function Harness:Drag(frame, dx, dy, button)
     if not self:IsVisibleWidget(frame) or not s.mouseEnabled or not (s.dragButtons and s.dragButtons[button]) then
         return false
     end
+
     if s.scripts.OnMouseDown then self:Protect(s.scripts.OnMouseDown, frame, button) end
+
     if s.scripts.OnDragStart then self:Protect(s.scripts.OnDragStart, frame, button) end
+
     if s.moving then
-        s.allPoints = nil -- the anchors now carry offsets
+        -- the anchors now carry offsets
+        s.allPoints = nil
+
         for _, p in ipairs(s.points) do
             p.x, p.y = (p.x + (dx or 0)), (p.y + (dy or 0))
         end
     end
+
     if s.scripts.OnDragStop then self:Protect(s.scripts.OnDragStop, frame) end
+
     return true
 end
 
--- Turns the mouse wheel over a frame: delta 1 is a notch up, -1 a notch down ([D] OnMouseWheel's
--- delta). A visible frame with the mouse wheel enabled runs its OnMouseWheel(frame, delta); [G] the
--- wheel over any other frame does nothing here (the client offers it to the frames beneath).
--- Returns whether the frame took it.
+--- The connected controller's mapped state, or nil for an unavailable device.
+function Harness:GamePadMappedState(id)
+    if (id ~= 1) or not self.labelStyle then
+        return nil
+    end
+
+    -- [E] gamePad.device's fields; [D] GamePadMappedState and GamePadStick in GamePadDocumentation.lua (forever). [G] A
+    -- neutral pad with six axes and sixteen buttons.
+    local buttons, axes, sticks = {}, {}, {}
+
+    for i = 1, 16 do buttons[i] = false end
+
+    for i = 1, 6 do axes[i] = 0 end
+
+    for i = 1, 2 do sticks[i] = { len = 0, x = 0, y = 0 } end
+
+    return {
+        axes = axes, axisCount = #axes, buttonCount = #buttons, buttons = buttons, labelStyle = self.labelStyle,
+        name = "Test Controller", stickCount = #sticks, sticks = sticks,
+    }
+end
+
+-- Presses (down = true) or releases a keyboard key like "W", "1", "ESCAPE" or "ENTER". Visible frames (every ancestor
+-- shown) with the keyboard enabled get it topmost first: higher frame strata, then higher frame level, then newest.
+-- Each runs its OnKeyDown (or OnKeyUp) script if it has one; one that doesn't propagate keyboard input
+-- (SetPropagateKeyboardInput(false), the default) consumes the key, read after its script runs, so a script may decide
+-- per key. One that propagates passes it on. A key no frame consumes goes to the game's bindings and is recorded in
+-- h.propagatedKeys. Returns whether a frame consumed it.
+function Harness:Key(key, down)
+    local script = ((down and "OnKeyDown") or "OnKeyUp")
+    local receivers = {}
+
+    for i, frame in ipairs(self.frames) do
+        if Harness.State(frame).keyboardEnabled and self:IsVisibleWidget(frame) then
+            receivers[#receivers + 1] = { frame = frame, index = i, level = self:FrameLevel(frame), strata = self:FrameStrataIndex(frame) }
+        end
+    end
+
+    table.sort(receivers, function(a, b)
+        if a.strata ~= b.strata then return (a.strata > b.strata) end
+
+        if a.level ~= b.level then return (a.level > b.level) end
+
+        return (a.index > b.index)
+    end)
+
+    for _, receiver in ipairs(receivers) do
+        local frame = receiver.frame
+        local state = Harness.State(frame)
+
+        -- an earlier script may change either
+        if state.keyboardEnabled and self:IsVisibleWidget(frame) then
+            local handler = state.scripts[script]
+
+            if handler then
+                self:Protect(handler, frame, key)
+            end
+
+            if not state.propagateKeyboard then
+                return true
+            end
+        end
+    end
+
+    self.propagatedKeys[#self.propagatedKeys + 1] = key
+
+    return false
+end
+
+-- Turns the mouse wheel over a frame: delta 1 is a notch up, -1 a notch down ([D] OnMouseWheel's delta). A visible
+-- frame with the mouse wheel enabled runs its OnMouseWheel(frame, delta); [G] the wheel over any other frame does
+-- nothing here (the client offers it to the frames beneath). Returns whether the frame took it.
 function Harness:MouseWheel(frame, delta)
     local s = Harness.State(frame)
 
     if not (s.mouseWheel and self:IsVisibleWidget(frame)) then
         return false
     end
+
     if s.scripts.OnMouseWheel then
         self:Protect(s.scripts.OnMouseWheel, frame, delta)
     end
-    return true
-end
 
--- Makes the env's math.random (and random) deterministic from seed n: the harness's own linear
--- congruential generator (Numerical Recipes' 32-bit constants), independent of Lua's global
--- math.random state, so the same seed gives the same sequence in every test. Before the first
--- SeedRandom, math.random is Lua's own. An addon's local copy of math.random follows too. The
--- seed is stirred by two steps first: a raw seed's first value hardly moves from one seed to the
--- next (seeds 1 to 20 all start near 0.24), so a loop over seeds would see one first draw.
-function Harness:SeedRandom(n)
-    assert(type(n) == "number", "SeedRandom: the seed must be a number")
-    self.rng = (math.floor(n) % 4294967296)
-    self:NextRandom()
-    self:NextRandom()
+    return true
 end
 
 -- The generator's next value in [0, 1).
 function Harness:NextRandom()
     self.rng = (((1664525 * self.rng) + 1013904223) % 4294967296)
+
     return (self.rng / 4294967296)
 end
 
@@ -191,22 +189,55 @@ function Harness:Random(...)
     if not self.rng then
         return math.random(...)
     end
+
     if count > 2 then
         error("wrong number of arguments", 3)
     end
+
     local r = self:NextRandom()
 
     if count == 0 then
         return r
     end
+
     local m, n = ...
 
     if count == 1 then
         m, n = 1, m
     end
+
     m, n = math.floor(m), math.floor(n)
+
     if m > n then
         error(("bad argument #%d to 'random' (interval is empty)"):format(count), 3)
     end
+
     return (m + math.floor(r * ((n - m) + 1)))
+end
+
+-- Makes the env's math.random (and random) deterministic from seed n: the harness's own linear congruential generator
+-- (Numerical Recipes' 32-bit constants), independent of Lua's global math.random state, so the same seed gives the same
+-- sequence in every test. Before the first SeedRandom, math.random is Lua's own. An addon's local copy of math.random
+-- follows too. The seed is stirred by two steps first: a raw seed's first value hardly moves from one seed to the next
+-- (seeds 1 to 20 all start near 0.24), so a loop over seeds would see one first draw.
+function Harness:SeedRandom(n)
+    assert(type(n) == "number", "SeedRandom: the seed must be a number")
+    self.rng = (math.floor(n) % 4294967296)
+    self:NextRandom()
+    self:NextRandom()
+end
+
+-- True when a visible, mouse-enabled frame covers the screen, so a click can't reach the world. A simple model:
+-- covering is SetAllPoints(UIParent) or corner anchors to it (see CoversScreen); a frame sized to the screen with
+-- SetSize, alpha, strata and hit rect insets aren't considered.
+function Harness:WorldClickBlocked()
+    for _, frame in ipairs(self.frames) do
+        local state = Harness.State(frame)
+
+        if state.mouseEnabled and self:IsVisibleWidget(frame) and CoversScreen(self, frame, 0) then
+            return true
+        end
+    end
+
+    return false
 end

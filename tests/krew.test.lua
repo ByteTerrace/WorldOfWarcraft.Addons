@@ -14,6 +14,7 @@ local function Sent(h, kind)
             count = (count + 1)
         end
     end
+
     return count
 end
 
@@ -44,7 +45,8 @@ test("you say hello once per group; hellos that aren't replies get one reply per
     h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t1", "PARTY", "Bob")
     h:Advance(3)
     eq(Sent(h, "HELLO"), 2, "a reply is never answered: no ping-pong")
-    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t0", "PARTY", "Cara") -- Cara reloaded
+    -- Cara reloaded
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t0", "PARTY", "Cara")
     h:Advance(3)
     eq(Sent(h, "HELLO"), 3, "a member saying hello again hears back")
 end)
@@ -93,29 +95,36 @@ test("a late joiner learns the existing Krew and syncs their own marks and wars"
             end
         end
     end
+
     Relay()
+
     for _ = 1, 10 do
         alice:Advance(1)
         cara:Advance(1)
         dana:Advance(1)
         Relay()
     end
+
     alice:AddMember("Dana")
     cara:AddMember("Dana")
     dana:JoinGroup("party", { "Alice", "Cara" })
     clients[3] = dana
     Relay()
+
     for _ = 1, 5 do
         for _, client in ipairs(clients) do
             client:Advance(1)
         end
+
         Relay()
     end
+
     truthy((Card(dana) or ""):find("Alice Doe, Cara Doe are running the toolkit too", 1, true))
     dana:Slash("/tlk krew")
     eq(dana.printed[#dana.printed]:match("The Krew: .*$"), "The Krew: Alice Doe (0.1.0), Cara Doe (0.1.0)")
     eq(Sent(dana, "MARKS"), 1, "the returning hello triggers one mark sync")
     eq(Sent(dana, "WARS"), 1, "the burst of replies triggers one war sync")
+
     for _, addon in ipairs({ aliceAddon, caraAddon }) do
         eq(addon.Modules.Warband.Records.ledger:Field("Enemy Doe", "kind"), "mark")
         truthy(addon.Modules.Warband.Records.wars:Has("Red Dawn-" .. dana.env.GetNormalizedRealmName()))
@@ -130,6 +139,7 @@ local function Newer(h)
             found[#found + 1] = line:match("A newer.*$")
         end
     end
+
     return found
 end
 
@@ -142,10 +152,13 @@ test("/tlk krew lists the version each member runs", function()
     h:ReceiveAddonMessage(Prefix, "HELLO:0.0.9\t1", "PARTY", "Dan")
     h:ReceiveAddonMessage(Prefix, "HELLO:1.x|cff\t1", "PARTY", "Eve")
     h:Slash("/tlk krew")
+
     eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe (0.1.0), Cara Doe (0.2.0), Dan Doe (0.0.9), Eve Doe",
         "an unreadable version is left out")
+
     eq(#Newer(h), 0, "one member ahead is no news")
-    h:ReceiveAddonMessage(Prefix, "HELLO:0.3.0\t1", "PARTY", "Bob") -- Bob updated and reloaded
+    -- Bob updated and reloaded
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.3.0\t1", "PARTY", "Bob")
     h:Slash("/tlk krew")
     truthy(h.printed[#h.printed]:find("Bob Doe (0.3.0)", 1, true), "a later hello updates it")
 end)
@@ -157,8 +170,10 @@ test("two Krew members on a newer version say so once per group, compared as num
     h:ReceiveAddonMessage(Prefix, "HELLO:0.10.0\t1", "PARTY", "Bob")
     eq(#Newer(h), 0, "one is not enough")
     h:ReceiveAddonMessage(Prefix, "HELLO:0.9.0\t1", "PARTY", "Cara")
+
     eq(table.concat(Newer(h), "\n"), "A newer TheLanKrewToolKit is out (2 Krew members run 0.9.0 or newer).",
         "0.10.0 is newer than 0.9.0")
+
     h:ReceiveAddonMessage(Prefix, "HELLO:0.10.0\t1", "PARTY", "Dan")
     h:ReceiveAddonMessage(Prefix, "HELLO:0.10.0\t0", "PARTY", "Cara")
     eq(#Newer(h), 1, "once per group")
@@ -214,22 +229,26 @@ test("a flood of Krew cards is capped", function()
 
     h:JoinGroup("party", { "Bob" })
     h:Echo(false)
+
     for level = 2, 30 do
         h:ReceiveAddonMessage(Prefix, "DING:" .. level, "PARTY", "Bob")
     end
+
     local card, shown = rawget(h.env, "TheLanKrewToolKitCard"), 0
 
     while card:IsShown() and (shown < 50) do
         shown = (shown + 1)
         h:Click(card)
     end
+
     eq(shown, 7, "the showing card plus six queued")
 end)
 
 test("the client's echo of our own message is ours, though it names us with our surname", function()
     local h = Load()
 
-    h:JoinGroup("party", { "Bob" }) -- we say hello; the echo arrives as "Tester Doe", UnitName says "Tester", "Doe"
+    -- we say hello; the echo arrives as "Tester Doe", UnitName says "Tester", "Doe"
+    h:JoinGroup("party", { "Bob" })
     h:Advance(3)
     h:Slash("/tlk krew")
     truthy(table.concat(h.printed, " "):find("No Krew members in your group yet.", 1, true), "we're not our own Krew")
@@ -265,10 +284,12 @@ test("sends are spaced out, never a burst", function()
     local h = Load()
 
     h:JoinGroup("party", { "Bob" })
+
     for _ = 1, 3 do
         h.player.level = (h.player.level + 1)
         h:LevelUp(h.player.level)
     end
+
     eq(Sent(h, "DING"), 0, "the hello went first; dings wait their turn")
     h:Advance(1)
     eq(Sent(h, "DING"), 1)
@@ -345,6 +366,7 @@ test("a roster change reads no names while no one in the group is in the Krew", 
     for i = 1, 19 do
         names[i] = ("Raider" .. i)
     end
+
     h:JoinGroup("raid", names)
     h.apiCalls = {}
     h:AddMember("Latecomer")
@@ -359,9 +381,11 @@ test("a raid forming reads the roster once, after its burst of updates settles",
     h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t1", "PARTY", "Cara")
     h:Advance(5)
     h.apiCalls = {}
+
     for i = 1, 20 do
         h:AddMember("Raider" .. i)
     end
+
     h:RemoveMember("Cara")
     eq(h:CountApiCalls("UnitName"), 0, "nothing read while the roster is still changing")
     h:Advance(0.5)
@@ -394,10 +418,12 @@ test("levels and stars from the Krew are whole numbers written in digits", funct
     local h = Load()
 
     h:JoinGroup("party", { "Bob" })
+
     for _, text in ipairs({ "DING:0x10", "DING:1e1", "DING:inf", "DING:20.0", "DING:-5", "DING:201",
         "SCHOLAR:inf", "SCHOLAR:0x10", "SCHOLAR:1e300", "SCHOLAR:0" }) do
         h:ReceiveAddonMessage(Prefix, text, "PARTY", "Bob")
     end
+
     eq(Card(h), nil)
     h:ReceiveAddonMessage(Prefix, "SCHOLAR:3", "PARTY", "Bob")
     truthy(Card(h):find("That's 3 stars", 1, true), Card(h))

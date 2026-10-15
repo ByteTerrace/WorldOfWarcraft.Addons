@@ -16,14 +16,14 @@ local Wolves = {
     title = "Wolves Across the Border",
 }
 
-local function Quests(addon)
-    return addon.Modules.QuestBook.Records.quests
-end
-
 -- A quest puzzle about quest, as Scholar asks it: an enUS Alliance player's unless context says.
 local function Ask(h, ns, quest, known, context)
     return ns.Puzzles.Generate({ context = (context or { faction = "Alliance", locale = "enUS" }), known = known,
         quest = quest, random = h.env.math.random, subject = "quest" })
+end
+
+local function Quests(addon)
+    return addon.Modules.QuestBook.Records.quests
 end
 
 test("an accepted quest is recorded as its offer showed it, objectives from the log", function()
@@ -66,9 +66,11 @@ test("an area trigger's quest is recorded from the quest log, the player's open 
     local h, addon, ns = LoadKid()
 
     h:SetLocation({ subZone = "Goldshire", zone = "Elwynn Forest" })
+
     local id = h:AutoAcceptQuest({ goal = "Speak with Marshal McBride.",
         objectives = { { text = "Report to Marshal McBride", type = "log" } },
         text = "Report to Marshal McBride in Northshire Abbey.", title = "A Threat Within" })
+
     local record = Quests(addon):Get(tostring(id))
 
     eq(record.title, "A Threat Within")
@@ -85,7 +87,8 @@ end)
 test("a quest giver whose name is secret is left out, and the quest is still recorded", function()
     local h, addon = LoadKid()
 
-    h:SetRestriction("Encounter", true) -- an escort that starts inside a boss encounter
+    -- an escort that starts inside a boss encounter
+    h:SetRestriction("Encounter", true)
     Accept(h, Wolves)
     eq(Quests(addon):Field("33", "title"), "Wolves Across the Border")
     eq(Quests(addon):Field("33", "giver"), "", "the giver's name was secret")
@@ -94,7 +97,8 @@ end)
 test("a quest the client can't name isn't recorded", function()
     local h, addon = LoadKid()
 
-    h:Fire("QUEST_ACCEPTED", 4242) -- not in the log, so GetTitleForQuestID has no title for it
+    -- not in the log, so GetTitleForQuestID has no title for it
+    h:Fire("QUEST_ACCEPTED", 4242)
     falsy(Quests(addon):Has("4242"))
 end)
 
@@ -113,7 +117,8 @@ test("a quest the book never saw is recorded when turned in, from its reward pan
     eq(record.endPlace, "Eastvale Logging Camp")
     truthy(record.turnedIn)
     eq(record.giver, "", "nobody saw who gave it")
-    h:Fire("QUEST_TURNED_IN", 9001, 0, 0) -- a hidden tracking quest: no panel named it
+    -- a hidden tracking quest: no panel named it
+    h:Fire("QUEST_TURNED_IN", 9001, 0, 0)
     falsy(Quests(addon):Has("9001"))
 end)
 
@@ -141,6 +146,7 @@ test("with only quest riddles on, older quests come back for review", function()
     local shown = Watch(ns)
 
     Accept(h, Wolves)
+
     for i = 1, 4 do
         eq(Solve(h, shown).subject, "quest", "riddle " .. i)
     end
@@ -152,32 +158,39 @@ test("a quest riddle comes first over math and reading, newest quest first", fun
 
     Accept(h, Wolves)
     h:Advance(5)
+
     Accept(h, { id = 40, objectives = { { required = 10, text = "Kobold Vermin", type = "monster" } },
         text = "Kobolds have overrun the Fargodeep Mine.", title = "The Fargodeep Mine" }, "Marshal Dughan")
+
     h:Slash("/tlk puzzle")
     eq(shown[1].questKey, "40", "the newest")
 end)
 
 test("every kind asks what the quest holds, with the right answer among four", function()
     local h, _, ns = LoadKid()
+
     local quest = {
         ender = "Marshal McBride", endPlace = "Eastvale Logging Camp", giver = "Eagan Peltskinner", goal = Wolves.goal,
         key = "33", objective1 = "Tough Wolf Meat", place = "Goldshire", required1 = 8, seen = 10, text = Wolves.text,
         title = "Wolves Across the Border", turnedIn = true, type1 = "item",
     }
+
     local known = { quest,
         { giver = "Marshal Dughan", key = "40", objective1 = "Kobold Candle", place = "Fargodeep Mine", required1 = 8, seen = 9, title = "The Fargodeep Mine", type1 = "item" },
         { giver = "Billy Maclure", key = "41", objective1 = "Billy's Pie", place = "Maclure Vineyards", required1 = 1, seen = 8, title = "Lost Necklace", type1 = "item" },
     }
+
     local expected = {
         ["quest.giver"] = "Eagan Peltskinner", ["quest.ender"] = "Marshal McBride", ["quest.place"] = "Goldshire",
         ["quest.endPlace"] = "Eastvale Logging Camp", ["quest.count"] = "8", ["quest.objective"] = "Tough Wolf Meat",
         ["quest.title"] = "Wolves Across the Border",
     }
+
     -- What it asked for comes first; without objectives or text, who and where.
     local plain = {}
 
     for key, value in pairs(quest) do plain[key] = value end
+
     plain.text, plain.objective1, plain.required1, plain.type1 = nil, nil, nil, nil
     local seen = {}
 
@@ -191,6 +204,7 @@ test("every kind asks what the quest holds, with the right answer among four", f
         if puzzle.kind == "quest.blank" then
             truthy(puzzle.prompt:find("___", 1, true), "a word is missing")
             truthy(Wolves.text:find(answer, 1, true), "and it's the quest's own")
+
             for i, choice in ipairs(puzzle.choices) do
                 if i ~= puzzle.answer then
                     falsy(puzzle.prompt:find("%f[%a]" .. choice .. "%f[%A]"), choice .. " isn't already in the sentence")
@@ -199,19 +213,24 @@ test("every kind asks what the quest holds, with the right answer among four", f
         else
             eq(answer, expected[puzzle.kind], puzzle.kind)
         end
+
         local distinct = {}
 
         for _, choice in ipairs(puzzle.choices) do distinct[choice:lower()] = true end
+
         local count = 0
 
         for _ in pairs(distinct) do count = (count + 1) end
+
         eq(count, 4, "four different choices")
         truthy(((seed % 2) == 1) or puzzle.book:find(Wolves.text, 1, true), "the book holds the text")
         truthy(puzzle.book:find(answer, 1, true), puzzle.kind .. "'s answer is in the book")
     end
+
     for kind in pairs(expected) do
         truthy(seen[kind], kind .. " was asked")
     end
+
     truthy(seen["quest.blank"], "quest.blank was asked")
 end)
 
@@ -219,12 +238,15 @@ test("a quest nothing can be asked about counts as asked, and the riddle falls b
     local h, addon, ns = LoadKid()
     local shown = Watch(ns)
 
-    Quests(addon):Set("99", { fresh = true, seen = 1, title = "Hmm" }) -- a title and nothing else
+    -- a title and nothing else
+    Quests(addon):Set("99", { fresh = true, seen = 1, title = "Hmm" })
+
     -- Everything to ask about, but a title too long to show in a riddle.
     Quests(addon):Set("98", { fresh = true, giver = "Eagan Peltskinner", place = "Goldshire", seen = 2,
         title = "The Long and Winding Road to the Edge of the Known World Today" })
-    eq(ns.Puzzles.Generate({ subject = "quest", random = h.env.math.random, quest = Quests(addon):Get("99") }), nil)
-    eq(ns.Puzzles.Generate({ subject = "quest", random = h.env.math.random, quest = Quests(addon):Get("98") }), nil)
+
+    eq(ns.Puzzles.Generate({ quest = Quests(addon):Get("99"), random = h.env.math.random, subject = "quest" }), nil)
+    eq(ns.Puzzles.Generate({ quest = Quests(addon):Get("98"), random = h.env.math.random, subject = "quest" }), nil)
     h:Slash("/tlk puzzle")
     truthy(shown[1].subject ~= "quest", shown[1].subject)
     falsy(Quests(addon):Field("99", "fresh"))
@@ -236,8 +258,10 @@ test("the quest book names who gave a quest and where, whichever the record hold
 
     local function Book(quest)
         h:SeedRandom(1)
+
         return Ask(h, ns, quest, { quest }).book
     end
+
     local both = Book({ giver = "Eagan Peltskinner", key = "1", place = "Goldshire", seen = 1, title = "Wolves" })
 
     truthy(both:find("From Eagan Peltskinner, in Goldshire.", 1, true), both)
@@ -264,6 +288,7 @@ test("the quest book asks fresh quests newest first, then the rest, the one aske
     for i, record in ipairs(ns.QuestBook.All()) do
         all[i] = record.key
     end
+
     eq(table.concat(all, ","), "2,4,3,5,1", "every record, newest seen first; a tie goes by key")
 end)
 
@@ -287,8 +312,9 @@ end)
 test("a long quest's text is kept whole, as the quest log shows it, through to the book", function()
     local h, addon, ns = LoadKid()
     local sentence = "The wolves grow bolder every night, and the farmers lie awake listening. "
-    local long = { id = 35, title = "Long Nights", header = "Elwynn Forest", text = (sentence:rep(30) .. "Help us."),
-        goal = "Bring wolf meat.", objectives = {} }
+
+    local long = { goal = "Bring wolf meat.", header = "Elwynn Forest", id = 35, objectives = {},
+        text = (sentence:rep(30) .. "Help us."), title = "Long Nights" }
 
     Accept(h, long)
     eq(Quests(addon):Field("35", "text"), long.text, "every word of it")
@@ -301,15 +327,19 @@ end)
 test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-pad, and the riddle fits", function()
     local h, _, ns = LoadKid()
 
-    h.labelStyle = "Letters" -- a controller is connected
-    h.env.UIParent:SetSize(1366, 600) -- a short screen: the harness's 14 px lines are shorter than the real font's
+    -- a controller is connected
+    h.labelStyle = "Letters"
+    -- a short screen: the harness's 14 px lines are shorter than the real font's
+    h.env.UIParent:SetSize(1366, 600)
+
     local paragraph = ("Greetings, rogue. I can see you've got the look of an adventurer about you. This is good. "
         .. "The world needs more of us restless souls, seeking fortune and glory. ")
+
     local long = {
-        id = 34, title = "The Great Outdoors", header = "Tirisfal Glades",
-        text = (paragraph:rep(20) .. "Have a seat near the fire and get comfortable."),
         goal = "Sit near Eleanor's Basic Campfire and wait until you receive the Boosted Rest buff.",
+        header = "Tirisfal Glades", id = 34,
         objectives = { { required = 1, text = "Sit near the campfire", type = "log" }, { required = 1, text = "Gain the Boosted Rest buff", type = "log" } },
+        text = (paragraph:rep(20) .. "Have a seat near the fire and get comfortable."), title = "The Great Outdoors",
     }
 
     Accept(h, long, "Eleanor Shackleton")
@@ -321,6 +351,7 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
         truthy(overlay.Panel:GetHeight() <= (screen - 40), ("%s: the panel (%d) fits the screen (%d)"):format(what,
             overlay.Panel:GetHeight(), screen))
     end
+
     Fits("the riddle")
     falsy(book:IsShown(), "the book waits to be opened")
     local hadStory = overlay.Story:IsShown()
@@ -337,7 +368,9 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
 
     truthy(range > 0, "more text than room")
     eq(book:GetVerticalScroll(), 0, "it opens at the top")
+
     local function Offset() return book:GetVerticalScroll() end
+
     truthy(h:MouseWheel(book, -1), "the book takes the wheel")
     local step = Offset()
 
@@ -361,7 +394,9 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
 
     h:Advance(1)
     eq(Offset(), held, "let go, it stops")
+
     for _ = 1, 100 do h:MouseWheel(book, -1) end
+
     eq(Offset(), range, "never below the end")
     h:Key("H", true)
     falsy(ns.ScholarView.BookOpen())
@@ -401,6 +436,7 @@ test("quest riddles are behind the parent's PIN like every Scholar setting", fun
     h:Slash("/tlk set Scholar.quests off")
     eq(addon.State:Get("Scholar.quests"), true)
     truthy(addon.State:IsLocked("Scholar.quests"))
+
     for _, name in ipairs(addon.State.Order) do
         if name:find("^Scholar%.") and addon.State.Specs[addon.State.Ids[name]].label then
             truthy(addon.State:IsLocked(name), name .. " is locked")
@@ -426,12 +462,15 @@ local function WrongChoices(h, ns, kind, quest, known, context)
 
         if puzzle.kind == kind then
             asked = (asked + 1)
+
             for i, choice in ipairs(puzzle.choices) do
                 if i ~= puzzle.answer then wrongs[choice] = true end
             end
         end
     end
+
     truthy(asked > 0, kind .. " was asked")
+
     return wrongs
 end
 
@@ -452,6 +491,7 @@ end)
 test("a giver's other quests are never wrong answers to which quest they gave", function()
     local h, _, ns = LoadKid()
     local mine = { giver = "Marshal McBride", key = "1", place = "Northshire", seen = 3, title = "Wolves Across the Border" }
+
     local known = { mine,
         { giver = "Marshal McBride", key = "2", place = "Northshire", seen = 2, title = "Kobold Camp Cleanup" },
         { giver = "Billy Maclure", key = "3", place = "Maclure Vineyards", seen = 1, title = "Lost Necklace" },
@@ -474,8 +514,9 @@ test("wrong answers come from the player's own quests before the bank", function
     local known = { mine }
 
     for i, giver in ipairs({ "Foreman Thazz'ril", "Zureetha Fargaze", "Hana'zua", "Galgar" }) do
-        known[#known + 1] = { key = tostring(i + 1), title = ("Quest " .. i), giver = giver, place = "Durotar", seen = i }
+        known[#known + 1] = { giver = giver, key = tostring(i + 1), place = "Durotar", seen = i, title = ("Quest " .. i) }
     end
+
     local wrongs = WrongChoices(h, ns, "quest.giver", mine, known)
 
     for name in pairs(wrongs) do
@@ -485,9 +526,11 @@ end)
 
 test("a fill-in-the-blank never leaves the missing word elsewhere in the sentence", function()
     local h, _, ns = LoadKid()
+
     local mine = { key = "1", seen = 1,
         text = "The wolves raided the farm, and the wolves fled north. Hunters, traders, farmers and miners watched closely.",
         title = "Boars" }
+
     local asked = 0
 
     for seed = 1, 200 do
@@ -501,6 +544,7 @@ test("a fill-in-the-blank never leaves the missing word elsewhere in the sentenc
             falsy(puzzle.prompt:find("%f[%a]" .. word .. "%f[%A]"), word .. " shows in: " .. puzzle.prompt)
         end
     end
+
     truthy(asked > 0, "a blank was asked")
 end)
 
@@ -536,6 +580,7 @@ test("quest text keeps its words and line breaks, and loses the client's links a
         text = "|TInterface\Icons\INV_Misc_Food_14:0|t Kill |cffff0000ten|r boars.|nThen see |Hitem:123|h[Boar Ribs]|h.",
         title = "Boar Hunt" },
         "Eagan Peltskinner")
+
     h:AcceptQuest()
     eq(Quests(addon):Field("50", "text"), "Kill ten boars.\nThen see [Boar Ribs].")
 end)
@@ -551,9 +596,11 @@ local function ObjectivePuzzles(h, ns, quest, known)
         if puzzle and ((puzzle.kind == "quest.objective") or (puzzle.kind == "quest.count")) then
             prompts[puzzle.prompt] = true
             answers[puzzle.choices[puzzle.answer]] = true
+
             for _, choice in ipairs(puzzle.choices) do choices[choice] = true end
         end
     end
+
     return prompts, choices, answers
 end
 
@@ -569,6 +616,7 @@ test("objectives the client hasn't named yet wait in the book until it names the
         },
         title = "The Chill of Death",
     }, "Gretchen Dedmar")
+
     local quests = Quests(addon)
 
     eq(quests:Field("70", "objective1"), "Coarse Thread", "a nameless \"0/5\" isn't an objective")
@@ -588,13 +636,15 @@ test("an objective riddle asks about one kind of objective, with wrong answers o
     local h, _, ns = LoadKid()
 
     local function Quest(key, title, objectives)
-        local record = { key = key, title = title, giver = "Gretchen Dedmar", seen = tonumber(key) }
+        local record = { giver = "Gretchen Dedmar", key = key, seen = tonumber(key), title = title }
 
         for i, objective in ipairs(objectives) do
             record["objective" .. i], record["required" .. i], record["type" .. i] = objective[1], objective[2], objective[3]
         end
+
         return record
     end
+
     local pelts = Quest("1", "The Chill of Death", { { "Duskbat Pelt", 5, "item" }, { "Coarse Thread", 1, "item" } })
     local warriors = Quest("2", "At War With The Scarlet Crusade", { { "Scarlet Warrior", 10, "monster" } })
     local campfire = Quest("3", "The Great Outdoors", { { "Sit near the campfire", 1, "log" } })
@@ -607,21 +657,27 @@ test("an objective riddle asks about one kind of objective, with wrong answers o
     prompts, choices, answers = ObjectivePuzzles(h, ns, warriors, known)
     truthy(prompts['Which enemy did the quest "At War With The Scarlet Crusade" ask you to defeat?'], "foes are defeated")
     truthy(answers["Scarlet Warrior"], "the foe by name, without \"slain\"")
+
     for choice in pairs(choices) do
         falsy(choice:find("slain", 1, true) or (choice == "Duskbat Pelt"), "only foes: " .. choice)
     end
+
     prompts = ObjectivePuzzles(h, ns, campfire, known)
     truthy(prompts['What did the quest "The Great Outdoors" ask you to do?'], "the rest are things to do")
 end)
 
 test("objectives saved without a name or a kind are never asked about or offered", function()
     local h, _, ns = LoadKid()
+
     local junk = { giver = "Executor Zygand", key = "1", objective1 = "slain", objective2 = "0/5", required1 = 10,
         required2 = 5, seen = 1, title = "At War With The Scarlet Crusade" }
+
     local untyped = { giver = "Gretchen Dedmar", key = "2", objective1 = "Coarse Thread", required1 = 1, seen = 2,
         title = "The Chill of Death" }
+
     local good = { giver = "Junior Apothecary Holland", key = "3", objective1 = "Doom Weed", required1 = 10, seen = 3,
         title = "Doom Weed", type1 = "item" }
+
     local known = { junk, untyped, good }
 
     for _, quest in ipairs(known) do
@@ -705,8 +761,10 @@ test("a Horde player's wrong answers come from Horde lands", function()
     local shown = Watch(ns)
 
     h:SetLocation({ subZone = "Valley of Trials", zone = "Durotar" })
+
     Accept(h, { id = 788, objectives = { { required = 10, text = "Mottled Boar", type = "monster" } },
         text = "Prove your mettle. Thin the boars that roam the valley.", title = "Cutting Teeth" }, "Gornek")
+
     for _ = 1, 8 do
         local puzzle = Solve(h, shown)
 
@@ -714,6 +772,7 @@ test("a Horde player's wrong answers come from Horde lands", function()
             falsy(AllianceNames[choice], ("%s offered %q"):format(puzzle.kind, choice))
         end
     end
+
     local wrongs = WrongChoices(h, ns, "quest.giver", { giver = "Hana'zua", key = "1", seen = 1, title = "Sarkoth" }, nil,
         { faction = "Horde", locale = "enUS" })
 
@@ -732,6 +791,7 @@ local function KindsAsked(h, ns, quest, context)
 
         if puzzle then kinds[puzzle.kind] = true end
     end
+
     return kinds
 end
 
@@ -754,6 +814,7 @@ test("the kind last asked about a quest isn't asked about it next, and who gave 
     local count = {}
 
     for key, value in pairs(Full) do count[key] = value end
+
     count.askedKind = "quest.count"
     falsy(KindsAsked(h, ns, count)["quest.count"], "a count was asked last time")
     local who = { askedKind = "quest.giver", giver = "Eagan Peltskinner", key = "1", place = "Goldshire", seen = 1, title = "Wolves" }
@@ -789,7 +850,9 @@ local function LoadLocale(locale)
     local h = Harness.New({ saved = { TheLanKrewToolKitCharDB = { ["Scholar.enabled"] = true } } })
 
     h.locale = locale
+
     for name, value in pairs(Locales[locale]) do rawset(h.env, name, value) end
+
     h:SeedRandom(7)
     local ns = h:LoadAddon("TheLanKrewToolKit")
 
@@ -805,6 +868,7 @@ test("objectives are named in every locale, with the client's own formats", func
                 { required = 5, text = names[1] }, { required = 10, text = names[2], type = "monster" },
                 { required = 2, text = names[1], uncached = true } },
             title = ("Locale " .. locale) })
+
         local quests = Quests(addon)
 
         eq(quests:Field("70", "objective1"), names[1], locale .. " item")
@@ -826,6 +890,7 @@ test("a quest whose names never load stops being read after a few log updates", 
     local calls = h:CountApiCalls("C_QuestLog.GetQuestObjectives")
 
     for _ = 1, 100 do h:Fire("QUEST_LOG_UPDATE") end
+
     local tried = (h:CountApiCalls("C_QuestLog.GetQuestObjectives") - calls)
 
     truthy((tried > 0) and (tried <= 20), "tried " .. tried .. " times")
@@ -837,6 +902,7 @@ end)
 
 test("a missing word is asked only on an English client", function()
     local h, _, ns = LoadKid()
+
     local text = { key = "1", seen = 1,
         text = "The wolves raided the farm at night. Hunters, traders, farmers and miners watched closely.",
         title = "Boars" }
@@ -857,6 +923,7 @@ test("quests already in the log are recorded when the challenge starts, for revi
 
     h:SetLocation({ subZone = "Goldshire", zone = "Elwynn Forest" })
     Accept(h, Wolves)
+
     local id = h:AutoAcceptQuest({ goal = "Speak with Marshal Dughan.",
         objectives = { { required = 4, text = "Gold Dust" } }, text = "Marshal Dughan waits in Goldshire.",
         title = "Report to Goldshire" })

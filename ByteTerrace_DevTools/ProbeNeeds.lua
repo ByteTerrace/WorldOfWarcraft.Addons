@@ -79,20 +79,21 @@ local function HeardAuraRestricted()
     return false
 end
 
+-- Out of combat (no lockdown, not fighting), with exactly these addon restrictions in force.
+local function CalmWith(restrictions)
+    return (not InCombatLockdown() and not UnitAffectingCombat("player") and (Probes.Restrictions() == restrictions))
+end
+
 local Needs = {
     idle = {
-        check = function()
-            return (not InCombatLockdown() and not UnitAffectingCombat("player") and (Probes.Restrictions() == "none"))
-        end,
+        check = function() return CalmWith("none") end,
         label = "idle",
         setup = function() end,
         step = 1,
         text = "out of combat in the open world (no addon restrictions active)",
     },
     restrictedMap = {
-        check = function()
-            return (not InCombatLockdown() and not UnitAffectingCombat("player") and (Probes.Restrictions() == "Map"))
-        end,
+        check = function() return CalmWith("Map") end,
         label = "restricted map",
         setup = function(h) h:SetRestriction("Map", true) end,
         step = 6,

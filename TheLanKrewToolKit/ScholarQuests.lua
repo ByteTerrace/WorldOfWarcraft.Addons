@@ -260,34 +260,25 @@ local function Bank(state)
     return (Words.questBanks[state.context.faction] or Words.questBanks.Alliance)
 end
 
-Generators["quest.giver"] = function(state)
-    local quest = state.quest
-    local wrongs = Wrongs(state, quest.giver, Gather(state, "giver", "ender"), Bank(state).names)
+-- A generator asking for the quest's field: wrong answers come from the same pair of fields in
+-- other quests, then the faction bank's bankKey list, and never name the field's own zone.
+local function AskFor(field, pair, bankKey, zoneField)
+    local kind = ("quest." .. field)
 
-    return Finish(state, "quest.giver", Words.quest.giver, { answer = quest.giver, title = quest.title }, quest.giver, wrongs)
+    return function(state)
+        local quest = state.quest
+        local answer = quest[field]
+        local excluded = (zoneField and Lowered(quest[zoneField]))
+        local wrongs = Wrongs(state, answer, Gather(state, pair[1], pair[2]), Bank(state)[bankKey], excluded)
+
+        return Finish(state, kind, Words.quest[field], { answer = answer, title = quest.title }, answer, wrongs)
+    end
 end
 
-Generators["quest.ender"] = function(state)
-    local quest = state.quest
-    local wrongs = Wrongs(state, quest.ender, Gather(state, "giver", "ender"), Bank(state).names)
-
-    return Finish(state, "quest.ender", Words.quest.ender, { answer = quest.ender, title = quest.title }, quest.ender, wrongs)
-end
-
-Generators["quest.place"] = function(state)
-    local quest = state.quest
-    local wrongs = Wrongs(state, quest.place, Gather(state, "place", "endPlace"), Bank(state).places, Lowered(quest.zone))
-
-    return Finish(state, "quest.place", Words.quest.place, { answer = quest.place, title = quest.title }, quest.place, wrongs)
-end
-
-Generators["quest.endPlace"] = function(state)
-    local quest = state.quest
-    local wrongs = Wrongs(state, quest.endPlace, Gather(state, "place", "endPlace"), Bank(state).places, Lowered(quest.endZone))
-
-    return Finish(state, "quest.endPlace", Words.quest.endPlace, { answer = quest.endPlace, title = quest.title },
-        quest.endPlace, wrongs)
-end
+Generators["quest.endPlace"] = AskFor("endPlace", { "place", "endPlace" }, "places", "endZone")
+Generators["quest.ender"] = AskFor("ender", { "giver", "ender" }, "names")
+Generators["quest.giver"] = AskFor("giver", { "giver", "ender" }, "names")
+Generators["quest.place"] = AskFor("place", { "place", "endPlace" }, "places", "zone")
 
 Generators["quest.count"] = function(state)
     local counted = {}

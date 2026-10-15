@@ -1,35 +1,12 @@
 -- Scholar's quest riddles: what the quest book records, what it asks, and the open book.
 
-local function LoadKid(extra)
-    local char = { ["Scholar.enabled"] = true }
+local Kit = use("scholar")
 
-    for key, value in pairs(extra or {}) do char[key] = value end
-    local h = Harness.New({ saved = { TheLanKrewToolKitCharDB = char } })
-
-    h:SeedRandom(7)
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    return h, ns.Addon, ns
-end
-
--- Every puzzle the screen shows, in order.
-local function Watch(ns)
-    local shown = {}
-    local view = ns.ScholarView
-    local show = view.Show
-
-    view.Show = function(puzzle, info)
-        shown[#shown + 1] = puzzle
-        return show(puzzle, info)
-    end
-    return shown
-end
-
-local function Showing(h)
-    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
-
-    return ((overlay ~= nil) and overlay:IsShown())
-end
+local Accept = Kit.Accept
+local LoadKid = Kit.LoadKid
+local Showing = Kit.Showing
+local Solve = Kit.Solve
+local Watch = Kit.Watch
 
 local Wolves = {
     goal = "Bring 8 Tough Wolf Meat to Eagan Peltskinner.", header = "Elwynn Forest", id = 33,
@@ -38,11 +15,6 @@ local Wolves = {
         .. "Bring me their meat, and the farmers will sleep easier."),
     title = "Wolves Across the Border",
 }
-
-local function Accept(h, spec, giver)
-    h:OfferQuest(spec, giver or "Eagan Peltskinner")
-    h:AcceptQuest()
-end
 
 local function Quests(addon)
     return addon.Modules.QuestBook.Records.quests
@@ -144,14 +116,6 @@ test("a quest the book never saw is recorded when turned in, from its reward pan
     h:Fire("QUEST_TURNED_IN", 9001, 0, 0) -- a hidden tracking quest: no panel named it
     falsy(Quests(addon):Has("9001"))
 end)
-
--- Asks a riddle now and answers it right.
-local function Solve(h, shown)
-    h:Slash("/tlk puzzle")
-    h:Key(tostring(shown[#shown].answer), true)
-    h:Advance(2)
-    return shown[#shown]
-end
 
 test("quest riddles are preferred, two to every math or reading riddle: fresh quests first, then review", function()
     local h, addon, ns = LoadKid()

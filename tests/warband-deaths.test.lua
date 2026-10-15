@@ -1,59 +1,16 @@
 -- Who killed you: the death fact's recap attribution, Warband's grudge cards and rivalry records,
 -- and Streaks' spree endings.
 
-local Prefix = "TLKKrew1"
+local Kit = use("toolkit")
 
-local function Grouped()
-    local h = Harness.New({ saved = {} })
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    h:JoinGroup("party", { "Mom" })
-    h:Echo(false)
-    h:Advance(2)
-    return h, ns.Addon
-end
-
-local function Enemy(name, extra)
-    local unit = { canAttack = true, classFile = "ROGUE", className = "Rogue", faction = "Alliance", isEnemy = true,
-        isPlayer = true, level = 60, name = (name or "Bob"), playerControlled = true }
-
-    for key, value in pairs(extra or {}) do unit[key] = value end
-    return unit
-end
-
--- A player's key: Forever's full name (every test player's surname is the harness default).
-local function Key(_, name)
-    return (name .. " " .. Harness.DEFAULT_SURNAME)
-end
-
-local function People(addon)
-    return addon.Modules.Warband.Records.people
-end
-
-local function Card(h)
-    local card = rawget(h.env, "TheLanKrewToolKitCard")
-
-    if not (card and card:IsShown()) then
-        return nil
-    end
-    return (Reveal(Harness.State(card.Title).text) .. "\n" .. Reveal(Harness.State(card.Body).text)), card
-end
-
-local function Sent(h, kind)
-    local found = {}
-
-    for _, message in ipairs(h.addonMessages) do
-        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
-            found[#found + 1] = message.message
-        end
-    end
-    return found
-end
-
--- Your killing blow on an enemy player: PARTY_KILL(your GUID, theirs).
-local function Blow(h, name)
-    h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ isPlayer = true, name = name }))
-end
+local Blow = Kit.Blow
+local Card = Kit.Card
+local Enemy = Kit.Enemy
+local Grouped = Kit.Grouped
+local Key = Kit.Key
+local People = Kit.People
+local Prefix = Kit.Prefix
+local Sent = Kit.Sent
 
 -- The player's source in a fight they die in, killed by attacker (a unit table) with one blow.
 local function KilledBy(attacker, blow)

@@ -1,27 +1,11 @@
 -- ByteTerrace framework: per-module work counts (debug work), their reset, profiling (debug
 -- profile), and what counting costs a dispatch.
 
--- A harness with the framework loaded and a bare addon, not yet started.
-local function NewAddOn()
-    local h = Harness.New()
+local Kit = use("framework")
 
-    h:LoadFiles("ByteTerrace_Core")
-    h.declared.TestDB = true
-    rawset(h.env, "TestDB", h.saved.TestDB)
-    local addon = h.env.ByteTerrace.NewAddOn({
-        name = "TestApp", savedVariable = "TestDB", slash = { "/test" }, title = "Test AddOn", version = "1.0",
-    })
-
-    return h, addon
-end
-
-local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp", false)
-end
-
-local function Printed(h)
-    return table.concat(h.printed, "\n")
-end
+local NewAddOn = Kit.NewAddOn
+local Printed = Kit.Printed
+local Start = Kit.Start
 
 -- Bytes the Lua heap grows by per call of fn, with the collector stopped so nothing is freed.
 local function BytesPerCall(fn, calls)

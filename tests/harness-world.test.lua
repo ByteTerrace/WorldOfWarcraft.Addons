@@ -1,23 +1,9 @@
 -- The harness's fidelity rules for the world (tests/harness/world.lua): location, maps and
 -- waypoints, honor and raid warnings.
 
-local function Watch(h, ...)
-    local seen = {}
-    local frame = h.env.CreateFrame("Frame")
+local Kit = use("harness")
 
-    for _, event in ipairs({ ... }) do
-        frame:RegisterEvent(event)
-    end
-    frame:SetScript("OnEvent", function(_, event, ...)
-        local parts = { event }
-
-        for i = 1, select("#", ...) do
-            parts[#parts + 1] = tostring(Reveal((select(i, ...))))
-        end
-        seen[#seen + 1] = table.concat(parts, ":")
-    end)
-    return seen
-end
+local Watch = Kit.Watch
 
 local Hillsbrad = 1424
 

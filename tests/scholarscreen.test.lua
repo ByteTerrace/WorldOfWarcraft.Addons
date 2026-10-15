@@ -1,36 +1,14 @@
 -- Scholar's riddle screen in play: when a riddle waits for Blizzard's windows, what Read aloud
 -- says, and the difficulty quest riddles leave alone.
 
-local function LoadKid(extra)
-    local char = { ["Scholar.enabled"] = true }
+local Kit = use("scholar")
 
-    for key, value in pairs(extra or {}) do char[key] = value end
-    local h = Harness.New({ saved = { TheLanKrewToolKitCharDB = char } })
-
-    h:SeedRandom(7)
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    return h, ns.Addon, ns
-end
-
--- Every puzzle the screen shows, in order.
-local function Watch(ns)
-    local shown = {}
-    local view = ns.ScholarView
-    local show = view.Show
-
-    view.Show = function(puzzle, info)
-        shown[#shown + 1] = puzzle
-        return show(puzzle, info)
-    end
-    return shown
-end
-
-local function Showing(h)
-    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
-
-    return ((overlay ~= nil) and overlay:IsShown())
-end
+local Accept = Kit.Accept
+local LoadKid = Kit.LoadKid
+local Showing = Kit.Showing
+local Solve = Kit.Solve
+local Watch = Kit.Watch
+local WrongAnswer = Kit.WrongAnswer
 
 local Wolves = {
     goal = "Bring 8 Tough Wolf Meat to Eagan Peltskinner.", id = 33,
@@ -38,24 +16,6 @@ local Wolves = {
     text = "The wolves of Elwynn grow bolder every night. Bring me their meat, and the farmers will sleep easier.",
     title = "Wolves Across the Border",
 }
-
-local function Accept(h, spec, giver)
-    h:OfferQuest(spec, giver or "Eagan Peltskinner")
-    h:AcceptQuest()
-end
-
--- Asks a riddle now and answers it right.
-local function Solve(h, shown)
-    h:Slash("/tlk puzzle")
-    h:Key(tostring(shown[#shown].answer), true)
-    h:Advance(2)
-    return shown[#shown]
-end
-
--- An answer other than the right one.
-local function WrongAnswer(puzzle)
-    return (((puzzle.answer == 1) and 2) or 1)
-end
 
 -- Answers the riddle on screen wrong, twice when it can.
 local function MissTwice(h, puzzle)

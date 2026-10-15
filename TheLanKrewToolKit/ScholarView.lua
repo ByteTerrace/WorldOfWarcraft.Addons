@@ -55,7 +55,7 @@ local CreateFrame, UIParent = CreateFrame, UIParent
 local floor, max, min = math.floor, math.max, math.min
 
 local ScholarStyle = ns.ScholarStyle
-local Backdrop, TextColor = ScholarStyle.Backdrop, ScholarStyle.TextColor
+local Backdrop, BackdropColors, TextColor = ScholarStyle.Backdrop, ScholarStyle.BackdropColors, ScholarStyle.TextColor
 local Palette, Solid, StarIcon, WrongIcon = ScholarStyle.Palette, ScholarStyle.Solid, ScholarStyle.StarIcon,
     ScholarStyle.WrongIcon
 
@@ -194,14 +194,13 @@ local function Paint(button, state)
     if state == "hover" then
         edge = Palette.gold
     elseif state == "wrong" then
-        background, edge, text, key, mark = { 0.24, 0.07, 0.06 }, Palette.bad, Palette.muted, Palette.muted, WrongIcon
+        background, edge, text, key, mark = Palette.wrongFill, Palette.bad, Palette.muted, Palette.muted, WrongIcon
     elseif state == "right" then
-        background, edge, mark = { 0.08, 0.26, 0.1 }, Palette.good, RightIcon
+        background, edge, mark = Palette.rightFill, Palette.good, RightIcon
     elseif state == "dim" then
-        edge, text, key = { 0.28, 0.23, 0.14 }, Palette.muted, Palette.muted
+        edge, text, key = Palette.dimEdge, Palette.muted, Palette.muted
     end
-    button:SetBackdropColor(background[1], background[2], background[3], 1)
-    button:SetBackdropBorderColor(edge[1], edge[2], edge[3])
+    BackdropColors(button, background, edge)
     TextColor(button.Text, text)
     TextColor(button.Key, key)
     Fill(button.Keycap, (((state == "dim") or (state == "wrong")) and Palette.keycapDim) or Palette.keycap)
@@ -266,13 +265,20 @@ local function CreateAnswer(panel, i)
     return button
 end
 
+local function LightPill(pill)
+    BackdropColors(pill, nil, Palette.gold)
+end
+
+local function DimPill(pill)
+    BackdropColors(pill, nil, Palette.edge)
+end
+
 -- Small text buttons (Need a hint?, Read aloud, Skip).
 local function CreatePill(parent, text, icon)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
 
     Backdrop(button, 10)
-    button:SetBackdropColor(0.14, 0.1, 0.05, 1)
-    button:SetBackdropBorderColor(Palette.edge[1], Palette.edge[2], Palette.edge[3])
+    BackdropColors(button, Palette.pill, Palette.edge)
     local left = 12
 
     if icon then
@@ -286,8 +292,8 @@ local function CreatePill(parent, text, icon)
     button.Label:SetPoint("LEFT", left, 0)
     button.m_left, button.m_text = left, text
     button:SetHeight(28)
-    button:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(Palette.gold[1], Palette.gold[2], Palette.gold[3]) end)
-    button:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(Palette.edge[1], Palette.edge[2], Palette.edge[3]) end)
+    button:SetScript("OnEnter", LightPill)
+    button:SetScript("OnLeave", DimPill)
     return button
 end
 
@@ -475,8 +481,7 @@ local function Create()
     panel:SetWidth(Width)
     panel:SetPoint("CENTER", 0, 30)
     Backdrop(panel, 16)
-    panel:SetBackdropColor(Palette.panel[1], Palette.panel[2], Palette.panel[3], 1)
-    panel:SetBackdropBorderColor(Palette.gold[1], Palette.gold[2], Palette.gold[3])
+    BackdropColors(panel, Palette.panel, Palette.gold)
     frame.Panel = panel
 
     CreateHeader(frame, panel)
@@ -623,11 +628,12 @@ end
 local function ShowFeedback(text, good, said)
     Overlay.m_said = said
     local banner = Overlay.Feedback
-    local tint = ((good and { 0.07, 0.19, 0.09 }) or { 0.17, 0.13, 0.05 })
-    local edge = ((good and { 0.2, 0.5, 0.26 }) or { 0.48, 0.38, 0.13 })
 
-    banner:SetBackdropColor(tint[1], tint[2], tint[3], 1)
-    banner:SetBackdropBorderColor(edge[1], edge[2], edge[3])
+    if good then
+        BackdropColors(banner, Palette.feedbackGood, Palette.feedbackGoodEdge)
+    else
+        BackdropColors(banner, Palette.feedback, Palette.feedbackEdge)
+    end
     banner.Text:SetText(text)
     banner:Show()
     -- On a quest riddle the hint is the quest book, which stays a click away beside the banner.

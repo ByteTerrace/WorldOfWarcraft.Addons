@@ -1,30 +1,14 @@
 -- Scholar's challenge: scheduling, the overlay, input capture, rewards and the parent lock.
 
-local function Load(saved)
-    local h = Harness.New({ saved = (saved or {}) })
+local Kit = use("scholar")
 
-    h:SeedRandom(7)
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    return h, ns.Addon
-end
-
--- A child's character with the challenge on.
-local function LoadKid(extra)
-    local char = { ["Scholar.enabled"] = true }
-
-    for key, value in pairs(extra or {}) do char[key] = value end
-    return Load({ TheLanKrewToolKitCharDB = char })
-end
+local Load = Kit.Load
+local LoadKid = Kit.LoadKid
+local Showing = Kit.Showing
+local WrongAnswer = Kit.WrongAnswer
 
 local function Overlay(h)
     return rawget(h.env, "TheLanKrewToolKitScholar")
-end
-
-local function Showing(h)
-    local overlay = Overlay(h)
-
-    return ((overlay ~= nil) and overlay:IsShown())
 end
 
 -- The puzzle the screen shows: watched.puzzle is always the latest. Call before it first shows.
@@ -37,15 +21,6 @@ local function Watch(h)
         return show(puzzle, info)
     end
     return watched
-end
-
--- An answer other than the right one and those in except.
-local function WrongAnswer(puzzle, except)
-    for i = 1, 4 do
-        if (i ~= puzzle.answer) and (i ~= except) then
-            return i
-        end
-    end
 end
 
 test("off by default: nothing ever appears", function()

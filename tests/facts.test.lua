@@ -1,6 +1,10 @@
 -- ByteTerrace facts: the demand facts (target, kills, death) run only while used, and cost as
 -- little as their events allow.
 
+local Kit = use("framework")
+
+local Start = Kit.Start
+
 -- A harness with the framework and an addon declaring every fact, with one module (User) that
 -- uses the demand facts while its switch is on. Not yet started.
 local function NewAddOn()
@@ -14,10 +18,6 @@ local function NewAddOn()
 
     addon:Module("User", { label = "User", uses = { "target", "kills", "death" } })
     return h, addon
-end
-
-local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp", false)
 end
 
 local function EnemyPlayer()

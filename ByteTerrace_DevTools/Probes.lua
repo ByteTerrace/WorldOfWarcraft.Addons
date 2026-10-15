@@ -231,15 +231,15 @@ local function First(list)
     return list[1]
 end
 
---- A set's keys, sorted and joined by commas.
-local function Joined(set)
+--- A set's keys, sorted and joined by separator (a comma unless given).
+local function Joined(set, separator)
     local keys = {}
 
     for key in pairs(set) do
         keys[#keys + 1] = key
     end
     table.sort(keys)
-    return table.concat(keys, ",")
+    return table.concat(keys, (separator or ","))
 end
 
 -- A value as an item of a string union: a secret's marker is "secret".
@@ -717,24 +717,24 @@ function Probes.JoinSets(sets)
     return out
 end
 
---- The needs' texts joined with " + ", or "nothing" for a probe that runs anywhere.
-function Probes.NeedsText(probe)
-    local texts = {}
+-- The probe's needs' field (text or label) joined with " + ", or none for a probe that runs anywhere.
+local function NeedsJoined(probe, field, none)
+    local parts = {}
 
     for i, key in ipairs(probe.needs) do
-        texts[i] = Needs[key].text
+        parts[i] = Needs[key][field]
     end
-    return (((#texts > 0) and table.concat(texts, " + ")) or "nothing")
+    return (((#parts > 0) and table.concat(parts, " + ")) or none)
+end
+
+--- The needs' texts joined with " + ", or "nothing" for a probe that runs anywhere.
+function Probes.NeedsText(probe)
+    return NeedsJoined(probe, "text", "nothing")
 end
 
 --- The needs' short labels joined with " + ", or "anywhere" for a probe that runs anywhere.
 function Probes.NeedsLabel(probe)
-    local labels = {}
-
-    for i, key in ipairs(probe.needs) do
-        labels[i] = Needs[key].label
-    end
-    return (((#labels > 0) and table.concat(labels, " + ")) or "anywhere")
+    return NeedsJoined(probe, "label", "anywhere")
 end
 
 --- Why the harness can't run the probe, or nil when it can.

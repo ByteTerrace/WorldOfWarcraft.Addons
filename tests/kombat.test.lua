@@ -1,15 +1,14 @@
 -- The sound bank's variants, the Mortal Kombat announcer and the Unreal Tournament kill streaks,
 -- end to end through the real addon files.
 
-local MediaPath = "Interface\\AddOns\\TheLanKrewToolKit\\Media\\"
-local Prefix = "TLKKrew1"
+local Kit = use("toolkit")
 
-local function Load(player)
-    local h = Harness.New(player)
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    return h, ns.Addon
-end
+local Blow = Kit.Blow
+local Load = Kit.Load
+local MediaPath = Kit.MediaPath
+local Notices = Kit.Notices
+local Prefix = Kit.Prefix
+local Sent = Kit.Sent
 
 local function Media(h, ...)
     for i = 1, select("#", ...) do
@@ -32,31 +31,6 @@ local function Heard(h)
         names[#names + 1] = sound.path:sub(#MediaPath + 1)
     end
     return table.concat(names, " ")
-end
-
-local function Notices(h)
-    local texts = {}
-
-    for _, notice in ipairs(h.raidNotices) do
-        texts[#texts + 1] = notice.text
-    end
-    return table.concat(texts, "\n")
-end
-
-local function Sent(h, kind)
-    local found = {}
-
-    for _, message in ipairs(h.addonMessages) do
-        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
-            found[#found + 1] = message.message
-        end
-    end
-    return found
-end
-
--- Your killing blow on an enemy player: PARTY_KILL(your GUID, theirs).
-local function Blow(h, name)
-    h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ isPlayer = true, name = name }))
 end
 
 -- A fight with an enemy player that dies while targeted; hit makes it not flawless.

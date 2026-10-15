@@ -101,8 +101,9 @@ local function Rebuild(self, event)
     Refresh(self, event)
 end
 
--- Dispatch while profiling (SetProfiling): the same, with each handler timed into its work.
-local function ProfiledDispatch(self, event, ...)
+-- Runs an event's live handlers as one state batch, counting each into its work and calling it
+-- through call(work, fn, ...): PlainCall, or TimedCall while profiling.
+local function Run(self, call, event, ...)
     local list = self.m_handlers[event]
 
     if not list then
@@ -113,6 +114,7 @@ local function ProfiledDispatch(self, event, ...)
     counts[event] = ((counts[event] or 0) + 1)
     local state = self.m_addon.State
     local unit = ...
+    -- A unit token that is itself secret can't be compared; filtered handlers can't claim it.
     local comparable = (not self.m_filtered[event] or not issecretvalue(unit))
 
     state:BeginBatch()
@@ -123,10 +125,19 @@ local function ProfiledDispatch(self, event, ...)
             local work = handle.work
 
             work.events = (work.events + 1)
-            TimedCall(work, handle.fn, ...)
+            call(work, handle.fn, ...)
         end
     end
     state:EndBatch()
+end
+
+local function PlainCall(_, fn, ...)
+    SafeCall(fn, ...)
+end
+
+-- Dispatch while profiling (SetProfiling): the same, with each handler timed into its work.
+local function ProfiledDispatch(self, event, ...)
+    Run(self, TimedCall, event, ...)
 end
 
 --- Creates an addon's dispatcher and its frame.
@@ -222,31 +233,7 @@ end
 --- Runs an event's live handlers as one state batch. The frame's OnEvent calls it.
 ---@param event string
 function Events:Dispatch(event, ...)
-    local list = self.m_handlers[event]
-
-    if not list then
-        return
-    end
-    local counts = self.Counts
-
-    counts[event] = ((counts[event] or 0) + 1)
-    local state = self.m_addon.State
-    local unit = ...
-    -- A unit token that is itself secret can't be compared; filtered handlers can't claim it.
-    local comparable = (not self.m_filtered[event] or not issecretvalue(unit))
-
-    state:BeginBatch()
-    for i = 1, #list do
-        local handle = list[i]
-
-        if not handle.dead and (not handle.unit or (comparable and (handle.unit == unit))) then
-            local work = handle.work
-
-            work.events = (work.events + 1)
-            SafeCall(handle.fn, ...)
-        end
-    end
-    state:EndBatch()
+    Run(self, PlainCall, event, ...)
 end
 
 --- Times each handler into its work record from now on (true), or goes back to Dispatch (false).

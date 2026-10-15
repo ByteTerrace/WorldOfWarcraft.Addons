@@ -1,22 +1,8 @@
 -- The harness's fidelity rules for groups and addon messages (tests/harness/group.lua).
 
-local function Watch(h, ...)
-    local seen = {}
-    local frame = h.env.CreateFrame("Frame")
+local Kit = use("harness")
 
-    for _, event in ipairs({ ... }) do
-        frame:RegisterEvent(event)
-    end
-    frame:SetScript("OnEvent", function(_, event, ...)
-        local parts = { event }
-
-        for i = 1, select("#", ...) do
-            parts[#parts + 1] = tostring(Reveal((select(i, ...))))
-        end
-        seen[#seen + 1] = table.concat(parts, ":")
-    end)
-    return seen
-end
+local Watch = Kit.Watch
 
 test("joining a party fires GROUP_JOINED with its category and GUID, then GROUP_ROSTER_UPDATE", function()
     local h = Harness.New()

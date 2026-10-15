@@ -2,23 +2,9 @@
 -- (tests/harness/meter.lua): sessions per combat, per-field secrecy in combat, and recaps tied to
 -- the deaths in a session.
 
-local function Watch(h, ...)
-    local seen = {}
-    local frame = h.env.CreateFrame("Frame")
+local Kit = use("harness")
 
-    for _, event in ipairs({ ... }) do
-        frame:RegisterEvent(event)
-    end
-    frame:SetScript("OnEvent", function(_, event, ...)
-        local parts = { event }
-
-        for i = 1, select("#", ...) do
-            parts[#parts + 1] = tostring(Reveal((select(i, ...))))
-        end
-        seen[#seen + 1] = table.concat(parts, ":")
-    end)
-    return seen
-end
+local Watch = Kit.Watch
 
 local MeterEvents = { "DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_CURRENT_SESSION_UPDATED", "DAMAGE_METER_RESET" }
 

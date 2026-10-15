@@ -1,13 +1,10 @@
 -- TheLanKrewToolKit behavior, end to end through the real addon files.
 
-local MediaPath = "Interface\\AddOns\\TheLanKrewToolKit\\Media\\"
+local Kit = use("toolkit")
 
-local function Load(player)
-    local h = Harness.New(player)
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    return h, ns.Addon
-end
+local Card = Kit.Card
+local Load = Kit.Load
+local MediaPath = Kit.MediaPath
 
 local function EnemyPlayer(fields)
     local unit = { canAttack = true, isPlayer = true, playerControlled = true }
@@ -468,16 +465,10 @@ test("rumble is strong entering combat and light leaving it, never at login, and
     eq(h.vibrationsStopped, 1)
 end)
 
-local function CardText(h)
-    local card = rawget(h.env, "TheLanKrewToolKitCard") -- created lazily with the first card
-
-    return ((card and card:IsShown() and (Reveal(Harness.State(card.Title).text) .. "\n" .. Reveal(Harness.State(card.Body).text))) or nil)
-end
-
 test("the first login ever shows no welcome card", function()
     local h = Load()
 
-    eq(CardText(h), nil)
+    eq(Card(h), nil)
 end)
 
 test("the next login welcomes you back with last session's highlights and rested XP", function()
@@ -493,7 +484,7 @@ test("the next login welcomes you back with last session's highlights and rested
     h.player.rested = 0
     h.player.xpMax = 1000
     h:Relog(3 * 86400, function() h.player.rested = 380 end)
-    local text = CardText(h)
+    local text = Card(h)
 
     truthy(text, "a card is shown")
     truthy(text:find("Welcome back, Tester!", 1, true), text)
@@ -509,9 +500,9 @@ test("a /reload continues the session and shows no welcome card", function()
 
     h:Fire("QUEST_TURNED_IN", 1, 100, 50)
     h:Reload()
-    eq(CardText(h), nil)
+    eq(Card(h), nil)
     h:Slash("/tlk journal")
-    truthy(CardText(h):find("1 quest", 1, true), CardText(h))
+    truthy(Card(h):find("1 quest", 1, true), Card(h))
 end)
 
 test("a level-up shows a Ding! card for the level you just finished", function()
@@ -521,7 +512,7 @@ test("a level-up shows a Ding! card for the level you just finished", function()
     h:Fire("QUEST_TURNED_IN", 1, 100, 50)
     h.player.level = (h.player.level + 1)
     h:LevelUp(h.player.level)
-    local text = CardText(h)
+    local text = Card(h)
 
     truthy(text:find("Ding! Level " .. h.player.level, 1, true), text)
     truthy(text:find("1 quest", 1, true), text)
@@ -534,13 +525,13 @@ test("deaths count toward the session and the level", function()
     h:Die()
     h:Revive()
     h:Slash("/tlk journal")
-    truthy(CardText(h):find("1 trip to the spirit healer", 1, true), CardText(h))
+    truthy(Card(h):find("1 trip to the spirit healer", 1, true), Card(h))
     h:Click(h.env.TheLanKrewToolKitCard)
     h:Die()
     h:Revive()
     h.player.level = (h.player.level + 1)
     h:LevelUp(h.player.level)
-    truthy(CardText(h):find("2 trips to the spirit healer", 1, true), CardText(h))
+    truthy(Card(h):find("2 trips to the spirit healer", 1, true), Card(h))
 end)
 
 test("cards queue, dismiss on click, and hide on their own", function()
@@ -549,13 +540,13 @@ test("cards queue, dismiss on click, and hide on their own", function()
     h:Slash("/tlk journal")
     h.player.level = (h.player.level + 1)
     h:LevelUp(h.player.level)
-    truthy(CardText(h):find("This session", 1, true), "first card stays up")
+    truthy(Card(h):find("This session", 1, true), "first card stays up")
     local card = h.env.TheLanKrewToolKitCard
 
     h:Click(card)
-    truthy(CardText(h):find("Ding!", 1, true), "click shows the next")
+    truthy(Card(h):find("Ding!", 1, true), "click shows the next")
     h:Advance(13)
-    eq(CardText(h), nil, "hid on its own")
+    eq(Card(h), nil, "hid on its own")
 end)
 
 test("card toggles and the module switch are honored", function()
@@ -564,7 +555,7 @@ test("card toggles and the module switch are honored", function()
     addon.State:Set("Journal.ding", false)
     h.player.level = (h.player.level + 1)
     h:LevelUp(h.player.level)
-    eq(CardText(h), nil, "ding card off")
+    eq(Card(h), nil, "ding card off")
     addon.State:Set("Journal.enabled", false)
     falsy(Registered(addon, "QUEST_TURNED_IN"))
 end)
@@ -722,16 +713,16 @@ test("cards wait out combat", function()
     h:EnterCombat()
     h.player.level = (h.player.level + 1)
     h:LevelUp(h.player.level)
-    eq(CardText(h), nil, "not mid-fight")
+    eq(Card(h), nil, "not mid-fight")
     h:LeaveCombat()
-    truthy(CardText(h):find("Ding!", 1, true))
+    truthy(Card(h):find("Ding!", 1, true))
 end)
 
 test("a short relog doesn't show a trivial welcome card", function()
     local h = Load()
 
     h:Relog(60)
-    eq(CardText(h), nil)
+    eq(Card(h), nil)
 end)
 
 test("a new character's 0 copper is a real baseline", function()
@@ -743,7 +734,7 @@ test("a new character's 0 copper is a real baseline", function()
     h.player.money = 6000
     h.player.level = (h.player.level + 1)
     h:LevelUp(h.player.level)
-    truthy(CardText(h):find("+60s", 1, true), CardText(h))
+    truthy(Card(h):find("+60s", 1, true), Card(h))
 end)
 
 test("the first ding after installing says so, and milestones are celebrated", function()
@@ -751,14 +742,14 @@ test("the first ding after installing says so, and milestones are celebrated", f
 
     h.player.level = 10
     h:LevelUp(10)
-    local text = CardText(h)
+    local text = Card(h)
 
     truthy(text:find("Since the journal started", 1, true), text)
     truthy(text:find("milestone", 1, true), text)
     h:Click(h.env.TheLanKrewToolKitCard)
     h.player.level = 60
     h:LevelUp(60)
-    text = CardText(h)
+    text = Card(h)
     truthy(text:find("\nMax level. Legendary.", 1, true), text)
 end)
 
@@ -766,11 +757,11 @@ test("the session journal shows the rested XP banked, from 1% of a level", funct
     local h = Load({ rested = 100, xpMax = 400 })
 
     h:Slash("/tlk journal")
-    truthy(CardText(h):find("\nRested XP banked: 25% of a level.", 1, true), CardText(h))
+    truthy(Card(h):find("\nRested XP banked: 25% of a level.", 1, true), Card(h))
     h:Click(h.env.TheLanKrewToolKitCard)
     h.player.rested = 3
     h:Slash("/tlk journal")
-    falsy(CardText(h):find("Rested", 1, true), "under 1% isn't worth a line")
+    falsy(Card(h):find("Rested", 1, true), "under 1% isn't worth a line")
 end)
 
 test("turning the journal off keeps the played time so far", function()

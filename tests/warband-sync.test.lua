@@ -1,59 +1,16 @@
 -- Warband: your marks and wars shared with Krew members who say hello, packed into few messages.
 
-local Prefix = "TLKKrew1"
+local Kit = use("toolkit")
 
-local function Load(saved)
-    local h = Harness.New({ saved = (saved or {}) })
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    return h, ns.Addon
-end
-
--- A group with one friend, so Krew messages go out. Echo off: tests look at what we send.
-local function Grouped(saved)
-    local h, addon = Load(saved)
-
-    h:JoinGroup("party", { "Mom" })
-    h:Echo(false)
-    h:Advance(2)
-    return h, addon
-end
-
-local function Enemy(name, extra)
-    local unit = { canAttack = true, classFile = "ROGUE", className = "Rogue", faction = "Alliance", isEnemy = true,
-        isPlayer = true, level = 60, name = (name or "Bob"), playerControlled = true }
-
-    for key, value in pairs(extra or {}) do unit[key] = value end
-    return unit
-end
-
--- A player's key: Forever's full name (every test player's surname is the harness default).
-local function Key(_, name)
-    return (name .. " " .. Harness.DEFAULT_SURNAME)
-end
-
-local function Ledger(addon)
-    return addon.Modules.Warband.Records.ledger
-end
-
-local function People(addon)
-    return addon.Modules.Warband.Records.people
-end
-
-local function Sent(h, kind)
-    local found = {}
-
-    for _, message in ipairs(h.addonMessages) do
-        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
-            found[#found + 1] = message.message
-        end
-    end
-    return found
-end
-
-local function Receive(h, sender, kind, ...)
-    h:ReceiveAddonMessage(Prefix, kind .. ":" .. table.concat({ ... }, "\t"), "PARTY", sender)
-end
+local Enemy = Kit.Enemy
+local Grouped = Kit.Grouped
+local Key = Kit.Key
+local Ledger = Kit.Ledger
+local Load = Kit.Load
+local People = Kit.People
+local Prefix = Kit.Prefix
+local Receive = Kit.Receive
+local Sent = Kit.Sent
 
 test("a joining Krew member hears the marks you placed", function()
     local h = Grouped()

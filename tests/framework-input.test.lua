@@ -1,18 +1,10 @@
 -- ByteTerrace framework: controller labels and maps (a map belongs to its module, and held commands
 -- keep their phases in order, whatever their own handlers do to the maps).
 
-local function NewAddOn()
-    local h = Harness.New()
+local Kit = use("framework")
 
-    h:LoadFiles("ByteTerrace_Core")
-    h.declared.TestDB = true
-    rawset(h.env, "TestDB", h.saved.TestDB)
-    return h, h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", slash = { "/test" }, title = "Test AddOn" })
-end
-
-local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp", false)
-end
+local NewAddOn = Kit.NewAddOn
+local Start = Kit.Start
 
 test("a stopping module's maps stop capturing: a stopped feature never keeps the controller", function()
     local h, addon = NewAddOn()

@@ -1,23 +1,9 @@
 -- ByteTerrace framework: data safety and lifecycle edge cases, each a bug that once got through.
 
--- A harness with the framework loaded and a bare addon, not yet started. saved seeds TestDB.
-local function NewAddOn(saved, options)
-    local h = Harness.New({ saved = { TestDB = saved } })
+local Kit = use("framework")
 
-    h:LoadFiles("ByteTerrace_Core")
-    h.declared.TestDB = true
-    rawset(h.env, "TestDB", h.saved.TestDB)
-    local spec = { name = "TestApp", savedVariable = "TestDB", slash = { "/test" }, title = "Test AddOn" }
-
-    for key, value in pairs(options or {}) do
-        spec[key] = value
-    end
-    return h, h.env.ByteTerrace.NewAddOn(spec)
-end
-
-local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp", false)
-end
+local NewAddOn = Kit.NewAddOn
+local Start = Kit.Start
 
 test("mixed unit filters check secret tokens regardless of registration order and keep publishing", function()
     for _, unfilteredFirst in ipairs({ true, false }) do
@@ -62,7 +48,7 @@ test("mixed unit filters check secret tokens regardless of registration order an
 end)
 
 test("a module whose declaration fails partway keeps its saved rows and records", function()
-    local h, addon = NewAddOn({ ["Ledger.note"] = "kept", ["Ledger.people"] = { Bob = { deaths = 3 } } })
+    local h, addon = NewAddOn({ harness = { saved = { TestDB = { ["Ledger.note"] = "kept", ["Ledger.people"] = { Bob = { deaths = 3 } } } } } })
     local ok = pcall(addon.Module, addon, "Ledger", {
         records = { { fields = { { default = "oops", kind = "number", name = "deaths" } }, limit = 5, name = "people" } },
         state = { { default = "", kind = "string", name = "note" } },
@@ -240,7 +226,7 @@ test("trimming a collection far over its limit asks keep once per key", function
     for i = 1, 40 do
         people[("P%02d"):format(i)] = { seen = i }
     end
-    local h, addon = NewAddOn({ ["M.people"] = people })
+    local h, addon = NewAddOn({ harness = { saved = { TestDB = { ["M.people"] = people } } } })
     local asked = 0
 
     addon:Module("M", { records = { { evict = "seen",
@@ -366,7 +352,7 @@ end)
 
 test("a keep function that errors while a collection loads costs the addon nothing but that answer", function()
     local saved = { ["M.people"] = { a = { seen = 1 }, b = { seen = 2 }, c = { seen = 3 } } }
-    local h, addon = NewAddOn(saved)
+    local h, addon = NewAddOn({ harness = { saved = { TestDB = saved } } })
 
     addon:Module("M", { records = { { evict = "seen", fields = { { default = 0, kind = "number", name = "seen" } },
         keep = function() error("keep broke") end, limit = 2, name = "people" } },

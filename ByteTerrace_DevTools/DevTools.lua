@@ -166,13 +166,7 @@ end
 
 -- A set of contexts as text, sorted and joined by "; " (a context's restrictions hold commas).
 local function ContextList(contexts)
-    local list = {}
-
-    for context in pairs(contexts) do
-        list[#list + 1] = context
-    end
-    table.sort(list)
-    return table.concat(list, "; ")
+    return Probes.Joined(contexts, "; ")
 end
 
 local function RunProbes()

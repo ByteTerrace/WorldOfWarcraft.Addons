@@ -1,13 +1,10 @@
 -- Krew: party-only addon messages between friends, within Blizzard's rules.
 
-local Prefix = "TLKKrew1"
+local Kit = use("toolkit")
 
-local function Load(player)
-    local h = Harness.New(player)
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    return h, ns.Addon
-end
+local Card = Kit.Card
+local Load = Kit.Load
+local Prefix = Kit.Prefix
 
 local function Sent(h, kind)
     local count = 0
@@ -18,15 +15,6 @@ local function Sent(h, kind)
         end
     end
     return count
-end
-
-local function CardText(h)
-    local card = rawget(h.env, "TheLanKrewToolKitCard")
-
-    if not (card and card:IsShown()) then
-        return nil
-    end
-    return (Reveal(Harness.State(card.Title).text) .. "\n" .. Reveal(Harness.State(card.Body).text))
 end
 
 test("nothing is sent outside a group", function()
@@ -123,7 +111,7 @@ test("a late joiner learns the existing Krew and syncs their own marks and wars"
         end
         Relay()
     end
-    truthy((CardText(dana) or ""):find("Alice Doe, Cara Doe are running the toolkit too", 1, true))
+    truthy((Card(dana) or ""):find("Alice Doe, Cara Doe are running the toolkit too", 1, true))
     dana:Slash("/tlk krew")
     eq(dana.printed[#dana.printed]:match("The Krew: .*$"), "The Krew: Alice Doe (0.1.0), Cara Doe (0.1.0)")
     eq(Sent(dana, "MARKS"), 1, "the returning hello triggers one mark sync")
@@ -190,9 +178,9 @@ test("a Krew member's hello shows who's here, merged into one card", function()
     h:JoinGroup("party", { "Bob", "Cara" })
     h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0", "PARTY", "Bob")
     h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0", "PARTY", "Cara")
-    eq(CardText(h), nil, "waits a moment to gather everyone")
+    eq(Card(h), nil, "waits a moment to gather everyone")
     h:Advance(3)
-    truthy(CardText(h):find("Bob Doe, Cara Doe are running the toolkit too", 1, true), CardText(h))
+    truthy(Card(h):find("Bob Doe, Cara Doe are running the toolkit too", 1, true), Card(h))
 end)
 
 test("level-ups and flawless victories are shared; the Krew sees cards", function()
@@ -204,9 +192,9 @@ test("level-ups and flawless victories are shared; the Krew sees cards", functio
     h:Advance(2)
     eq(Sent(h, "DING:" .. h.player.level), 1)
     h:ReceiveAddonMessage(Prefix, "DING:20", "PARTY", "Bob")
-    truthy(CardText(h):find("Ding! Level", 1, true), "our own ding card is still up")
+    truthy(Card(h):find("Ding! Level", 1, true), "our own ding card is still up")
     h:Click(rawget(h.env, "TheLanKrewToolKitCard"))
-    truthy(CardText(h):find("Bob Doe hit level 20!", 1, true), CardText(h))
+    truthy(Card(h):find("Bob Doe hit level 20!", 1, true), Card(h))
     h:Click(rawget(h.env, "TheLanKrewToolKitCard"))
     local enemy = { canAttack = true, isPlayer = true, name = "Ann", playerControlled = true }
 
@@ -218,7 +206,7 @@ test("level-ups and flawless victories are shared; the Krew sees cards", functio
     h:Advance(2)
     eq(Sent(h, "FLAWLESS"), 1, "a flawless victory, once the fight ends")
     h:ReceiveAddonMessage(Prefix, "FLAWLESS", "PARTY", "Bob")
-    eq(CardText(h), "Flawless victory!\nBob Doe won a fight without taking a single hit.")
+    eq(Card(h), "Flawless victory!\nBob Doe won a fight without taking a single hit.")
 end)
 
 test("a flood of Krew cards is capped", function()
@@ -255,7 +243,7 @@ test("our own echoed messages and malformed or foreign messages are ignored", fu
     h:ReceiveAddonMessage(Prefix, "DING:banana", "PARTY", "Bob")
     h:ReceiveAddonMessage(Prefix, "DING:20", "WHISPER", "Bob")
     h:ReceiveAddonMessage(Prefix, "EXPLODE", "PARTY", "Bob")
-    eq(CardText(h), nil)
+    eq(Card(h), nil)
 end)
 
 test("nothing is sent during chat messaging lockdown; stale celebrations are dropped", function()
@@ -320,12 +308,12 @@ test("a card showing when combat starts steps aside until the fight ends", funct
 
     h:JoinGroup("party", { "Bob" })
     h:ReceiveAddonMessage(Prefix, "DING:20", "PARTY", "Bob")
-    truthy(CardText(h):find("Bob Doe hit level 20!", 1, true), CardText(h))
+    truthy(Card(h):find("Bob Doe hit level 20!", 1, true), Card(h))
     h:EnterCombat()
-    eq(CardText(h), nil, "hidden, and so not clickable, in the fight")
+    eq(Card(h), nil, "hidden, and so not clickable, in the fight")
     h:Advance(30)
     h:LeaveCombat()
-    truthy((CardText(h) or ""):find("Bob Doe hit level 20!", 1, true), "back at the front of the queue")
+    truthy((Card(h) or ""):find("Bob Doe hit level 20!", 1, true), "back at the front of the queue")
 end)
 
 test("someone who leaves the group leaves the Krew", function()
@@ -410,7 +398,7 @@ test("levels and stars from the Krew are whole numbers written in digits", funct
         "SCHOLAR:inf", "SCHOLAR:0x10", "SCHOLAR:1e300", "SCHOLAR:0" }) do
         h:ReceiveAddonMessage(Prefix, text, "PARTY", "Bob")
     end
-    eq(CardText(h), nil)
+    eq(Card(h), nil)
     h:ReceiveAddonMessage(Prefix, "SCHOLAR:3", "PARTY", "Bob")
-    truthy(CardText(h):find("That's 3 stars", 1, true), CardText(h))
+    truthy(Card(h):find("That's 3 stars", 1, true), Card(h))
 end)

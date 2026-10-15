@@ -325,25 +325,25 @@ function Harness:SetUnit(token, unit)
     self.units[token] = ((unit and FillUnit(unit)) or nil)
 end
 
+-- What ExpectErrors and ExpectBlocked declare: a count, or a list of Lua patterns.
+local function Expected(first, ...)
+    if type(first) == "number" then
+        return first
+    end
+    return { first, ... }
+end
+
 -- Declares the errors this test deliberately causes: a count (h:ExpectErrors(2)) or Lua patterns
 -- (h:ExpectErrors("did not settle", "boom")), each matching one reported error, in any order.
 function Harness:ExpectErrors(first, ...)
-    if type(first) == "number" then
-        self.expectedErrors = first
-    else
-        self.expectedErrors = { first, ... }
-    end
+    self.expectedErrors = Expected(first, ...)
 end
 
 -- Declares the protected calls this test deliberately has blocked or forbidden (h.blocked): a
 -- count or Lua patterns, like ExpectErrors. Any other blocked call fails the test, as the client
 -- would show the player its "blocked from an action" message.
 function Harness:ExpectBlocked(first, ...)
-    if type(first) == "number" then
-        self.expectedBlocked = first
-    else
-        self.expectedBlocked = { first, ... }
-    end
+    self.expectedBlocked = Expected(first, ...)
 end
 
 -- Nil when the entries are what `expected` (a count or patterns) allows, else a description.

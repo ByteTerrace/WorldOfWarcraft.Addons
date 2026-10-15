@@ -1,36 +1,10 @@
 -- Warband: the sighting alerts' budget. A brawl's alerts merge into one summary with one sound.
 
-local Prefix = "TLKKrew1"
+local Kit = use("toolkit")
 
--- A group with one friend, so Krew messages go out. Echo off: tests look at what we send.
-local function Grouped()
-    local h = Harness.New({ saved = {} })
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    h:JoinGroup("party", { "Mom" })
-    h:Echo(false)
-    h:Advance(2)
-    return h, ns.Addon
-end
-
-local function Enemy(name, extra)
-    local unit = { canAttack = true, classFile = "ROGUE", className = "Rogue", faction = "Alliance", isEnemy = true,
-        isPlayer = true, level = 60, name = name, playerControlled = true }
-
-    for key, value in pairs(extra or {}) do unit[key] = value end
-    return unit
-end
-
-local function Sent(h, kind)
-    local count = 0
-
-    for _, message in ipairs(h.addonMessages) do
-        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
-            count = (count + 1)
-        end
-    end
-    return count
-end
+local Enemy = Kit.Enemy
+local Grouped = Kit.Grouped
+local Sent = Kit.Sent
 
 local function Sounds(h, kit)
     local count = 0
@@ -62,7 +36,7 @@ test("five marked enemies at once: one alert now, one summary after, every name 
     eq(#h.raidNotices, 2, "the rest merge into one summary")
     eq(h.raidNotices[2].text, "|cffff20204 more marked for death nearby:|r Cara Doe, Dan Doe, Eve Doe, Finn Doe")
     eq(Sounds(h, h.env.SOUNDKIT.RAID_WARNING) - sounds, 2, "one sound each")
-    eq(Sent(h, "SIGHT"), 5, "the Krew hears of every one")
+    eq(#Sent(h, "SIGHT"), 5, "the Krew hears of every one")
 end)
 
 test("a summary lists marks, grudges, wars and champions in that order, with one sound", function()

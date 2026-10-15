@@ -658,6 +658,21 @@ local function Rally()
     Addon:Print("Rally call sent to the Krew.")
 end
 
+-- A command's run that acts on the subject its argument names (your target without one), then
+-- prints done (a format of the subject's key) when act says it changed anything.
+local function OnSubject(verb, act, done)
+    return function(arg)
+        local info = Subject(arg)
+
+        if not info then
+            return Usage(verb)
+        end
+        if act(info) then
+            Addon:Print(done:format(info.key))
+        end
+    end
+end
+
 Warband.Status, Warband.Score, Warband.Known, Warband.TakeFoe = Status, Score, Known, TakeFoe
 Warband.Describe, Warband.Subject, Warband.IdentifyNow = Describe, Subject, IdentifyNow
 Warband.Remember, Warband.CountDeath = Remember, CountDeath
@@ -669,16 +684,7 @@ Warband.SetKind, Warband.Avenge, Warband.HeardSighting, Warband.FreshGathering =
 WarbandModule = Addon:Module("Warband", {
     commands = {
         { label = "Mark your target (or a name) for death, with the Krew", name = "mark",
-            run = function(arg)
-                local info = Subject(arg)
-
-                if not info then
-                    return Usage("mark")
-                end
-                if Mark(info) then
-                    Addon:Print(info.key .. " is marked for death.")
-                end
-            end,
+            run = OnSubject("mark", Mark, "%s is marked for death."),
             slash = "mark" },
         { label = "Lift a mark for death", name = "unmark",
             run = function(arg)
@@ -696,28 +702,10 @@ WarbandModule = Addon:Module("Warband", {
             end,
             slash = "unmark" },
         { label = "Hold a grudge against your target (or a name)", name = "grudge",
-            run = function(arg)
-                local info = Subject(arg)
-
-                if not info then
-                    return Usage("grudge")
-                end
-                if HoldGrudge(info, false) then
-                    Addon:Print("The Krew holds a grudge against " .. info.key .. ".")
-                end
-            end,
+            run = OnSubject("grudge", function(info) return HoldGrudge(info, false) end, "The Krew holds a grudge against %s."),
             slash = "grudge" },
         { label = "Grant glory to your target (or a name): a champion the Krew aids", name = "glory",
-            run = function(arg)
-                local info = Subject(arg)
-
-                if not info then
-                    return Usage("glory")
-                end
-                if Glory(info) then
-                    Addon:Print(info.key .. " is a champion of the Krew.")
-                end
-            end,
+            run = OnSubject("glory", Glory, "%s is a champion of the Krew."),
             slash = "glory" },
         { label = "Remove someone from your ledger", name = "forgive",
             run = function(arg)

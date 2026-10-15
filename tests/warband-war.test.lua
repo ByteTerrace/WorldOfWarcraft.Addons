@@ -1,71 +1,18 @@
 -- Warband: guild wars, rivalry records, nameplate badges and the nearby-enemies window.
 
-local Prefix = "TLKKrew1"
+local Kit = use("toolkit")
 
-local function Load()
-    local h = Harness.New()
-    local ns = h:LoadAddon("TheLanKrewToolKit")
-
-    return h, ns.Addon
-end
-
-local function Grouped()
-    local h, addon = Load()
-
-    h:JoinGroup("party", { "Mom" })
-    h:Echo(false)
-    h:Advance(2)
-    return h, addon
-end
-
-local function Enemy(name, extra)
-    local unit = { canAttack = true, classFile = "ROGUE", className = "Rogue", faction = "Alliance", isEnemy = true,
-        isPlayer = true, level = 60, name = (name or "Bob"), playerControlled = true }
-
-    for key, value in pairs(extra or {}) do unit[key] = value end
-    return unit
-end
-
--- A player's key: Forever's full name (every test player's surname is the harness default).
-local function Key(_, name)
-    return (name .. " " .. Harness.DEFAULT_SURNAME)
-end
+local Card = Kit.Card
+local Enemy = Kit.Enemy
+local Grouped = Kit.Grouped
+local Key = Kit.Key
+local Load = Kit.Load
+local Notices = Kit.Notices
+local Receive = Kit.Receive
+local Sent = Kit.Sent
 
 local function Collection(addon, name)
     return addon.Modules.Warband.Records[name]
-end
-
-local function Sent(h, kind)
-    local found = {}
-
-    for _, message in ipairs(h.addonMessages) do
-        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
-            found[#found + 1] = message.message
-        end
-    end
-    return found
-end
-
-local function Receive(h, sender, kind, ...)
-    h:ReceiveAddonMessage(Prefix, kind .. ":" .. table.concat({ ... }, "\t"), "PARTY", sender)
-end
-
-local function Notices(h)
-    local texts = {}
-
-    for _, notice in ipairs(h.raidNotices) do
-        texts[#texts + 1] = notice.text
-    end
-    return table.concat(texts, "\n")
-end
-
-local function Card(h)
-    local card = rawget(h.env, "TheLanKrewToolKitCard")
-
-    if not (card and card:IsShown()) then
-        return nil
-    end
-    return (Reveal(Harness.State(card.Title).text) .. "\n" .. Reveal(Harness.State(card.Body).text)), card
 end
 
 test("war on your target's guild makes every member an enemy of the Krew, and tells the Krew", function()

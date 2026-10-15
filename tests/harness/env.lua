@@ -139,6 +139,14 @@ function Harness:BuildEnvironment()
         end
         return unit[name]
     end
+    -- A unit's amount from one of its power tables (power or powerMax), of powerType or else its
+    -- primary power type. A unit without power has none.
+    local function Power(token, field, powerType)
+        local unit = Unit(token)
+
+        if not unit then return 0 end
+        return ((unit[field] or {})[powerType or unit.powerType or 0] or 0)
+    end
     local function Handle(entry)
         local handle = {}
 
@@ -307,23 +315,13 @@ function Harness:BuildEnvironment()
 
             return powerType, (PowerTokens[powerType] or "MANA")
         end,
-        UnitPower = function(u, powerType)
-            local unit = Unit(u)
-
-            if not unit then return 0 end
-            return ((unit.power or {})[powerType or unit.powerType or 0] or 0) -- a unit without power has none
-        end,
+        UnitPower = function(u, powerType) return Power(u, "power", powerType) end,
         GetComboPoints = function(u, target)
             local unit = ((u == "player") and Unit(target))
 
             return ((unit and unit.comboPoints) or 0)
         end,
-        UnitPowerMax = function(u, powerType)
-            local unit = Unit(u)
-
-            if not unit then return 0 end
-            return ((unit.powerMax or {})[powerType or unit.powerType or 0] or 0)
-        end,
+        UnitPowerMax = function(u, powerType) return Power(u, "powerMax", powerType) end,
 
         -- Zones.
         GetRealZoneText = function() return h.zone end,

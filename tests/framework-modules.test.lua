@@ -1,28 +1,11 @@
 -- ByteTerrace framework: what a module owns beyond handlers and watchers (timers, rising counts,
 -- demand dependencies, group messages, sounds), names, slash registration and the debug command.
 
--- A harness with the framework loaded and a bare addon, not yet started.
-local function NewAddOn(options)
-    local h = Harness.New()
+local Kit = use("framework")
 
-    h:LoadFiles("ByteTerrace_Core")
-    h.declared.TestDB = true
-    rawset(h.env, "TestDB", h.saved.TestDB)
-    local spec = { name = "TestApp", savedVariable = "TestDB", slash = { "/test" }, title = "Test AddOn", version = "1.0" }
-
-    for key, value in pairs(options or {}) do
-        spec[key] = value
-    end
-    return h, h.env.ByteTerrace.NewAddOn(spec)
-end
-
-local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp", false)
-end
-
-local function Printed(h)
-    return table.concat(h.printed, "\n")
-end
+local NewAddOn = Kit.NewAddOn
+local Printed = Kit.Printed
+local Start = Kit.Start
 
 test("a module's timer runs its callback as one state batch", function()
     local h, addon = NewAddOn()

@@ -12,7 +12,8 @@ local addonName, ns = ...
 --     to draw, and the frame is then hidden.
 --
 -- It also defines ns.ScholarStyle, the look the whole Scholar screen shares: { Palette, Solid,
--- Border, StarIcon, WrongIcon, Backdrop(frame, edgeSize), TextColor(fontString, color) }. This file
+-- Border, StarIcon, WrongIcon, Backdrop(frame, edgeSize), BackdropColors(frame, fill, edge),
+-- TextColor(fontString, color) }. This file
 -- loads before ScholarView.lua, which reads it.
 
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
@@ -22,7 +23,13 @@ local Palette = {
     bad = { 1, 0.4, 0.35 },
     band = { 0.2, 0.15, 0.09 },
     button = { 0.2, 0.15, 0.09 },
+    card = { 0.16, 0.12, 0.06 },
+    dimEdge = { 0.28, 0.23, 0.14 },
     edge = { 0.45, 0.36, 0.17 },
+    feedback = { 0.17, 0.13, 0.05 },
+    feedbackEdge = { 0.48, 0.38, 0.13 },
+    feedbackGood = { 0.07, 0.19, 0.09 },
+    feedbackGoodEdge = { 0.2, 0.5, 0.26 },
     gold = { 1, 0.82, 0 },
     good = { 0.35, 0.95, 0.45 },
     ink = { 0.16, 0.11, 0.05 },
@@ -31,12 +38,15 @@ local Palette = {
     math = { 0.42, 0.77, 1 },
     muted = { 0.62, 0.59, 0.54 },
     panel = { 0.08, 0.06, 0.04 },
+    pill = { 0.14, 0.1, 0.05 },
     quest = { 1, 0.76, 0.3 },
     question = { 1, 1, 1 },
     reading = { 0.5, 0.88, 0.48 },
+    rightFill = { 0.08, 0.26, 0.1 },
     story = { 0.88, 0.85, 0.79 },
     streak = { 1, 0.7, 0.28 },
     tile = { 0.93, 0.86, 0.68 },
+    wrongFill = { 0.24, 0.07, 0.06 },
 }
 local Solid = "Interface\\Buttons\\WHITE8X8"
 local StarIcon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1"
@@ -71,6 +81,20 @@ local function Backdrop(frame, edgeSize)
         insets = { bottom = 3, left = 3, right = 3, top = 3 } })
 end
 
+--- Colors frame's backdrop with palette colors, { r, g, b }: fill (opaque) and edge. A nil one
+--- stays as it is.
+---@param frame table
+---@param fill table?
+---@param edge table?
+local function BackdropColors(frame, fill, edge)
+    if fill then
+        frame:SetBackdropColor(fill[1], fill[2], fill[3], 1)
+    end
+    if edge then
+        frame:SetBackdropBorderColor(edge[1], edge[2], edge[3])
+    end
+end
+
 --- Colors fontString with a palette color, { r, g, b }.
 ---@param fontString table
 ---@param color table
@@ -99,8 +123,7 @@ local function PictureCard(pictures, index)
     if not card then
         card = CreateFrame("Frame", nil, pictures, "BackdropTemplate")
         Backdrop(card, 10)
-        card:SetBackdropColor(0.16, 0.12, 0.06, 1)
-        card:SetBackdropBorderColor(Palette.edge[1], Palette.edge[2], Palette.edge[3])
+        BackdropColors(card, Palette.card, Palette.edge)
         pictures.Cards[index] = card
     end
     return card
@@ -138,8 +161,7 @@ local function DrawTiles(pictures, tiles)
             tile = CreateFrame("Frame", nil, pictures, "BackdropTemplate")
             tile:SetSize(TileSize, TileSize + 4)
             Backdrop(tile, 10)
-            tile:SetBackdropColor(Palette.tile[1], Palette.tile[2], Palette.tile[3], 1)
-            tile:SetBackdropBorderColor(Palette.edge[1], Palette.edge[2], Palette.edge[3])
+            BackdropColors(tile, Palette.tile, Palette.edge)
             tile.Letter = tile:CreateFontString(nil, "OVERLAY", "Game24Font")
             tile.Letter:SetPoint("CENTER", 0, 1)
             TextColor(tile.Letter, Palette.ink)
@@ -237,6 +259,6 @@ end
 ScholarPictures.Draw = Draw
 
 ns.ScholarStyle = {
-    Backdrop = Backdrop, Border = Border, Palette = Palette, Solid = Solid, StarIcon = StarIcon, TextColor = TextColor,
+    Backdrop = Backdrop, BackdropColors = BackdropColors, Border = Border, Palette = Palette, Solid = Solid, StarIcon = StarIcon, TextColor = TextColor,
     WrongIcon = WrongIcon,
 }

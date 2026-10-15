@@ -1,23 +1,9 @@
 -- The harness's fidelity rules for units (tests/harness/units.lua): enemy players, nameplates,
 -- mouseover, death, raid target icons, GUIDs and realms.
 
-local function Watch(h, ...)
-    local seen = {}
-    local frame = h.env.CreateFrame("Frame")
+local Kit = use("harness")
 
-    for _, event in ipairs({ ... }) do
-        frame:RegisterEvent(event)
-    end
-    frame:SetScript("OnEvent", function(_, event, ...)
-        local parts = { event }
-
-        for i = 1, select("#", ...) do
-            parts[#parts + 1] = tostring(Reveal((select(i, ...))))
-        end
-        seen[#seen + 1] = table.concat(parts, ":")
-    end)
-    return seen
-end
+local Watch = Kit.Watch
 
 local function EnemyPlayer(fields)
     local unit = { canAttack = true, classFile = "ROGUE", faction = "Alliance", isPlayer = true, level = 60,

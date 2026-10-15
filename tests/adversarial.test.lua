@@ -1,5 +1,9 @@
 -- Framework boundaries under reentrant callbacks, failed startup and malformed messages.
 
+local Kit = use("framework")
+
+local Start = Kit.Start
+
 local function NewAddOn()
     local h = Harness.New()
 
@@ -8,10 +12,6 @@ local function NewAddOn()
     local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", slash = { "/test" } })
 
     return h, addon
-end
-
-local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp", false)
 end
 
 test("record replacement publishes only the complete collection", function()

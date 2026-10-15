@@ -1,34 +1,10 @@
 -- ByteTerrace framework: module declarations and activation, per-character scope, row locks and records.
 
--- A harness with the framework loaded and a bare addon, not yet started.
-local function NewAddOn(options)
-    local h = Harness.New(options and options.harness)
+local Kit = use("framework")
 
-    h:LoadFiles("ByteTerrace_Core")
-    h.declared.TestDB = true
-    rawset(h.env, "TestDB", h.saved.TestDB)
-    local spec = { name = "TestApp", savedVariable = "TestDB", slash = { "/test" }, title = "Test AddOn", version = "1.0" }
-
-    for key, value in pairs(options or {}) do
-        if key ~= "harness" then spec[key] = value end
-    end
-    local addon = h.env.ByteTerrace.NewAddOn(spec)
-
-    return h, addon
-end
-
-local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp", false)
-end
-
--- Starts an addon whose declarations are invalid. Compile refuses; the refusal reaches the error
--- handler (the ADDON_LOADED dispatch isolates it) and the addon never starts.
-local function StartRefused(h, addon)
-    h:ExpectErrors(1)
-    Start(h)
-    falsy(addon.Started, "addon must not start")
-    return (h.errors[1] or "")
-end
+local NewAddOn = Kit.NewAddOn
+local Start = Kit.Start
+local StartRefused = Kit.StartRefused
 
 test("a module with an active rule runs only while the rule holds", function()
     local h, addon = NewAddOn()

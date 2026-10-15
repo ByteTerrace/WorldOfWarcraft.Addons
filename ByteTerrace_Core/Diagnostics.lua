@@ -7,6 +7,11 @@
 --                       errors SafeCall has caught.
 --   debug events        each registered event with its dispatches since load (or reset), its
 --                       handlers and its unit filter, busiest first; then publishes and watcher runs.
+--   debug work          each module's work since load (or reset), busiest first: its event
+--                       handler calls, timer callbacks, state-change callbacks, commands, message
+--                       deliveries and deferred actions; "addon" is what the framework ran for no
+--                       module (built-in commands, module switching). While profiling, also the
+--                       time each module's callbacks took.
 --   debug rows <text>   every row whose name contains text (runtime rows too): value and version.
 --   debug trace <text>  prints each published change of the rows whose names contain text, until
 --                       debug trace off. Untraced rows cost nothing.
@@ -14,12 +19,23 @@
 --                       session, peak, encounter), its share of the game's time, the frames it took
 --                       over 1 to 100 ms, and its memory. Blizzard's AddOn list shows the same.
 --                       The framework's own work counts under ByteTerrace_Core, shown after it.
---   debug reset         zeroes the event, publish and watcher counts.
+--   debug profile       toggles profiling: from then on each dispatched callback is timed with
+--                       debugprofilestop and its time added to its module's work. Times start at
+--                       zero; a callback's time includes what it runs synchronously (a message
+--                       listener's time is inside the transport's event handler too). Off by
+--                       default, and while off nothing is timed.
+--   debug reset         zeroes the event, publish, watcher and work counts.
 --
--- The counts it reads are always kept: an integer increment per dispatch and per publish.
+-- The counts it reads are always kept: an integer increment per dispatch and per publish, and a
+-- field increment on the work record the dispatched handler, watcher, timer or command holds.
 
 local MaxLines = 40
 local CoreName = "ByteTerrace_Core" -- the framework's addon: its dispatch and publishes are counted there
+-- A work record's counts (Core.lua) in report order, with the word for one.
+local WorkKinds = {
+    { "events", "event" }, { "timers", "timer" }, { "changes", "change" }, { "commands", "command" },
+    { "messages", "message" }, { "actions", "action" },
+}
 
 local ByteTerrace = ByteTerrace
 local C_AddOnProfiler, Enum, GetAddOnMemoryUsage = C_AddOnProfiler, Enum, GetAddOnMemoryUsage
@@ -109,6 +125,80 @@ local function EventsReport(addon)
     print(("  %d publishes, %d watcher runs."):format(stateCounts.publishes, stateCounts.watchers))
 end
 
+-- Every work record: [name] = work, "addon" for the addon's own.
+local function WorkRecords(addon)
+    local records = { addon = addon.Work }
+    for name, module in pairs(addon.Modules) do
+        records[name] = module.Work
+    end
+    return records
+end
+
+local function WorkTotal(work)
+    local total = 0
+    for _, kind in ipairs(WorkKinds) do
+        total = total + work[kind[1]]
+    end
+    return total
+end
+
+local function WorkReport(addon)
+    local records, names, totals, idle = WorkRecords(addon), {}, {}, {}
+    for name, work in pairs(records) do
+        totals[name] = WorkTotal(work)
+        if totals[name] > 0 then
+            names[#names + 1] = name
+        else
+            idle[#idle + 1] = name
+        end
+    end
+    sort(names, function(a, b)
+        if totals[a] ~= totals[b] then
+            return totals[a] > totals[b]
+        end
+        return a < b
+    end)
+    sort(idle)
+    local profiling = addon.Profiling
+    addon:Print(("Work since load or reset, busiest first%s:"):format(profiling and "; time while profiling" or ""))
+    for i, name in ipairs(names) do
+        if i > MaxLines then
+            print(("  ... and %d more"):format(#names - MaxLines))
+            break
+        end
+        local work, parts = records[name], {}
+        for _, kind in ipairs(WorkKinds) do
+            if work[kind[1]] > 0 then
+                parts[#parts + 1] = Plural(work[kind[1]], kind[2])
+            end
+        end
+        local time = profiling and (", %.3f ms"):format(work.time) or ""
+        print(("  %s: %d (%s)%s"):format(name, totals[name], concat(parts, ", "), time))
+    end
+    if #idle > 0 then
+        print("  No work: " .. concat(idle, ", "))
+    end
+end
+
+-- Turns profiling on (every work record's time from zero) or off.
+local function Profile(addon)
+    local on = not addon.Profiling
+    if on then
+        for _, work in pairs(WorkRecords(addon)) do
+            work.time = 0
+        end
+    end
+    addon.Profiling = on
+    addon.Events:SetProfiling(on)
+    if not on then
+        addon:Print("Profiling off.")
+        return
+    end
+    local slash = addon.Slash and addon.Slash[1] or ""
+    addon:Print(("Profiling on: %s debug work shows each module's time. Turn it off with %s debug profile.")
+        :format(slash, slash))
+end
+
 local function Rows(addon, text)
     local state = addon.State
     local ids = MatchingRows(state, text)
@@ -187,20 +277,30 @@ function AddOn:DebugCommand(arg)
         Status(self)
     elseif word == "events" then
         EventsReport(self)
+    elseif word == "work" then
+        WorkReport(self)
     elseif word == "rows" and rest ~= "" then
         Rows(self, rest)
     elseif word == "trace" and rest ~= "" then
         Trace(self, rest:lower() == "off" and "off" or rest)
     elseif word == "cpu" then
         Cpu(self)
+    elseif word == "profile" then
+        Profile(self)
     elseif word == "reset" then
         local counts = self.State.Counts
         counts.publishes, counts.watchers = 0, 0
         for event in pairs(self.Events.Counts) do
             self.Events.Counts[event] = nil
         end
+        for _, work in pairs(WorkRecords(self)) do
+            for key in pairs(work) do
+                work[key] = 0
+            end
+        end
         self:Print("Counts reset.")
     else
-        self:Print("Usage: " .. (self.Slash and self.Slash[1] or "") .. " debug [status | events | rows <text> | trace <text> | trace off | cpu | reset]")
+        local usage = "Usage: %s debug [status | events | work | rows <text> | trace <text> | trace off | cpu | profile | reset]"
+        self:Print(usage:format(self.Slash and self.Slash[1] or ""))
     end
 end

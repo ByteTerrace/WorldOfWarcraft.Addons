@@ -212,6 +212,7 @@ function Harness.New(player)
     player = player or {}
     local h = setmetatable({}, Harness)
     h.time = 0                -- GetTime()
+    h.workTime = 0            -- ms the current frame's work has taken: debugprofilestop() adds it to h.time
     h.serverTime = Harness.SERVER_EPOCH -- GetServerTime(), time()
     h.inCombat = false        -- the player is in combat (mirrors restrictions.Combat)
     h.lockdown = false        -- InCombatLockdown()

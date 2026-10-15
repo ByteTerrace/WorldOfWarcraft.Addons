@@ -122,10 +122,12 @@ The built-in `debug` command shows what an addon is doing on a player's machine:
 - `debug` toggles debug output (`AddOn:Debug` lines in chat).
 - `debug status`: modules running and stopped (demand modules with their users), events registered, watchers, pending timers, records, queued messages, and the errors `SafeCall` has caught.
 - `debug events`: each registered event with its dispatches, handlers and unit filter, busiest first; then publishes and watcher runs.
+- `debug work`: each module's work since load or reset, busiest first: event handler calls, timer callbacks, state-change callbacks (watchers and rules), commands, message deliveries and deferred actions. `addon` is what the framework ran for no module (built-in commands, starting and stopping modules). While profiling, each line also shows the milliseconds that module's callbacks took.
 - `debug rows <text>`: every row whose name contains the text, runtime rows included, with value and version.
 - `debug trace <text>` prints each published change of the matching rows until `debug trace off`. Untraced rows cost nothing.
 - `debug cpu`: the client's addon profiler for this addon (time per frame recent, session, peak and in encounters, its share of the game's time as Blizzard's AddOn list computes it, frames over 1 to 100 ms) and its memory.
-- `debug reset` zeroes the counts. The counts are always kept: an integer increment per dispatch and per publish.
+- `debug profile` toggles profiling, off by default. While it's on, each dispatched callback is timed with `debugprofilestop` and its time is added to its module, starting from zero. A callback's time includes what it runs synchronously, so a message listener's time also counts in the transport's event handler. While it's off, nothing is timed, and the event dispatcher is exactly the counting one.
+- `debug reset` zeroes the counts. The counts are always kept: an integer increment per dispatch and per publish, and a field increment on the work record each handler, watcher, timer, command and listener holds (no allocation; the tests prove it).
 
 ## Secret values
 

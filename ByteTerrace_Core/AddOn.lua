@@ -34,17 +34,19 @@
 -- order, and addon.debug closes it under an "Advanced" header.
 --
 -- Built-in commands: bare slash (the settings window, SettingsWindow.lua), help, version,
--- debug [status | events | rows | trace | cpu | reset] (Diagnostics.lua), set <row> <value>,
--- toggle <row>.
+-- debug [status | events | work | rows | trace | cpu | profile | reset] (Diagnostics.lua),
+-- set <row> <value>, toggle <row>.
 --
 -- Public members: Name, Title, Version, Slash, State, Events, Commands, Input, SettingsWindow,
--- Modules ([name] = Module, Module.lua) and Started.
+-- Modules ([name] = Module, Module.lua), Started, Work (the work record of what the framework
+-- runs for no module: built-in commands, module switching; Core.lua) and Profiling (whether
+-- dispatches are timed, debug profile).
 
 -- Module and row names are identifiers: "." separates a module from its row, so it can't appear in either.
 local NamePattern = "^%a[%w_]*$"
 
 local ByteTerrace = ByteTerrace
-local Report, SafeCall = ByteTerrace.Report, ByteTerrace.SafeCall
+local Report, SafeCall, TimedCall = ByteTerrace.Report, ByteTerrace.SafeCall, ByteTerrace.TimedCall
 local ipairs, pairs, print, tonumber, tostring, type = ipairs, pairs, print, tonumber, tostring, type
 
 local AddOn = {}
@@ -105,6 +107,8 @@ function ByteTerrace.NewAddOn(options)
         Slash = options.slash,
         Modules = {},
         Started = false,
+        Work = ByteTerrace.NewWork(),
+        Profiling = false,
         m_savedVariable = options.savedVariable,
         m_savedVariablePerCharacter = options.savedVariablePerCharacter,
         m_moduleOrder = {},
@@ -379,6 +383,25 @@ function AddOn:Batch(fn, ...)
     return ok
 end
 
+--- Batch for work the framework runs on a module's behalf (timers, commands, deferred actions):
+--- while profiling, fn's time, not the publish after it, adds to work.time. The caller counts
+--- the run in work's field for its kind.
+---@param work table a work record (Core.lua)
+---@param fn function
+---@return boolean ok false when fn errored (the error reaches the error handler)
+function AddOn:Run(work, fn, ...)
+    local state = self.State
+    state:BeginBatch()
+    local ok
+    if self.Profiling then
+        ok = TimedCall(work, fn, ...)
+    else
+        ok = SafeCall(fn, ...)
+    end
+    state:EndBatch()
+    return ok
+end
+
 --- Prints to chat behind the addon's colored title.
 function AddOn:Print(...)
     print(self.m_prefix, ...)
@@ -469,7 +492,7 @@ function AddOn:DefineBuiltinCommands()
     })
     commands:Define({
         name = "addon.debug", slash = "debug",
-        label = "Toggle debug output, or inspect: debug status | events | rows <text> | trace <text> | trace off | cpu | reset",
+        label = "Toggle debug output, or inspect: debug status | events | work | rows | trace | cpu | profile | reset",
         run = function(arg) self:DebugCommand(arg) end,
     })
     commands:Define({

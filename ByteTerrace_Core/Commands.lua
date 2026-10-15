@@ -7,8 +7,9 @@
 --   Run(ref, arg, phase, source)
 --                 ref is an id (hot path) or a name. phase defaults to "down"; a command that
 --                 isn't held ignores other phases. Each run is one state batch, so a command that
---                 writes several rows publishes once. Returns false for an unknown command or a
---                 stopped module or run that errored (the error reaches the error handler).
+--                 writes several rows publishes once, and counts in its module's work record
+--                 (the addon's own for built-in commands). Returns false for an unknown command
+--                 or a stopped module or run that errored (the error reaches the error handler).
 --
 -- After compile, Ids maps each name to its id (Input.lua resolves bindings through it).
 --
@@ -38,6 +39,7 @@ function Commands:Define(spec)
     for key, value in pairs(spec) do
         own[key] = value
     end
+    own.work = spec.module and spec.module.Work or self.m_addon.Work
     self.m_declared[spec.name] = own
 end
 
@@ -106,7 +108,9 @@ function Commands:Run(ref, arg, phase, source)
         end
         return false
     end
-    return addon:Batch(spec.run, arg, phase, source)
+    local work = spec.work
+    work.commands = work.commands + 1
+    return addon:Run(work, spec.run, arg, phase, source)
 end
 
 --- The slash driver: "<word> <rest>" runs the command whose slash word matches, with rest as arg.

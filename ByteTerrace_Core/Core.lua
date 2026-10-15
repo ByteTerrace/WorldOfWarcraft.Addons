@@ -26,10 +26,15 @@
 -- refused start.
 --
 -- This file loads first and exports the helpers every other file uses: SortedKeys, Report,
--- SafeCall and Refuse. ByteTerrace.Errors counts the errors SafeCall has caught since load, in
--- every ByteTerrace addon (debug status shows it).
+-- SafeCall, TimedCall, NewWork and Refuse. ByteTerrace.Errors counts the errors SafeCall has
+-- caught since load, in every ByteTerrace addon (debug status shows it).
+--
+-- A work record counts what the framework ran for one module, or for the addon itself: event
+-- handler calls, timer callbacks, state-change callbacks, commands, message deliveries and
+-- deferred actions, and the milliseconds they took while profiling is on (debug work and debug
+-- profile, Diagnostics.lua). The dispatcher running a callback increments its owner's field.
 
-local geterrorhandler, xpcall = geterrorhandler, xpcall
+local debugprofilestop, geterrorhandler, xpcall = debugprofilestop, geterrorhandler, xpcall
 local pairs, sort = pairs, table.sort
 
 ByteTerrace = { Errors = 0 }
@@ -67,6 +72,25 @@ end
 ---@return boolean ok true when fn returned without an error
 function ByteTerrace.SafeCall(fn, ...)
     return xpcall(fn, OnError, ...)
+end
+
+--- Calls fn(...) like SafeCall and adds its run time to work.time, in milliseconds. Dispatchers
+--- call it in place of SafeCall only while profiling is on. It never calls debugprofilestart,
+--- which would reset the clock every addon's timing reads.
+---@param work table a work record (NewWork)
+---@param fn function
+---@return boolean ok true when fn returned without an error
+function ByteTerrace.TimedCall(work, fn, ...)
+    local start = debugprofilestop()
+    local ok = xpcall(fn, OnError, ...)
+    work.time = work.time + debugprofilestop() - start
+    return ok
+end
+
+--- A work record with every count at zero (see the file header).
+---@return table
+function ByteTerrace.NewWork()
+    return { events = 0, timers = 0, changes = 0, commands = 0, messages = 0, actions = 0, time = 0 }
 end
 
 --- Raises every problem at once, so a bad declaration reports all of its mistakes in one pass.

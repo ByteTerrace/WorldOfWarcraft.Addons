@@ -3,10 +3,12 @@
 --
 --   Send(kind, fields, urgent)  queues "KIND" or "KIND:field<tab>field..." for the group.
 --   Ready()                     whether a message sent now would go out.
---   Listen(kind, fn)            fn(sender, fields) for each valid message of kind; sender is the
+--   Listen(kind, fn, work)      fn(sender, fields) for each valid message of kind; sender is the
 --                               sender's full name ("First Last", Names.lua) and fields an array
---                               of strings. Returns a handle for Unlisten; feature code uses
---                               module:Listen(comms, kind, fn) in OnEnable for automatic teardown.
+--                               of strings. Each delivery counts in work (the listening module's;
+--                               this module's by default). Returns a handle for Unlisten; feature
+--                               code uses module:Listen(comms, kind, fn) in OnEnable for automatic
+--                               teardown.
 --
 -- Nothing is sent or received while the module is stopped: its handler and pending send go with
 -- it, and the queue empties. CHAT_MSG_ADDON is registered only while you're in a group, since
@@ -48,7 +50,7 @@ local ChatRestrictions = {
 }
 
 local ByteTerrace = ByteTerrace
-local Report, SafeCall = ByteTerrace.Report, ByteTerrace.SafeCall
+local Report, SafeCall, TimedCall = ByteTerrace.Report, ByteTerrace.SafeCall, ByteTerrace.TimedCall
 local Names = ByteTerrace.Names
 local C_ChatInfo, Enum, GetTime = C_ChatInfo, Enum, GetTime
 local IsInGroup, IsInRaid, LE_PARTY_CATEGORY_INSTANCE = IsInGroup, IsInRaid, LE_PARTY_CATEGORY_INSTANCE
@@ -225,13 +227,20 @@ function Comms:Open()
         local kind, fields = Parse(text)
         local list = kind and listeners[kind]
         if list then
+            local profiling = module.Addon.Profiling
             for i = 1, #list do
                 if not self.m_open or self.m_session ~= session then
                     break
                 end
                 local handle = list[i]
                 if not handle.dead then
-                    SafeCall(handle.fn, name, fields)
+                    local work = handle.work
+                    work.messages = work.messages + 1
+                    if profiling then
+                        TimedCall(work, handle.fn, name, fields)
+                    else
+                        SafeCall(handle.fn, name, fields)
+                    end
                 end
             end
         end
@@ -342,8 +351,9 @@ end
 --- own the subscription. New listeners begin with the next delivery.
 ---@param kind string
 ---@param fn fun(sender: string, fields: string[])
+---@param work table? the work record its deliveries count in (Core.lua); this module's by default
 ---@return table handle for Unlisten
-function Comms:Listen(kind, fn)
+function Comms:Listen(kind, fn, work)
     if not ValidKind(kind) or type(fn) ~= "function" then
         error("Listen needs an uppercase message kind and a function", 2)
     end
@@ -352,7 +362,7 @@ function Comms:Listen(kind, fn)
     for i = 1, #(list or {}) do
         copy[i] = list[i]
     end
-    local handle = { kind = kind, fn = fn }
+    local handle = { kind = kind, fn = fn, work = work or self.m_module.Work }
     copy[#copy + 1] = handle
     self.m_listeners[kind] = copy
     return handle

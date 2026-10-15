@@ -23,7 +23,9 @@
 --   Get / Set / Toggle   by id (hot paths) or name (boundaries). Every write is validated: kind,
 --                        enum, bounds, step, finiteness, and never a secret value, since rules
 --                        compute over rows.
---   Watch / Rule         run after a publish in which one of their rows changed.
+--   Watch / Rule         run after a publish in which one of their rows changed. Each run counts
+--                        as a change in the watcher's work record (a module's Work; the addon's
+--                        own by default), timed while the addon's Profiling is on.
 --   BeginBatch/EndBatch  bracket a batch; the outermost EndBatch publishes.
 --
 -- After compile, hot paths read state.Values[id] directly; Ids, Specs and Order (names in
@@ -47,7 +49,7 @@ local Kinds = { boolean = true, number = true, string = true }
 
 local ByteTerrace = ByteTerrace
 local Report, Refuse = ByteTerrace.Report, ByteTerrace.Refuse
-local SafeCall, SortedKeys = ByteTerrace.SafeCall, ByteTerrace.SortedKeys
+local SafeCall, SortedKeys, TimedCall = ByteTerrace.SafeCall, ByteTerrace.SortedKeys, ByteTerrace.TimedCall
 local issecretvalue = issecretvalue
 local ipairs, pairs, tostring, type = ipairs, pairs, tostring, type
 local concat, remove, sort = table.concat, table.remove, table.sort
@@ -244,6 +246,18 @@ local function Settle(self, list, stamp)
     return count
 end
 
+-- Runs a watcher once, counted (and, while profiling, timed) in its work record. Publish inlines
+-- the same for its rounds.
+local function RunWatcher(self, watcher)
+    local work = watcher.work
+    work.changes = work.changes + 1
+    if self.m_addon.Profiling then
+        TimedCall(work, watcher.fn, self)
+    else
+        SafeCall(watcher.fn, self)
+    end
+end
+
 -- Gives the rules registered since the last pass (by the batch, or by a watcher) their first
 -- verdict, from the state as it stands. A rule one of them registers waits for the next pass.
 local function TakeVerdicts(self)
@@ -253,7 +267,7 @@ local function TakeVerdicts(self)
         local watcher = deferred[i]
         deferred[i] = nil
         if watcher.active then
-            SafeCall(watcher.fn, self)
+            RunWatcher(self, watcher)
         end
     end
 end
@@ -295,11 +309,18 @@ local function Publish(self)
         local count = Settle(self, list, self.m_stamp)
         SortScheduled(scheduled, count)
         counts.watchers = counts.watchers + count
+        local profiling = self.m_addon.Profiling
         for i = 1, count do
             local watcher = scheduled[i]
             scheduled[i] = nil
             if watcher.active then
-                SafeCall(watcher.fn, self)
+                local work = watcher.work
+                work.changes = work.changes + 1
+                if profiling then
+                    TimedCall(work, watcher.fn, self)
+                else
+                    SafeCall(watcher.fn, self)
+                end
             end
         end
     end
@@ -347,9 +368,9 @@ end
 
 -- Registers a watcher. Inside a batch, rows the batch already touched get this watcher's own
 -- baseline (their current value), so it never reacts to writes made before it registered.
-local function Register(self, ids, fn)
+local function Register(self, ids, fn, work)
     self.m_seq = self.m_seq + 1
-    local watcher = { ids = ids, fn = fn, active = true, stamp = 0, seq = self.m_seq }
+    local watcher = { ids = ids, fn = fn, work = work or self.m_addon.Work, active = true, stamp = 0, seq = self.m_seq }
     for _, id in ipairs(ids) do
         local watchers = self.m_watchersByRow[id]
         if not watchers then
@@ -398,6 +419,11 @@ State.Admits = Admits
 ---@param spec table
 ---@param problems string[]
 State.Prepare = Validate
+
+--- Runs a watcher now, as a publish would: counted as a change in its work record, and timed
+--- while profiling. Module:Watch takes its first reading through it.
+---@param watcher table from Watch or Rule
+State.Run = RunWatcher
 
 --- Creates an addon's state, empty and uncompiled.
 ---@param addon table the owning AddOn, for its name in messages
@@ -621,11 +647,12 @@ end
 ---@param rows (integer|string)[]
 ---@param fn fun(state: table)
 ---@param skipInitial boolean?
+---@param work table? the work record its runs count in (Core.lua); the addon's own by default
 ---@return table watcher for Unwatch
-function State:Watch(rows, fn, skipInitial)
-    local watcher = Register(self, ResolveIds(self, rows), fn)
+function State:Watch(rows, fn, skipInitial, work)
+    local watcher = Register(self, ResolveIds(self, rows), fn, work)
     if not skipInitial then
-        SafeCall(fn, self)
+        RunWatcher(self, watcher)
     end
     return watcher
 end
@@ -674,7 +701,7 @@ end
 --- A verdict over rows. changed runs whenever the verdict flips; with spec.initial it also runs
 --- once with the first verdict. Registered inside a batch, the first verdict is taken when the
 --- batch publishes.
----@param spec table { reads, when(state) -> boolean, changed(active, state), initial? }
+---@param spec table { reads, when(state) -> boolean, changed(active, state), initial?, work? (as for Watch) }
 ---@return table watcher for Unwatch
 function State:Rule(spec)
     local verdict
@@ -690,11 +717,11 @@ function State:Rule(spec)
             verdict = now
             changed(now, state)
         end
-    end)
+    end, spec.work)
     if self.m_batchDepth > 0 then
         self.m_deferred[#self.m_deferred + 1] = watcher
     else
-        SafeCall(watcher.fn, self)
+        RunWatcher(self, watcher)
     end
     return watcher
 end

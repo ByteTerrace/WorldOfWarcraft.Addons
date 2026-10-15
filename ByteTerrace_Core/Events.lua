@@ -1,7 +1,9 @@
 -- Events: one dispatcher frame per addon.
 --
---   On(event, fn, unit)  fn(...) receives the event payload. With unit, only that unit's events
---                        arrive. Returns a handle for Off.
+--   On(event, fn, unit, work)
+--                        fn(...) receives the event payload. With unit, only that unit's events
+--                        arrive. Each call counts in work (a module's Work; the addon's own by
+--                        default). Returns a handle for Off.
 --   Off(handle)          the handle stops receiving immediately, including the rest of a dispatch
 --                        already in progress.
 --   OffAll(handles)      Off for many handles, rebuilding each affected event once.
@@ -15,9 +17,11 @@
 --
 -- Frame, the dispatcher frame, is public so tests can ask what's registered, and Counts ([event] =
 -- dispatches since load or the last debug reset) feeds debug events. Handles are opaque.
+-- SetProfiling swaps in a dispatch that also times each handler, so with profiling off a
+-- dispatch does exactly the counting and nothing more.
 
 local ByteTerrace = ByteTerrace
-local SafeCall = ByteTerrace.SafeCall
+local SafeCall, TimedCall = ByteTerrace.SafeCall, ByteTerrace.TimedCall
 local CreateFrame, issecretvalue, pairs, pcall = CreateFrame, issecretvalue, pairs, pcall
 
 local Events = {}
@@ -91,6 +95,29 @@ local function Rebuild(self, event)
     Refresh(self, event)
 end
 
+-- Dispatch while profiling (SetProfiling): the same, with each handler timed into its work.
+local function ProfiledDispatch(self, event, ...)
+    local list = self.m_handlers[event]
+    if not list then
+        return
+    end
+    local counts = self.Counts
+    counts[event] = (counts[event] or 0) + 1
+    local state = self.m_addon.State
+    local unit = ...
+    local comparable = not self.m_filtered[event] or not issecretvalue(unit)
+    state:BeginBatch()
+    for i = 1, #list do
+        local handle = list[i]
+        if not handle.dead and (not handle.unit or (comparable and handle.unit == unit)) then
+            local work = handle.work
+            work.events = work.events + 1
+            TimedCall(work, handle.fn, ...)
+        end
+    end
+    state:EndBatch()
+end
+
 --- Creates an addon's dispatcher and its frame.
 ---@param addon table the owning AddOn, whose state batches each dispatch
 function ByteTerrace.NewEvents(addon)
@@ -109,8 +136,9 @@ end
 ---@param event string
 ---@param fn function receives the event payload
 ---@param unit string? only this unit's events arrive
+---@param work table? the work record its calls count in (Core.lua); the addon's own by default
 ---@return table handle for Off
-function Events:On(event, fn, unit)
+function Events:On(event, fn, unit, work)
     local list = self.m_handlers[event]
     local copy = {}
     if list then
@@ -118,7 +146,7 @@ function Events:On(event, fn, unit)
             copy[i] = list[i]
         end
     end
-    local handle = { event = event, fn = fn, unit = unit }
+    local handle = { event = event, fn = fn, unit = unit, work = work or self.m_addon.Work }
     copy[#copy + 1] = handle
     self.m_handlers[event] = copy
     local ok, err = pcall(Refresh, self, event)
@@ -189,8 +217,16 @@ function Events:Dispatch(event, ...)
     for i = 1, #list do
         local handle = list[i]
         if not handle.dead and (not handle.unit or (comparable and handle.unit == unit)) then
+            local work = handle.work
+            work.events = work.events + 1
             SafeCall(handle.fn, ...)
         end
     end
     state:EndBatch()
+end
+
+--- Times each handler into its work record from now on (true), or goes back to Dispatch (false).
+---@param on boolean
+function Events:SetProfiling(on)
+    self.Dispatch = on and ProfiledDispatch or nil
 end

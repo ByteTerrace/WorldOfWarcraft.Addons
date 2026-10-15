@@ -17,8 +17,9 @@
 -- dependencies it acquired; a failed dependency prevents its user from starting.
 --
 -- Public members: Name, Addon, Spec (the declaration, never changed), Enabled, Records ([name] =
--- collection), Comms (its messages, when spec.comms declares them) and Users (how many running
--- modules use a demand module).
+-- collection), Comms (its messages, when spec.comms declares them), Users (how many running
+-- modules use a demand module) and Work (its work record, Core.lua: what its handlers, watchers,
+-- rules, listeners, timers, commands and deferred actions ran, kept across stops and starts).
 
 local ByteTerrace = ByteTerrace
 local SafeCall = ByteTerrace.SafeCall
@@ -53,7 +54,7 @@ end
 ---@return table module
 function ByteTerrace.NewModule(addon, name, spec)
     return setmetatable({
-        Addon = addon, Spec = spec, Enabled = false, Records = {}, Users = 0,
+        Addon = addon, Spec = spec, Enabled = false, Records = {}, Users = 0, Work = ByteTerrace.NewWork(),
         Name = name, m_handles = {}, m_watchers = {}, m_timers = {}, m_ids = {}, m_runtime = {}, m_uses = {},
         m_listeners = {}, m_acquired = 0, m_generation = 0,
         m_stopping = false,
@@ -120,7 +121,7 @@ end
 ---@return table handle for Off
 function Module:On(event, fn, unit)
     self:CheckRunning()
-    local handle = self.Addon.Events:On(event, fn, unit)
+    local handle = self.Addon.Events:On(event, fn, unit, self.Work)
     self.m_handles[#self.m_handles + 1] = handle
     return handle
 end
@@ -158,10 +159,10 @@ end
 function Module:Watch(rows, fn, skipInitial)
     self:CheckRunning()
     local state = self.Addon.State
-    local watcher = state:Watch(self:ResolveRows(rows, 2), fn, true)
+    local watcher = state:Watch(self:ResolveRows(rows, 2), fn, true, self.Work)
     self.m_watchers[#self.m_watchers + 1] = watcher
     if not skipInitial then
-        SafeCall(fn, state) -- ownership precedes a callback that may stop this module
+        state:Run(watcher) -- ownership precedes a callback that may stop this module
     end
     return watcher
 end
@@ -192,7 +193,7 @@ function Module:Rule(spec)
     local state, reads = self.Addon.State, self:ResolveRows(spec.reads, 2)
     state:BeginBatch()
     local watcher = state:Rule({
-        reads = reads, when = spec.when, changed = spec.changed, initial = spec.initial,
+        reads = reads, when = spec.when, changed = spec.changed, initial = spec.initial, work = self.Work,
     })
     self.m_watchers[#self.m_watchers + 1] = watcher
     state:EndBatch()
@@ -206,7 +207,7 @@ end
 ---@param fn fun(sender: string, fields: string[])
 function Module:Listen(comms, kind, fn)
     self:CheckRunning()
-    local handle = comms:Listen(kind, fn)
+    local handle = comms:Listen(kind, fn, self.Work)
     self.m_listeners[#self.m_listeners + 1] = { comms = comms, handle = handle }
     return handle
 end
@@ -223,11 +224,13 @@ function Module:Callback(fn, ...)
         error("Callback needs a function", 2)
     end
     local generation, args, count = self.m_generation, { ... }, select("#", ...)
+    local work = self.Work
     return function()
         if not self:IsRunning() or self.m_generation ~= generation then
             return
         end
-        self.Addon:Batch(fn, unpack(args, 1, count))
+        work.actions = work.actions + 1
+        self.Addon:Run(work, fn, unpack(args, 1, count))
     end
 end
 
@@ -239,11 +242,12 @@ end
 ---@return table timer for Cancel
 function Module:After(seconds, fn)
     self:CheckRunning()
-    local timers, addon = self.m_timers, self.Addon
+    local timers, addon, work = self.m_timers, self.Addon, self.Work
     local timer
     timer = C_Timer.NewTimer(seconds, function()
         timers[timer] = nil
-        addon:Batch(fn)
+        work.timers = work.timers + 1
+        addon:Run(work, fn)
     end)
     timers[timer] = true
     return timer
@@ -255,9 +259,10 @@ end
 ---@return table timer for Cancel
 function Module:Every(seconds, fn)
     self:CheckRunning()
-    local addon = self.Addon
+    local addon, work = self.Addon, self.Work
     local timer = C_Timer.NewTicker(seconds, function()
-        addon:Batch(fn)
+        work.timers = work.timers + 1
+        addon:Run(work, fn)
     end)
     self.m_timers[timer] = true
     return timer

@@ -178,6 +178,11 @@ function Harness:BuildEnvironment()
             return function(message) h:ReportError(message) end
         end,
         GetTime = function() return h.time end,
+        -- [G] The client's high-resolution clock in milliseconds; the snapshot records only that it
+        -- exists. It runs with GetTime, plus h.workTime: the milliseconds a test says the work in
+        -- the current frame has taken, since GetTime holds still within a frame and this clock
+        -- doesn't. debugprofilestart, which resets it for every addon, isn't faked.
+        debugprofilestop = function() return h.time * 1000 + h.workTime end,
         GetServerTime = function() return h.serverTime end,
         time = function(t) return t and EpochFromDate(t) or h.serverTime end,
         date = function(fmt, t)

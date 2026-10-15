@@ -400,7 +400,7 @@ test("debug toggles debug output, explains itself, and lists at most a screenful
     h:Slash("/test debug trace nothing")
     truthy(Printed(h):find("No row matches 'nothing'.", 1, true), Printed(h))
     h:Slash("/test debug bogus")
-    truthy(Printed(h):find("Usage: /test debug [status | events | rows <text> | trace <text> | trace off | cpu | reset]", 1, true),
+    truthy(Printed(h):find("Usage: /test debug [status | events | work | rows <text> | trace <text> | trace off | cpu | profile | reset]", 1, true),
         Printed(h))
 end)
 

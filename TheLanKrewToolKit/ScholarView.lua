@@ -13,13 +13,16 @@ local addonName, ns = ...
 --             raised keycap at its edge; hover glows, a wrong answer turns red and shakes, the right
 --             one turns green and a "+1" rises from the star counter
 --   book      on a quest riddle, Need a hint? is the quest book: it puts the quest's text, as the
---             player saw it, in the story's place, and closes again the same way
+--             player saw it, in the story's place, and closes again the same way. Text too long for
+--             the screen comes in pages that fit, broken at a sentence where one fits; the button
+--             says "Page 1 of 3, next" and turns them, and the last page's press closes the book
 --   footer    Need a hint? and how to answer; feedback (the hint, or the working) replaces it in
 --             place, so the panel never jumps. Every button names its key: the controller's
 --             buttons when one is connected (face buttons answer, shoulders ask for the hint and read
 --             aloud, Back skips), the keyboard's otherwise
 --
--- The panel is opaque and sized to its content, over a dark shade. The screen only draws;
+-- The panel is opaque and sized to its content, never taller than the screen (less ScreenMargin
+-- above and below), over a dark shade. The screen only draws;
 -- Scholar.lua owns the rules and gives it handlers through ns.ScholarView.Init before the first
 -- Show. Its colors, textures and backdrop come from ns.ScholarStyle (ScholarPictures.lua).
 
@@ -31,6 +34,8 @@ local ButtonWidth = (Width - 2 * Pad - AnswerGap) / 2
 local KeycapSize = 34
 local FooterHeight = 44
 local PortraitSize = 60
+local ScreenMargin = 20 -- the least room above and below the panel
+local LiftUp = 30 -- the panel sits this much above the screen's center when it has room
 local OwlIcon = "Interface\\Icons\\Ability_Hunter_Pet_Owl"
 local CircleMask = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local RightIcon = "Interface\\RAIDFRAME\\ReadyCheck-Ready"
@@ -39,8 +44,8 @@ local NumberColor = "|cffffd100"
 local SubjectLabels = { math = "MATH", reading = "READING", quest = "QUEST" }
 local WordColor = "|cff7fe0ff"
 
-local CreateFrame = CreateFrame
-local floor, max = math.floor, math.max
+local CreateFrame, UIParent = CreateFrame, UIParent
+local floor, max, min = math.floor, math.max, math.min
 local concat = table.concat
 
 local ScholarStyle = ns.ScholarStyle
@@ -431,7 +436,7 @@ function PlaceFooter()
 end
 
 -- Lays the panel out top to bottom from its content, so it's always exactly as tall as it needs
--- to be.
+-- to be, and centers it on screen (LiftUp above center when there's room). Returns its height.
 local function Layout(hasStory, puzzle)
     local panel, y = Overlay.Panel, 116
     if hasStory then
@@ -475,7 +480,53 @@ local function Layout(hasStory, puzzle)
     y = y + 2 * AnswerHeight + AnswerGap + 16
     Overlay.FooterTop = y
     PlaceFooter()
-    panel:SetHeight(y + FooterHeight + 18)
+    local height = y + FooterHeight + 18
+    panel:SetHeight(height)
+    -- secret: UIParent is the client's own screen-sized frame, anchored to nothing an addon sets
+    local room = (UIParent:GetHeight() - height) / 2 - ScreenMargin
+    panel:ClearAllPoints()
+    panel:SetPoint("CENTER", 0, max(0, min(LiftUp, room)))
+    return height
+end
+
+-- The book's text in pages whose story fits in room (pixels of height): words fill each page,
+-- which ends at the last sentence or line that fits (or at a word, in a sentence too long for a
+-- page). Measures with the story fontstring, so the story's text changes.
+local function Pages(text, room)
+    local story, pages, page, cut = Overlay.Story, {}, "", nil
+    local function Fits(candidate)
+        story:SetText(Emphasize(candidate))
+        -- secret: the book's text is built from plain strings, as the story's is
+        return story:GetStringHeight() <= room
+    end
+    for word in text:gmatch("%S+%s*") do
+        if page ~= "" and not Fits(page .. word) then
+            local at = cut or #page
+            pages[#pages + 1] = (page:sub(1, at):gsub("%s+$", ""))
+            page, cut = page:sub(at + 1), nil
+        end
+        page = page .. word
+        if word:find("[%.!%?:]%s*$") or word:find("\n") then
+            cut = #page -- a sentence or line ends here: the page may end here
+        end
+    end
+    if page:find("%S") then
+        pages[#pages + 1] = (page:gsub("%s+$", ""))
+    end
+    return pages
+end
+
+-- Labels the quest book's button for what pressing it does: open it, turn the page, or close it.
+local function LabelBook()
+    local hint, pages, page = Overlay.Hint, Overlay.m_pages, Overlay.m_page
+    if not Overlay.m_bookOpen then
+        hint.m_text = "Quest book"
+    elseif #pages == 1 then
+        hint.m_text = "Close book"
+    else
+        hint.m_text = ("Page %d of %d, %s"):format(page, #pages, page < #pages and "next" or "close")
+    end
+    LabelPill(hint, hint.m_key)
 end
 
 -- Shows a message in the footer's place: the hint (gold) or the working (green).
@@ -555,7 +606,8 @@ function ScholarView.Show(puzzle, info)
     end
     local actions = info.actions or {}
     LabelPill(Overlay.Speak, actions.speak)
-    Overlay.Hint.m_text = info.book and "Quest book" or "Need a hint?"
+    Overlay.Hint.m_text, Overlay.Hint.m_key = info.book and "Quest book" or "Need a hint?", actions.hint
+    Overlay.m_pages, Overlay.m_page = nil, 0
     LabelPill(Overlay.Hint, actions.hint)
     LabelPill(Overlay.Skip, actions.skip)
     Overlay.Speak:SetShown(info.canSpeak and true or false)
@@ -567,13 +619,26 @@ function ScholarView.Show(puzzle, info)
     return Overlay
 end
 
---- Opens the quest book in the story's place, or closes it again: the quest's text, as the player
---- saw it, holds every answer to a quest riddle. Only while a puzzle with a book is on screen.
+--- Opens the quest book in the story's place, turns its page, or closes it after the last one:
+--- the quest's text, as the player saw it, holds every answer to a quest riddle. Only while a
+--- puzzle with a book is on screen.
 function ScholarView.ToggleBook()
     local puzzle = Overlay.m_puzzle
-    Overlay.m_bookOpen = not Overlay.m_bookOpen
-    local story = Overlay.m_bookOpen and puzzle.book or Overlay.m_story
+    if not Overlay.m_bookOpen then
+        -- The room the story may take: the screen, less the margins and the rest of the riddle.
+        local rest = Layout(false, puzzle)
+        -- secret: as in Layout
+        local room = max(UIParent:GetHeight() - 2 * ScreenMargin - rest - 14, 24)
+        Overlay.m_pages = Overlay.m_pages or Pages(puzzle.book, room)
+        Overlay.m_bookOpen, Overlay.m_page = true, 1
+    elseif Overlay.m_page < #Overlay.m_pages then
+        Overlay.m_page = Overlay.m_page + 1
+    else
+        Overlay.m_bookOpen, Overlay.m_page = false, 0
+    end
+    local story = Overlay.m_bookOpen and Overlay.m_pages[Overlay.m_page] or Overlay.m_story
     Overlay.Story:SetText(Emphasize(story))
+    LabelBook()
     Layout(story ~= "", puzzle)
 end
 

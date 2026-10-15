@@ -273,6 +273,56 @@ test("the quest book opens in the riddle's place with the quest's text, and clos
     falsy(ns.ScholarView.BookOpen())
 end)
 
+test("a quest text longer than the book keeps ends at its last whole sentence", function()
+    local h, addon = LoadKid()
+    local sentence = "The wolves grow bolder every night, and the farmers lie awake listening. "
+    local long = { id = 35, title = "Long Nights", header = "Elwynn Forest", text = sentence:rep(20) .. "Help us.",
+        goal = "Bring wolf meat.", objectives = {} }
+    Accept(h, long)
+    local text = Quests(addon):Field("35", "text")
+    truthy(#text <= 1200 and #text > 1100, "as much as fits: " .. #text)
+    eq(text:sub(-#"listening."), "listening.", "a whole sentence, not a word cut off")
+end)
+
+test("a quest book too long for the screen turns its pages, and the riddle always fits on screen", function()
+    local h, _, ns = LoadKid()
+    local paragraph = "Greetings, rogue. I can see you've got the look of an adventurer about you. This is good. "
+        .. "The world needs more of us restless souls, seeking fortune and glory. "
+    local long = {
+        id = 34, title = "The Great Outdoors", header = "Tirisfal Glades",
+        text = paragraph:rep(6) .. "Have a seat near the fire and get comfortable.",
+        goal = "Sit near Eleanor's Basic Campfire and wait until you receive the Boosted Rest buff.",
+        objectives = { { text = "Sit near the campfire", required = 1 }, { text = "Gain the Boosted Rest buff", required = 1 } },
+    }
+    h.env.UIParent:SetSize(1366, 600) -- a short screen: the harness's 14 px lines are shorter than the real font's
+    Accept(h, long, "Eleanor Shackleton")
+    h:Slash("/tlk puzzle")
+    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
+    local screen = h.env.UIParent:GetHeight()
+    local function Fits(what)
+        local panel = overlay.Panel
+        truthy(panel:GetHeight() <= screen - 40, ("%s: the panel (%d) fits the screen (%d)"):format(what, panel:GetHeight(), screen))
+    end
+    Fits("the riddle")
+    local pages, seen = {}, 0
+    repeat
+        h:Key("H", true)
+        if ns.ScholarView.BookOpen() then
+            seen = seen + 1
+            Fits("page " .. seen)
+            pages[#pages + 1] = Reveal(Harness.State(overlay.Story).text)
+            local label = Reveal(Harness.State(overlay.Hint.Label).text)
+            truthy(label:find(("Page %d of"):format(seen), 1, true), "the button says which page: " .. label)
+        end
+    until not ns.ScholarView.BookOpen() or seen > 10
+    truthy(seen > 1, "the book took more than one page")
+    falsy(ns.ScholarView.BookOpen(), "the last page's press closes the book")
+    local whole = table.concat(pages, " "):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("%s+", " ")
+    truthy(whole:find("Have a seat near the fire and get comfortable.", 1, true), "every page together is the whole text: " .. whole)
+    truthy(whole:find("Eleanor Shackleton", 1, true), "who gave it, too")
+    Fits("the riddle again")
+end)
+
 test("with only quest riddles on, a riddle that comes due waits for a quest", function()
     local h = LoadKid({ ["Scholar.math"] = false, ["Scholar.reading"] = false })
     h:Advance(31 * 60)

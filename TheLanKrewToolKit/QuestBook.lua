@@ -42,7 +42,8 @@ local TurnIn -- what the open reward panel showed: { id, title, ender, reward }
 
 -- A text the client gave, plain: "" for a secret or a non-string; its escape codes undone (a
 -- link keeps its text, a texture goes, |n is a line break), other control characters but line
--- breaks removed, trimmed, and cut to length characters.
+-- breaks removed, trimmed, and cut to length characters, at the last whole sentence (else word)
+-- that fits.
 local function Plain(text, length)
     if issecretvalue(text) or type(text) ~= "string" then
         return ""
@@ -51,7 +52,12 @@ local function Plain(text, length)
     text = gsub(gsub(gsub(text, "|c%x%x%x%x%x%x%x%x", ""), "|r", ""), "|", "")
     text = gsub(gsub(text, "\r", ""), "[%z\1-\9\11-\31]", "")
     text = gsub(gsub(text, "^%s+", ""), "%s+$", "")
-    return sub(text, 1, length)
+    if #text <= length then
+        return text
+    end
+    -- Too long: it ends at the last whole sentence that fits, else the last whole word.
+    local cut = sub(text, 1, length + 1)
+    return cut:match("^(.*[%.!%?])%s") or cut:match("^(.*%S)%s") or sub(text, 1, length)
 end
 
 -- An objective's text without its count: "0/8 Wolf Pelt" and "Wolf Pelt: 0/8" are "Wolf Pelt".

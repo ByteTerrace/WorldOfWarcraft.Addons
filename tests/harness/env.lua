@@ -432,6 +432,9 @@ function Harness:BuildEnvironment()
     end
 
     fakes.UIParent = h:CreateWidget("Frame", "UIParent")
+    -- [G] The screen at UI scale 1: 768 high, whatever the resolution, and 16:9 wide. A test can
+    -- change it (h.env.UIParent:SetSize).
+    Harness.State(fakes.UIParent).width, Harness.State(fakes.UIParent).height = 1366, 768
     -- Blizzard's settings frame carries SettingsPanelMixin (Blizzard_SettingsPanel.lua). Addon code
     -- that opened it froze the client when it closed, so Open and OpenToCategory are forbidden
     -- (tools/api/forbidden.json); the player opens it from Esc > Options.

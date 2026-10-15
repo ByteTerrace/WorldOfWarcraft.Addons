@@ -26,9 +26,10 @@
 --               GetQuestID answers 0 and the texts "". [G] The accept and turn-in event orders.
 --   Log         [P] GetNumQuestLogEntries answers the shown entries (zone headers included) and the
 --               quests; GetInfo answers the questLog.entry fields; GetQuestObjectives answers
---               { text, type, finished, numFulfilled, numRequired }, without the docs' Nilable
---               objectiveType: 1.60.1 (70374) sent none, for an item objective or a log one
---               (questLog.objectives; 70009 had sent it for an item objective); GetQuestLogQuestText(index)
+--               { text, type, finished, numFulfilled, numRequired }. The docs' Nilable
+--               objectiveType comes with some objectives and not others (questLog.objectives saw
+--               both, item objectives included); [G] which ones isn't known, so the harness sends
+--               none, and nothing here reads it; GetQuestLogQuestText(index)
 --               answers the description and the objective summary, and GetTitleForQuestID a title
 --               (questLog.text). [G] One header per header name, in first-seen order; a header's
 --               entry carries the same fields with questID 0. [G] An objective's text puts its

@@ -416,12 +416,12 @@
     },
     "questLog.objectives": {
       "result": {
-        "fields": "finished,numFulfilled,numRequired,text,type",
+        "fields": "finished,numFulfilled,numRequired,objectiveType,text,type",
         "finished": "boolean",
         "hasObjectives": true,
         "numFulfilled": "number",
         "numRequired": "number",
-        "objectiveType": "nil",
+        "objectiveType": "nil,number",
         "text": "text",
         "type": "text",
         "types": "item,log,monster,object"

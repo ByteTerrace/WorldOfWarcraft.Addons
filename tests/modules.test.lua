@@ -125,7 +125,7 @@ local function NewLedger(saved)
 end
 
 test("records validate every write and store only non-default fields", function()
-    local h, addon, people = NewLedger()
+    local h, _, people = NewLedger()
     people:Set("Bob-Realm", { deaths = 2, seen = 10 })
     eq(people:Field("Bob-Realm", "deaths"), 2)
     eq(people:Field("Bob-Realm", "kind"), "grudge", "defaults fill in")
@@ -144,7 +144,7 @@ test("records validate every write and store only non-default fields", function(
 end)
 
 test("a change moves the collection's version row, once per batch", function()
-    local h, addon, people = NewLedger()
+    local _, addon, people = NewLedger()
     local runs = 0
     addon.State:Watch({ "Ledger.people" }, function() runs = runs + 1 end, true)
     addon:Batch(function()
@@ -161,7 +161,7 @@ test("a change moves the collection's version row, once per batch", function()
 end)
 
 test("at the limit a new key evicts the least recently seen", function()
-    local h, addon, people = NewLedger()
+    local _, _, people = NewLedger()
     people:Set("A", { seen = 5 })
     people:Set("B", { seen = 1 })
     people:Set("C", { seen = 9 })
@@ -176,7 +176,7 @@ test("at the limit a new key evicts the least recently seen", function()
 end)
 
 test("loading keeps valid records, resets bad fields and drops bad records", function()
-    local h, addon, people = NewLedger({ ["Ledger.people"] = {
+    local h, _, people = NewLedger({ ["Ledger.people"] = {
         ["Bob-Realm"] = { deaths = 3, kind = "enemy", renamed = true, seen = 0 },
         [""] = { deaths = 1 },
         ["Cara-Realm"] = "not a record",
@@ -235,7 +235,7 @@ test("kept keys are never evicted; a collection of only kept keys refuses new on
 end)
 
 test("record specs are validated at declaration", function()
-    local h, addon = NewAddOn()
+    local _, addon = NewAddOn()
     local ok, err = pcall(addon.Module, addon, "Bad", { toggle = false, records = {
         { name = "x", limit = 0, evict = "nope", fields = { { name = "a", kind = "table", default = {} } } } } })
     falsy(ok)

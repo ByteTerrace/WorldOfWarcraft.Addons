@@ -124,9 +124,9 @@ test("rogues hear each combo point, and finish him at five on an enemy player", 
 end)
 
 test("combo callouts are rogues' and druids' only, and switch off with their setting", function()
-    local h, addon = Load({ classFile = "WARRIOR", powerType = 1 })
-    falsy(addon.Events.Frame:IsEventRegistered("UNIT_POWER_FREQUENT"), "warriors have no combo points")
-    h, addon = Load({ classFile = "DRUID", powerType = 0 }) -- caster form: the fuck-o-meter stays off
+    local _, warrior = Load({ classFile = "WARRIOR", powerType = 1 })
+    falsy(warrior.Events.Frame:IsEventRegistered("UNIT_POWER_FREQUENT"), "warriors have no combo points")
+    local h, addon = Load({ classFile = "DRUID", powerType = 0 }) -- caster form: the fuck-o-meter stays off
     Media(h, "ComboPoint1.ogg")
     h:SetTarget({ canAttack = true })
     h:SetComboPoints(1)
@@ -308,7 +308,7 @@ test("the Krew hears your first blood, sprees and a spree's end, and yours yield
 end)
 
 test("streaks and Warband both off: honor messages aren't even registered", function()
-    local h, addon = Load()
+    local _, addon = Load()
     addon.State:Set("Warband.enabled", false)
     truthy(addon.Events.Frame:IsEventRegistered("CHAT_MSG_COMBAT_HONOR_GAIN"), "streaks still listen")
     addon.State:Set("Streaks.enabled", false)

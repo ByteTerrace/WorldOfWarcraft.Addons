@@ -29,6 +29,10 @@ const BS = "BadAddon/BadStyle.lua";
 const BANNER = "COMMENT banner divider: let the code's structure and doc comments do that work";
 const DEBT = (marker) => `COMMENT debt marker "${marker}": do the work, or say what's true today`;
 const HP = `UnitHealth can return a secret (SecretReturns); ${SECRET_CALL}`;
+const BH = "BadAddon/BadHygiene.lua";
+const KEEP = "rename it to _, since a later one is read and keeps its position";
+const BA = "BadAddon/BadArgs.lua";
+const UNNILABLE = (count, argument) => `passes ${count} arguments but argument #${argument} isn't nilable in its documentation`;
 
 const FW = "FrameworkAddon/Framework.lua";
 const TIMERS = "use a module timer (module:After, module:Every), which runs as a batch and stops with its module";
@@ -142,6 +146,43 @@ const EXPECTED = [
     `${BS}:22: ${DEBT("TODO")}`,
     `${BS}:23: ${DEBT("for now")}`,
     `${BS}:26: NAMING local 'BAD_VALUE' should be camelCase (badValue)`,
+    // Hygiene (GoodAddon/GoodHygiene.lua holds the allowed constructs).
+    `${BH}:3: HYGIENE unused local Unread: nothing reads it`,
+    `${BH}:4: HYGIENE unused local function Uncalled: nothing calls or reads it`,
+    `${BH}:5: HYGIENE unused local function Recurse: only its own body calls it`,
+    `${BH}:6: HYGIENE unused parameter first: ${KEEP}`,
+    `${BH}:7: HYGIENE unused parameter second: remove it`,
+    `${BH}:8: HYGIENE unused parameter first: ${KEEP}`, // `...` is read after it
+    `${BH}:10: HYGIENE unused parameter self: ${KEEP}`, // a callback's signature is the caller's
+    `${BH}:11: HYGIENE unused loop variable index: rename it to _`,
+    `${BH}:12: HYGIENE unused loop variable value: remove it`,
+    `${BH}:13: HYGIENE unused loop variable key: ${KEEP}`,
+    `${BH}:14: HYGIENE unused local First: nothing reads it; ${KEEP}`,
+    `${BH}:15: HYGIENE unused local Written: nothing reads it`, // assigned, never read
+    `${BH}:17: HYGIENE parameter value shadows the parameter value on line 17; rename one`,
+    `${BH}:18: HYGIENE loop variable entry shadows the loop variable entry on line 18; rename one`,
+    `${BH}:21: HYGIENE local Level shadows the local Level on line 19; rename one`,
+    `${BH}:26: HYGIENE local Twice redefines the local Twice on line 24; rename one`,
+    `${BH}:28: HYGIENE parameter self shadows the implicit self of the method on line 27; rename it`,
+    `${BH}:32: HYGIENE unreachable code: the statement on line 31 always leaves this block`, // do return end
+    `${BH}:36: HYGIENE unreachable code: the statement on line 35 always leaves this block`, // every branch returns
+    `${BH}:40: HYGIENE unreachable code: the statement on line 39 always leaves this block`, // do break end
+    `${BH}:42: HYGIENE empty if branch`,
+    `${BH}:43: HYGIENE empty elseif branch`,
+    `${BH}:44: HYGIENE empty else branch`,
+    `${BH}:45: HYGIENE empty do block`,
+    `${BH}:46: HYGIENE empty loop body`,
+    `${BH}:47: HYGIENE empty loop body`,
+    `${BH}:48: HYGIENE empty loop body`,
+    `${BH}:50: HYGIENE the value assigned to total is overwritten on line 51 before anything reads it`,
+    // Argument counts of documented functions.
+    `${BA}:5: ARGS InCombatLockdown passes 1 argument but its documentation declares 0`,
+    `${BA}:6: ARGS C_Spell.GetSpellName ${UNNILABLE(0, "1 (SpellIdentifier)")}`,
+    `${BA}:7: ARGS C_Spell.GetSpellName passes 2 arguments but its documentation declares 1`, // through an alias
+    `${BA}:8: ARGS C_Spell.GetSpellName ${UNNILABLE(0, "1 (SpellIdentifier)")}`, // a string-literal index
+    `${BA}:9: ARGS GetTime passes 1 argument but its documentation declares 0`, // a string call
+    `${BA}:10: ARGS Mixin ${UNNILABLE(0, "1 (LuaValueVariant)")}`, // before a repeating argument
+    `${BA}:11: ARGS C_CVar.GetCVar passes 2 arguments but its documentation declares 1`, // a nil literal counts
     `${FW}:7: FRAMEWORK C_Timer.After belongs to the framework; ${TIMERS}`,
     `${FW}:8: FRAMEWORK C_Timer.NewTicker belongs to the framework; ${TIMERS}`,
     `${FW}:9: FRAMEWORK CHAT_MSG_ADDON belongs to the framework; ${COMMS}`,

@@ -116,7 +116,7 @@ local function Member(h, spec)
     return Harness.FillUnit(unit)
 end
 
-local function CheckSize(h, kind, count)
+local function CheckSize(_, kind, count)
     local limit = kind == "party" and 4 or 39
     assert(count <= limit, ("a %s holds at most %d members besides the player, got %d"):format(kind, limit, count))
 end

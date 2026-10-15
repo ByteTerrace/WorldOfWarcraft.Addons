@@ -251,7 +251,7 @@ test("nothing is sent during chat messaging lockdown; stale celebrations are dro
 end)
 
 test("sends are spaced out, never a burst", function()
-    local h, addon = Load()
+    local h = Load()
     h:JoinGroup("party", { "Bob" })
     for _ = 1, 3 do
         h.player.level = h.player.level + 1

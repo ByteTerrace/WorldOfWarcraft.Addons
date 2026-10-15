@@ -50,7 +50,7 @@ test("off by default: nothing ever appears", function()
 end)
 
 test("a riddle appears after the interval of play and holds the keyboard and mouse", function()
-    local h, addon = LoadKid()
+    local h = LoadKid()
     h:Advance(29 * 60)
     falsy(Showing(h))
     h:Advance(60)
@@ -287,7 +287,7 @@ test("lock and unlock say what's wrong, and a bare lock locks again with the par
 end)
 
 test("three wrong PINs make unlocking wait a minute, even across a /reload", function()
-    local h, addon = LoadKid()
+    local h = LoadKid()
     h:Slash("/tlk lock 2468")
     h:Slash("/tlk unlock 0001")
     h:Slash("/tlk unlock 0002")
@@ -364,7 +364,7 @@ test("with every subject off, no riddle comes due and the timer holds", function
 end)
 
 test("a /reload during the celebration doesn't ask another riddle", function()
-    local h, addon = LoadKid({ ["Scholar.pending"] = true })
+    local h = LoadKid({ ["Scholar.pending"] = true })
     for key = 1, 4 do
         h:Key(tostring(key), true)
     end
@@ -390,7 +390,7 @@ test("a fight during the celebration sends it away for good", function()
 end)
 
 test("stars reach the Krew", function()
-    local h, addon = LoadKid({ ["Scholar.pending"] = true })
+    local h = LoadKid({ ["Scholar.pending"] = true })
     h:JoinGroup("party", { "Mom" })
     for key = 1, 4 do
         h:Key(tostring(key), true)
@@ -424,7 +424,7 @@ local function Text(fontString)
 end
 
 test("each answer's key sits in its own keycap, apart from the answer", function()
-    local h, view, frame = Screen()
+    local _, _, frame = Screen()
     eq(Text(frame.Buttons[1].Key), "1")
     eq(Text(frame.Buttons[1].Text), "9", "the answer alone: never \"1 9\"")
     eq(Text(frame.Buttons[4].Key), "4")
@@ -432,7 +432,7 @@ test("each answer's key sits in its own keycap, apart from the answer", function
 end)
 
 test("the question stands apart from the story, with its numbers highlighted", function()
-    local h, view, frame = Screen()
+    local _, _, frame = Screen()
     eq(Text(frame.Story), "|cffffd10020|r carrots are shared equally by |cffffd1004|r hunters.")
     eq(Text(frame.Question), "How many carrots does each hunter get?")
     truthy(Text(frame.Tag):find("MATH", 1, true))
@@ -441,21 +441,21 @@ test("the question stands apart from the story, with its numbers highlighted", f
 end)
 
 test("a question alone has no story line", function()
-    local h, view = Screen()
+    local _, view = Screen()
     eq(select(1, view.Split("Which word rhymes with \"cat\"?")), "")
     eq(select(2, view.Split("The Owl Sage has a rhyme game!\nWhich word rhymes with \"cat\"?")), "Which word rhymes with \"cat\"?")
     eq(select(2, view.Split("Spell the word you hear.")), "Spell the word you hear.")
 end)
 
 test("highlighting keeps full stops and never colors its own color codes", function()
-    local h, view = Screen()
+    local _, view = Screen()
     eq(view.Emphasize("It costs 3.5 gold."), "It costs |cffffd1003.5|r gold.")
     eq(view.Emphasize("25% of 1,000"), "|cffffd10025%|r of |cffffd1001,000|r")
     eq(view.Emphasize("Which word rhymes with \"cat\"?"), "Which word rhymes with |cff7fe0ff\"cat\"|r?")
 end)
 
 test("right and wrong answers look different, and the hint says so", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Wrong(1, Shares.hint, false)
     falsy(frame.Buttons[1]:IsEnabled())
     truthy(Text(frame.Feedback.Text):find("Hint:", 1, true))
@@ -468,7 +468,7 @@ test("right and wrong answers look different, and the hint says so", function()
 end)
 
 test("long answers get a smaller font than short ones", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     local short = Harness.State(frame.Buttons[1].Text).fontObject
     view.Show({ subject = "reading", kind = "reading.vocab", title = "Word Wizard", prompt = "What does \"brave\" mean?",
         choices = { "ready to face danger", "sleepy", "hungry", "tiny" }, answer = 1, hint = "", explanation = "" },
@@ -478,7 +478,7 @@ test("long answers get a smaller font than short ones", function()
 end)
 
 test("the header shows how close the next rank is, and the streak", function()
-    local h, view, frame = Screen()
+    local _, _, frame = Screen()
     eq(Text(frame.Stars), "2")
     truthy(Text(frame.Rank):find("8 more to Journeyman", 1, true), Text(frame.Rank))
     eq(Harness.State(frame.Progress).value, 0.2)
@@ -486,7 +486,7 @@ test("the header shows how close the next rank is, and the streak", function()
 end)
 
 test("a right answer raises a +1 and the streak says the riddles got harder", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Correct(3, Shares.explanation, { stars = 3, rank = "Apprentice", nextRank = "Journeyman", nextAt = 10, progress = 0.3,
         streak = 3, earned = 1, levelUp = true })
     eq(Text(frame.Gain), "+1")
@@ -499,7 +499,7 @@ test("a right answer raises a +1 and the streak says the riddles got harder", fu
 end)
 
 test("a wrong answer shakes", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Wrong(2, Shares.hint, false)
     truthy(frame.Buttons[2].Shake:IsPlaying())
 end)
@@ -528,7 +528,7 @@ test("an answer glows under the mouse, a missed one doesn't, and so do the foote
 end)
 
 test("the hint button shows the hint in the footer's place", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     falsy(frame.Feedback:IsShown())
     truthy(frame.Hint:IsShown())
     view.Hint(Shares.hint)
@@ -538,12 +538,12 @@ test("the hint button shows the hint in the footer's place", function()
 end)
 
 test("the Owl Sage's portrait is cropped to a circle", function()
-    local h, view, frame = Screen()
+    local _, _, frame = Screen()
     eq(frame.Portrait:GetNumMaskTextures(), 1)
 end)
 
 test("a groups riddle is drawn as bags of items", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Show({ subject = "math", kind = "math.groups", title = "Stacks and Stacks",
         prompt = "Pip the gnome fills 5 bags with 6 apples in each bag. How many apples is that?",
         choices = { "35", "29", "30", "25" }, answer = 3, hint = "", explanation = "",
@@ -567,7 +567,7 @@ test("a groups riddle is drawn as bags of items", function()
 end)
 
 test("a picture draws the riddle's own item, whatever words its story uses", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     local function Textures()
         local seen = {}
         for _, icon in ipairs(frame.Pictures.Icons) do
@@ -589,7 +589,7 @@ test("a picture draws the riddle's own item, whatever words its story uses", fun
 end)
 
 test("taking away crosses out the ones taken", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Show({ subject = "math", kind = "math.subtract", title = "Take Away",
         prompt = "A basket holds 7 apples. A grumpy murloc grabs 3 and waddles away. How many apples are left?",
         choices = { "4", "5", "3", "10" }, answer = 1, hint = "", explanation = "",
@@ -603,7 +603,7 @@ test("taking away crosses out the ones taken", function()
 end)
 
 test("Read aloud speaks the riddle and its choices with the player's voice settings", function()
-    local h, addon = LoadKid({ ["Scholar.pending"] = true })
+    local h = LoadKid({ ["Scholar.pending"] = true })
     h.ttsVoices[2] = { voiceID = 3, name = "Other Voice" }
     h.tts.voices[h.env.Enum.TtsVoiceType.Standard] = 3
     h.tts.rate, h.tts.volume = 2, 70
@@ -689,7 +689,7 @@ local function Point(region)
 end
 
 test("Read aloud and Skip live in the footer, never over the question", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Show({ subject = "reading", kind = "reading.rhyme", title = "Rhyme Time", prompt = "Which word rhymes with \"cat\"?",
         choices = { "hat", "dog", "sun", "cup" }, answer = 1, hint = "", explanation = "" },
         { stars = 1, rank = "Apprentice", canSpeak = true, keys = { "1", "2", "3", "4" }, actions = { hint = "H", speak = "R", skip = "Esc" } })
@@ -700,7 +700,7 @@ test("Read aloud and Skip live in the footer, never over the question", function
 end)
 
 test("the feedback banner stops short of the footer's right-hand buttons", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Wrong(1, Shares.hint, true)
     truthy(frame.Skip:IsShown())
     local banner = { frame.Feedback:GetPoint(2) }
@@ -708,7 +708,7 @@ test("the feedback banner stops short of the footer's right-hand buttons", funct
 end)
 
 test("an unscramble shows its letters as tiles, not in the question text", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Show({ subject = "reading", kind = "reading.unscramble", title = "Scrambled Scroll",
         prompt = "A gnome mixed up the letters of a word!\nR O F E T S\nClue: Lots and lots of trees.\nWhich word is it?",
         tiles = { "R", "O", "F", "E", "T", "S" },
@@ -736,7 +736,7 @@ test("an unscramble shows its letters as tiles, not in the question text", funct
 end)
 
 test("a counting riddle draws its items instead of a row of symbols", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     view.Show({ subject = "math", kind = "math.count", title = "Count Them",
         prompt = "Count the stars:\n* * * *\nHow many stars are there?", picture = { kind = "count", n = 4, row = "* * * *" },
         choices = { "4", "5", "3", "6" }, answer = 1, hint = "", explanation = "" },
@@ -750,7 +750,7 @@ test("a counting riddle draws its items instead of a row of symbols", function()
 end)
 
 test("dimmed and wrong answers dim their keycaps too", function()
-    local h, view, frame = Screen()
+    local _, view, frame = Screen()
     local function Red(button)
         return Harness.State(button.Keycap).color[1]
     end

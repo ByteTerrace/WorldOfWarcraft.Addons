@@ -92,7 +92,7 @@ test("a message number that wouldn't survive as text is refused rather than sent
 end)
 
 test("a transport faster than the client's throttle regains messages, or without a queue, is refused", function()
-    local h, addon = NewAddOn()
+    local _, addon = NewAddOn()
     throws(function() addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1", interval = 0.05 } }) end,
         "interval must be at least 1 second")
     throws(function() addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1", queue = 0 } }) end,

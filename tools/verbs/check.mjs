@@ -56,6 +56,14 @@
 //             settings and settings-category registration), nor one taken as a value, and no handler
 //             for CHAT_MSG_ADDON or CHAT_MSG_ADDON_LOGGED: the framework's versions own their
 //             lifetime and the client's rules, and a second implementation is a defect.
+//   ARGS      a call to a documented client function (its `Arguments` in the snapshot), directly
+//             or through a never-reassigned alias, passes no more arguments than the docs declare
+//             and none fewer than the last one they don't mark Nilable (or give a Default; a
+//             LuaValueReference takes nil). A call whose last argument is a call or `...` passes an
+//             unknown count and isn't judged; nor are `:` calls and widget methods (the gate doesn't
+//             know a receiver's widget type, and the docs can't state overloads). The snapshot
+//             doesn't record repeating arguments (StrideIndex), so a function whose last argument
+//             is a LuaValueReference or LuaValueVariant (Mixin, scrub) is judged only before it.
 //
 //   An annotation is a `--` line comment on the construct's line, or alone on the line above.
 //   Not seen: dynamic reads (_G[k]), values that cross files or function calls, and handlers
@@ -68,11 +76,23 @@
 //             a file's own `local addonName, ns = ...` is exempt, and so are metamethods (__index).
 //   COMMENT   no banner dividers (four or more of - = * # _ ~) and no debt markers (TODO, FIXME,
 //             HACK, XXX, KLUDGE, REVISIT in capitals, or "for now"), as Puck's comment-smell gate.
+//   HYGIENE   luacheck's warnings, as far as a parser decides them: a local, local function or loop
+//             variable nothing reads (a local function only its own body calls counts as unused);
+//             a parameter nothing reads (remove it, or rename it to _ when a later parameter or
+//             `...` is read and it keeps its position; callbacks too); a local, parameter or loop
+//             variable that shadows or redefines a visible local of the same file (a callback's
+//             `state` may shadow an outer `state`, docs/Conventions.md); a statement after one that
+//             always leaves its block (`do return end`, an if whose every branch, else included,
+//             returns or breaks); an empty if, elseif or else branch, do block or loop body (an empty
+//             function is a no-op callback, allowed); and a value assigned to a local that a later
+//             statement of the same block overwrites before anything reads it (straight-line code,
+//             and only locals no closure references). `_`, names starting with `_` and a file's own
+//             `local addonName, ns = ...` are exempt.
 //   LENGTH    no file exceeds MAX_LINES.
 //   STYLE     LF line endings, final newline, no tabs, no trailing whitespace.
 //
 //   Beyond the addons, tools/ and tests/ get LENGTH and STYLE, and the tests' Lua (tests/*.lua and
-//   tests/harness, not tests/fixtures, which are deliberately bad) gets NAMING and COMMENT too.
+//   tests/harness, not tests/fixtures, which are deliberately bad) gets NAMING, COMMENT and HYGIENE too.
 //
 // Snapshot truth: when the snapshot has a client dump, a global or member counts as known only if
 // the dump has it; documented-only names don't. Without a dump, the documented API is the fallback.

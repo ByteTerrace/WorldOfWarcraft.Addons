@@ -179,7 +179,7 @@ test("protected methods on protected frames are blocked during lockdown: the cal
     local child = h.env.CreateFrame("Button", nil, holder, "SecureHandlerBaseTemplate")
     local plain = h.env.CreateFrame("Frame")
     h:EnterCombat()
-    local after = false
+    local after
     secure:Hide()
     after = true
     truthy(after, "code after a blocked call runs")

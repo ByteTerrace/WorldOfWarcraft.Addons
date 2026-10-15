@@ -1,4 +1,4 @@
-// The per-file Lua rules of the check verb (GLOBAL, MEMBER, EVENT, SECRET, PROTECTED, FRAMEWORK); see
+// The per-file Lua rules of the check verb (GLOBAL, MEMBER, EVENT, SECRET, PROTECTED, FRAMEWORK, ARGS); see
 // tools/verbs/check.mjs for what each rule enforces and what it can't see.
 
 import { NOT_LOCKDOWN, flow } from "./lua-flow.mjs";
@@ -359,6 +359,12 @@ export function checkLua(file, text, context, report) {
                 }
             }
 
+            // Argument counts of documented client functions (a `:` call passes a receiver the docs
+            // don't count, so it's skipped).
+            const documented = name && base.indexer !== ":" && isClient(name) && Object.hasOwn(api.functions, name) ? api.functions[name] : null;
+            const mismatch = documented && argumentMismatch(documented, args);
+            if (mismatch) report(file, line(node), "ARGS", `${name} ${mismatch}`);
+
             // Client APIs the framework owns.
             if (framework && name && FRAMEWORK_CALLS[name]) {
                 report(file, line(node), "FRAMEWORK", `${name} belongs to the framework; use ${FRAMEWORK_CALLS[name]}`);
@@ -583,6 +589,31 @@ export function checkLua(file, text, context, report) {
             return scope.references(binding).every((ref) => guardArguments.has(ref) || facts.factsAt(ref).has(binding));
         });
     }
+}
+
+// How a call's argument count disagrees with a documented function's Arguments, or null. A call
+// whose last argument is a call or `...` passes an unknown count, so it's never judged. Required
+// positions are those the docs don't mark Nilable or give a Default, and that aren't a
+// LuaValueReference (which takes nil, as the harness's fakes do). The snapshot doesn't record the
+// docs' StrideIndex (an argument that repeats), and every documented function with one ends in a
+// LuaValueReference or LuaValueVariant (Mixin, scrub, securecallmethod), so a function ending in
+// either is judged only for the arguments before it.
+function argumentMismatch(entry, args) {
+    const last = args[args.length - 1];
+    if (last && (callBase(last) || last.type === "VarargLiteral")) return null;
+    const types = entry.Arguments ?? [];
+    const repeats = /^LuaValue(Reference|Variant)$/.test(types[types.length - 1] ?? "");
+    const nilable = new Set(entry.ArgumentsNilable ?? []);
+    const plural = (n) => `${n} argument${n === 1 ? "" : "s"}`;
+    if (!repeats && args.length > types.length) return `passes ${plural(args.length)} but its documentation declares ${types.length}`;
+    let required = 0;
+    types.forEach((type, i) => {
+        if (!nilable.has(i + 1) && type !== "LuaValueReference" && !(repeats && i === types.length - 1)) required = i + 1;
+    });
+    if (args.length < required) {
+        return `passes ${plural(args.length)} but argument #${required} (${types[required - 1]}) isn't nilable in its documentation`;
+    }
+    return null;
 }
 
 // The first segment of a static path that the snapshot says doesn't exist ("Enum.PowerType.Nope"),

@@ -229,7 +229,7 @@ local function Walk(description, out)
     return out
 end
 
-local function NewMenu(h, root)
+local function NewMenu(_, root)
     local menu = { root = root }
     function menu:Find(text)
         for _, element in ipairs(Walk(root, {})) do

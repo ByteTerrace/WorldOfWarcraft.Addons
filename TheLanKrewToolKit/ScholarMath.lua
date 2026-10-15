@@ -24,7 +24,7 @@ local OrderForms = {
         function(a, b, c, d)
             return a + 5 .. " + " .. b .. " x " .. c .. " - " .. d, a + 5 + b * c - d, (a + 5 + b) * c - d
         end,
-        function(a, b, c, d) return a .. " x (" .. b + d .. " - " .. d .. ")", a * b, a * (b + d) - d end,
+        function(a, b, _, d) return a .. " x (" .. b + d .. " - " .. d .. ")", a * b, a * (b + d) - d end,
     },
     {
         function(a, b, c, d)
@@ -33,7 +33,7 @@ local OrderForms = {
         function(a, b, c, d)
             return "(" .. a .. " + " .. b .. ") x (" .. c + d .. " - " .. c .. ")", (a + b) * d, a + b * (c + d) - c
         end,
-        function(a, b, c, d)
+        function(_, b, c, d)
             return c + d .. " x " .. b + 1 .. " - " .. c .. " x " .. b, (c + d) * (b + 1) - c * b,
                 ((c + d) * (b + 1) - c) * b
         end,

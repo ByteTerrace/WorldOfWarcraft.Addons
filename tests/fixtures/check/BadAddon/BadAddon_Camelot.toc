@@ -11,4 +11,6 @@ Bad2.lua
 Bad3.lua
 Bad3.lua
 BadStyle.lua
+BadHygiene.lua
+BadArgs.lua
 Missing.lua

@@ -25,7 +25,7 @@ local function Enemy(name, extra)
 end
 
 -- A player's key: Forever's full name (every test player's surname is the harness default).
-local function Key(h, name)
+local function Key(_, name)
     return name .. " " .. Harness.DEFAULT_SURNAME
 end
 
@@ -79,7 +79,7 @@ test("marking your target records it and tells the Krew", function()
 end)
 
 test("the ledger is saved with the account", function()
-    local h, addon = Load()
+    local h = Load()
     h:Slash("/tlk grudge Bob Doe")
     h:Relog(60)
     truthy(Ledger(h.ns.Addon):Has(Key(h, "Bob")), "kept under the typed full name")
@@ -105,7 +105,7 @@ test("a mark can be lifted; the enemy stays a grudge", function()
 end)
 
 test("a marked enemy's nameplate raises one alert and one Krew report, and never a raid icon", function()
-    local h, addon = Grouped()
+    local h = Grouped()
     h:Slash("/tlk mark Bob Doe")
     local plate = h:AddNamePlate(Enemy())
     truthy(Notices(h):find("Marked for death", 1, true), Notices(h))
@@ -440,7 +440,7 @@ test("the right-click menu marks an enemy player", function()
 end)
 
 test("the tooltip shows the ledger", function()
-    local h, addon = Load()
+    local h = Load()
     h:Slash("/tlk grudge Bob Doe")
     local plate = h:AddNamePlate(Enemy())
     h:ShowUnitTooltip(plate)
@@ -450,7 +450,7 @@ test("the tooltip shows the ledger", function()
 end)
 
 test("switched off, Warband listens to nothing", function()
-    local h, addon = Load()
+    local _, addon = Load()
     addon.State:Set("Warband.enabled", false)
     addon.State:Set("Streaks.enabled", false) -- kill streaks read honor kills too
     for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "UPDATE_MOUSEOVER_UNIT", "CHAT_MSG_COMBAT_HONOR_GAIN" }) do
@@ -695,7 +695,7 @@ local function TooltipExtra(h, token)
 end
 
 test("the tooltip names a champion and who honored them, and a guild at war", function()
-    local h, addon = Load()
+    local h = Load()
     h:Slash("/tlk glory Cara Doe")
     h:Slash("/tlk war Knights of Light")
     h:Advance(60) -- a sighting a minute after the record began counts

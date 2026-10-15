@@ -86,7 +86,7 @@ test("a callback registered after a menu opened runs at once against it; Unregis
     local env = h.env
     h:OpenMenu("MENU_UNIT_SELF", { unit = "player" })
     local runs = 0
-    local handle = env.Menu.ModifyMenu("MENU_UNIT_SELF", function(_, root, contextData)
+    local handle = env.Menu.ModifyMenu("MENU_UNIT_SELF", function(_, _, contextData)
         runs = runs + 1
         eq(contextData.which, "SELF")
     end)
@@ -265,7 +265,7 @@ test("an empty context menu opens nothing; a tagged one runs Menu.ModifyMenu; a 
     eq(#h.soundKits, sounds, "no sound for a menu that didn't open")
     throws(function() h:OpenContextMenu() end, "no context menu is open", "opening closes the one before")
     local modified
-    env.Menu.ModifyMenu("MENU_HARNESS_ROW", function(o, root, contextData)
+    env.Menu.ModifyMenu("MENU_HARNESS_ROW", function(_, root, contextData)
         modified = contextData
         root:CreateButton("Added", function() end)
     end)

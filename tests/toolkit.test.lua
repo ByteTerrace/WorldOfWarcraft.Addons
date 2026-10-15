@@ -624,7 +624,7 @@ test("finish him doesn't replay after a /reload with the same target in range", 
 end)
 
 test("finish him alone never tracks targets for classes without a finisher", function()
-    local h, addon = Load({ classFile = "MAGE" })
+    local _, addon = Load({ classFile = "MAGE" })
     addon.State:Set("Warband.enabled", false) -- Warband watches targets too
     for _, row in ipairs({ "flawlessVictory", "chooseYourDestiny", "testYourMight", "superbVictory" }) do
         addon.State:Set("Kombat." .. row, false)

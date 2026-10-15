@@ -45,7 +45,6 @@ local NamePattern = "^%a[%w_]*$"
 
 local ByteTerrace = ByteTerrace
 local Report, SafeCall = ByteTerrace.Report, ByteTerrace.SafeCall
-local InCombatLockdown = InCombatLockdown
 local ipairs, pairs, print, tonumber, tostring, type = ipairs, pairs, print, tonumber, tostring, type
 
 local AddOn = {}

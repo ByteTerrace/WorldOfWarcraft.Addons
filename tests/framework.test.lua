@@ -576,7 +576,7 @@ test("a module spec shared by two addons isn't changed by either", function()
 end)
 
 test("row and module names must be identifiers", function()
-    local h, addon = NewAddOn()
+    local _, addon = NewAddOn()
     throws(function() addon:Module("M", { toggle = false, state = { { name = "a.b", kind = "number", default = 0 } } }) end, "identifier")
     throws(function() addon:Module("Bad.Name", {}) end, "identifier")
 end)
@@ -749,7 +749,7 @@ test("a module's errors for a bad value or an unknown row point at the module's 
 end)
 
 test("reserved module names are refused", function()
-    local h, addon = NewAddOn()
+    local _, addon = NewAddOn()
     throws(function() addon:Module("addon", {}) end, "reserved")
     throws(function() addon:Module("combat", {}) end, "reserved")
 end)

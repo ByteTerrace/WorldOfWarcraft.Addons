@@ -218,7 +218,7 @@ function Harness:BuildEnvironment()
         -- [D] "percent of health remaining", scaled by an optional curve. [G] Without a curve it's the
         -- 0-1 fraction (the client's CurveConstants offer ScaleTo100), and 0 for a unit without max
         -- health. Curves aren't modeled: passing one is a harness error.
-        UnitHealthPercent = function(u, usePredicted, curve)
+        UnitHealthPercent = function(u, _, curve)
             assert(curve == nil, "UnitHealthPercent: the harness doesn't model curves")
             local max = Field(u, "maxHealth", 0)
             return max > 0 and Field(u, "health", 0) / max or 0

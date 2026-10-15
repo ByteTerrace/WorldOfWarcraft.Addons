@@ -1,6 +1,6 @@
-// The NAMING and COMMENT rules of the check verb: Puck's C# conventions, mapped to Lua (see
-// docs/Conventions.md). Only what a parser can decide is enforced; field naming (PascalCase public
-// members, m_ private fields) is a review rule.
+// The NAMING, COMMENT and HYGIENE rules of the check verb: Puck's C# conventions, mapped to Lua (see
+// docs/Conventions.md), and luacheck's warnings. Only what a parser can decide is enforced; field
+// naming (PascalCase public members, m_ private fields) is a review rule.
 
 import { analyze, parse, walk } from "./lua-scope.mjs";
 
@@ -49,6 +49,140 @@ function functionBindings(ast) {
         }
     });
     return { scope, bindings };
+}
+
+// The statement lists of a chunk: its body, and every function, branch, loop and do body in it.
+function blocks(ast) {
+    const lists = [ast.body];
+    walk(ast.body, (node) => {
+        if (node.type === "IfStatement") for (const clause of node.clauses) lists.push(clause.body);
+        else if (Array.isArray(node.body)) lists.push(node.body);
+    });
+    return lists;
+}
+
+// Whether a statement always leaves its block: return, break, a `do` block that does, or an if
+// with an else whose every branch does.
+function leaves(node) {
+    if (node.type === "ReturnStatement" || node.type === "BreakStatement") return true;
+    if (node.type === "DoStatement") return node.body.some(leaves);
+    if (node.type === "IfStatement") {
+        return node.clauses.some((clause) => clause.type === "ElseClause") && node.clauses.every((clause) => clause.body.some(leaves));
+    }
+    return false;
+}
+
+const EMPTY_BLOCKS = {
+    IfClause: "if branch", ElseifClause: "elseif branch", ElseClause: "else branch", DoStatement: "do block",
+    WhileStatement: "loop body", RepeatStatement: "loop body", ForNumericStatement: "loop body", ForGenericStatement: "loop body",
+};
+const KINDS = { local: "local", function: "local function", param: "parameter", for: "loop variable" };
+const KEEP = "rename it to _, since a later one is read and keeps its position";
+const isCall = (node) => node?.type === "CallExpression" || node?.type === "StringCallExpression" || node?.type === "TableCallExpression";
+
+// HYGIENE: luacheck's warnings, as far as a parser can decide them. Names starting with `_` are
+// exempt, and so is a file's own `local addonName, ns = ...`; an empty function body is a no-op
+// callback, not an empty block. A local function is used when something outside its own body
+// reads it. A callback's `state` parameter may shadow an outer `state` (docs/Conventions.md).
+function checkHygiene(ast, file, report) {
+    const scope = analyze(ast);
+    const line = (node) => node.loc.start.line;
+    const exempt = (name) => name.startsWith("_");
+    const within = (node, outer) => node.range[0] >= outer.range[0] && node.range[1] <= outer.range[1];
+
+    // The innermost function around each identifier (null: the chunk), so a local a closure
+    // references is left out of the overwritten-value check.
+    const functionOf = new Map();
+    walk(ast.body, (node, ancestors) => {
+        if (node.type === "Identifier") functionOf.set(node, ancestors.findLast((ancestor) => ancestor.type === "FunctionDeclaration") ?? null);
+    });
+    // Whether a function's own body (not a nested function's) reads `...`.
+    const readsVararg = (fn) => {
+        let found = false;
+        walk(fn.body, (node, ancestors) => {
+            if (node.type === "VarargLiteral" && !ancestors.some((ancestor) => ancestor.type === "FunctionDeclaration")) found = true;
+        });
+        return found;
+    };
+    const isHeader = (binding) => binding.depth === 0 && binding.statement?.type === "LocalStatement"
+        && binding.statement.init.length === 1 && binding.statement.init[0].type === "VarargLiteral"
+        && binding.statement.variables.every((variable, i) => variable.name === ["addonName", "ns"][i]);
+    const read = (identifier) => scope.reads(scope.bindingOf(identifier)).length > 0;
+
+    for (const binding of scope.all()) {
+        const { identifier, statement, name } = binding;
+        if (!identifier || exempt(name) || isHeader(binding)) continue;
+        // docs/Conventions.md: a callback may name its parameter `state` where an outer `state`
+        // holds the same object.
+        const stateCallback = binding.kind === "param" && name === "state" && !statement.identifier;
+        if (binding.shadows && !exempt(binding.shadows.name) && !stateCallback) {
+            const hidden = binding.shadows.identifier;
+            report(file, line(identifier), "HYGIENE", hidden
+                ? `${KINDS[binding.kind]} ${name} ${binding.redefines ? "redefines" : "shadows"} the ${KINDS[binding.shadows.kind]} ${name} on line ${line(hidden)}; rename one`
+                : `${KINDS[binding.kind]} ${name} shadows the implicit self of the method on line ${line(binding.shadows.statement)}; rename it`);
+        }
+        const reads = scope.reads(binding);
+        if (binding.kind === "function") {
+            if (!reads.some((ref) => !within(ref, statement))) {
+                report(file, line(identifier), "HYGIENE", `unused local function ${name}: ${reads.length ? "only its own body calls it" : "nothing calls or reads it"}`);
+            }
+            continue;
+        }
+        if (reads.length) continue;
+        if (binding.kind === "param") {
+            const later = statement.parameters.slice(statement.parameters.indexOf(identifier) + 1);
+            const kept = later.some((parameter) => (parameter.type === "VarargLiteral" ? readsVararg(statement) : read(parameter)));
+            report(file, line(identifier), "HYGIENE", `unused parameter ${name}: ${kept ? KEEP : "remove it"}`);
+        } else if (binding.kind === "for") {
+            const later = statement.type === "ForGenericStatement" ? statement.variables.slice(statement.variables.indexOf(identifier) + 1) : [];
+            const kept = statement.type === "ForNumericStatement" || later.some(read);
+            report(file, line(identifier), "HYGIENE", `unused loop variable ${name}: ${kept ? (later.length ? KEEP : "rename it to _") : "remove it"}`);
+        } else {
+            const later = statement.type === "LocalStatement" ? statement.variables.slice(statement.variables.indexOf(identifier) + 1) : [];
+            report(file, line(identifier), "HYGIENE", `unused local ${name}: nothing reads it${later.some(read) ? `; ${KEEP}` : ""}`);
+        }
+    }
+
+    for (const list of blocks(ast)) {
+        const exit = list.findIndex(leaves);
+        if (exit >= 0 && exit < list.length - 1) {
+            report(file, line(list[exit + 1]), "HYGIENE", `unreachable code: the statement on line ${line(list[exit])} always leaves this block`);
+        }
+        list.forEach((statement, i) => overwritten(list, statement, i));
+    }
+
+    walk(ast.body, (node) => {
+        const kind = EMPTY_BLOCKS[node.type];
+        if (kind && node.body.length === 0) report(file, line(node), "HYGIENE", `empty ${kind}`);
+    });
+
+    // A value assigned to a local (declared with one, or assigned) that a later statement of the
+    // same block overwrites before anything reads it. Only straight-line code counts, and only
+    // locals no closure references, so a call in between can't read the value.
+    function overwritten(list, statement, i) {
+        const written = [];
+        if (statement.type === "LocalStatement") {
+            const last = statement.init[statement.init.length - 1];
+            statement.variables.forEach((variable, k) => {
+                const value = statement.init[k];
+                if (value ? value.type !== "NilLiteral" : isCall(last) || last?.type === "VarargLiteral") written.push(variable);
+            });
+        } else if (statement.type === "AssignmentStatement") {
+            for (const target of statement.variables) if (target.type === "Identifier" && scope.bindingOf(target)) written.push(target);
+        }
+        for (const target of written) {
+            const binding = scope.bindingOf(target);
+            if (!binding.identifier || exempt(binding.name)) continue;
+            const home = functionOf.get(binding.identifier);
+            const refs = scope.references(binding);
+            if (refs.some((ref) => functionOf.get(ref) !== home)) continue;
+            const next = refs.filter((ref) => ref.range[0] > statement.range[1]).sort((a, b) => a.range[0] - b.range[0])[0];
+            const overwriter = next && list.slice(i + 1).find((later) => later.type === "AssignmentStatement" && later.variables.includes(next));
+            if (overwriter && !scope.reads(binding).some((ref) => within(ref, overwriter))) {
+                report(file, line(target), "HYGIENE", `the value assigned to ${binding.name} is overwritten on line ${line(overwriter)} before anything reads it`);
+            }
+        }
+    }
 }
 
 export function checkStyleRules(file, text, report) {
@@ -113,4 +247,6 @@ export function checkStyleRules(file, text, report) {
             naming(node.variable, node.variable.name, CAMEL, "loop variable");
         }
     });
+
+    checkHygiene(ast, file, report);
 }

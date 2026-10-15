@@ -162,7 +162,7 @@ function Harness:GUID(unit)
 end
 
 -- Every token that can name a unit, in the client's order (see the header).
-local function Tokens(h)
+local function Tokens()
     local tokens = { "player", "target", "focus", "mouseover", "pet", "vehicle" }
     for i = 1, 4 do tokens[#tokens + 1] = "party" .. i end
     for i = 1, 40 do tokens[#tokens + 1] = "raid" .. i end
@@ -173,7 +173,7 @@ end
 -- The first token naming the unit with this GUID, or nil.
 function Harness:UnitTokenForGUID(guid)
     guid = Reveal(guid)
-    for _, token in ipairs(Tokens(self)) do
+    for _, token in ipairs(Tokens()) do
         local unit = self:Unit(token)
         if unit and self:GUID(unit) == guid then
             return token

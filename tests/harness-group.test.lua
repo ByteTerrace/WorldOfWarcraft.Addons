@@ -232,7 +232,7 @@ test("your own group messages echo back on the next Advance, never during the se
     local got = {}
     local frame = h.env.CreateFrame("Frame")
     frame:RegisterEvent("CHAT_MSG_ADDON")
-    frame:SetScript("OnEvent", function(_, _, prefix, text, channel, sender) got[#got + 1] = text .. "@" .. channel .. "<" .. sender end)
+    frame:SetScript("OnEvent", function(_, _, _, text, channel, sender) got[#got + 1] = text .. "@" .. channel .. "<" .. sender end)
     h:JoinGroup("party", { "Bob" })
     chatInfo.SendAddonMessage("Krew", "hello", "PARTY")
     eq(#got, 0, "not inside the call")

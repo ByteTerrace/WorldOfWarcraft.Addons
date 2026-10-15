@@ -20,7 +20,7 @@ local function Enemy(name, extra)
 end
 
 -- A player's key: Forever's full name (every test player's surname is the harness default).
-local function Key(h, name)
+local function Key(_, name)
     return name .. " " .. Harness.DEFAULT_SURNAME
 end
 

@@ -228,7 +228,6 @@ end)
 test("the meter reports whether it's available; a relog clears its sessions, a reload keeps them", function()
     local h = Harness.New()
     local env = h.env
-    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
     local ok, reason = env.C_DamageMeter.IsDamageMeterAvailable()
     eq(ok, true)
     eq(reason, "")

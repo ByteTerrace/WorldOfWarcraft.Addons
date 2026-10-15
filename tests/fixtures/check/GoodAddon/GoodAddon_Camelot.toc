@@ -7,3 +7,4 @@
 Good.lua
 GoodLayout.lua
 GoodStyle.lua
+GoodHygiene.lua

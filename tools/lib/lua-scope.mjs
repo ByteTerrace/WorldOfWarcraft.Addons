@@ -4,7 +4,9 @@
 // following Lua's scoping (a local is visible after its statement; `local function f` sees
 // itself; parameters and loop variables are scoped to their body; `repeat ... until cond` sees
 // the body's locals). A binding records whether it's ever reassigned, so aliases are trusted only
-// when they can't change: conservative about shadowing and reassignment.
+// when they can't change: conservative about shadowing and reassignment. It also records what the
+// HYGIENE rule reads: each binding's declaring node, the local its declaration hides, and which
+// references write rather than read.
 
 import luaparse from "luaparse";
 
@@ -39,11 +41,17 @@ export function isFunction(node) {
 }
 
 // Returns { bindingOf(identifier) -> binding | undefined, fileLevel(binding) -> boolean,
-// references(binding) -> the Identifiers that read or assign it (not its declaration) }.
-// binding = { name, kind: "local" | "function" | "param" | "for", init, depth, reassigned }
+// references(binding) -> the Identifiers that read or assign it (not its declaration),
+// reads(binding) -> the references that read it, all() -> every binding in declaration order }.
+// binding = { name, kind: "local" | "function" | "param" | "for", init, depth, reassigned,
+//   identifier (the declaring Identifier; null for a method's implicit self), statement (the
+//   LocalStatement, loop or FunctionDeclaration that declares it), shadows (the visible local it
+//   hides, or undefined), redefines (whether that local is in the same scope) }
 export function analyze(ast) {
     const bindings = new Map();
     const references = new Map();
+    const writes = new Set();
+    const declared = [];
     const refer = (identifier, binding) => {
         bindings.set(identifier, binding);
         const list = references.get(binding) ?? [];
@@ -60,10 +68,15 @@ export function analyze(ast) {
         }
         return undefined;
     };
-    const declare = (identifier, kind, init = null) => {
-        const binding = { name: identifier.name, kind, init, depth: functionDepth, reassigned: false };
+    const declare = (identifier, kind, init = null, statement = null) => {
+        const binding = {
+            name: identifier.name, kind, init, depth: functionDepth, reassigned: false,
+            identifier: identifier.type === "Identifier" ? identifier : null, statement, shadows: lookup(identifier.name),
+            redefines: scopes[scopes.length - 1].has(identifier.name),
+        };
         scopes[scopes.length - 1].set(identifier.name, binding);
         bindings.set(identifier, binding);
+        declared.push(binding);
         return binding;
     };
     const block = (fn) => {
@@ -118,10 +131,10 @@ export function analyze(ast) {
         block(() => {
             const identifier = node.identifier;
             if (identifier && identifier.type === "MemberExpression" && identifier.indexer === ":") {
-                declare({ name: "self" }, "param");
+                declare({ name: "self" }, "param", null, node);
             }
             for (const parameter of node.parameters) {
-                if (parameter.type === "Identifier") declare(parameter, "param");
+                if (parameter.type === "Identifier") declare(parameter, "param", null, node);
             }
             statements(node.body);
         });
@@ -134,6 +147,7 @@ export function analyze(ast) {
             if (binding) {
                 binding.reassigned = true;
                 refer(target, binding);
+                writes.add(target);
             }
         } else {
             expression(target);
@@ -144,7 +158,7 @@ export function analyze(ast) {
         switch (node.type) {
             case "LocalStatement":
                 node.init.forEach(expression);
-                node.variables.forEach((variable, i) => declare(variable, "local", node.init[i] ?? null));
+                node.variables.forEach((variable, i) => declare(variable, "local", node.init[i] ?? null, node));
                 return;
             case "AssignmentStatement":
                 node.init.forEach(expression);
@@ -153,7 +167,7 @@ export function analyze(ast) {
                 return expression(node.expression);
             case "FunctionDeclaration":
                 if (node.isLocal && node.identifier) {
-                    declare(node.identifier, "function", node);
+                    declare(node.identifier, "function", node, node);
                 } else if (node.identifier) {
                     assignTarget(node.identifier);
                 }
@@ -181,13 +195,13 @@ export function analyze(ast) {
                 expression(node.end);
                 expression(node.step);
                 return block(() => {
-                    declare(node.variable, "for");
+                    declare(node.variable, "for", null, node);
                     statements(node.body);
                 });
             case "ForGenericStatement":
                 node.iterators.forEach(expression);
                 return block(() => {
-                    node.variables.forEach((variable) => declare(variable, "for"));
+                    node.variables.forEach((variable) => declare(variable, "for", null, node));
                     statements(node.body);
                 });
             default:
@@ -204,6 +218,8 @@ export function analyze(ast) {
         bindingOf: (identifier) => bindings.get(identifier),
         fileLevel: (binding) => binding.depth === 0,
         references: (binding) => references.get(binding) ?? [],
+        reads: (binding) => (references.get(binding) ?? []).filter((identifier) => !writes.has(identifier)),
+        all: () => declared,
     };
 }
 

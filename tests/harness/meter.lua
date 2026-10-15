@@ -23,7 +23,9 @@
 --       for Overall, then (type, sessionID) for the current session (DamageMeterSessionWindow.lua:
 --       "Two events are always dispatched"). [G] A DamageDone change also fires for Dps and a
 --       HealingDone change for Hps (Blizzard's window filters by its own type); a death fires for
---       Deaths. Ending a session fires nothing.
+--       Deaths. Ending a session fires nothing. [P] damageMeter.afterDeath: your own death reaches
+--       the meter after PLAYER_DEAD (its DamageTaken and Deaths updates came in the seconds after),
+--       so h:MeterFight adds the local player's dying source then; [G] at once, before combat ends.
 --   [G] No session of the asked kind returns an empty session: no sources,
 --       amounts 0, durationSeconds nil (the return isn't Nilable). An unknown source returns no
 --       spells and amounts 0.
@@ -347,31 +349,59 @@ function Harness:MeterAdd(spec, fightLeft)
     return record, recapID
 end
 
+-- A source spec split in two: everything but its DamageTaken and death, and its identity with
+-- only those.
+local function SplitDamageTaken(source)
+    local during, after = { amounts = {}, spells = {} }, { amounts = {}, spells = {}, death = source.death }
+    for key, value in pairs(source) do
+        if key ~= "amounts" and key ~= "spells" and key ~= "death" then
+            during[key], after[key] = value, value
+        end
+    end
+    for _, field in ipairs({ "amounts", "spells" }) do
+        for key, value in pairs(source[field] or {}) do
+            local side = MeterType(key) == Types.DamageTaken and after or during
+            side[field][key] = value
+        end
+    end
+    return during, after
+end
+
 -- Scripts a whole fight: enters combat (starting a session) unless already in combat, names the
 -- session, adds every source (h:MeterAdd), lets duration seconds pass (h:Advance), then, unless
--- endCombat is false, ends combat: h:Die() when the local player's source died, else
--- h:LeaveCombat(). Returns { sessionID, recaps = { [source name] = recapID } }.
+-- endCombat is false, ends combat: h:Die() when the local player's source died, adding that source
+-- after PLAYER_DEAD (see the header), else h:LeaveCombat(). Returns { sessionID, recaps =
+-- { [source name] = recapID } }.
 function Harness:MeterFight(spec)
     if not self.inCombat then
         self:EnterCombat()
     end
     local session = assert(self:MeterActive(), "MeterFight: no damage meter session")
     session.name = spec.name or session.name
-    local fight, localDeath = { sessionID = session.id, recaps = {} }, false
-    for _, source in ipairs(spec.sources or {}) do
-        local record, recapID = self:MeterAdd(source, spec.duration or 0)
+    local fight, dying = { sessionID = session.id, recaps = {} }, nil
+    local function Add(source, fightLeft)
+        local record, recapID = self:MeterAdd(source, fightLeft)
         if recapID then
             fight.recaps[record.name] = recapID
-            localDeath = localDeath or record.isLocalPlayer
+        end
+    end
+    local alive = not self.player.dead and not self.player.ghost
+    for _, source in ipairs(spec.sources or {}) do
+        local isLocal = source.isLocalPlayer or (source.isLocalPlayer == nil and (source.unit == "player" or source.unit == self.player))
+        if source.death and isLocal and alive and spec.endCombat ~= false and not dying then
+            -- What you dealt reaches the meter in the fight; the hits on you and your death after PLAYER_DEAD.
+            local during
+            during, dying = SplitDamageTaken(source)
+            Add(during, spec.duration or 0)
+        else
+            Add(source, spec.duration or 0)
         end
     end
     self:Advance(spec.duration or 0)
-    if spec.endCombat ~= false then
-        if localDeath and not self.player.dead and not self.player.ghost then
-            self:Die()
-        elseif self.inCombat then
-            self:LeaveCombat()
-        end
+    if dying then
+        self:Die(function() Add(dying, 0) end)
+    elseif spec.endCombat ~= false and self.inCombat then
+        self:LeaveCombat()
     end
     return fight
 end

@@ -48,6 +48,10 @@
       },
       "context": { "combat": false, "restrictions": "none" }
     },
+    "damageMeter.afterDeath": {
+      "result": { "types": "DamageTaken,Deaths" },
+      "context": { "combat": false, "restrictions": "none" }
+    },
     "damageMeter.afterFight": {
       "result": {
         "damageTaken": {
@@ -89,8 +93,7 @@
         "hasRecapID": true,
         "localPlayer": true
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "damageMeter.enemySource": {
       "result": {
@@ -189,13 +192,11 @@
         "sourceName": "text"
       },
       "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)",
       "version": 2
     },
     "deathRecap.latest": {
       "result": { "hasLatest": true, "latest": "table", "sameAsMeter": true },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "deathRecap.spellFields": {
       "result": {
@@ -205,13 +206,11 @@
         "spellName": "string",
         "spellSchool": "number"
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "deathRecap.swingFields": {
       "result": { "avoidable": "nil", "deadly": "nil", "spellId": "nil", "spellName": "nil", "spellSchool": "nil" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "faction.player": {
       "result": { "group": "string", "isAllianceOrHorde": true, "localized": "string", "localizedIsGlobalString": true },
@@ -286,8 +285,7 @@
     },
     "namePlate.friendlyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "names.chatDiscordInfo": {
       "result": {
@@ -342,8 +340,7 @@
     },
     "power.comboPoints": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "power.comboPointsInCombat": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
@@ -356,8 +353,7 @@
         "powerType": "number",
         "token": "string"
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "power.npcTargetInCombat": {
       "result": {
@@ -388,13 +384,11 @@
     },
     "quest.offer": {
       "result": { "objectiveText": "text", "questText": "text", "title": "text" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "quest.offerIdentity": {
       "result": { "hasQuestID": true, "npcName": "string", "questID": "number", "questNpcName": "string" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "quest.turnIn": {
       "result": { "rewardText": "text", "title": "text" },
@@ -433,7 +427,7 @@
         "objectiveType": "nil",
         "text": "text",
         "type": "text",
-        "types": "item,log"
+        "types": "item,log,object"
       },
       "context": { "combat": false, "restrictions": "none" }
     },
@@ -540,8 +534,7 @@
     },
     "unitClassification.npcTarget": {
       "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "unitClassification.npcTargetInCombat": {
       "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
@@ -574,8 +567,7 @@
     },
     "unitHealth.npcTarget": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "unitHealth.npcTargetInCombat": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
@@ -627,8 +619,7 @@
         "name": "string",
         "realm": "nil"
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "unitIdentity.npcTargetInCombat": {
       "result": {

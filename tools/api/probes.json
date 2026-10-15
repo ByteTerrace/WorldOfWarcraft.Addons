@@ -529,7 +529,7 @@
         "flagTexts": "BLOCK_REDUCED,CRITICAL,GLANCING",
         "player": {
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
-          "HEAL": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
+          "HEAL": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" },
           "MISS": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "WOUND": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" }
         },

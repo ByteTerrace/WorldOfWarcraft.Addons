@@ -14,7 +14,7 @@
         "sellPrice": "number",
         "stackCount": "number"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "chat.lockdownIdle": {
       "result": { "inChatMessagingLockdown": false },
@@ -22,7 +22,7 @@
     },
     "chatTypeInfo.raidWarning": {
       "result": { "b": 0, "g": 72, "hasMetatable": true, "r": 255, "sticky": 0 },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "classColors": {
       "result": {
@@ -39,7 +39,7 @@
           "WARRIOR": "ffc69b6d"
         }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "combat.edges": {
       "result": {
@@ -73,7 +73,7 @@
     },
     "damageMeter.available": {
       "result": { "failureReason": "", "isAvailable": true },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "damageMeter.currentInCombat": {
       "result": {
@@ -181,11 +181,11 @@
     },
     "faction.player": {
       "result": { "group": "string", "isAllianceOrHorde": true, "localized": "string", "localizedIsGlobalString": true },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "fonts.scholar": {
       "result": { "Game18Font": "Font", "Game24Font": "Font", "Game30Font": "Font" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "gamePad.device": {
       "result": {
@@ -209,15 +209,15 @@
         "COMBATLOG_HONORGAIN": "%s dies (Honorable Kill: %s). You gain %d Honor.",
         "COMBATLOG_HONORGAIN_NO_RANK": "%s dies (Honorable Kill). You gain %d Honor."
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "kills.seen": {
       "result": {
-        "partyKill": { "attacker": "you", "attackerKind": "Player", "target": "Creature" },
+        "partyKill": { "attacker": "other,you", "attackerKind": "Player", "target": "Creature" },
         "targetDied": true,
-        "unitDied": { "unit": "Creature,Player" }
+        "unitDied": { "unit": "Creature,Pet,Player" }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "map.player": {
       "result": {
@@ -227,7 +227,7 @@
         "mapID": "number",
         "position": "table"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "merchant.firstItem": {
       "result": {
@@ -271,7 +271,7 @@
         },
         "shapes": { "CHAT_MSG_CHANNEL": "table", "CHAT_MSG_SAY": "table", "CHAT_MSG_YELL": "table" }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.chatSenders": {
       "result": {
@@ -280,7 +280,7 @@
         "CHAT_MSG_SAY": "Aa Aa",
         "CHAT_MSG_YELL": "Aa Aa"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.otherPlayer": {
       "result": {
@@ -301,11 +301,11 @@
         "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.secondPart": {
       "result": { "unitFullNameIsRealm": false, "unitNameIsRealm": false },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "power.comboPoints": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
@@ -369,7 +369,7 @@
     },
     "questLog.countForm": {
       "result": { "forms": "leading,none" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "questLog.entry": {
       "result": {
@@ -382,7 +382,7 @@
         "questID": "number",
         "title": "text"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "questLog.objectives": {
       "result": {
@@ -396,11 +396,11 @@
         "type": "text",
         "types": "event,item,log,monster,object"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "questLog.text": {
       "result": { "description": "text", "objectives": "text", "selectedQuest": "number", "titleForQuestID": "text" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "realm.normalized": {
       "result": {
@@ -409,7 +409,7 @@
         "normalized": "string",
         "realm": "string"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "resting.player": {
       "result": { "isResting": "boolean" },
@@ -428,15 +428,15 @@
         "tostring": true,
         "truthTest": true
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "secrets.rawOperations": {
       "result": { "compare": false, "tableKey": false },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "sound.knownFile": {
       "result": { "addonLua": true, "addonToc": true, "missing": false, "shipped": true },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "textures.used": {
       "result": {
@@ -475,7 +475,7 @@
         "Interface\\TargetingFrame\\UI-StatusBar": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
         "Interface\\Tooltips\\UI-Tooltip-Border": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "trainer.services": {
       "result": {
@@ -504,7 +504,7 @@
         "voiceName": "string",
         "voices": "table"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "unitClassification.npcTarget": {
       "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
@@ -533,7 +533,7 @@
           "WOUND": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" }
         }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "unitHealth.enemyPlayer": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
@@ -620,11 +620,11 @@
     },
     "units.secretTokenInAuraEvent": {
       "result": { "Combat": "player,target", "none": "player,target" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "xp.player": {
       "result": { "exhaustion": "number or nil", "xp": "number", "xpMax": "number" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     }
   }
 }

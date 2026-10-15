@@ -689,7 +689,7 @@ test("Read aloud speaks the riddle and its choices with the player's voice setti
     local spoken = h.spoken[#h.spoken]
 
     truthy(spoken, "something was spoken")
-    truthy(spoken.text:find(" Is it ", 1, true), spoken.text)
+    truthy(spoken.text:find(" Press 1 for ", 1, true), spoken.text)
     eq(spoken.voiceID .. " " .. spoken.rate .. " " .. spoken.volume, "3 2 70", "the player's voice, rate and volume")
 end)
 

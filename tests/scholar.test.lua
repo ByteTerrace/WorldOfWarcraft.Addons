@@ -22,8 +22,8 @@ local Kinds = {
         { "math.percent", "math.ratio", "math.order" },
     },
     reading = {
-        [0] = { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc" },
-        { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc" },
+        [0] = { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.listen", "reading.listenSound" },
+        { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.listen", "reading.listenSound" },
         { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
         { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
         { "reading.vocab", "reading.blank", "reading.story" },
@@ -432,6 +432,19 @@ local function CheckReading(p, options)
         local expected = ((sounds and sounds:gsub(" %- ", "")) or (from and from:gsub(was, now)))
 
         Expect(correct == expected, p, options, "the built word %q, not %q", tostring(expected), correct)
+    elseif p.kind == "reading.listen" then
+        local heard = p.speech:match("^Find the word (%a+)%.")
+
+        Expect(correct == heard, p, options, "the answer is the word said aloud, %q", tostring(heard))
+        Expect(not p.prompt:lower():find("%f[%a]" .. heard .. "%f[%a]"), p, options, "the prompt doesn't show the word")
+    elseif p.kind == "reading.listenSound" then
+        local heard = p.speech:match("^Which letter does (%a+) start with%?")
+
+        for i, choice in ipairs(p.choices) do
+            Expect((choice == heard:sub(1, 1)) == (i == p.answer), p, options, "first letter of %q: %q", heard, choice)
+        end
+
+        Expect(not p.prompt:lower():find("%f[%a]" .. heard .. "%f[%a]"), p, options, "the prompt doesn't show the word")
     elseif p.kind == "reading.unscramble" then
         local letters = p.prompt:match("\n([A-Z][A-Z ]+)")
 

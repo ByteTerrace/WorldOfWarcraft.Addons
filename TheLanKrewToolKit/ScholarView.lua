@@ -352,6 +352,8 @@ local function CreateAnswer(panel, i)
 
     button:SetScript("OnEnter", function(self)
         if self.State == "normal" then Paint(self, "hover") end
+
+        if Callbacks.hover then Callbacks.hover(i) end
     end)
 
     button:SetScript("OnLeave", function(self)
@@ -643,25 +645,42 @@ local function Split(prompt)
     return story, (prompt:sub(cut + 1):gsub("^%s+", ""))
 end
 
---- What a child hears when they press Read aloud: the story, the question, then the choices. A spelling riddle's
---- choices are misspelled on purpose, so the voice spells each letter by letter rather than saying a wrong spelling as
---- if it were the word.
+--- What a child hears when they press Read aloud: the story and the question, then each choice with the key that picks
+--- it ("Press A for cat."). A spelling riddle's choices are misspelled on purpose, so the voice spells each letter by
+--- letter rather than saying a wrong spelling as if it were the word. A heard riddle says only its speech.
 ---@param puzzle table
 ---@return string
-local function Spoken(puzzle)
-    local prompt, choices = Sayable((puzzle.prompt:gsub("\n", " "))), puzzle.choices
-
-    if SpelledKinds[puzzle.kind] then
-        local spelled = {}
-
-        for i, choice in ipairs(choices) do
-            spelled[i] = ("Choice %d: %s."):format(i, Spelled(choice))
-        end
-
-        return (prompt .. " " .. concat(spelled, " "))
+-- What read-aloud says for choice i: the button that picks it, then the choice (spelled out for a spelling riddle), or
+-- nil for a riddle that's heard, whose choices are for reading.
+local function SpokenChoice(puzzle, i)
+    if puzzle.speech then
+        return nil
     end
 
-    return ("%s Is it %s, %s, %s, or %s?"):format(prompt, choices[1], choices[2], choices[3], choices[4])
+    local choice = puzzle.choices[i]
+    local keys = (Overlay and Overlay.m_keys)
+    local key = ((keys and keys[i]) or tostring(i))
+
+    if SpelledKinds[puzzle.kind] then
+        return ("Press %s: %s."):format(key, Spelled(choice))
+    end
+
+    return ("Press %s for %s."):format(key, Sayable(choice))
+end
+
+-- What read-aloud says for a riddle: a heard riddle's own speech, else its prompt, then each choice with its button.
+local function Spoken(puzzle)
+    if puzzle.speech then
+        return Sayable(puzzle.speech)
+    end
+
+    local spoken = { Sayable((puzzle.prompt:gsub("\n", " "))) }
+
+    for i in ipairs(puzzle.choices) do
+        spoken[#spoken + 1] = SpokenChoice(puzzle, i)
+    end
+
+    return concat(spoken, " ")
 end
 
 -- The footer row: help on the left (Need a hint?, or the feedback banner in its place; on a quest riddle the quest book
@@ -802,6 +821,7 @@ function ScholarView.Show(puzzle, info)
     Overlay.Clue:SetShown(clue ~= nil)
     Overlay.Story:SetText(Emphasize(story))
     Overlay.m_puzzle, Overlay.m_story, Overlay.m_bookOpen, Overlay.m_said = puzzle, story, false, nil
+    Overlay.m_keys = info.keys
     Overlay.Question:SetFontObject(((#question <= 44) and "Game30Font") or "Game24Font")
     Overlay.Question:SetText(Emphasize(question))
 
@@ -819,6 +839,7 @@ function ScholarView.Show(puzzle, info)
 
     local actions = (info.actions or {})
 
+    Overlay.Speak.m_text = ((puzzle.speech and "Hear it again") or "Read aloud")
     LabelPill(Overlay.Speak, actions.speak)
     Overlay.Hint.m_text, Overlay.Hint.m_key = ((info.book and "Quest book") or "Need a hint?"), actions.hint
     LabelPill(Overlay.Hint, actions.hint)
@@ -842,6 +863,14 @@ function ScholarView.Speech()
     end
 
     return ((Overlay.m_said and Sayable(Overlay.m_said)) or Spoken(Overlay.m_puzzle))
+end
+
+--- What read-aloud says for choice i of the riddle on screen ("Press A for cat."), or nil for a riddle that's heard,
+--- whose choices are for reading. Only while a riddle is on screen.
+---@param i integer
+---@return string?
+function ScholarView.SpokenChoice(i)
+    return SpokenChoice(Overlay.m_puzzle, i)
 end
 
 --- Opens the quest book in the story's place, or closes it again: the quest's text, as the player saw it, holds every

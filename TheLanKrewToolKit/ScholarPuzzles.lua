@@ -249,7 +249,8 @@ local function Finish(state, kind, text, vars, correct, wrongs)
         expression = (text.expr and Fill(text.expr, vars)), hint = hint, kind = kind,
         picture = (((state.grade <= 3) and Pictures[kind] and (type(vars.a) == "number") and (type(vars.b) == "number")
             and Pictures[kind](vars, Counted(prompt, vars))) or nil),
-        prompt = prompt, remainder = vars.r, subject = state.subject, terms = vars.terms, title = title,
+        prompt = prompt, remainder = vars.r, speech = (text.speech and Fill(text.speech, vars)), subject = state.subject,
+        terms = vars.terms, title = title,
         value = (vars.report or vars.v),
     }
 end
@@ -269,7 +270,7 @@ end
 ---                     an optional kind (one of Kinds(subject, grade); a random one otherwise), and for "quest" the
 ---                     quest (a QuestBook record) and known (every record)
 ---@return table? puzzle { subject, kind, title, prompt, choices (4 distinct strings), answer (1..4), hint,
----                      explanation }, plus value, expression, remainder and terms on math puzzles and book (the quest
+---                      explanation, speech (what's said aloud for a heard riddle, whose prompt never shows the word) }, plus value, expression, remainder and terms on math puzzles and book (the quest
 ---                      book's text) on quest puzzles
 local function Generate(options)
     if (type(options) ~= "table") or (type(options.random) ~= "function") then
@@ -306,11 +307,13 @@ local function Generate(options)
     return Generators[kind](state)
 end
 
---- The puzzle kinds of a subject ("math" or "reading") at a grade (clamped to 0..6), in a fresh array.
+--- The puzzle kinds of a subject ("math" or "reading") at a grade (clamped to 0..6), in a fresh array. Without canHear,
+--- the kinds that are heard rather than read (ScholarWords.heard) are left out.
 ---@param subject string
 ---@param grade number
+---@param canHear boolean whether the client can say a riddle aloud
 ---@return string[]
-local function Kinds(subject, grade)
+local function Kinds(subject, grade, canHear)
     local kinds = ScholarWords.kinds[subject]
 
     if not kinds then
@@ -319,8 +322,10 @@ local function Kinds(subject, grade)
 
     local out = {}
 
-    for i, kind in ipairs(kinds[Clamp(grade, 0, 6, 0)]) do
-        out[i] = kind
+    for _, kind in ipairs(kinds[Clamp(grade, 0, 6, 0)]) do
+        if canHear or not ScholarWords.heard[kind] then
+            out[#out + 1] = kind
+        end
     end
 
     return out

@@ -29,6 +29,10 @@ local addonName, ns = ...
 --            shoulder, Skip is Esc or Back. The open quest book scrolls with the wheel, the Up and
 --            Down arrows or the D-pad. Read aloud reads what the screen shows: the riddle, the
 --            open quest book, or the feedback after an answer or a hint.
+--   Aloud    the readAloud setting says riddles as they appear (kindergarten and grade 1 by
+--            default), each choice with the key that picks it, and a hovered choice again. A heard
+--            riddle (ScholarWords.heard) always says its word, and its button is Hear it again.
+--            With no text-to-speech voice, nothing speaks and no heard riddle is asked.
 --   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the
 --            grade (math and reading only: a quest riddle never changes it).
 --
@@ -125,6 +129,11 @@ local function Bank()
         SegmentStart = (SegmentStart + played)
         Scholar:Set("elapsed", Scholar:Get("elapsed") + played)
     end
+end
+
+-- Whether the client has a text-to-speech voice to say a riddle with (probe tts.voices).
+local function CanHear()
+    return (next(C_VoiceChat.GetTtsVoices() or {}) ~= nil)
 end
 
 -- Hides the riddle and gives input back; the riddle stays current until it's solved.
@@ -282,6 +291,21 @@ local function Progress(extra)
     return info
 end
 
+-- Whether riddles are said aloud as they appear: the readAloud setting ("young" means kindergarten and grade 1), when
+-- the client has a voice.
+local function ReadsAloud()
+    local mode = Scholar:Get("readAloud")
+
+    return (CanHear() and ((mode == "always") or ((mode == "young") and (tonumber(Scholar:Get("grade")) <= 1))))
+end
+
+-- Reads what the screen shows aloud (the riddle, the open quest book, or the feedback) with the player's text-to-speech
+-- voice, rate and volume. Says text with the player's text-to-speech voice, rate and volume.
+local function Say(text)
+    C_VoiceChat.SpeakText(C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard), text, C_TTSSettings.GetSpeechRate(),
+        C_TTSSettings.GetSpeechVolume(), false)
+end
+
 -- A Blizzard window opened (open) or closed: window is whether any a riddle waits for is open.
 local function SetWindow(name, open)
     Windows[name] = (open or nil)
@@ -341,7 +365,7 @@ local function NextPuzzle()
 
     LastSubject = subject
     local grade = tonumber(Scholar:Get("grade"))
-    local kind = Skills.Choose(Puzzles.Kinds(subject, grade), SkillOf, Scholar:Get(subject .. "Count"), random)
+    local kind = Skills.Choose(Puzzles.Kinds(subject, grade, CanHear()), SkillOf, Scholar:Get(subject .. "Count"), random)
 
     return Puzzles.Generate({
         context = Context(), grade = grade, kind = kind, level = Scholar:Get(subject .. "Level"), random = random,
@@ -449,12 +473,9 @@ local function Skip()
     end
 end
 
--- Reads what the screen shows aloud (the riddle, the open quest book, or the feedback) with the player's text-to-speech
--- voice, rate and volume.
 local function Speak()
     if Current and ScholarView.IsShown() then
-        C_VoiceChat.SpeakText(C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard), ScholarView.Speech(),
-            C_TTSSettings.GetSpeechRate(), C_TTSSettings.GetSpeechVolume(), false)
+        Say(ScholarView.Speech())
     end
 end
 
@@ -485,7 +506,7 @@ end
 local function Open()
     local frame = ScholarView.Show(Current, Progress({
         actions = { hint = ActionLabel("hint"), skip = ActionLabel("skip"), speak = ActionLabel("speak") },
-        book = (Current.book ~= nil), canSkip = ((Scholar:Get("mode") == "gentle") and (Wrongs > 0)), canSpeak = true,
+        book = (Current.book ~= nil), canSkip = ((Scholar:Get("mode") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
         controller = UsingController(), gentle = (Scholar:Get("mode") == "gentle"),
         keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, wrong = Missed,
     }))
@@ -495,6 +516,11 @@ local function Open()
     frame:SetPropagateKeyboardInput(false)
     Addon.Input:SetActiveMaps({ "scholar" })
     C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN)
+
+    -- A heard riddle always speaks; any other as readAloud says.
+    if Current.speech or ReadsAloud() then
+        Speak()
+    end
 end
 
 local function ValidPin(pin)
@@ -504,6 +530,13 @@ end
 ScholarView.Init({
     choose = function(i) Addon:Batch(Choose, i) end,
     hint = Hint,
+    hover = function(i)
+        local said = (ReadsAloud() and ScholarView.SpokenChoice(i))
+
+        if said then
+            Say(said)
+        end
+    end,
     key = function(key)
         if KeyAnswers[key] then
             Addon:Batch(Choose, KeyAnswers[key])
@@ -535,6 +568,12 @@ local Rows = {
             .. "and their text. Two of every three riddles are about quests, the newest first, then older ones for "
             .. "review; the quest book on the riddle screen holds every answer."),
         kind = "boolean", label = "Quest riddles", lockedBy = LockedBy, name = "quests", scope = "character" },
+    { default = "young",
+        description = ("Says each riddle and its choices aloud as it appears, with your text-to-speech voice, for a child "
+            .. "still learning to read. Hovering a choice says it again. Riddles you only hear always speak."),
+        kind = "string", label = "Read riddles aloud", lockedBy = LockedBy, name = "readAloud", scope = "character",
+        valueLabels = { always = "Always", off = "Only when asked", young = "For kindergarten and grade 1" },
+        values = { "young", "always", "off" } },
     { default = 30, description = "Minutes of play between riddles.", kind = "number",
         label = "Minutes between riddles", lockedBy = LockedBy, max = 120, min = 10, name = "interval",
         scope = "character", section = "When", step = 5 },

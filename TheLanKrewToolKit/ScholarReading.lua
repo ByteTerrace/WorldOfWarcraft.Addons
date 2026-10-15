@@ -111,7 +111,31 @@ local function LookAlikes(state, target, except)
     return out
 end
 
--- Blending sounds ("c - a - t"), or at higher levels changing one letter ("cat" to "hat").
+-- Blending sounds ("c - a - t"), or at higher levels changing one letter ("cat" to "hat"). A short word is said aloud;
+-- the four choices are it and three words that look alike.
+Generators["reading.listen"] = function(state)
+    local target = Pick(state, Words.cvc)
+    local vars = { sounds = concat(Letters(target), " - "), target = target }
+
+    return Finish(state, "reading.listen", Words.reading.listen, vars, target, LookAlikes(state, target))
+end
+
+-- A word is said aloud; the four choices are its first letter and three others.
+Generators["reading.listenSound"] = function(state)
+    local group = Pick(state, Words.sounds)
+    local target = group[state.roll(2, #group)]
+    local letters = {}
+
+    for _, other in ipairs(Shuffle(state, Words.sounds)) do
+        if (other ~= group) and (#letters < 3) then
+            letters[#letters + 1] = other[1]
+        end
+    end
+
+    return Finish(state, "reading.listenSound", Words.reading.listenSound, { letter = group[1], target = target },
+        group[1], letters)
+end
+
 Generators["reading.cvc"] = function(state)
     local target = Pick(state, Words.cvc)
 

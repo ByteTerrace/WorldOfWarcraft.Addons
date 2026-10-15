@@ -10,6 +10,8 @@ local addonName, ns = ...
 
 -- order: grouped by subject and grade, beside the words each group's puzzles read
 ns.ScholarWords = {
+    -- The kinds whose riddle is heard, not read: Scholar asks them only while the client has a text-to-speech voice.
+    heard = { ["reading.listen"] = true, ["reading.listenSound"] = true },
     -- Puzzle kinds per subject and grade.
     kinds = {
         math = {
@@ -22,8 +24,8 @@ ns.ScholarWords = {
             { "math.percent", "math.ratio", "math.order" },
         },
         reading = {
-            [0] = { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc" },
-            { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc" },
+            [0] = { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.listen", "reading.listenSound" },
+            { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.listen", "reading.listenSound" },
             { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
             { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
             { "reading.vocab", "reading.blank", "reading.story" },
@@ -103,6 +105,8 @@ ns.ScholarWords = {
         ["reading.sound"] = { "Sound Detective", "First Sound Fun", "Listen Closely!" },
         ["reading.sight"] = { "Word Watcher", "Spell It Right!", "The Word Scroll" },
         ["reading.cvc"] = { "Sound It Out", "Word Builder", "Letter Magic" },
+        ["reading.listen"] = { "Listen Closely!", "The Owl Sage Whispers", "Ears of a Hero" },
+        ["reading.listenSound"] = { "First Sound Hunt", "Listen for the Letter", "Owl Ears" },
         ["reading.unscramble"] = { "Scrambled Scroll", "A Gnome Mixed Up the Letters!", "Unscramble It!" },
         ["reading.synonym"] = { "Word Twins", "Meaning Match", "Same-Same Words" },
         ["reading.antonym"] = { "Opposite Day", "Flip It Around", "Opposites Attract" },
@@ -375,6 +379,17 @@ ns.ScholarWords = {
         blend = {
             explain = "{sounds} makes \"{target}\"!", hint = "Say the sounds slowly, then say them faster and faster.",
             prompt = "Say each sound, then put them together:\n{sounds}\nWhat word do you get?",
+        },
+        -- A heard riddle: speech is what's said aloud, and the prompt never shows the word.
+        listen = {
+            explain = "You heard \"{target}\": {sounds}.", hint = "Listen again, then say each word's sounds slowly.",
+            prompt = "Listen to the Owl Sage!\nWhich word did you hear?", speech = "Find the word {target}. {target}.",
+        },
+        listenSound = {
+            explain = "\"{target}\" starts with the \"{letter}\" sound.",
+            hint = "Listen again, and say the word slowly. What sound comes first?",
+            prompt = "Listen to the Owl Sage!\nWhich letter does the word start with?",
+            speech = "Which letter does {target} start with? {target}.",
         },
         rhyme = {
             explain = "\"{target}\" and \"{correct}\" rhyme. They end with the same sound.",

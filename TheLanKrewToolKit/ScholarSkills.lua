@@ -32,7 +32,7 @@ local Names = {
     ["quest.count"] = "how many a quest asked for", ["quest.endPlace"] = "where a quest ended", ["quest.ender"] = "who ended a quest",
     ["quest.giver"] = "who gave a quest", ["quest.objective"] = "what a quest asked for", ["quest.place"] = "where a quest began",
     ["quest.title"] = "a quest's title", ["reading.antonym"] = "opposites", ["reading.blank"] = "filling in the blank",
-    ["reading.cvc"] = "short words", ["reading.rhyme"] = "rhymes", ["reading.sight"] = "sight words",
+    ["reading.cvc"] = "short words", ["reading.listen"] = "hearing words", ["reading.listenSound"] = "hearing first sounds", ["reading.rhyme"] = "rhymes", ["reading.sight"] = "sight words",
     ["reading.sound"] = "first sounds", ["reading.spelling"] = "spelling", ["reading.story"] = "reading a story",
     ["reading.synonym"] = "same meanings", ["reading.unscramble"] = "unscrambling words", ["reading.vocab"] = "vocabulary",
 }

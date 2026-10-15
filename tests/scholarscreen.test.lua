@@ -150,7 +150,8 @@ test("Read aloud spells a spelling riddle's choices letter by letter", function(
 
     local rhyme = Says({ choices = { "hat", "dog", "sun", "pig" }, kind = "reading.rhyme", prompt = "Which word rhymes with \"cat\"?" })
 
-    truthy(rhyme:find("hat, dog, sun, or pig", 1, true), "other riddles say their choices as words: " .. rhyme)
+    truthy(rhyme:find("Press 1 for hat. Press 2 for dog. Press 3 for sun. Press 4 for pig.", 1, true),
+        "other riddles say each choice as a word, with the key that picks it: " .. rhyme)
 end)
 
 test("Read aloud reads the open quest book, and after an answer the feedback shown", function()
@@ -166,7 +167,7 @@ test("Read aloud reads the open quest book, and after an answer the feedback sho
     eq(h.spoken[#h.spoken].text, puzzle.book, "the book, while it's open")
     h:Key("H", true)
     h:Key("R", true)
-    truthy(h.spoken[#h.spoken].text:find(" Is it ", 1, true), "the riddle, once it's closed")
+    truthy(h.spoken[#h.spoken].text:find(" Press 1 for ", 1, true), "the riddle, once it's closed")
     h:Key(tostring(WrongAnswer(puzzle)), true)
     h:Key("R", true)
     local said = h.spoken[#h.spoken].text

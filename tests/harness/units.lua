@@ -42,6 +42,10 @@
 --               releasing fires PLAYER_ALIVE (warcraft.wiki.gg event pages). [G] PLAYER_DEAD
 --               dispatches while combat lockdown still holds, then combat ends like h:LeaveCombat;
 --               a revive restores full health.
+--   Flights     [D] Taking a flight path takes the character's control (PLAYER_CONTROL_LOST) and
+--               landing gives it back (PLAYER_CONTROL_GAINED); UnitOnTaxi("player") is true in
+--               between. [G] Control goes before UnitOnTaxi turns true, and comes back after it
+--               turns false. h:TakeFlight() and h:Land().
 --   Raid icons  SetRaidTarget is forbidden to addon code (verified in game; see
 --               Harness.FORBIDDEN_IN_GAME in secrets.lua, and the wiki says it's protected from
 --               12.0.0). Players set icons through Blizzard's UI; nothing reads them, so icons
@@ -238,6 +242,20 @@ function Harness:LevelUp(level)
     self:Fire("PLAYER_LEVEL_UP", level, 0, 0, 0, 0, 0, 0, 0, 0)
 end
 
+-- The player takes a flight path: PLAYER_CONTROL_LOST, then UnitOnTaxi("player") is true.
+function Harness:TakeFlight()
+    assert(not self.player.onTaxi, "TakeFlight: already flying")
+    self:Fire("PLAYER_CONTROL_LOST")
+    self.player.onTaxi = true
+end
+
+-- The flight lands: UnitOnTaxi("player") is false, then PLAYER_CONTROL_GAINED.
+function Harness:Land()
+    assert(self.player.onTaxi, "Land: not flying")
+    self.player.onTaxi = false
+    self:Fire("PLAYER_CONTROL_GAINED")
+end
+
 -- The player dies: PLAYER_DEAD (still in combat, if they were), then afterDeath() if given (what
 -- reaches the damage meter after it), then combat ends.
 function Harness:Die(afterDeath)
@@ -290,6 +308,10 @@ function Harness:UnitFakes()
         UnitIsDead = function(u)
             local unit = Unit(u)
             return unit ~= nil and unit.dead == true
+        end,
+        UnitOnTaxi = function(u)
+            local unit = Unit(u)
+            return unit == h.player and h.player.onTaxi == true
         end,
         UnitIsDeadOrGhost = function(u)
             local unit = Unit(u)

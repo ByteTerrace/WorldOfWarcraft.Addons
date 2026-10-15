@@ -451,7 +451,7 @@ local Needs = {
         text = "on a flight path (type it mid-flight)",
         step = 6,
         check = function() return UnitOnTaxi("player") end,
-        harness = "the harness doesn't model flight paths (UnitOnTaxi)",
+        setup = function(h) h:TakeFlight() end,
     },
     comboPoints = {
         label = "combo points",

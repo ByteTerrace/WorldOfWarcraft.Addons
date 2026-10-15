@@ -14,7 +14,10 @@ local addonName, ns = ...
 --            shows the quest as the player saw it. With only quest riddles on and no quest yet, a
 --            riddle that comes due waits for one.
 --   When     every N minutes of play (saved per character, so relogging doesn't skip one), and
---            optionally at each level-up. Time AFK, or with every subject off, doesn't count.
+--            optionally at each level-up. Time AFK, or with every subject off, doesn't count. A good
+--            moment brings the next riddle forward once half its minutes are played: a flight path
+--            (free time), a quest turned in (asked about while it's fresh) or a death (waiting to
+--            come back); each can be switched off.
 --   Where    a riddle covers the screen and holds the mouse and keyboard until it's solved; in
 --            Gentle mode a Skip appears after one try. Never during combat: a riddle waits for the
 --            fight to end, and one on screen steps aside if a fight starts and comes back after.
@@ -40,6 +43,8 @@ local ActionKeys = { hint = "H", speak = "R", skip = "Esc" }
 local ScrollKeys = { UP = -1, DOWN = 1 }
 local ScrollSources = { scrollUp = "gamepad.dpadUp", scrollDown = "gamepad.dpadDown" }
 local ScrollRepeat = 0.12 -- seconds between notches while a D-pad direction is held
+local FlightCheck = 1 -- seconds after losing control to look for a flight path (UnitOnTaxi)
+local TurnInDelay = 1 -- seconds after a turn-in, once QuestBook has noted it and the panel closed
 local LockedBy = "Scholar.locked"
 local MaxPinMisses = 3
 local PinWaitSeconds = 60
@@ -47,6 +52,7 @@ local PinWaitSeconds = 60
 local ByteTerrace = ByteTerrace
 local C_Sound, C_TTSSettings, C_VoiceChat, GetMoney = C_Sound, C_TTSSettings, C_VoiceChat, GetMoney
 local GetRealZoneText, GetServerTime, GetTime, IsLoggedIn = GetRealZoneText, GetServerTime, GetTime, IsLoggedIn
+local UnitOnTaxi = UnitOnTaxi
 local SOUNDKIT, UnitClass, UnitLevel, UnitName = SOUNDKIT, UnitClass, UnitLevel, UnitName
 local issecretvalue, wipe, floor, max, min, random, byte = issecretvalue, wipe, math.floor, math.max, math.min, math.random, string.byte
 
@@ -369,6 +375,13 @@ local Rows = {
         lockedBy = LockedBy, section = "When" },
     { name = "onLevelUp", kind = "boolean", default = true, label = "A riddle at every level-up", scope = "character",
         lockedBy = LockedBy, description = "Earn each new level with a little wisdom, too." },
+    { name = "onFlight", kind = "boolean", default = true, label = "Riddles on flight paths", scope = "character",
+        lockedBy = LockedBy, description = "A flight is free time: once half the minutes are played, it brings the next riddle." },
+    { name = "onTurnIn", kind = "boolean", default = true, label = "Riddles when a quest is turned in",
+        scope = "character", lockedBy = LockedBy,
+        description = "Once half the minutes are played, turning in a quest brings a riddle about it, while it's fresh." },
+    { name = "onDeath", kind = "boolean", default = true, label = "Riddles while dead", scope = "character",
+        lockedBy = LockedBy, description = "Once half the minutes are played, a death brings the next riddle." },
     { name = "mode", kind = "string", default = "gate", values = { "gate", "gentle" },
         valueLabels = { gate = "Solve to keep playing", gentle = "Gentle (Skip after one try)" },
         label = "Riddle style", description = "Whether a riddle must be solved, or can be skipped after one try.",
@@ -540,6 +553,26 @@ Scholar = Addon:Module("Scholar", {
                 module:Set("pending", true)
             end
         end)
+
+        -- A good moment brings the next riddle forward once it's half due: the play clock counting,
+        -- and half the interval played.
+        local function Moment(row)
+            if module:Get(row) and Counting and Elapsed() * 2 >= module:Get("interval") * 60 then
+                Bank()
+                module:Set("pending", true)
+            end
+        end
+        module:On("PLAYER_CONTROL_LOST", function()
+            module:After(FlightCheck, function()
+                if UnitOnTaxi("player") then
+                    Moment("onFlight")
+                end
+            end)
+        end)
+        module:On("QUEST_TURNED_IN", function()
+            module:After(TurnInDelay, function() Moment("onTurnIn") end)
+        end)
+        module:On("PLAYER_DEAD", function() Moment("onDeath") end)
 
         -- A riddle shows when one is due (or celebrating) and there's no fight; a fight sends it
         -- away until it ends. A celebration a fight cut short doesn't come back: Finish ends it.

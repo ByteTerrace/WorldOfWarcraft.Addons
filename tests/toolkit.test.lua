@@ -55,7 +55,7 @@ test("loads cleanly and builds its settings window, organized into pages and sec
             .. " Warband.deathPrompt Warband.rallyWaypoint Warband.intel"
             .. " [Nameplate badges] Badges.enabled [Nearby enemies window] Radar.enabled Radar.share",
         "Scholar's challenge: Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading Scholar.quests"
-            .. " [When] Scholar.interval Scholar.onLevelUp Scholar.mode",
+            .. " [When] Scholar.interval Scholar.onLevelUp Scholar.onFlight Scholar.onTurnIn Scholar.onDeath Scholar.mode",
     }
     local window = addon.SettingsWindow
     local pages = Pages(window.Pages)

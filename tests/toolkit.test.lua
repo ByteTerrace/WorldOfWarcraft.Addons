@@ -95,6 +95,8 @@ test("fuck-o-meter shows for energy users and passes secret energy straight to t
     eq(Reveal(Harness.State(meter.Bar).value), 42)
     eq(Reveal(Harness.State(meter.Value).text), 42)
     eq(Harness.State(meter.Bar).calls.SetValue, 1, "one SetValue per power event")
+    eq(Harness.State(meter.Bar).interpolation, h.env.Enum.StatusBarInterpolation.ExponentialEaseOut,
+        "the bar eases toward each value, in the same call")
     eq(Harness.State(meter.Bar).calls.SetMinMaxValues, nil, "range isn't touched on power ticks")
 end)
 

@@ -167,7 +167,7 @@ If something seems off, `/tlk debug status` shows which features are running and
 
 ### Fuck-o-meter
 
-A blown-up energy bar stretched across the middle of the screen, shown whenever your power type is energy (rogues, cat-form druids). Toggle it with `/tlk fom`.
+A blown-up energy bar stretched across the middle of the screen, shown whenever your power type is energy (rogues, cat-form druids). The bar glides to each new value rather than jumping. Toggle it with `/tlk fom`.
 
 ### Sounds
 

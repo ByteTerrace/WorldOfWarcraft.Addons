@@ -291,7 +291,9 @@ end
 function Behaviors.GetUnboundedStringWidth(s) return Longest(Lines(s, 0)) end
 function Behaviors.GetStringHeight(s) return #Lines(s, Anchored(s, Axes.x, 0) or s.width or 0) * LineHeight end
 function Behaviors.GetNumLines(s) return #Lines(s, Anchored(s, Axes.x, 0) or s.width or 0) end
-function Behaviors.SetValue(s, _, value) s.value = value end
+-- [D] A StatusBar's optional second argument is an Enum.StatusBarInterpolation: how the bar moves to
+-- the value. [G] The harness keeps it (s.interpolation) and sets the value at once.
+function Behaviors.SetValue(s, _, value, interpolation) s.value, s.interpolation = value, interpolation end
 function Behaviors.GetValue(s) return s.value end
 function Behaviors.SetMinMaxValues(s, _, min, max) s.min, s.max = min, max end
 function Behaviors.GetMinMaxValues(s) return s.min, s.max end

@@ -6,12 +6,14 @@ local addonName, ns = ...
 -- The player's primary power is secret in combat and out (probed: power.player), so energy never
 -- enters state: UnitPower/UnitPowerMax results go straight to the bar and text (both accept
 -- secrets) and are never compared or computed with.
--- Power events are registered only while the meter is visible.
+-- Power events are registered only while the meter is visible. The bar eases toward each new value
+-- (Enum.StatusBarInterpolation.ExponentialEaseOut) in the same SetValue call: no extra work per tick.
 --
 -- The meter frame is the global TheLanKrewToolKitFuckOMeter: its name (Label) centered on the
 -- bar, and the energy in Bar and in Value at the bar's right end.
 
 local Energy = Enum.PowerType.Energy
+local Ease = Enum.StatusBarInterpolation.ExponentialEaseOut
 local Height = 64
 local SideInset = 24
 
@@ -66,7 +68,7 @@ end
 local function UpdateValue(_, powerToken)
     if powerToken == nil or powerToken == "ENERGY" then
         local current = UnitPower("player", Energy) -- secret: widget sink
-        Meter.Bar:SetValue(current)
+        Meter.Bar:SetValue(current, Ease)
         Meter.Value:SetText(current)
     end
 end

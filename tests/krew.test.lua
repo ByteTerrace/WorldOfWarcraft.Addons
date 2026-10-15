@@ -287,6 +287,43 @@ test("a roster change reads no names while no one in the group is in the Krew", 
     eq(h:CountApiCalls("UnitName"), 0)
 end)
 
+test("a raid forming reads the roster once, after its burst of updates settles", function()
+    local h = Load()
+    h:JoinGroup("raid", { "Bob", "Cara" })
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t1", "PARTY", "Bob")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t1", "PARTY", "Cara")
+    h:Advance(5)
+    h.apiCalls = {}
+    for i = 1, 20 do
+        h:AddMember("Raider" .. i)
+    end
+    h:RemoveMember("Cara")
+    eq(h:CountApiCalls("UnitName"), 0, "nothing read while the roster is still changing")
+    h:Advance(0.5)
+    h:AddMember("Latecomer")
+    h:Advance(0.5)
+    eq(h:CountApiCalls("UnitName"), 0, "an update inside the burst waits for quiet")
+    h:Advance(2)
+    eq(h:CountApiCalls("UnitName"), h.env.GetNumGroupMembers(), "one pass of unit reads")
+    h:Slash("/tlk krew")
+    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe", "Cara left; Bob stays")
+end)
+
+test("the Krew listed mid-burst is the group as it is", function()
+    local h = Load()
+    h:JoinGroup("raid", { "Bob", "Cara" })
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t1", "PARTY", "Bob")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t1", "PARTY", "Cara")
+    h:Advance(5)
+    h:AddMember("Dan")
+    h:RemoveMember("Cara")
+    h:Slash("/tlk krew")
+    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe")
+    h.apiCalls = {}
+    h:Advance(5)
+    eq(h:CountApiCalls("UnitName"), 0, "the pass already ran")
+end)
+
 test("levels and stars from the Krew are whole numbers written in digits", function()
     local h = Load()
     h:JoinGroup("party", { "Bob" })

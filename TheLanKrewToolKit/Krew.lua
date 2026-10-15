@@ -26,11 +26,13 @@ local addonName, ns = ...
 -- texture or color on your screen.
 --
 -- Krew members are the group members whose hello you heard; one who leaves the group leaves the
--- Krew on the next roster update.
+-- Krew once the roster settles: a raid forming fires a burst of roster updates, and the roster is
+-- read once, PruneDelay after the last of them. Showing or listing the Krew reads it first.
 
 local Prefix = "TLKKrew1"
 local ReplyDelay = 1 -- seconds that gather a burst of hellos into one reply
 local RollCallDelay = 2
+local PruneDelay = 1 -- seconds without a roster update that end a burst of them
 local MaxText = 60     -- longest text accepted from a message
 local MaxLevel = 200   -- the highest level accepted from a message
 local MaxStars = 99999 -- the most stars accepted from a message
@@ -40,7 +42,8 @@ for i = 1, 40 do
     PartyUnits[i], RaidUnits[i] = "party" .. i, "raid" .. i
 end
 
-local GetNumGroupMembers, IsInGroup, IsInRaid, SOUNDKIT = GetNumGroupMembers, IsInGroup, IsInRaid, SOUNDKIT
+local GetNumGroupMembers, GetTime, IsInGroup, IsInRaid = GetNumGroupMembers, GetTime, IsInGroup, IsInRaid
+local SOUNDKIT = SOUNDKIT
 local next, pairs, tonumber, type, wipe = next, pairs, tonumber, type, wipe
 local concat, sort = table.concat, table.sort
 
@@ -52,6 +55,8 @@ local Members = {} -- [name] = true for group members running the toolkit
 local Present = {} -- scratch: [name] = true for the group's members, while pruning Members
 local RollCallTimer -- pending timer that merges a burst of hellos into one card
 local ReplyTimer    -- pending timer that answers a burst of hellos with one reply
+local PruneTimer    -- pending timer that prunes Members once a burst of roster updates settles
+local RosterAt = 0  -- GetTime() of the last roster update
 local Said = false  -- you said hello to this group
 local Krew, Messages -- the module, and its Comms (ns.Krew)
 
@@ -79,7 +84,54 @@ local function CleanCount(text, max)
     return (count >= 1 and count <= max) and count or nil
 end
 
+-- Drops Krew members who left the group. While any member's name is unreadable, nobody is dropped.
+-- With no Krew members there's no one to drop, and no name to read.
+local function Prune()
+    if next(Members) == nil then
+        return
+    end
+    wipe(Present)
+    local raid, count = IsInRaid(), GetNumGroupMembers()
+    local units = raid and RaidUnits or PartyUnits
+    if not raid then
+        count = count - 1 -- party tokens leave out the player
+    end
+    for i = 1, count do
+        local name = Names.OfUnit(units[i])
+        if not name then
+            return
+        end
+        Present[name] = true
+    end
+    for name in pairs(Members) do
+        if not Present[name] then
+            Members[name] = nil
+        end
+    end
+end
+
+-- The pending prune, once the roster has been quiet for PruneDelay.
+local function PruneWhenQuiet()
+    local quiet = GetTime() - RosterAt
+    if quiet < PruneDelay then
+        PruneTimer = Krew:After(PruneDelay - quiet, PruneWhenQuiet)
+        return
+    end
+    PruneTimer = nil
+    Prune()
+end
+
+-- Runs a pending prune now, so a reader of Members sees the group as it is.
+local function Settle()
+    if PruneTimer then
+        Krew:Cancel(PruneTimer)
+        PruneTimer = nil
+        Prune()
+    end
+end
+
 local function KrewNames()
+    Settle()
     local names = {}
     for name in pairs(Members) do
         names[#names + 1] = name
@@ -110,29 +162,12 @@ local function SayHello()
     end
 end
 
--- Drops Krew members who left the group. While any member's name is unreadable, nobody is dropped.
--- With no Krew members there's no one to drop, and no name to read.
-local function Prune()
-    if next(Members) == nil then
-        return
-    end
-    wipe(Present)
-    local raid, count = IsInRaid(), GetNumGroupMembers()
-    local units = raid and RaidUnits or PartyUnits
-    if not raid then
-        count = count - 1 -- party tokens leave out the player
-    end
-    for i = 1, count do
-        local name = Names.OfUnit(units[i])
-        if not name then
-            return
-        end
-        Present[name] = true
-    end
-    for name in pairs(Members) do
-        if not Present[name] then
-            Members[name] = nil
-        end
+-- A roster update: the roster is pruned once updates stop for PruneDelay. One timer serves a
+-- burst; it waits out the updates that came after it was set.
+local function RosterChanged()
+    RosterAt = GetTime()
+    if not PruneTimer and next(Members) ~= nil then
+        PruneTimer = Krew:After(PruneDelay, PruneWhenQuiet)
     end
 end
 
@@ -201,7 +236,7 @@ Krew = Addon:Module("Krew", {
         module:On("GROUP_JOINED", SayHello)
         module:On("GROUP_ROSTER_UPDATE", function()
             if IsInGroup() then
-                Prune()
+                RosterChanged()
                 SayHello()
             end
         end)
@@ -232,7 +267,7 @@ Krew = Addon:Module("Krew", {
     OnDisable = function()
         wipe(Members)
         Said = false
-        RollCallTimer, ReplyTimer = nil, nil -- the module's timers stop with it
+        RollCallTimer, ReplyTimer, PruneTimer = nil, nil, nil -- the module's timers stop with it
     end,
 })
 Messages = Krew.Comms

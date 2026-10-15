@@ -234,7 +234,7 @@ Each card can be switched off in settings. Turning the journal off keeps the pla
 ### Krew
 
 Friends in your group who also run the toolkit share fun moments, each as a card:
-- **Roll call:** when you group up, a card shows who else runs the toolkit. `/tlk krew` lists them; someone who leaves the group leaves the list.
+- **Roll call:** when you group up, a card shows who else runs the toolkit. `/tlk krew` lists them; someone who leaves the group leaves the list once the roster settles, a second after the last change.
 - **Ding:** your level-ups.
 - **Flawless:** your flawless victories (needs the "Flawless victory" sound on).
 - **Kill streaks:** your first blood and sprees, as raid warnings (see [Sounds](#sounds)).
@@ -267,7 +267,7 @@ The ledger holds up to 300 people and never forgets anyone on its own. When it's
 
 **Nearby enemies:** a small window lists the enemy players you and your Krew have seen in the last two minutes, marked ones first, with class colors, level, how long ago, and who saw them. Right-click a name for the Krew's choices; drag the window to move it. It shows itself when there's someone to list. New enemies you see are shared with the Krew in one batch, at most every ten seconds.
 
-- **Sightings:** when a ledger player's nameplate appears, or you target or mouse over them, a raid warning says so. The Krew hears where you saw them. A champion in a fight asks the Krew for aid. A guild at war showing up in numbers raises one warning, not one per member.
+- **Sightings:** when a ledger player's nameplate appears, or you target or mouse over them, a raid warning says so. The Krew hears where you saw them. A champion in a fight asks the Krew for aid. Each person alerts at most once every 90 seconds; in a brawl, the alerts that follow one within 3 seconds merge into one summary with one sound ("3 more grudges nearby: Bob Doe, Cara Doe, Dan Doe"), marks first, then grudges, guilds at war and champions. Your Krew still hears about every sighting. A guild at war showing up in numbers raises one warning, not one per member.
 - **Vengeance:** an honorable kill on a marked or grudge enemy settles the score for everyone, counted once however many of you got credit. Kills of anyone else count quietly in their record.
 - **Rally:** `/tlk rally` calls the Krew to you. They get a raid warning and a map waypoint to your position.
 - **Enemy gatherings:** when five or more enemy players show up on your nameplates within a minute in one place (a subzone), the Krew gets a card saying how many and where. Clicking it sets a waypoint. That's how to find the other faction's world events. One report per place every five minutes: once a Krew member has reported a gathering, the rest of the Krew neither sees it again nor reports it themselves.

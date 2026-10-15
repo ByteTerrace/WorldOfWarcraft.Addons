@@ -32,22 +32,24 @@ local function Hit(spellID, name)
     }
 end
 
-test("death recap common shapes are stable for melee, spell and mixed deaths in either order", function()
-    local baseline
+test("death recap fields are kept per kind of event: the same for a kind, however you died", function()
+    local byKind = {}
     for _, spells in ipairs({
         { Hit(6603) }, { Hit(11976, "Strike") },
         { Hit(11976, "Strike"), Hit(6603) }, { Hit(6603), Hit(11976, "Strike") },
     }) do
         local h = Load()
         local result = DieToDamage(h, spells)
-        truthy(result.commonFields, "the result describes common fields, never the event union")
         eq(result.fields, nil)
         eq(result.killingBlow.amount, "number")
         eq(result.killingBlow.sourceName, "string")
         eq(result.killingBlow.spellId, nil, "spell fields have their own event-kind probe")
-        if baseline then eq(#h.ns.Probes.Diff(baseline, result), 0) end
-        baseline = result
+        for kind, fields in pairs(result.fieldsByKind) do
+            if byKind[kind] then eq(fields, byKind[kind], kind .. " carries the same fields in every death") end
+            byKind[kind] = fields
+        end
     end
+    truthy(byKind.SWING_DAMAGE and byKind.SPELL_DAMAGE, "melee and spells each have their own list")
 end)
 
 test("death recap spell-field probes require the event kind and keep false booleans", function()
@@ -106,8 +108,13 @@ test("common recap fields exclude optional mitigation and require presence in ev
     end
     eq(#h.ns.Probes.Diff(baseline, Record()), 0, "optional mitigation doesn't alter common shapes")
     events[2].amount = nil
+    Records(h)["deathRecap.events"] = nil -- the record grows across deaths: start this one afresh
     local result = Record()
-    falsy(("," .. result.commonFields .. ","):find(",amount,", 1, true), "one event lacks amount")
+    local missing = 0
+    for _, fields in pairs(result.fieldsByKind) do
+        if not ("," .. fields .. ","):find(",amount,", 1, true) then missing = missing + 1 end
+    end
+    eq(missing, 1, "the kind whose event lacks amount drops it; the other keeps it")
     eq(result.killingBlow.amount, "number", "the killing blow retains its own shape")
 end)
 
@@ -292,8 +299,8 @@ test("a record from another version of its probe counts as missing, and a new ru
     local text = Printed(h, from)
     falsy(text:find("probe deathRecap.events changed", 1, true), "an old version's record isn't compared: " .. text)
     local record = Records(h)["deathRecap.events"]
-    eq(record.version, 2)
-    eq(record.result.fields, nil, "version 2 records common fields")
+    eq(record.version, 3)
+    truthy(record.result.fieldsByKind and record.result.fieldsByKind.SPELL_DAMAGE, "version 3 keeps fields per kind of event")
     truthy(h.ns.Probes.IsCurrent(h.ns.Probes.ByName["deathRecap.events"], record))
 end)
 

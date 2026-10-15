@@ -161,39 +161,6 @@
       },
       "context": { "combat": false, "restrictions": "none" }
     },
-    "deathRecap.events": {
-      "result": {
-        "commonFields": "amount,critical,crushing,currentHP,destFlags,destGUID,destName,destRaidFlags,event,glancing,hideCaster,isOffHand,overkill,school,sourceFlags,sourceGUID,sourceName,sourceRaidFlags,timestamp",
-        "events": "table",
-        "hasRecapEvents": true,
-        "killingBlow": {
-          "amount": "number",
-          "critical": "boolean",
-          "crushing": "boolean",
-          "currentHP": "number",
-          "destFlags": "number",
-          "destGUID": "string",
-          "destName": "string",
-          "destRaidFlags": "number",
-          "event": "string",
-          "glancing": "boolean",
-          "hideCaster": "boolean",
-          "isOffHand": "boolean",
-          "overkill": "number",
-          "school": "number",
-          "sourceFlags": "number",
-          "sourceGUID": "string",
-          "sourceName": "string",
-          "sourceRaidFlags": "number",
-          "timestamp": "number"
-        },
-        "maxHealth": "number",
-        "recapID": "number",
-        "sourceName": "text"
-      },
-      "context": { "combat": false, "restrictions": "none" },
-      "version": 2
-    },
     "deathRecap.latest": {
       "result": { "hasLatest": true, "latest": "table", "sameAsMeter": true },
       "context": { "combat": false, "restrictions": "none" }
@@ -551,7 +518,7 @@
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "HEAL": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "MISS": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
-          "WOUND": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" }
+          "WOUND": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" }
         },
         "target": {
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
@@ -647,7 +614,7 @@
       "build": "1.60.1 (70009)"
     },
     "units.secretTokenInAuraEvent": {
-      "result": { "Combat": "player,target", "none": "player" },
+      "result": { "Combat": "player,target", "none": "player,target" },
       "context": { "combat": false, "restrictions": "none" }
     },
     "xp.player": {

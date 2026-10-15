@@ -212,9 +212,13 @@ Probes.Define({
         end,
     },
     {
+        -- The fields each kind of recap event carries (SWING_DAMAGE, SPELL_DAMAGE, ENVIRONMENTAL_DAMAGE,
+        -- ...): a field counts for a kind when every event of that kind in the recap had it. Kept per
+        -- kind and across deaths, since which kinds a recap holds depends on how you died.
         name = "deathRecap.events",
-        version = 2, -- version 1 recorded the union of every event's fields, which depends on how you died
+        version = 3, -- versions 1 and 2 kept one field list for every event, which depended on how you died
         needs = { "diedToMob" },
+        accumulates = true,
         run = function()
             local death = LocalDeath()
             local recapID = death and death.deathRecapID
@@ -223,18 +227,30 @@ Probes.Define({
             end
             local events = C_DeathRecap.GetRecapEvents(recapID)
             local killingBlow = First(events)
-            local fields = killingBlow and CommonRecapShape(killingBlow) or {}
+            local byKind = {}
             for _, event in ipairs(killingBlow and events or {}) do
-                for key in pairs(fields) do
-                    local value = event[key]
-                    if not issecretvalue(value) and value == nil then
-                        fields[key] = nil
+                local kind = event.event
+                if not issecretvalue(kind) and type(kind) == "string" then
+                    local fields = CommonRecapShape(event)
+                    local kept = byKind[kind]
+                    if kept then
+                        for key in pairs(kept) do
+                            if fields[key] == nil then
+                                kept[key] = nil
+                            end
+                        end
+                    else
+                        byKind[kind] = fields
                     end
                 end
             end
+            local fieldsByKind = {}
+            for kind, fields in pairs(byKind) do
+                fieldsByKind[kind] = Joined(fields)
+            end
             return {
                 recapID = "number", hasRecapEvents = Value(C_DeathRecap.HasRecapEvents(recapID)),
-                events = Shape(events), commonFields = Joined(fields),
+                events = Shape(events), fieldsByKind = fieldsByKind,
                 killingBlow = killingBlow and CommonRecapShape(killingBlow) or nil,
                 sourceName = killingBlow and Text(killingBlow.sourceName) or nil,
                 maxHealth = Shape(C_DeathRecap.GetRecapMaxHealth(recapID)),

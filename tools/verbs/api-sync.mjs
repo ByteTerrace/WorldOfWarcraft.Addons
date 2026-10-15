@@ -5,6 +5,13 @@
 //   --globals <file> ByteTerrace_DevTools SavedVariables from `/btdev dump` in the installed client.
 //                    Supplies every global the client exposes (including Lua-defined ones such as
 //                    CreateColor, Settings, UIParent) and the member names of its tables.
+//   --latest         writes nothing: compares the docs build the snapshot records (source.docs)
+//                    with the newest build on the forever branch of Gethe/wow-ui-source (its
+//                    version.txt, "1.60.1.70374"). Exits 0 when they match, 1 when they differ,
+//                    saying how to refresh, and 2 when either can't be read.
+//   --source <path>  with --latest, reads the branch's build from a local wow-ui-source checkout
+//                    (its version.txt, else its HEAD commit's title, "1.60.1 (70374)") or a file
+//                    holding either, instead of GitHub.
 //
 // The documentation files are executed in real Lua 5.1 against a stub APIDocumentation that
 // captures what they register, so the snapshot is exactly what the client documents.
@@ -29,17 +36,22 @@
 // events, methods and enums; the globals half is globals and members.
 
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { findAddons, repoRoot } from "../lib/repo.mjs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, relative } from "node:path";
+import { findAddons, repoRoot, toPosix } from "../lib/repo.mjs";
 import { createLua } from "../lib/lua.mjs";
 import { buildOf } from "../lib/wow.mjs";
 
 export const options = {
     docs: { type: "string" },
     globals: { type: "string" },
+    latest: { type: "boolean", default: false },
+    source: { type: "string" },
     out: { type: "string", default: join(repoRoot, "tools", "api", "forever.json") },
 };
+
+// The forever branch's version file: "<version>.<build>" and a newline.
+export const FOREVER_VERSION_URL = "https://raw.githubusercontent.com/Gethe/wow-ui-source/forever/version.txt";
 
 // A real client exposes tens of thousands of globals; anything far smaller is a broken dump.
 export const MIN_GLOBALS = 10000;
@@ -179,10 +191,71 @@ export async function readDocs(dir) {
 function docsBuild(dir) {
     try {
         const subject = execFileSync("git", ["-C", dir, "log", "-1", "--format=%s"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-        return /\d+\.\d+\.\d+ \(\d+\)/.exec(subject)?.[0] ?? null;
+        return buildOf(subject);
     } catch {
         return null;
     }
+}
+
+// The build a wow-ui-source text names, as "1.60.1 (70374)": its version.txt ("1.60.1.70374") or
+// a commit title ("1.60.1 (70374)"). null when it names none.
+export function sourceBuild(text) {
+    const dotted = /^\s*(\d+\.\d+\.\d+)\.(\d+)\s*$/.exec(text ?? "");
+    return dotted ? `${dotted[1]} (${dotted[2]})` : buildOf(text);
+}
+
+// The forever branch's newest build: from source when given (a checkout's version.txt, else its
+// HEAD commit's title; or a file's text), else from GitHub. Throws when it can't be read.
+export async function latestBuild(source) {
+    let build;
+    let from = source;
+    if (!source) {
+        from = FOREVER_VERSION_URL;
+        const response = await fetch(FOREVER_VERSION_URL);
+        if (!response.ok) throw new Error(`${FOREVER_VERSION_URL}: HTTP ${response.status}`);
+        build = sourceBuild(await response.text());
+    } else if (!existsSync(source)) {
+        throw new Error(`${source} doesn't exist`);
+    } else if (statSync(source).isDirectory()) {
+        const version = join(source, "version.txt");
+        from = existsSync(version) ? version : `${source}'s HEAD commit`;
+        build = existsSync(version) ? sourceBuild(readFileSync(version, "utf8")) : docsBuild(source);
+    } else {
+        build = sourceBuild(readFileSync(source, "utf8"));
+    }
+    if (!build) throw new Error(`no build in ${from} (expected "1.60.1.70374" or "1.60.1 (70374)")`);
+    return build;
+}
+
+// --latest: whether the snapshot's docs come from the forever branch's newest build.
+async function checkLatest(values) {
+    const name = toPosix(relative(repoRoot, values.out)) || values.out;
+    let documented;
+    try {
+        documented = buildOf(JSON.parse(readFileSync(values.out, "utf8")).source?.docs);
+    } catch (error) {
+        console.error(`api-sync: can't read ${name}: ${error.message}`);
+        return 2;
+    }
+    if (!documented) {
+        console.error(`api-sync: ${name} records no docs build (source.docs); run api-sync --docs first`);
+        return 2;
+    }
+    let latest;
+    try {
+        latest = await latestBuild(values.source);
+    } catch (error) {
+        console.error(`api-sync: ${error.message}`);
+        return 2;
+    }
+    if (latest === documented) {
+        console.log(`api-sync: ${name} documents ${documented}, the forever branch's newest build.`);
+        return 0;
+    }
+    console.error(`api-sync: the forever branch of Gethe/wow-ui-source is at ${latest}, but ${name} documents ${documented}.\n`
+        + `Refresh both halves: pull the branch, run tlk api-sync --docs <wow-ui-source>/Interface/AddOns/Blizzard_APIDocumentationGenerated, `
+        + `then /btdev dump in the ${latest} client and tlk api-sync --globals <ByteTerrace_DevTools.lua>.`);
+    return 1;
 }
 
 // Reads ByteTerrace_DevTools SavedVariables:
@@ -300,8 +373,19 @@ export function serialize(snapshot) {
 }
 
 export async function run(values) {
+    if (values.latest) {
+        if (values.docs || values.globals) {
+            console.error("api-sync --latest only reads; run it without --docs and --globals.");
+            return 2;
+        }
+        return checkLatest(values);
+    }
+    if (values.source) {
+        console.error("api-sync: --source goes with --latest.");
+        return 2;
+    }
     if (!values.docs && !values.globals) {
-        console.error("api-sync needs --docs and/or --globals.");
+        console.error("api-sync needs --docs and/or --globals, or --latest.");
         return 2;
     }
     let snapshot = { source: {}, functions: {}, events: {}, methods: {}, enums: {}, globals: {}, members: {} };

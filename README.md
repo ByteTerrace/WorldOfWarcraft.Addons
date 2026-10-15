@@ -13,7 +13,7 @@ AddOns for **World of Warcraft: Forever**, held to the same correctness and perf
 | | |
 | --- | --- |
 | Interface | `16001` (game version 1.60.1) |
-| TOC file | `<AddOnName>_Camelot.toc`; the client's game type is `camelot` |
+| TOC file | `<AddOnName>_Camelot.toc` or `<AddOnName>_Forever.toc`; the client's game type is `camelot`, with `forever` as an alias. These addons use `_Camelot.toc`; the tools read `_Forever.toc` when a folder has both |
 | API | Mainline (Midnight 12.x) UI and API, including secret values; Classic Era APIs don't apply |
 | AddOns folder | Detected from the install's `.build.info` (the beta installs to `_classic_beta_`) |
 
@@ -33,6 +33,8 @@ node tools/tlk.mjs package         # check and test, then zip the committed addo
 ```
 
 `package` ships every addon without `## X-DevOnly` (DevTools has it) as committed at HEAD, so it refuses uncommitted changes in a shipped folder and a shipped addon whose dependency stays behind, and players' own sounds, which git ignores, never ship. The zip is named after the addon nothing else depends on, with its `## Version`, and extracts straight into `Interface\AddOns`. Its players' guide is [TheLanKrewToolKit/README.txt](TheLanKrewToolKit/README.txt).
+
+When HEAD is tagged `vX.Y.Z`, every shipped addon's `## Version` in the zip is X.Y.Z; otherwise it's the TOC's version plus `-dev+<short sha>`. Only the zip changes, never the working tree. The named addon's folder holds `CHANGELOG.txt`: the commit subjects since the previous tag. Pushing a `vX.Y.Z` tag runs the gates and publishes a GitHub Release with the zip (`release.yml`); every pull request uploads the zip as an artifact.
 
 `deploy --addon <name>` includes the full dependency chain regardless of directory order. `deploy --unlink --addon <name>` removes only the explicitly selected addon's link.
 
@@ -58,7 +60,7 @@ Turn on Lua error popups in game once: `/console scriptErrors 1`.
 | Rule | What it enforces |
 | --- | --- |
 | PARSE | Every file parses as Lua 5.1. |
-| TOC | Every addon folder has a `_Camelot.toc`. The TOC lists exactly the files present, each once, dependencies (`Dependencies`, `RequiredDeps`, `Dep*`) exist, and `## Interface` matches the installed client or, with none installed, the interface the API snapshot's build implies (1.60.1 is 16001); check prints which it used, or that it skipped. |
+| TOC | Every addon folder has a `_Forever.toc` or a `_Camelot.toc`, not both (which one the client loads isn't documented). The TOC lists exactly the files present, each once, dependencies (`Dependencies`, `RequiredDeps`, `Dep*`) exist, and `## Interface` matches the installed client or, with none installed, the interface the API snapshot's build implies (1.60.1 is 16001); check prints which it used, or that it skipped. |
 | GLOBAL | Every global read exists in the client dump or a dependency, including reads through `_G.X`, `getfenv().X` and `getglobal("X")`. Every write is declared: SavedVariables, SavedVariablesPerCharacter, `AddonCompartmentFunc`, `SLASH_*`, or `## X-Globals`, whether written as `X =`, through `_G`, `rawset`, `setglobal` or `getfenv()`. A write with a dynamic key, `getfenv` with a level other than 0 or 1, `setfenv` and `loadstring` need `-- global: <why>`. It also flags assignments into client tables and frame names that collide with client globals. |
 | MEMBER | Full member chains (`Enum.PowerType.Energy`, `C_Spell["X"]`, through local aliases) exist in the snapshot, and so does a client table's method called with `:` (`C_GamePad:X()`). |
 | EVENT | Every event name passed to an event method is real, whether a literal or a file-level constant, and none registered (`On`, `RegisterEvent`, `RegisterUnitEvent`) is restricted to Blizzard's code (`HasRestrictions`, such as the combat log events). |
@@ -115,7 +117,9 @@ What `test` can't show: the real client's rendering, layout, taint propagation, 
 
 The documented half says which flags an API has; what a flag means comes from Blizzard's predicate text, and the harness's reading of each is marked documented or conservative in `tests/harness/secrets.lua`.
 
-The snapshot's `source` field records where each half came from. `api-sync` refuses an implausibly small dump and warns when the two halves come from different builds. Refresh both halves when the client build changes:
+The snapshot's `source` field records where each half came from. `api-sync` refuses an implausibly small dump and warns when the two halves come from different builds. `node tools/tlk.mjs api-sync --latest` compares the snapshot's docs build with the forever branch's `version.txt`: 0 current, 1 stale, 2 unreadable. `--source <checkout or file>` reads it locally. `build-watch.yml` runs it weekly and opens or updates an issue when it's stale.
+
+Refresh both halves when the client build changes:
 
 1. Refresh the documented API from Blizzard's Forever UI source (the `forever` branch of [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source/tree/forever)):
 
@@ -153,7 +157,7 @@ When the harness has to guess how the client behaves, a probe asks the client. B
    ```
 
    The answers land in `tools/api/probes.json`, sorted by probe, with the client build. Each record lists the contexts its result was confirmed in (`idle/none`, `combat/Combat`: combat lockdown, then the active restrictions). The same result in a new context adds that context, and in a known context nothing changes. A different result, or a newer build, replaces the record, and the earlier contexts go with it (the import prints `Replaced <probe>`). An accumulating probe's answer merges into the record already there from the same build, and so do its contexts, so a session that saw less never shrinks it.
-3. `node tools/tlk.mjs probes` prints each probe with its needs, the client's and the harness's answers, and whether they match, then what's left to do in game. `probes --check` fails when an answer comes from another build than the API snapshot, from a probe that no longer exists, or from another version of its probe.
+3. `node tools/tlk.mjs probes` prints each probe with its needs, the client's and the harness's answers, and whether they match, then what's left to do in game. `probes --check` fails when an answer comes from another build than the API snapshot, from a probe that no longer exists, or from another version of its probe. `probes --check --warn-builds` (as CI runs it) only warns about another build.
 
 A probe whose result changes shape declares a higher `version`: a record made by another version answered a different question, so `/btdev probe list` asks for it again, the import skips and drops it, and the tests treat the probe as unanswered.
 

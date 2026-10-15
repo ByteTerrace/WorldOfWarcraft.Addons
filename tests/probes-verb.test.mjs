@@ -181,6 +181,36 @@ export const tests = [
         }),
     },
     {
+        // CI can't re-run a probe in game: another build is a warning there, but a record of a
+        // probe that's gone (or of another probe version) still fails.
+        name: "probes --check --warn-builds warns about records from another build and still fails on orphaned ones",
+        run: async () => withTemp(async (dir) => {
+            const out = join(dir, "probes.json");
+            const api = join(dir, "api.json");
+            writeFileSync(api, JSON.stringify({ source: { globals: "ByteTerrace_DevTools dump, client 1.60.1 (70374)" } }));
+            const contexts = { "idle/none": true };
+            const raidWarning = { build: "1.60.1 (70009)", contexts, result: { b: 0, g: 72, hasMetatable: true, r: 255, sticky: 0 } };
+            writeFileSync(out, serializeProbes({ build: "1.60.1 (70374)", probes: { "chatTypeInfo.raidWarning": raidWarning } }));
+            const strict = tlk(["probes", "--check", "--out", out, "--api", api]);
+            assert(strict.status === 1 && strict.stderr.includes("chatTypeInfo.raidWarning: recorded on 1.60.1 (70009), the API snapshot is 1.60.1 (70374)"),
+                `--check alone fails on another build: ${strict.status} ${strict.stderr}`);
+            const warned = tlk(["probes", "--check", "--warn-builds", "--out", out, "--api", api]);
+            assert(warned.status === 0, `another build only warns (got ${warned.status}): ${warned.stderr}`);
+            assert(warned.stderr.includes("probes: warning: records from another build")
+                && warned.stderr.includes("chatTypeInfo.raidWarning: recorded on 1.60.1 (70009)") && !warned.stderr.includes("Stale records"), warned.stderr);
+            writeFileSync(out, serializeProbes({ build: "1.60.1 (70374)", probes: {
+                "chatTypeInfo.raidWarning": raidWarning,
+                "no.longerDefined": { contexts, result: { value: 1 } },
+            } }));
+            const orphaned = tlk(["probes", "--check", "--warn-builds", "--out", out, "--api", api]);
+            assert(orphaned.status === 1 && orphaned.stderr.includes("no.longerDefined: ByteTerrace_DevTools no longer defines it"),
+                `${orphaned.status} ${orphaned.stderr}`);
+            assert(!/Stale records[^]*chatTypeInfo/.test(orphaned.stderr), `another build stays a warning: ${orphaned.stderr}`);
+            const alone = tlk(["probes", "--warn-builds", "--out", out, "--api", api]);
+            assert(alone.status === 2 && alone.stderr.includes("--warn-builds goes with --check"), `${alone.status} ${alone.stderr}`);
+        }),
+    },
+    {
         name: "probes reports each probe's client and harness answers and their status",
         run: async () => withTemp(async (dir) => {
             const out = join(dir, "probes.json");

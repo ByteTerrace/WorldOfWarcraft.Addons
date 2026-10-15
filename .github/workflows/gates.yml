@@ -1,11 +1,17 @@
-# The gates every change must pass: tlk check and tlk test, on Windows like the development
-# machines. No game client is installed here, so check compares each TOC's ## Interface with the
-# one the API snapshot's build implies. Actions are pinned to full commit SHAs.
+# The gates every change must pass: tlk check, tlk test and the probe snapshot's staleness, on
+# Windows like the development machines. No game client is installed here, so check compares each
+# TOC's ## Interface with the one the API snapshot's build implies, and probes --check only warns
+# about records from another build (re-running them needs the client). On a pull request the
+# package players would install is built too and uploaded as an artifact. release.yml calls this
+# workflow before it publishes; a pushed tag runs it there, not here. Actions are pinned to full
+# commit SHAs.
 name: gates
 
 on:
   push:
+    branches: ["**"]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -21,3 +27,25 @@ jobs:
       - run: npm ci
       - run: node tools/tlk.mjs check
       - run: node tools/tlk.mjs test
+      - run: node tools/tlk.mjs probes --check --warn-builds
+
+  package:
+    if: github.event_name == 'pull_request'
+    needs: gates
+    runs-on: windows-latest
+    steps:
+      # The whole history and its tags: package's version and changelog read them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: npm ci
+      # The gates job ran the tests; package still runs check.
+      - run: node tools/tlk.mjs package --no-test
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package
+          path: dist/*.zip
+          if-no-files-found: error

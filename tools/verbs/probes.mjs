@@ -14,6 +14,10 @@
 //                                                 (tools/api/forever.json), for a probe
 //                                                 ByteTerrace_DevTools no longer defines, or made
 //                                                 by another version of its probe.
+//   node tools/tlk.mjs probes --check --warn-builds
+//                                                 the same, but a record from another build is
+//                                                 a warning (exit 0), as in CI, where no client
+//                                                 can re-run it; the other two still fail.
 //
 // An import folds each imported record into the saved one by the rules /btdev probe follows
 // (keepRecord, Probes.lua's header): the same result adds its contexts, another result or a newer
@@ -34,6 +38,7 @@ import { DEFAULT_WOW_ROOT, buildOf, findForeverInstall } from "../lib/wow.mjs";
 export const options = {
     import: { type: "boolean", default: false },
     check: { type: "boolean", default: false },
+    "warn-builds": { type: "boolean", default: false },
     out: { type: "string", default: PROBES_PATH },
     api: { type: "string", default: join(repoRoot, "tools", "api", "forever.json") },
     flavor: { type: "string" },
@@ -239,18 +244,27 @@ async function importRecords(values, positionals, definitions) {
     return 0;
 }
 
+// --check: 1 when a record is stale. With --warn-builds, a record from another build than the
+// API snapshot's is a warning instead (CI, where no client can re-run it); a record of a probe
+// that's gone or of another probe version still fails.
 function checkRecords(values, definitions) {
     const { probes } = readProbes(values.out);
     const defined = new Map(definitions.map((definition) => [definition.name, definition]));
     const build = apiBuild(values.api);
     const stale = [];
+    const otherBuild = [];
     for (const [name, record] of Object.entries(probes)) {
         if (!defined.has(name)) stale.push(`${name}: ByteTerrace_DevTools no longer defines it`);
         else if (!isCurrent(defined.get(name), record)) stale.push(`${name}: made by version ${record.version ?? 1}, the probe is version ${defined.get(name).version}`);
-        else if (build && record.build !== build) stale.push(`${name}: recorded on ${record.build}, the API snapshot is ${build}`);
+        else if (build && record.build !== build) otherBuild.push(`${name}: recorded on ${record.build}, the API snapshot is ${build}`);
     }
     if (!build) console.warn("probes: warning: the API snapshot names no client build; builds weren't compared");
     printToDo(definitions, probes);
+    if (values["warn-builds"] && otherBuild.length) {
+        console.warn(`probes: warning: records from another build (re-run /btdev probe on ${build}, then tlk probes --import):\n  ${otherBuild.sort().join("\n  ")}`);
+    } else {
+        stale.push(...otherBuild);
+    }
     if (stale.length) {
         console.error(`Stale records (re-run /btdev probe, then tlk probes --import):\n  ${stale.sort().join("\n  ")}`);
         return 1;
@@ -266,6 +280,10 @@ export async function run(values, positionals) {
     } catch (error) {
         console.error(`probes: ${error.message}`);
         return 1;
+    }
+    if (values["warn-builds"] && !values.check) {
+        console.error("probes: --warn-builds goes with --check");
+        return 2;
     }
     if (values.check) return checkRecords(values, definitions);
     return report(values, definitions);

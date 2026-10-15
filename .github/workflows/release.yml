@@ -1,0 +1,45 @@
+# Publishes a release when a vX.Y.Z tag is pushed: the gates (gates.yml) first, then package,
+# which versions every shipped addon X.Y.Z from the tag and writes CHANGELOG.txt from the commit
+# subjects since the previous tag, then a GitHub Release with the zip attached. A v* tag that isn't
+# exactly vX.Y.Z fails before anything is published. Actions are pinned to full commit SHAs.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    uses: ./.github/workflows/gates.yml
+
+  release:
+    needs: gates
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Require a vX.Y.Z tag
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$GITHUB_REF_NAME isn't a vX.Y.Z tag, so package wouldn't version from it; nothing published."
+            exit 1
+          fi
+      # The whole history and its tags: package's version and changelog read them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: npm ci
+      # The gates job ran the tests; package still runs check.
+      - run: node tools/tlk.mjs package --no-test
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

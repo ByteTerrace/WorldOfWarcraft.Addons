@@ -1,1 +1,1 @@
--- Fixture: a TOC without the _Camelot suffix, which the Forever client doesn't load.
+-- Fixture: a TOC without the _Forever or _Camelot suffix, which the Forever client doesn't load.

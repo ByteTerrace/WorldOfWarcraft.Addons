@@ -6,7 +6,8 @@
 //   node tools/tlk.mjs deploy [--unlink] [--no-test] [--addon <name>]... [--wow-root <path>] [--flavor <_folder_>]
 //   node tools/tlk.mjs package [--addon <name>]... [--no-test]            the zip players install, in dist/
 //   node tools/tlk.mjs api-sync [--docs <Blizzard_APIDocumentationGenerated dir>] [--globals <dump>]
-//   node tools/tlk.mjs probes [--import [<SavedVariables file>]] [--check] [--wow-root <path>] [--flavor <_folder_>]
+//   node tools/tlk.mjs api-sync --latest [--source <wow-ui-source checkout | file>]   is the snapshot's build the newest?
+//   node tools/tlk.mjs probes [--import [<SavedVariables file>]] [--check [--warn-builds]] [--wow-root <path>] [--flavor <_folder_>]
 //
 // Before any verb loads, node_modules must match package-lock.json; when it doesn't, tlk says to
 // run `npm ci` and exits 2.

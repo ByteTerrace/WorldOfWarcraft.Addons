@@ -1,0 +1,6 @@
+## Interface: 16001
+## Title: Camelot Addon
+## Version: 0.1.0
+## Dependencies: ForeverAddon
+
+Main.lua

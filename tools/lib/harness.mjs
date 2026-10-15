@@ -46,9 +46,11 @@ export function loadSnapshot() {
     return { raw: snapshot, lua: lines.join("\n") };
 }
 
-function loadAddons() {
+// The addons the harness loads (findAddons, so either Forever TOC suffix), by name: each one's
+// listed Lua files and their sources, the listed files missing on disk, and its TOC metadata.
+export function loadAddons(root = repoRoot) {
     const addons = {};
-    for (const addon of findAddons()) {
+    for (const addon of findAddons(root)) {
         const lua = addon.files.filter((f) => f.endsWith(".lua"));
         // A file the TOC lists but the disk lacks fails that addon's load (Harness:LoadFiles),
         // not every test file: the check gate reports it, and the other addons still load.

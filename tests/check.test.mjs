@@ -1,10 +1,13 @@
 // The check gate's own tests. It runs over fixture addons (tests/fixtures/check): BadAddon has one
 // violation per marked line, GoodAddon exercises every allowed construct, LegacyAddon has no
-// _Camelot TOC, and FrameworkAddon (built on a stub ByteTerrace_Core) reaches past the framework.
+// Forever TOC, and FrameworkAddon (built on a stub ByteTerrace_Core) reaches past the framework.
 // The findings must be exactly EXPECTED, so a rule that stops firing (or starts misfiring) fails.
+// tests/fixtures/toc holds one addon per Forever TOC suffix and one with both.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { loadAddons } from "../tools/lib/harness.mjs";
+import { findAddons } from "../tools/lib/repo.mjs";
 import { FIXTURES, assert, assertSame, captureLog, withTemp } from "../tools/lib/test-support.mjs";
 import { buildOf, interfaceOf } from "../tools/lib/wow.mjs";
 import { loadApi, runChecks } from "../tools/verbs/check.mjs";
@@ -32,7 +35,7 @@ const TIMERS = "use a module timer (module:After, module:Every), which runs as a
 const COMMS = "use a module's comms (comms = { prefix }), which keeps Blizzard's addon message rules";
 
 const EXPECTED = [
-    "LegacyAddon/LegacyAddon.toc:1: TOC LegacyAddon has no LegacyAddon_Camelot.toc, so the Forever client won't load it",
+    "LegacyAddon/LegacyAddon.toc:1: TOC LegacyAddon has no LegacyAddon_Forever.toc or LegacyAddon_Camelot.toc, so the Forever client won't load it",
     "BadAddon/BadAddon_Camelot.toc:1: TOC ## Interface 11507 but the installed client is 16001",
     "BadAddon/BadAddon_Camelot.toc:1: TOC dependency MissingAddon is not an addon in this repository",
     "BadAddon/BadAddon_Camelot.toc:1: TOC dependency AlsoMissing is not an addon in this repository",
@@ -159,6 +162,24 @@ export const tests = [
         name: "check reports exactly the planted violations, and nothing for allowed constructs",
         run: async () => {
             assertSame(await runChecks({ quiet: true, root: join(FIXTURES, "check"), clientInterface: 16001 }), EXPECTED);
+        },
+    },
+    {
+        // The client loads <Name>_Forever.toc and <Name>_Camelot.toc; with both, the tools read
+        // _Forever.toc (its ## Title says so) and check reports the other.
+        name: "check, findAddons and the harness read either Forever TOC suffix, and check reports a folder with both",
+        run: async () => {
+            const root = join(FIXTURES, "toc");
+            const addons = findAddons(root);
+            const summary = addons.map((addon) => `${addon.name}:${addon.tocFile}:${addon.metadata.Title}`).sort().join(" | ");
+            assert(summary === "BothAddon:BothAddon_Forever.toc:From Forever | CamelotAddon:CamelotAddon_Camelot.toc:Camelot Addon"
+                + " | ForeverAddon:ForeverAddon_Forever.toc:Forever Addon", summary);
+            const loaded = loadAddons(root);
+            assert(Object.keys(loaded).sort().join(",") === "BothAddon,CamelotAddon,ForeverAddon", Object.keys(loaded).join(","));
+            assert(loaded.BothAddon.metadata.Version === "0.2.0" && loaded.ForeverAddon.files.join(",") === "Main.lua", JSON.stringify(loaded.BothAddon));
+            assertSame(await runChecks({ quiet: true, root, clientInterface: 16001 }), [
+                "BothAddon/BothAddon_Camelot.toc:1: TOC BothAddon also has BothAddon_Forever.toc, which the tools read; which one the client loads isn't documented, so keep one",
+            ]);
         },
     },
     {

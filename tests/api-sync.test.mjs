@@ -1,12 +1,16 @@
 // api-sync's own tests: it refuses partial inputs rather than empty the rules, reads what the
-// docs and the dump record, and writes the snapshot in its one-entry-per-line format.
+// docs and the dump record, and writes the snapshot in its one-entry-per-line format. --latest
+// runs against fixture checkouts and files, never GitHub.
 
+import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { repoRoot } from "../tools/lib/repo.mjs";
 import { FIXTURES, assert, tlk, withTemp } from "../tools/lib/test-support.mjs";
-import { MIN_DOC_FUNCTIONS, MIN_GLOBALS, readDocs, readGlobals, serialize } from "../tools/verbs/api-sync.mjs";
+import {
+    FOREVER_VERSION_URL, MIN_DOC_FUNCTIONS, MIN_GLOBALS, latestBuild, readDocs, readGlobals, serialize, sourceBuild,
+} from "../tools/verbs/api-sync.mjs";
 
 // A minimal DevTools dump with `count` function globals plus a nested Enum table.
 function writeDump(path, count, skipped = "") {
@@ -95,6 +99,56 @@ export const tests = [
             assert(text.includes('\n  "A": {"secret":["SecretReturns"]},\n  "B": {}\n'), "functions one per line");
             assert(text.includes('\n   "M": {}\n'), "methods one per line");
             JSON.parse(text);
+        }),
+    },
+    {
+        name: "api-sync reads a build from wow-ui-source's version.txt or a commit title",
+        run() {
+            assert(sourceBuild("1.60.1.70374\n") === "1.60.1 (70374)", sourceBuild("1.60.1.70374\n"));
+            assert(sourceBuild("1.60.1 (70374)") === "1.60.1 (70374)", "a commit title");
+            assert(sourceBuild("") === null && sourceBuild("1.60.1") === null && sourceBuild("<html>1.60.1.70374 x</html>") === null, "nothing else");
+            assert(FOREVER_VERSION_URL.includes("Gethe/wow-ui-source/forever/version.txt"), FOREVER_VERSION_URL);
+        },
+    },
+    {
+        // The fixture checkout's version.txt says 1.60.2 (71000).
+        name: "api-sync --latest exits 0 when the snapshot's docs build is the branch's newest, 1 when it differs, 2 when unreadable",
+        run: async () => withTemp(async (dir) => {
+            const out = join(dir, "forever.json");
+            const docs = (build) => JSON.stringify({ source: { docs: `Blizzard_APIDocumentationGenerated (Gethe/wow-ui-source, forever), ${build}` } });
+            const checkout = join(FIXTURES, "api", "wow-ui-source");
+            writeFileSync(out, docs("1.60.1 (70374)"));
+            const stale = tlk(["api-sync", "--latest", "--source", checkout, "--out", out]);
+            assert(stale.status === 1, `a newer build exits 1 (got ${stale.status}): ${stale.stdout}${stale.stderr}`);
+            assert(stale.stderr.includes("the forever branch of Gethe/wow-ui-source is at 1.60.2 (71000)") && stale.stderr.includes("documents 1.60.1 (70374)")
+                && stale.stderr.includes("api-sync --docs"), stale.stderr);
+            writeFileSync(out, docs("1.60.2 (71000)"));
+            const current = tlk(["api-sync", "--latest", "--source", join(checkout, "version.txt"), "--out", out]);
+            assert(current.status === 0 && current.stdout.includes("documents 1.60.2 (71000), the forever branch's newest build"), `${current.status} ${current.stdout}${current.stderr}`);
+            assert(readFileSync(out, "utf8") === docs("1.60.2 (71000)"), "--latest writes nothing");
+            const title = join(dir, "title.txt");
+            writeFileSync(title, "1.60.2 (71000)\n");
+            assert(tlk(["api-sync", "--latest", "--source", title, "--out", out]).status === 0, "a commit title");
+            writeFileSync(title, "no build here\n");
+            const unreadable = tlk(["api-sync", "--latest", "--source", title, "--out", out]);
+            assert(unreadable.status === 2 && unreadable.stderr.includes("no build in"), `${unreadable.status} ${unreadable.stderr}`);
+            writeFileSync(out, JSON.stringify({ source: {} }));
+            const undocumented = tlk(["api-sync", "--latest", "--source", checkout, "--out", out]);
+            assert(undocumented.status === 2 && undocumented.stderr.includes("records no docs build"), `${undocumented.status} ${undocumented.stderr}`);
+            assert(tlk(["api-sync", "--source", checkout, "--out", out]).status === 2, "--source needs --latest");
+        }),
+    },
+    {
+        // A checkout without version.txt: its HEAD commit's title, as wow-ui-source titles them.
+        name: "api-sync --latest reads a checkout's HEAD commit title when it has no version.txt",
+        run: async () => withTemp(async (dir) => {
+            const git = (...args) => {
+                const result = spawnSync("git", ["-C", dir, "-c", "user.name=tlk", "-c", "user.email=tlk@example.invalid", ...args], { encoding: "utf8" });
+                assert(result.status === 0, `git ${args.join(" ")}: ${result.stderr}`);
+            };
+            git("init", "--quiet");
+            git("commit", "--quiet", "--allow-empty", "-m", "1.60.3 (72000)");
+            assert(await latestBuild(dir) === "1.60.3 (72000)", "the commit title");
         }),
     },
     {

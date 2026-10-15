@@ -7,8 +7,10 @@
 //             dependency (## Dependencies, ## RequiredDeps, ## Dep*) is an addon here; ## Interface
 //             (a comma-separated list) includes the installed Forever client's, or without an
 //             install the one the API snapshot's build implies (1.60.1 is 16001), and check
-//             says which it used; a top-level folder
-//             with a .toc but no <Name>_Camelot.toc is reported (the client won't load it).
+//             says which it used. An addon's TOC is <Name>_Forever.toc or <Name>_Camelot.toc (the
+//             client loads both suffixes; the tools read _Forever.toc when a folder has both, and
+//             a folder with both is reported, since which one the client loads isn't documented);
+//             a top-level folder with a .toc but neither is reported (the client won't load it).
 //   GLOBAL    a global read names something the client dump or a loaded addon defines (also via
 //             _G.X, getfenv().X and getglobal("X")). A global write is declared: SavedVariables,
 //             SavedVariablesPerCharacter, AddonCompartmentFunc, SLASH_*, or ## X-Globals; that
@@ -79,7 +81,7 @@ import { checkStyleRules } from "../lib/check-style.mjs";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { checkLua } from "../lib/check-lua.mjs";
-import { findAddons, findMisnamedAddons, readForbidden, repoRoot, splitList, toPosix } from "../lib/repo.mjs";
+import { findAddons, findAmbiguousAddons, findMisnamedAddons, readForbidden, repoRoot, splitList, toPosix } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, buildOf, findForeverInstall, interfaceOf } from "../lib/wow.mjs";
 
 export const options = {
@@ -208,7 +210,12 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
 
     for (const name of findMisnamedAddons(root)) {
         const toc = readdirSync(join(root, name)).find((f) => f.toLowerCase().endsWith(".toc"));
-        report(join(root, name, toc), 1, "TOC", `${name} has no ${name}_Camelot.toc, so the Forever client won't load it`);
+        report(join(root, name, toc), 1, "TOC", `${name} has no ${name}_Forever.toc or ${name}_Camelot.toc, so the Forever client won't load it`);
+    }
+    for (const { name, files: [read, ...ignored] } of findAmbiguousAddons(root)) {
+        for (const toc of ignored) {
+            report(join(root, name, toc), 1, "TOC", `${name} also has ${read}, which the tools read; which one the client loads isn't documented, so keep one`);
+        }
     }
 
     const exported = new Map(addons.map((addon) => [addon.name, splitList(addon.metadata["X-Globals"])]));
@@ -237,7 +244,7 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
             listed.add(file);
         }
         for (const file of onDisk) {
-            if (!files.includes(file)) report(join(dir, file), 1, "TOC", `not listed in ${addon.name}_Camelot.toc`);
+            if (!files.includes(file)) report(join(dir, file), 1, "TOC", `not listed in ${addon.tocFile}`);
         }
 
         const allowedWrites = new Set([...addon.savedVariables, ...exported.get(addon.name)]);

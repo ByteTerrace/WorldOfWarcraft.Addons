@@ -1,9 +1,11 @@
 // The CLI's own tests: tools/tlk.mjs refuses to run on a missing or stale node_modules, saying to
-// run `npm ci`, and the harness loader runs every file in tests/harness.
+// run `npm ci`, the CI workflows call it as it is, and the harness loader runs every file in
+// tests/harness.
 
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { staleDependencies } from "../tools/lib/dependencies.mjs";
 import { HARNESS_FILES } from "../tools/lib/harness.mjs";
 import { repoRoot } from "../tools/lib/repo.mjs";
@@ -49,6 +51,37 @@ export const tests = [
             assert(run.stderr.includes("Run `npm ci`") && run.stderr.includes("luaparse: not installed"), run.stderr);
             assert(!run.stderr.includes("ERR_MODULE_NOT_FOUND"), run.stderr);
         }),
+    },
+    {
+        // The workflows run once pushed, so what can be read before then is checked here: every
+        // action is pinned to a full commit SHA, one SHA per action across the workflows, every
+        // tlk call names a verb and options it has, and a called workflow exists and can be called.
+        name: "the CI workflows pin their actions and call real tlk verbs and options",
+        run: async () => {
+            const folder = join(repoRoot, ".github", "workflows");
+            const shas = new Map();
+            for (const file of readdirSync(folder).filter((f) => f.endsWith(".yml"))) {
+                const text = readFileSync(join(folder, file), "utf8");
+                for (const [, action, ref] of text.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+?)@(\S+)/gm)) {
+                    assert(/^[0-9a-f]{40}$/.test(ref), `${file}: ${action}@${ref} isn't pinned to a commit SHA`);
+                    assert((shas.get(action) ?? ref) === ref, `${file}: ${action}@${ref}, elsewhere @${shas.get(action)}`);
+                    shas.set(action, ref);
+                }
+                for (const [, called] of text.matchAll(/^\s*uses:\s*\.\/(\S+)$/gm)) {
+                    const callee = readFileSync(join(repoRoot, called), "utf8");
+                    assert(/^\s+workflow_call:/m.test(callee), `${file} calls ${called}, which has no workflow_call trigger`);
+                }
+                for (const [, verb, rest] of text.matchAll(/node tools\/tlk\.mjs ([\w-]+)([^\n>|&]*)/g)) {
+                    const path = join(repoRoot, "tools", "verbs", `${verb}.mjs`);
+                    assert(existsSync(path), `${file}: tlk has no verb ${verb}`);
+                    const { options = {} } = await import(pathToFileURL(path).href);
+                    for (const [, flag] of rest.matchAll(/--([\w-]+)/g)) {
+                        assert(flag in options, `${file}: tlk ${verb} has no --${flag}`);
+                    }
+                }
+            }
+            assert(shas.has("actions/checkout") && shas.has("actions/setup-node"), [...shas.keys()].join(", "));
+        },
     },
     {
         name: "the harness loader lists exactly the files in tests/harness",

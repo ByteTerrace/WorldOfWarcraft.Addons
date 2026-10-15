@@ -1,0 +1,55 @@
+# Weekly (and on demand): is tools/api/forever.json documenting the newest build on the forever
+# branch of Gethe/wow-ui-source? `tlk api-sync --latest` answers: 0 current, 1 stale, 2 couldn't
+# tell. When it's stale, this opens an issue, or updates the open one, with what it printed; an
+# error fails the run instead. Actions are pinned to full commit SHAs, the same as gates.yml's.
+name: build-watch
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build-watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: npm ci
+      - id: latest
+        name: Compare the snapshot's build with the forever branch's
+        shell: bash
+        run: |
+          set +e
+          node tools/tlk.mjs api-sync --latest > "$RUNNER_TEMP/latest.txt" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/latest.txt"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then exit "$status"; fi
+      - name: Open or update the stale-build issue
+        if: steps.latest.outputs.status == '1'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "API snapshot is behind the forever branch's build"
+        run: |
+          {
+            cat "$RUNNER_TEMP/latest.txt"
+            echo
+            echo "Found by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/body.md"
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json number,title \
+            --jq "map(select(.title == env.TITLE)) | .[0].number // empty")
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+            echo "Updated issue #$number"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi

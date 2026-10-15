@@ -17,6 +17,14 @@ local function Records(h)
     return h.env.ByteTerraceDevToolsDB.probes
 end
 
+-- A record's contexts, sorted and joined by spaces.
+local function Contexts(record)
+    local list = {}
+    for context in pairs(record.contexts) do list[#list + 1] = context end
+    table.sort(list)
+    return table.concat(list, " ")
+end
+
 local function DieToDamage(h, spells)
     h:MeterFight({ duration = 12, sources = {
         { unit = "player", spells = { DamageTaken = spells }, death = { maxHealth = 55 } },
@@ -143,15 +151,14 @@ test("/btdev probe records the probes whose needs are met, with build and contex
     h:Slash("/btdev probe")
     local record = Records(h)["chatTypeInfo.raidWarning"]
     eq(record.build, Harness.BUILD)
-    eq(record.context.combat, false)
-    eq(record.context.restrictions, "none")
+    eq(Contexts(record), "idle/none")
     eq(record.result.g, 72)
     eq(record.result.hasMetatable, true)
     truthy(Records(h)["chat.lockdownIdle"], "an idle probe runs out of combat")
     eq(Records(h)["unitIdentity.npcTarget"], nil, "no target: skipped")
     eq(Records(h)["quest.offer"], nil, "no quest dialog: skipped")
     local text = Printed(h)
-    truthy(text:find("recorded %d+ probes %(%d+ new, 0 changed%)"), text)
+    truthy(text:find("recorded %d+ probes %(%d+ new, 0 changed, 0 confirmed in a new context or build%)"), text)
     truthy(text:find("target a living NPC (a quest giver or a mob): unitIdentity.npcTarget, unitHealth.npcTarget", 1, true), text)
     truthy(text:find("/reload to write them", 1, true), text)
 end)
@@ -177,7 +184,7 @@ test("running again merges: new probes are added, unchanged ones stay, changes a
     local after = 0
     for _ in pairs(Records(h)) do after = after + 1 end
     truthy(after > before, "the target's probes are added")
-    truthy(text:find(("(%d new, 1 changed)"):format(after - before), 1, true), "the summary counts what was added: " .. text)
+    truthy(text:find(("(%d new, 1 changed, 0 confirmed"):format(after - before), 1, true), "the summary counts what was added: " .. text)
     truthy(text:find("probe chatTypeInfo.raidWarning changed at result.g: was 1, now 72", 1, true), text)
     truthy(text:find('probe chatTypeInfo.raidWarning changed at result.r: was { secret = true, type = "number" }, now 255',
         1, true), "a table prints with its keys sorted: " .. text)
@@ -202,8 +209,7 @@ test("in combat, records carry the combat context", function()
     h:EnterCombat()
     h:Slash("/btdev probe")
     local record = Records(h)["unitHealth.npcTargetInCombat"]
-    eq(record.context.combat, true)
-    eq(record.context.restrictions, "Combat")
+    eq(Contexts(record), "combat/Combat")
     eq(record.result.health.secret, true)
     eq(Records(h)["unitHealth.npcTarget"], nil, "the idle probe waits for combat to end")
 end)
@@ -284,13 +290,13 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
 end)
 
 test("a record from another build counts as missing", function()
-    local h = Load({ ByteTerraceDevToolsDB = { probes = { classColors = { build = "1.60.0 (69000)", context = {}, result = {} } } } })
+    local h = Load({ ByteTerraceDevToolsDB = { probes = { classColors = { build = "1.60.0 (69000)", contexts = { ["idle/none"] = true }, result = {} } } } })
     h:Slash("/btdev probe list")
     truthy(Printed(h):find("nothing: chatTypeInfo.raidWarning, classColors", 1, true), Printed(h))
 end)
 
 test("a record from another version of its probe counts as missing, and a new run replaces it", function()
-    local old = { build = Harness.BUILD, context = { combat = false, restrictions = "none" }, result = { fields = "amount" } }
+    local old = { build = Harness.BUILD, contexts = { ["idle/none"] = true }, result = { fields = "amount" } }
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["deathRecap.events"] = old } } })
     h:Slash("/btdev probe list")
     truthy(Printed(h):find("deathRecap.events", 1, true), Printed(h))
@@ -348,7 +354,7 @@ test("kill events accumulate: a player kill after a mob kill keeps both kinds", 
 end)
 
 test("an accumulating probe's record grows across sessions and reloads", function()
-    local record = { build = Harness.BUILD, context = { combat = false, restrictions = "none" },
+    local record = { build = Harness.BUILD, contexts = { ["combat/Combat"] = true },
         result = { partyKill = { attacker = "pet", attackerKind = "Pet", target = "Creature" }, targetDied = true } }
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["kills.seen"] = record } } })
     h:Fire("PARTY_KILL", h:GUID(h.player), h:GUID({ name = "Cara", isPlayer = true }))
@@ -359,6 +365,7 @@ test("an accumulating probe's record grows across sessions and reloads", functio
     eq(result.partyKill.attacker, "pet,you")
     eq(result.partyKill.target, "Creature,Player")
     eq(result.targetDied, true, "kept from the earlier session")
+    eq(Contexts(Records(h)["kills.seen"]), "combat/Combat idle/none", "and so is its context, joined by this one")
     h:Reload()
     h:FireChat("CHAT_MSG_CHANNEL", "hi", "Dh Taketwo-Realm")
     h:Slash("/btdev probe")
@@ -392,7 +399,7 @@ test("a secret never erases what was seen before it, nor what's seen after", fun
 end)
 
 test("a saved accumulating record keeps its items when a session saw a secret", function()
-    local record = { build = Harness.BUILD, context = { combat = false, restrictions = "none" },
+    local record = { build = Harness.BUILD, contexts = { ["idle/none"] = true },
         result = { CHAT_MSG_SAY = "Aa,Aa Aa" } }
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["names.chatSenders"] = record } } })
     h:FireChat("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
@@ -443,8 +450,44 @@ test("/btdev probe lists only what's still to do, and a new context alone isn't 
     local from = #h.printed + 1
     h:Slash("/btdev probe")
     local text = Printed(h, from)
-    falsy(text:find("changed at context", 1, true), "combat context alone: " .. text)
+    falsy(text:find("changed at", 1, true), "combat context alone: " .. text)
     falsy(text:find("classColors", 1, true), "an answered probe isn't listed again: " .. text)
+    truthy(text:find("%(%d+ new, 0 changed, %d+ confirmed in a new context or build%)"), text)
+    eq(Contexts(Records(h)["chatTypeInfo.raidWarning"]), "combat/Combat idle/none", "the same result in combat adds the context")
+end)
+
+test("/btdev probe again in a known context changes no record and reports nothing changed", function()
+    local h = Load()
+    h:Slash("/btdev probe")
+    local before = {}
+    for name, record in pairs(Records(h)) do before[name] = h.ns.Probes.Show(record) end
+    local from = #h.printed + 1
+    h:Slash("/btdev probe")
+    local text = Printed(h, from)
+    truthy(text:find("(0 new, 0 changed, 0 confirmed in a new context or build)", 1, true), text)
+    falsy(text:find("changed at", 1, true), text)
+    for name, record in pairs(Records(h)) do eq(h.ns.Probes.Show(record), before[name], name) end
+end)
+
+test("a different result replaces the record and its contexts, and says which contexts it replaced", function()
+    local stale = { build = Harness.BUILD, contexts = { ["combat/Combat"] = true, ["idle/none"] = true },
+        result = { b = 0, g = 1, hasMetatable = true, r = 255, sticky = 0 } }
+    local h = Load({ ByteTerraceDevToolsDB = { probes = { ["chatTypeInfo.raidWarning"] = stale } } })
+    h:Slash("/btdev probe")
+    local text = Printed(h)
+    truthy(text:find("probe chatTypeInfo.raidWarning changed at result.g: was 1, now 72", 1, true), text)
+    truthy(text:find("probe chatTypeInfo.raidWarning now holds only idle/none; the new result replaced combat/Combat", 1, true), text)
+    eq(Contexts(Records(h)["chatTypeInfo.raidWarning"]), "idle/none")
+end)
+
+test("a record from another build is replaced, contexts and all, even with the same result", function()
+    local h = Load()
+    h:Slash("/btdev probe")
+    local record = Records(h)["chatTypeInfo.raidWarning"]
+    record.build, record.contexts = "1.60.0 (69000)", { ["combat/Combat"] = true }
+    h:Slash("/btdev probe")
+    eq(Contexts(Records(h)["chatTypeInfo.raidWarning"]), "idle/none", "only this build's context vouches for it")
+    eq(Records(h)["chatTypeInfo.raidWarning"].build, Harness.BUILD)
 end)
 
 test("the meter's updates in the seconds after your death are kept by type, for damageMeter.afterDeath", function()
@@ -551,7 +594,7 @@ test("/btdev probe list says so when every probe has a result for this build", f
     local h = Load()
     local records = {}
     for _, probe in ipairs(h.ns.Probes.List) do
-        records[probe.name] = { build = Harness.BUILD, context = { combat = false, restrictions = "none" }, result = {},
+        records[probe.name] = { build = Harness.BUILD, contexts = { ["idle/none"] = true }, result = {},
             version = probe.version }
     end
     h.env.ByteTerraceDevToolsDB = { probes = records }
@@ -597,7 +640,7 @@ test("combat.edges keeps another order as it came, adds it to a saved record, an
     local leave = "PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false] > "
         .. "Combat Inactive[lockdown=false affecting=false restricted=false]"
     eq(h.ns.Probes.ByName["combat.edges"].run().leave, leave)
-    local record = { build = Harness.BUILD, context = { combat = false, restrictions = "none" },
+    local record = { build = Harness.BUILD, contexts = { ["idle/none"] = true },
         result = { enter = "PLAYER_REGEN_DISABLED[lockdown=false affecting=false restricted=false]", leave = leave } }
     local saved = Load({ ByteTerraceDevToolsDB = { probes = { ["combat.edges"] = record } } })
     saved:EnterCombat()

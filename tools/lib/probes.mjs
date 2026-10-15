@@ -2,15 +2,17 @@
 // probe (ByteTerrace_DevTools' probe files, probeFiles below), recorded in game by `/btdev probe`
 // and imported by `tlk probes --import`. tests/probes.test.lua compares the harness's answers with it.
 //
-// Format: pretty-printed JSON, probes sorted by name, each record's result first, then the context
-// it ran in. The file's build is the newest record's; a record from another build names its own.
+// Format: pretty-printed JSON, probes sorted by name, each record's result first, then the set of
+// contexts the client gave it in (Probes.Context in ByteTerrace_DevTools' Probes.lua: "idle" or
+// "combat", a slash, the active restrictions). The file's build is the newest record's; a record
+// from another build names its own.
 //
 //   {
 //     "build": "1.60.1 (70009)",
 //     "probes": {
 //       "chatTypeInfo.raidWarning": {
 //         "result": { "b": 0, "g": 72, "hasMetatable": true, "r": 255, "sticky": 0 },
-//         "context": { "combat": false, "restrictions": "none" }
+//         "contexts": { "combat/Combat": true, "idle/none": true }
 //       },
 //       ...
 //     }
@@ -72,8 +74,8 @@ function pretty(value, indent, forceOpen = false, keys = null) {
 export function serializeProbes(snapshot) {
     const build = snapshot.build ?? "";
     const records = Object.keys(snapshot.probes).sort().map((name) => {
-        const { result, context, build: own, version } = snapshot.probes[name];
-        const record = own && own !== build ? { result, context, build: own } : { result, context };
+        const { result, contexts, build: own, version } = snapshot.probes[name];
+        const record = own && own !== build ? { result, contexts, build: own } : { result, contexts };
         if (version !== undefined) record.version = version;
         return `    ${JSON.stringify(name)}: ${pretty(record, "    ", true, Object.keys(record))}`;
     });
@@ -216,6 +218,21 @@ export function mergeResults(a, b) {
 // Whether a record was made by the definition's current version of the probe (Probes.IsCurrent):
 // a record without a version is version 1's.
 export const isCurrent = (definition, record) => Boolean(record) && (record.version ?? 1) === definition.version;
+
+// A record folded into the saved one, the way Probes.Keep (ByteTerrace_DevTools) folds a run:
+// { record, outcome }, outcome "new" (nothing current was saved), "changed" (another result,
+// which replaces the record and its contexts unless the probe accumulates on the same build),
+// "confirmed" (the same result in a new context or on another build) or "same".
+export function keepRecord(definition, previous, record) {
+    if (!isCurrent(definition, previous)) return { record, outcome: "new" };
+    const kept = { ...record };
+    const sameBuild = previous.build === record.build;
+    if (definition.accumulates && sameBuild) kept.result = mergeResults(previous.result, record.result);
+    const changed = stableJson(previous.result) !== stableJson(kept.result);
+    if (sameBuild && (definition.accumulates || !changed)) kept.contexts = { ...previous.contexts, ...record.contexts };
+    if (changed) return { record: kept, outcome: "changed" };
+    return { record: kept, outcome: stableJson(previous) === stableJson(kept) ? "same" : "confirmed" };
+}
 
 // Orders builds by their build number.
 export const buildNumber = (build) => Number(/\((\d+)\)/.exec(build ?? "")?.[1] ?? 0);

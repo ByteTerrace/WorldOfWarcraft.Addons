@@ -152,12 +152,12 @@ When the harness has to guess how the client behaves, a probe asks the client. B
    node tools/tlk.mjs probes --import    # the installed client's SavedVariables; or pass the file
    ```
 
-   The answers land in `tools/api/probes.json`, sorted by probe, with the client build. An accumulating probe's answer merges into the record already there from the same build, so a session that saw less never shrinks it.
+   The answers land in `tools/api/probes.json`, sorted by probe, with the client build. Each record lists the contexts its result was confirmed in (`idle/none`, `combat/Combat`: combat lockdown, then the active restrictions). The same result in a new context adds that context, and in a known context nothing changes. A different result, or a newer build, replaces the record, and the earlier contexts go with it (the import prints `Replaced <probe>`). An accumulating probe's answer merges into the record already there from the same build, and so do its contexts, so a session that saw less never shrinks it.
 3. `node tools/tlk.mjs probes` prints each probe with its needs, the client's and the harness's answers, and whether they match, then what's left to do in game. `probes --check` fails when an answer comes from another build than the API snapshot, from a probe that no longer exists, or from another version of its probe.
 
 A probe whose result changes shape declares a higher `version`: a record made by another version answered a different question, so `/btdev probe list` asks for it again, the import skips and drops it, and the tests treat the probe as unanswered.
 
-`tests/probes.test.lua` runs every probe in the harness. A probe whose answer differs from the client's fails, with the differing fields; fix the harness and mark the behavior `[E]`. A probe without an answer, or one the harness can't run (bags, vendors, trainers, flights, font objects, texture files, others' addon messages during a restriction, XP at the max level), is pending: `test` prints it as `PEND` and it doesn't fail the run. Any test can call `pending(reason)` the same way.
+`tests/probes.test.lua` runs every probe in the harness, once for each context its record holds; it has to match in every one. A probe whose answer differs from the client's fails, with the differing fields; fix the harness and mark the behavior `[E]`. A probe without an answer, or one the harness can't run (bags, vendors, trainers, flights, font objects, texture files, others' addon messages during a restriction, XP at the max level), is pending: `test` prints it as `PEND` and it doesn't fail the run. Any test can call `pending(reason)` the same way.
 
 ## TheLanKrewToolKit
 

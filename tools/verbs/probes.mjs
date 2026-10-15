@@ -15,18 +15,18 @@
 //                                                 ByteTerrace_DevTools no longer defines, or made
 //                                                 by another version of its probe.
 //
-// An import replaces each imported probe's record (an accumulating probe's merges into the saved
-// record from the same build, as /btdev probe merges sessions, so a fresh session never shrinks
-// it), keeps the others, and drops records of probes that no longer exist or were made by another
-// version of their probe (Probes.lua's header). A record that isn't { build, context = { combat,
-// restrictions }, result } is refused.
+// An import folds each imported record into the saved one by the rules /btdev probe follows
+// (keepRecord, Probes.lua's header): the same result adds its contexts, another result or a newer
+// build replaces the record, contexts and all, and an accumulating probe's result merges into the
+// saved record from the same build, so a fresh session never shrinks it. It keeps the others, and
+// drops records of probes that no longer exist or were made by another version of their probe. A
+// record that isn't { build, contexts = { ["idle/none"] = true, ... }, result } is refused.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadSnapshot, withHarness } from "../lib/harness.mjs";
 import {
-    ENCODE_JSON, PROBES_PATH, buildNumber, isCurrent, mergeResults, readDefinitions, readProbes, readRecords, serializeProbes,
-    stableJson,
+    ENCODE_JSON, PROBES_PATH, buildNumber, isCurrent, keepRecord, readDefinitions, readProbes, readRecords, serializeProbes,
 } from "../lib/probes.mjs";
 import { repoRoot } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, buildOf, findForeverInstall } from "../lib/wow.mjs";
@@ -41,6 +41,10 @@ export const options = {
 };
 
 const SAVED_VARIABLES = "ByteTerrace_DevTools.lua";
+
+// A context as Probes.Context writes it: "idle" or "combat", a slash, then "none" or the active
+// restrictions' names joined by commas.
+const CONTEXT = /^(idle|combat)\/(none|[A-Za-z]+(,[A-Za-z]+)*)$/;
 
 // The installed client's DevTools SavedVariables, when exactly one account has them.
 function defaultRecordsFile(values) {
@@ -60,8 +64,11 @@ function defaultRecordsFile(values) {
 function recordProblem(record) {
     if (!record || typeof record !== "object") return "isn't a table";
     if (!buildOf(record.build)) return "has no build";
-    const context = record.context;
-    if (!context || typeof context.combat !== "boolean" || typeof context.restrictions !== "string") return "has no context";
+    const contexts = record.contexts;
+    if (!contexts || typeof contexts !== "object" || Object.keys(contexts).length === 0) return "has no contexts";
+    for (const [context, value] of Object.entries(contexts)) {
+        if (!CONTEXT.test(context) || value !== true) return `has a bad context ${JSON.stringify(context)}`;
+    }
     if (!record.result || typeof record.result !== "object") return "has no result";
     if (record.version !== undefined && !(Number.isInteger(record.version) && record.version >= 2)) return "has a bad version";
     return null;
@@ -102,7 +109,11 @@ function compact(value) {
     return typeof value === "string" && /^[^\s={}"]+$/.test(value) ? value : JSON.stringify(value);
 }
 
-// Every probe run in the harness (Harness.RunProbe): { [name]: { gap, problem, context, result, differs } }.
+// A set of contexts as text, sorted and joined by "; " (a context's restrictions hold commas).
+const contextList = (contexts) => Object.keys(contexts ?? {}).sort().join("; ");
+
+// Every probe run in the harness (Harness.RunProbe): { [name]: { gap, problem, runs, differs } },
+// runs { [the client's context, or "-"]: { context, result } } for each run that recorded one.
 // differs is RunProbe's verdict against the client's record, which merges an accumulating probe's
 // sessions, so a harness answer that shows less than every session did still matches.
 async function harnessAnswers(definitions, probesPath) {
@@ -113,10 +124,14 @@ async function harnessAnswers(definitions, probesPath) {
             local out = {}
             for name in __names:gmatch("[^\\n]+") do
                 local run = Harness.RunProbe(name)
-                local record = run.record
+                local runs = {}
+                for _, one in ipairs(run.runs) do
+                    if one.record then
+                        runs[one.context or "-"] = { context = next(one.record.contexts), result = one.record.result }
+                    end
+                end
                 out[name] = {
-                    gap = run.gap, problem = run.problem,
-                    context = record and record.context, result = record and record.result,
+                    gap = run.gap, problem = run.problem, runs = runs,
                     differs = run.differences ~= nil and #run.differences > 0,
                 }
             end
@@ -135,8 +150,10 @@ async function report(values, definitions) {
     const rows = definitions.map((definition) => {
         const observed = isCurrent(definition, probes[definition.name]) ? probes[definition.name] : undefined;
         const answer = answers[definition.name];
-        const client = observed && { context: observed.context, result: observed.result };
-        const harness = answer.result && { context: answer.context, result: answer.result };
+        const client = observed && { contexts: observed.contexts, result: observed.result };
+        const harness = Object.keys(answer.runs ?? {}).sort().map((context) => ({
+            contexts: { [answer.runs[context].context]: true }, result: answer.runs[context].result,
+        }));
         let status;
         if (answer.gap) status = "harness can't set up";
         else if (answer.problem) status = "harness error";
@@ -150,12 +167,11 @@ async function report(values, definitions) {
     console.log(line("Probe", "Needs", "Status"));
     for (const row of rows) {
         console.log(line(row.definition.name, row.definition.labels, row.status));
-        const context = (record) => (record.context.combat ? "in combat" : "idle") + (record.context.restrictions === "none" ? "" : `, ${record.context.restrictions}`);
-        const show = (label, record) => console.log(`    ${label.padEnd(8)}${compact(record.result)}  [${context(record)}${record.build ? `, ${record.build}` : ""}]`);
+        const show = (label, record) => console.log(`    ${label.padEnd(8)}${compact(record.result)}  [${contextList(record.contexts)}${record.build ? `, ${record.build}` : ""}]`);
         if (row.status === "match") show("both", { ...row.client, build: row.observed.build });
         else {
             if (row.client) show("client", { ...row.client, build: row.observed.build });
-            if (row.harness) show("harness", row.harness);
+            for (const harness of row.harness) show("harness", harness);
         }
         if (row.answer.gap) console.log(`    ${"harness".padEnd(8)}${row.answer.gap}`);
         if (row.answer.problem) console.log(`    ${"harness".padEnd(8)}${row.answer.problem.replaceAll("\n", " ")}`);
@@ -188,18 +204,20 @@ async function importRecords(values, positionals, definitions) {
             console.log(`Skipped ${name}: the record was ${versionNote(name, record)}; re-run it in game`);
             continue;
         }
-        const clean = { build: record.build, context: { combat: record.context.combat, restrictions: record.context.restrictions }, result: record.result };
+        const clean = { build: record.build, contexts: { ...record.contexts }, result: record.result };
         if (record.version !== undefined) clean.version = record.version;
         const previous = snapshot.probes[name];
         if (previous && buildNumber(previous.build) > buildNumber(record.build)) {
             console.log(`Kept ${name}: the file's record is from ${record.build}, older than ${previous.build}`);
             continue;
         }
-        if (defined.get(name).accumulates && previous && previous.build === record.build && isCurrent(defined.get(name), previous)) {
-            clean.result = mergeResults(previous.result, clean.result);
+        const kept = keepRecord(defined.get(name), previous, clean);
+        counts[{ new: "new", changed: "changed", confirmed: "changed", same: "unchanged" }[kept.outcome]]++;
+        const dropped = kept.outcome === "changed" ? Object.keys(previous.contexts ?? {}).filter((context) => !kept.record.contexts[context]) : [];
+        if (dropped.length) {
+            console.log(`Replaced ${name}: its result changed, so it now holds only ${contextList(kept.record.contexts)}, not ${dropped.sort().join("; ")}`);
         }
-        counts[!previous ? "new" : stableJson(previous) === stableJson(clean) ? "unchanged" : "changed"]++;
-        snapshot.probes[name] = clean;
+        snapshot.probes[name] = kept.record;
     }
     for (const name of Object.keys(snapshot.probes)) {
         if (!defined.has(name)) {

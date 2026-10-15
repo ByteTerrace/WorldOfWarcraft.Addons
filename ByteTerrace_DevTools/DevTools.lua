@@ -7,8 +7,9 @@ local addonName, ns = ...
 --                      member names), plus the build it came from, for
 --                      `node tools/tlk.mjs api-sync --globals <that file>` (tools/api/forever.json).
 --   /btdev probe       every calibration probe (Probes.lua and the files it names) whose needs are
---                      met right now, merged into the probes already recorded (an accumulating
---                      probe's result merges into its record: Probes.lua), for
+--                      met right now, folded into the probes already recorded (Probes.Keep: the
+--                      same result adds its context, another result replaces the record, an
+--                      accumulating probe's result merges), for
 --                      `node tools/tlk.mjs probes --import` (tools/api/probes.json). Probes it
 --                      skips are printed with what they need.
 --   /btdev probe list  the probes with no result for this build yet, grouped by what they need,
@@ -149,10 +150,20 @@ local function AddToGroup(groups, probe, text)
     table.insert(groups[step][text], probe.name)
 end
 
+-- A set of contexts as text, sorted and joined by "; " (a context's restrictions hold commas).
+local function ContextList(contexts)
+    local list = {}
+    for context in pairs(contexts) do
+        list[#list + 1] = context
+    end
+    table.sort(list)
+    return table.concat(list, "; ")
+end
+
 local function RunProbes()
     local db = Database()
     db.probes = type(db.probes) == "table" and db.probes or {}
-    local recorded, added, changed, skipped, failed = 0, 0, 0, {}, 0
+    local recorded, added, changed, confirmed, skipped, failed = 0, 0, 0, 0, {}, 0
     local build = Probes.Build()
     for _, probe in ipairs(Probes.List) do
         local met, unmet = Probes.Check(probe)
@@ -168,31 +179,37 @@ local function RunProbes()
                 failed = failed + 1
                 Say(("probe %s failed: %s"):format(probe.name, problem))
             else
-                local previous = saved
-                if not Probes.IsCurrent(probe, previous) then
-                    previous = nil -- an older version's record answered another question
-                elseif probe.accumulates and previous.build == record.build then
-                    record.result = Probes.Merge(previous.result, record.result)
-                end
-                -- A changed answer is news; a new context alone (combat now, idle before) is saved
-                -- without a word, so it doesn't bury the answers that did change.
-                local differences = previous and Probes.Diff(previous.result, record.result) or {}
-                if not previous then
+                -- A changed answer is news; a new context alone (combat now, idle before) is only
+                -- counted, so it doesn't bury the answers that did change.
+                local kept, outcome, differences = Probes.Keep(probe, saved, record)
+                if outcome == "new" then
                     added = added + 1
-                elseif #differences > 0 then
+                elseif outcome == "confirmed" then
+                    confirmed = confirmed + 1
+                elseif outcome == "changed" then
                     changed = changed + 1
                     for _, difference in ipairs(differences) do
                         Say(("probe %s changed at result.%s: was %s, now %s"):format(probe.name, difference.path,
                             Probes.Show(difference.a), Probes.Show(difference.b)))
                     end
+                    local dropped = {}
+                    for context in pairs(type(saved.contexts) == "table" and saved.contexts or {}) do
+                        if not kept.contexts[context] then
+                            dropped[context] = true
+                        end
+                    end
+                    if next(dropped) then
+                        Say(("probe %s now holds only %s; the new result replaced %s"):format(probe.name,
+                            ContextList(kept.contexts), ContextList(dropped)))
+                    end
                 end
-                db.probes[probe.name] = record
+                db.probes[probe.name] = kept
                 recorded = recorded + 1
             end
         end
     end
-    Say(("recorded %d probes (%d new, %d changed)%s. /reload to write them."):format(recorded, added, changed,
-        failed > 0 and (", " .. failed .. " failed") or ""))
+    Say(("recorded %d probes (%d new, %d changed, %d confirmed in a new context or build)%s. /reload to write them.")
+        :format(recorded, added, changed, confirmed, failed > 0 and (", " .. failed .. " failed") or ""))
     if next(skipped) then
         print("  Skipped until their need is met, in play-session order; set it up and type /btdev probe again:")
         PrintGroups(skipped)

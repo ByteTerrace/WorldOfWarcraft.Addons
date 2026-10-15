@@ -22,11 +22,11 @@ export const tests = [
                 '  "probes": {',
                 '    "chatTypeInfo.raidWarning": {',
                 '      "result": { "b": 0, "g": 72, "hasMetatable": true, "r": 255, "sticky": 0 },',
-                '      "context": { "combat": false, "restrictions": "none" }',
+                '      "contexts": { "combat/Combat": true, "idle/none": true }',
                 "    },",
                 '    "damageMeter.available": {',
                 '      "result": { "failureReason": "", "isAvailable": true },',
-                '      "context": { "combat": false, "restrictions": "none" }',
+                '      "contexts": { "idle/none": true }',
                 "    }",
                 "  }",
                 "}",
@@ -41,40 +41,72 @@ export const tests = [
         name: "probes --import merges an accumulating probe's record into the saved one, never shrinking it",
         run: async () => withTemp(async (dir) => {
             const out = join(dir, "probes.json");
-            const context = { combat: false, restrictions: "none" };
+            const contexts = { "idle/none": true };
             writeFileSync(out, serializeProbes({ build: "1.60.1 (70009)", probes: {
-                "names.chatSenders": { context, result: { CHAT_MSG_SAY: "Aa,Aa Aa" } },
+                "names.chatSenders": { contexts, result: { CHAT_MSG_SAY: "Aa,Aa Aa" } },
             } }));
             const saved = join(dir, "senders.lua");
             writeFileSync(saved, [
                 "ByteTerraceDevToolsDB = { probes = {",
-                '    ["names.chatSenders"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },',
+                '    ["names.chatSenders"] = { build = "1.60.1 (70009)", contexts = { ["combat/Combat"] = true },',
                 '        result = { CHAT_MSG_SAY = "Aa", CHAT_MSG_CHANNEL = { secret = true, type = "string" } } },',
                 "} }",
             ].join("\n"));
             const run = tlk(["probes", "--import", saved, "--out", out]);
             assert(run.status === 0, `${run.stdout}${run.stderr}`);
-            const result = JSON.parse(readFileSync(out, "utf8")).probes["names.chatSenders"].result;
+            const record = JSON.parse(readFileSync(out, "utf8")).probes["names.chatSenders"];
+            const result = record.result;
             assert(result.CHAT_MSG_SAY === "Aa,Aa Aa", `what earlier sessions saw stays: ${JSON.stringify(result)}`);
             assert(result.CHAT_MSG_CHANNEL?.secret === true, `and the new session's adds: ${JSON.stringify(result)}`);
+            assert(Object.keys(record.contexts).join(" ") === "combat/Combat idle/none", `their contexts join: ${JSON.stringify(record)}`);
+        }),
+    },
+    {
+        name: "probes --import adds a new context, changes nothing for a known one, and a new result replaces the record",
+        run: async () => withTemp(async (dir) => {
+            const out = join(dir, "probes.json");
+            const saved = join(dir, "contexts.lua");
+            const result = '{ b = 0, g = 72, hasMetatable = true, r = 255, sticky = 0 }';
+            const importOne = (contexts, recorded = result) => {
+                writeFileSync(saved, `ByteTerraceDevToolsDB = { probes = { ["chatTypeInfo.raidWarning"] = { build = "1.60.1 (70009)", contexts = ${contexts}, result = ${recorded} } } }`);
+                const run = tlk(["probes", "--import", saved, "--out", out]);
+                assert(run.status === 0, `${run.stdout}${run.stderr}`);
+                return { stdout: run.stdout, text: readFileSync(out, "utf8") };
+            };
+            const record = (text) => JSON.parse(text).probes["chatTypeInfo.raidWarning"];
+            const first = importOne('{ ["idle/none"] = true }');
+            assert(first.stdout.includes("1 new, 0 changed, 0 unchanged"), first.stdout);
+            const widened = importOne('{ ["combat/Combat"] = true }');
+            assert(widened.stdout.includes("0 new, 1 changed, 0 unchanged"), `a new context is a change: ${widened.stdout}`);
+            assert(Object.keys(record(widened.text).contexts).join(" ") === "combat/Combat idle/none", widened.text);
+            const again = importOne('{ ["idle/none"] = true }');
+            assert(again.stdout.includes("0 new, 0 changed, 1 unchanged") && again.text === widened.text,
+                `a known context alone changes nothing: ${again.stdout}`);
+            const replaced = importOne('{ ["idle/none"] = true }', '{ b = 0, g = 0, hasMetatable = true, r = 255, sticky = 0 }');
+            assert(replaced.stdout.includes("0 new, 1 changed, 0 unchanged"), replaced.stdout);
+            assert(replaced.stdout.includes("Replaced chatTypeInfo.raidWarning: its result changed, so it now holds only idle/none, not combat/Combat"),
+                replaced.stdout);
+            assert(Object.keys(record(replaced.text).contexts).join(" ") === "idle/none" && record(replaced.text).result.g === 0, replaced.text);
         }),
     },
     {
         name: "probes --import refuses broken records, drops unknown probes and keeps strings intact",
         run: async () => withTemp(async (dir) => {
             const out = join(dir, "probes.json");
-            const context = { combat: false, restrictions: "none" };
+            const contexts = { "idle/none": true };
             writeFileSync(out, serializeProbes({ build: "1.60.1 (69000)", probes: {
-                "no.longerDefined": { build: "1.60.1 (69000)", context, result: {} },
-                "classColors": { build: "1.60.1 (69000)", context, result: { classes: "MAGE" } },
+                "no.longerDefined": { build: "1.60.1 (69000)", contexts, result: {} },
+                "classColors": { build: "1.60.1 (69000)", contexts, result: { classes: "MAGE" } },
             } }));
             const saved = join(dir, "edge-cases.lua");
             writeFileSync(saved, [
                 "ByteTerraceDevToolsDB = { probes = {",
-                '    ["unknown.probe"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = {} },',
+                '    ["unknown.probe"] = { build = "1.60.1 (70009)", contexts = { ["idle/none"] = true }, result = {} },',
                 '    ["tts.voices"] = { build = "1.60.1 (70009)", result = {} },',
+                '    ["chat.lockdownIdle"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = {} },',
+                '    ["chatTypeInfo.raidWarning"] = { build = "1.60.1 (70009)", contexts = { ["asleep/none"] = true }, result = {} },',
                 '    ["damageMeter.available"] = {',
-                '        build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },',
+                '        build = "1.60.1 (70009)", contexts = { ["idle/none"] = true },',
                 '        result = { failureReason = "tab\\there \\"quoted\\" \\\\ back", isAvailable = false },',
                 "    },",
                 "} }",
@@ -82,7 +114,9 @@ export const tests = [
             const run = tlk(["probes", "--import", saved, "--out", out]);
             assert(run.status === 0, `import exits 0 (got ${run.status}): ${run.stdout}${run.stderr}`);
             assert(run.stdout.includes("Skipped unknown.probe") && run.stdout.includes("Dropped no.longerDefined"), run.stdout);
-            assert(run.stderr.includes("Refused tts.voices: the record has no context"), run.stderr);
+            assert(run.stderr.includes("Refused tts.voices: the record has no contexts"), run.stderr);
+            assert(run.stderr.includes("Refused chat.lockdownIdle: the record has no contexts"), `a lone context isn't read: ${run.stderr}`);
+            assert(run.stderr.includes('Refused chatTypeInfo.raidWarning: the record has a bad context "asleep/none"'), run.stderr);
             assert(run.stderr.includes("records come from 1.60.1 (69000), 1.60.1 (70009)"), run.stderr);
             const text = readFileSync(out, "utf8");
             assert(serializeProbes(JSON.parse(text)) === text, "the snapshot is in its serializer's format");
@@ -111,18 +145,18 @@ export const tests = [
         name: "probes --import skips and drops records made by another version of their probe",
         run: async () => withTemp(async (dir) => {
             const out = join(dir, "probes.json");
-            const context = { combat: false, restrictions: "none" };
+            const contexts = { "idle/none": true };
             const recap = { hasRecapEvents: true };
             // deathRecap.events is past version 1, and a record without a version is version 1's.
             const version = (await readDefinitions()).find((probe) => probe.name === "deathRecap.events").version;
             assert(version >= 2, `deathRecap.events is version ${version}`);
             writeFileSync(out, serializeProbes({ build: "1.60.1 (70009)", probes: {
-                "deathRecap.events": { context, result: recap },
+                "deathRecap.events": { contexts, result: recap },
             } }));
             const saved = join(dir, "versions.lua");
             writeFileSync(saved, [
                 "ByteTerraceDevToolsDB = { probes = {",
-                '    ["deathRecap.events"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = {} },',
+                '    ["deathRecap.events"] = { build = "1.60.1 (70009)", contexts = { ["idle/none"] = true }, result = {} },',
                 "} }",
             ].join("\n"));
             const api = join(dir, "api.json");
@@ -137,7 +171,7 @@ export const tests = [
             assert(!("deathRecap.events" in JSON.parse(readFileSync(out, "utf8")).probes), "the old version's record is gone");
             writeFileSync(saved, [
                 "ByteTerraceDevToolsDB = { probes = {",
-                `    ["deathRecap.events"] = { build = "1.60.1 (70009)", version = ${version}, context = { combat = false, restrictions = "none" }, result = {} },`,
+                `    ["deathRecap.events"] = { build = "1.60.1 (70009)", version = ${version}, contexts = { ["idle/none"] = true }, result = {} },`,
                 "} }",
             ].join("\n"));
             const current = tlk(["probes", "--import", saved, "--out", out]);
@@ -150,10 +184,10 @@ export const tests = [
         name: "probes reports each probe's client and harness answers and their status",
         run: async () => withTemp(async (dir) => {
             const out = join(dir, "probes.json");
-            const context = { combat: false, restrictions: "none" };
+            const contexts = { "idle/none": true };
             writeFileSync(out, serializeProbes({ build: "1.60.1 (70009)", probes: {
-                "chatTypeInfo.raidWarning": { context, result: { b: 0, g: 72, hasMetatable: true, r: 255, sticky: 0 } },
-                "damageMeter.available": { context, result: { failureReason: "disabled", isAvailable: false } },
+                "chatTypeInfo.raidWarning": { contexts, result: { b: 0, g: 72, hasMetatable: true, r: 255, sticky: 0 } },
+                "damageMeter.available": { contexts, result: { failureReason: "disabled", isAvailable: false } },
             } }));
             const run = tlk(["probes", "--out", out]);
             assert(run.status === 1, `a mismatch exits 1 (got ${run.status}): ${run.stdout}${run.stderr}`);

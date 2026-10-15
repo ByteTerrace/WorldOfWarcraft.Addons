@@ -52,11 +52,20 @@ local addonName, ns = ...
 -- PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED and the Combat restriction's state changes, and what
 -- InCombatLockdown, UnitAffectingCombat and IsAddOnRestrictionActive said at each.
 --
--- A record is { build = "1.60.1 (70009)", context = { combat, restrictions }, result, version? }:
--- the version of the probe that made it (absent for version 1), the build,
--- whether combat lockdown held and which addon restrictions were active ("none", or their
--- Enum.AddOnRestrictionType names sorted and joined by commas), and the result. It holds no
--- time, so running a probe twice in the same situation gives the same record.
+-- A record is { build = "1.60.1 (70009)", contexts = { ["idle/none"] = true }, result, version? }:
+-- the version of the probe that made it (absent for version 1), the build, the result, and the
+-- contexts the build gave that result in. A context (Probes.Context) is "idle" or "combat" for
+-- whether combat lockdown held, a slash, and the active addon restrictions ("none", or their
+-- Enum.AddOnRestrictionType names sorted and joined by commas): "idle/none", "combat/Combat".
+-- contexts is a set, since a record holds string keys only; its keys sort when saved. A record
+-- holds no time, so running a probe twice in the same situation gives the same record.
+-- Probes.Keep folds a run into the saved record (tools/lib/probes.mjs's keepRecord does the same
+-- on import):
+--   * the same result in a new context adds the context; in a known one, nothing changes;
+--   * a different result, or a run on another build, replaces the record, contexts and all: the
+--     client or the situation changed, so the earlier contexts no longer vouch for the result;
+--   * an accumulating probe's result merges into the saved one, and its contexts join, while the
+--     build stays the same.
 --
 -- Every probe file (all the TOC lists before DevTools.lua) defines data and functions only;
 -- nothing runs at load, so `tlk probes` can read the probe names and needs in plain Lua.
@@ -397,9 +406,10 @@ function Probes.Build()
     return ("%s (%s)"):format(version, build)
 end
 
---- The situation a probe runs in: combat lockdown and the active restrictions.
+--- The situation a probe runs in: "combat" or "idle" for combat lockdown, a slash, and the active
+--- restrictions (Probes.Restrictions), as in "idle/none" or "combat/Combat".
 function Probes.Context()
-    return { combat = InCombatLockdown() and true or false, restrictions = Probes.Restrictions() }
+    return (InCombatLockdown() and "combat/" or "idle/") .. Probes.Restrictions()
 end
 
 --- Whether the probe's needs are met right now.
@@ -721,7 +731,7 @@ end
 
 --- Runs the probe and returns its record, or nil and why it failed (an error or a result that
 --- can't be saved).
----@return table? record { build, context, result, version? }
+---@return table? record { build, contexts, result, version? }, its contexts the one it ran in
 ---@return string? problem
 function Probes.Record(probe)
     local context = Probes.Context()
@@ -734,7 +744,33 @@ function Probes.Record(probe)
         return nil, problem
     end
     local version = probe.version -- absent for version 1, like the records made before versions
-    return { build = Probes.Build(), context = context, result = result, version = version }, nil
+    return { build = Probes.Build(), contexts = { [context] = true }, result = result, version = version }, nil
+end
+
+--- Folds a new record into the saved one by the rules in the header: the record to save, and how
+--- it differs from the saved one: "new" (nothing current was saved), "changed" (another result),
+--- "confirmed" (the same result in a new context or on another build) or "same".
+---@param previous table? the saved record, or nil
+---@param record table a record Probes.Record just made; Keep may change it
+---@return table saved
+---@return string outcome
+---@return table differences the results' (Probes.Diff), for "changed"
+function Probes.Keep(probe, previous, record)
+    if not Probes.IsCurrent(probe, previous) then
+        return record, "new", {}
+    end
+    local sameBuild = previous.build == record.build
+    if probe.accumulates and sameBuild then
+        record.result = Merge(previous.result, record.result)
+    end
+    local differences = Differences(previous.result, record.result, "", {})
+    if sameBuild and (probe.accumulates or #differences == 0) then
+        record.contexts = Merge(previous.contexts, record.contexts)
+    end
+    if #differences > 0 then
+        return record, "changed", differences
+    end
+    return record, #Differences(previous, record, "", {}) > 0 and "confirmed" or "same", differences
 end
 
 --- Where two records (or any values of the kind a record holds) differ: a list of

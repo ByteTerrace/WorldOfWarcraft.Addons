@@ -9,9 +9,8 @@ ByteTerraceDevToolsDB = {
 ["isAvailable"] = true,
 },
 ["build"] = "1.60.1 (70009)",
-["context"] = {
-["restrictions"] = "none",
-["combat"] = false,
+["contexts"] = {
+["idle/none"] = true,
 },
 },
 ["chatTypeInfo.raidWarning"] = {
@@ -23,9 +22,9 @@ ByteTerraceDevToolsDB = {
 ["r"] = 255,
 },
 ["build"] = "1.60.1 (70009)",
-["context"] = {
-["restrictions"] = "none",
-["combat"] = false,
+["contexts"] = {
+["idle/none"] = true,
+["combat/Combat"] = true,
 },
 },
 },

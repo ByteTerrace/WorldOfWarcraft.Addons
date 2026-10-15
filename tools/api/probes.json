@@ -41,6 +41,13 @@
       },
       "context": { "combat": false, "restrictions": "none" }
     },
+    "combat.edges": {
+      "result": {
+        "enter": "PLAYER_REGEN_DISABLED[lockdown=false affecting=true restricted=false] > Combat Activating[lockdown=false affecting=true restricted=false]",
+        "leave": "Combat Inactive[lockdown=false affecting=false restricted=false] > PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false]"
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
     "damageMeter.afterFight": {
       "result": {
         "damageTaken": {
@@ -58,8 +65,7 @@
           "totalAmount": "number"
         }
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "damageMeter.available": {
       "result": { "failureReason": "", "isAvailable": true },
@@ -73,8 +79,7 @@
         "maxAmount": { "secret": true, "type": "number" },
         "totalAmount": { "secret": true, "type": "number" }
       },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "damageMeter.death": {
       "result": {
@@ -99,8 +104,7 @@
         "sourceDisplayType": 0,
         "sourceGUID": "nil"
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "damageMeter.playerDamageTaken": {
       "result": {
@@ -121,8 +125,7 @@
         },
         "totalAmount": "number"
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "damageMeter.sessions": {
       "result": {
@@ -132,8 +135,7 @@
         "oldestFirst": true,
         "sessionID": "number"
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "damageMeter.typesIdle": {
       "result": {
@@ -154,8 +156,7 @@
           "totalAmount": "number"
         }
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "deathRecap.events": {
       "result": {
@@ -250,8 +251,7 @@
         "targetDied": true,
         "unitDied": { "unit": "Creature,Player" }
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "map.player": {
       "result": {
@@ -289,10 +289,30 @@
       "context": { "combat": false, "restrictions": "none" },
       "build": "1.60.1 (70009)"
     },
+    "names.chatDiscordInfo": {
+      "result": {
+        "fields": {
+          "forwardedMessage": "empty",
+          "fromDiscord": "false",
+          "globalName": "empty",
+          "hasAttachment": "false",
+          "hasEmbed": "false",
+          "hasEmoji": "false",
+          "hasError": "false",
+          "hasForwardedMessage": "false",
+          "hasPoll": "false",
+          "hasSticker": "false",
+          "lastOnlineName": "empty",
+          "type": "number",
+          "userID": "number"
+        },
+        "shapes": { "CHAT_MSG_CHANNEL": "table", "CHAT_MSG_SAY": "table", "CHAT_MSG_YELL": "table" }
+      },
+      "context": { "combat": false, "restrictions": "none" }
+    },
     "names.chatSenders": {
-      "result": { "CHAT_MSG_CHANNEL": "Aa Aa" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "result": { "CHAT_MSG_CHANNEL": "Aa Aa", "CHAT_MSG_SAY": "Aa Aa", "CHAT_MSG_YELL": "Aa Aa" },
+      "context": { "combat": false, "restrictions": "none" }
     },
     "names.otherPlayer": {
       "result": {
@@ -327,8 +347,7 @@
     },
     "power.comboPointsInCombat": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "power.npcTarget": {
       "result": {
@@ -347,8 +366,7 @@
         "powerType": "number",
         "token": "string"
       },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "power.player": {
       "result": {
@@ -366,8 +384,7 @@
         "powerType": "number",
         "token": "string"
       },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "quest.offer": {
       "result": { "objectiveText": "text", "questText": "text", "title": "text" },
@@ -528,8 +545,7 @@
     },
     "unitClassification.npcTargetInCombat": {
       "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "unitCombat.seen": {
       "result": {
@@ -549,8 +565,7 @@
           "WOUND": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" }
         }
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "unitHealth.enemyPlayer": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
@@ -564,8 +579,7 @@
     },
     "unitHealth.npcTargetInCombat": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "unitHealth.player": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": "number" },
@@ -573,8 +587,7 @@
     },
     "unitHealth.playerInCombat": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": "number" },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "unitHealthPercent.player": {
       "result": {
@@ -592,8 +605,7 @@
         "percent": { "secret": true, "type": "number" },
         "percentUnpredicted": { "secret": true, "type": "number" }
       },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "unitIdentity.enemyPlayer": {
       "result": {
@@ -627,8 +639,7 @@
         "name": "string",
         "realm": "nil"
       },
-      "context": { "combat": true, "restrictions": "Combat" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": true, "restrictions": "Combat" }
     },
     "unitIdentity.partyMember": {
       "result": {

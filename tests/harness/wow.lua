@@ -386,9 +386,15 @@ function Harness:FireRestriction(index, state)
     self.restrictionDispatch = self.restrictionDispatch - 1
 end
 
+-- Restrictions that take hold with no Active event after Activating. [P] combat.edges: entering
+-- combat, the client sent Combat Activating and nothing more until Inactive, though the restriction
+-- is in force during the fight. [G] The others send Active (no probe has seen one enter yet).
+Harness.SILENT_ACTIVE = { Combat = true }
+
 -- Activates or clears an addon restriction (Enum.AddOnRestrictionType name). Activating fires
 -- ADDON_RESTRICTION_STATE_CHANGED(type, Activating) while the restriction isn't enforced, then
--- enforces it and fires Active; clearing lifts it, then fires Inactive.
+-- enforces it and fires Active (none for SILENT_ACTIVE ones); clearing lifts it, then fires
+-- Inactive.
 function Harness:SetRestriction(name, active)
     local index
     for i, known in ipairs(Harness.RESTRICTIONS) do
@@ -404,24 +410,28 @@ function Harness:SetRestriction(name, active)
     if active then
         self:FireRestriction(index, 1) -- Activating: not enforced during this dispatch
         self.restrictions[name] = true
-        self:FireRestriction(index, 2) -- Active
+        if not Harness.SILENT_ACTIVE[name] then
+            self:FireRestriction(index, 2) -- Active
+        end
     else
         self.restrictions[name] = false
         self:FireRestriction(index, 0) -- Inactive
     end
 end
 
--- Combat: the Combat restriction and PLAYER_REGEN_DISABLED, then lockdown and a new damage meter
--- session (meter.lua).
+-- Combat, in the order [P] combat.edges saw: PLAYER_REGEN_DISABLED (UnitAffectingCombat already
+-- true; no lockdown or restriction yet), then the Combat restriction, then lockdown and a new
+-- damage meter session (meter.lua).
 function Harness:EnterCombat()
     self.inCombat = true
-    self:SetRestriction("Combat", true)
     self:Fire("PLAYER_REGEN_DISABLED")
+    self:SetRestriction("Combat", true)
     self.lockdown = true
     self:MeterStartSession()
 end
 
--- Leaving combat ends the damage meter session before PLAYER_REGEN_ENABLED.
+-- Leaving combat ends lockdown and the damage meter session, then lifts the Combat restriction
+-- before PLAYER_REGEN_ENABLED ([P] combat.edges: Combat Inactive comes first).
 function Harness:LeaveCombat()
     self.lockdown = false
     self.inCombat = false

@@ -568,13 +568,12 @@ test("the steps into and out of combat are kept in order with what each signal s
     h:LeaveCombat()
     h:Slash("/btdev probe")
     local result = Records(h)["combat.edges"].result
-    eq(result.enter, "Combat Activating[lockdown=false affecting=true restricted=false] > "
-        .. "Combat Active[lockdown=false affecting=true restricted=false] > "
-        .. "PLAYER_REGEN_DISABLED[lockdown=false affecting=true restricted=true]",
-        "the restriction reads inactive during both of its changes, then lockdown follows PLAYER_REGEN_DISABLED")
+    eq(result.enter, "PLAYER_REGEN_DISABLED[lockdown=false affecting=true restricted=false] > "
+        .. "Combat Activating[lockdown=false affecting=true restricted=false]",
+        "as the client did: PLAYER_REGEN_DISABLED first, then Activating, and no Active")
     eq(result.leave, "Combat Inactive[lockdown=false affecting=false restricted=false] > "
         .. "PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false]",
-        "the harness lifts the Combat restriction before PLAYER_REGEN_ENABLED")
+        "the Combat restriction lifts before PLAYER_REGEN_ENABLED")
     h:EnterCombat()
     h:LeaveCombat()
     h:Slash("/btdev probe")
@@ -674,12 +673,12 @@ test("chat events' discordInfo is kept as shapes, with a table's fields, for nam
     eq(Records(h)["names.chatDiscordInfo"], nil, "an addon message has no discordInfo and isn't chat heard")
     h:FireChat("CHAT_MSG_SAY", "hi", "Bob")
     h:Fire("CHAT_MSG_GUILD", "hi", "Bob", "", "", "", "", 0, 0, "", 0, 2, "", 0, false, false, false, false,
-        { userID = 7, globalName = "", hasPoll = false })
+        { userID = 7, globalName = "Bob", hasPoll = true, fromDiscord = true })
     h:Slash("/btdev probe")
     local result = Records(h)["names.chatDiscordInfo"].result
-    eq(result.shapes.CHAT_MSG_SAY, "nil")
-    eq(result.shapes.CHAT_MSG_GUILD, "table")
+    eq(result.shapes.CHAT_MSG_SAY .. " " .. result.shapes.CHAT_MSG_GUILD, "table table")
     eq(result.fields.userID, "number")
-    eq(result.fields.globalName, "empty")
-    eq(result.fields.hasPoll, "false")
+    eq(result.fields.globalName, "empty,text", "each field keeps every shape it showed")
+    eq(result.fields.hasPoll, "false,true")
+    eq(result.fields.fromDiscord, "false,true")
 end)

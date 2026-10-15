@@ -37,17 +37,16 @@ local addonName, ns = ...
 --             regeneration don't count, nor a hit fully absorbed, blocked or resisted (amount 0).
 --             A hit in the second before combat starts (an ambush) counts for the fight.
 --             Victory.flawlessWins: flawless victories this session; Krew shares them. The sound
---             plays at the kill; the victory counts when the fight ends, once Blizzard's damage
---             meter confirms you took no damage (or can't say). Its numbers can stay secret a
---             moment after combat ends, so the check waits for them, at most ConfirmTries times.
+--             plays at the kill; the victory counts when the fight ends, unless Blizzard's damage
+--             meter says you took damage. Its numbers are secret only under the Combat
+--             restriction, which lifts before PLAYER_REGEN_ENABLED (probed: combat.edges), so
+--             they're readable when the fight ends; a meter that's off, or still secret, can't say.
 --   DeathTaunt  plays deathTaunt on PLAYER_DEAD.
 
 local ExecuteSpellID = 5308
 local FullComboPoints = 5 -- Forever's rogues and druids hold at most 5 (ComboFrame shows 5 unless the max is 6 or 9)
 local TargetCooldown = 10
 local OpeningHitWindow = 1 -- seconds: a hit this soon before combat starts opened the fight
-local ConfirmTries = 10 -- damage meter reads at the end of a fight, while its numbers are secret
-local ConfirmInterval = 0.5 -- seconds between them
 
 local C_DamageMeter, C_Spell, Enum, GetComboPoints, GetTime = C_DamageMeter, C_Spell, Enum, GetComboPoints, GetTime
 local ipairs, issecretvalue, type, UnitClass = ipairs, issecretvalue, type, UnitClass
@@ -59,29 +58,29 @@ local function IsTrue(value)
     return not issecretvalue(value) and value == true
 end
 
--- The damage you took in the fight that just ended, from Blizzard's damage meter, and whether
--- that answer is final: nil, true when the meter can't say (it's off); nil, false while its
--- numbers are still secret. The session's combatSources list stays a plain table in combat
--- (probed: damageMeter.currentInCombat); only the numbers in it turn secret.
+-- The damage you took in the fight that just ended, from Blizzard's damage meter, or nil when
+-- the meter can't say (it's off, or its numbers are secret). The session's combatSources list
+-- stays a plain table in combat (probed: damageMeter.currentInCombat); only the numbers in it
+-- turn secret.
 local function DamageTakenLastFight()
     if not C_DamageMeter.IsDamageMeterAvailable() then
-        return nil, true
+        return nil
     end
     local types = Enum.DamageMeterSessionType
     local session = C_DamageMeter.GetCombatSessionFromType(types.Current, Enum.DamageMeterType.DamageTaken)
     if issecretvalue(session) or type(session) ~= "table" then
-        return nil, false
+        return nil
     end
     for _, source in ipairs(session.combatSources) do
         if IsTrue(source.isLocalPlayer) then
             local total = source.totalAmount
             if issecretvalue(total) then
-                return nil, false
+                return nil
             end
-            return total, true
+            return total
         end
     end
-    return 0, true
+    return 0
 end
 
 -- Whether a UNIT_COMBAT payload on you is a hit that got through: a WOUND, unless its amount is a
@@ -282,15 +281,13 @@ Addon:Module("Victory", {
         local flawless, combat = module:Id("flawless"), module:Id("combat.active")
         local died, duelEnded = module:Id("target.died"), module:Id("target.duelEnded")
         local serial, announced = module:Id("target.serial"), module:Id("Finish.announced")
-        local wins = 0 -- flawless kills this fight, waiting for the meter to confirm them
+        local wins = 0 -- flawless kills this fight, counted when it ends
         local lastHit = -math.huge -- GetTime() of your last hit
 
-        -- Counts a fight's flawless kills once the meter says you took no damage (or can't say).
-        local function Confirm(count, tries)
-            local taken, final = DamageTakenLastFight()
-            if not final and tries > 1 then
-                module:After(ConfirmInterval, function() Confirm(count, tries - 1) end)
-            elseif taken == nil or taken == 0 then
+        -- Counts a fight's flawless kills unless the meter says you took damage.
+        local function Confirm(count)
+            local taken = DamageTakenLastFight()
+            if taken == nil or taken == 0 then
                 module:Set("flawlessWins", module:Get("flawlessWins") + count)
             end
         end
@@ -320,7 +317,7 @@ Addon:Module("Victory", {
                 if active then
                     wins = 0
                 elseif wins > 0 then
-                    Confirm(wins, ConfirmTries)
+                    Confirm(wins)
                     wins = 0
                 end
             end,

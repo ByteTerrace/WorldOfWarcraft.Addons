@@ -187,12 +187,18 @@ end
 
 -- A chat event (CHAT_MSG_SAY, CHAT_MSG_CHANNEL, ...) with the documented 18-field payload around
 -- text and sender ("First Last", or "" for a system message): the other fields are empty
--- ("" / 0 / false), guid is "" (documented non-nil), the lineID counts up from 1 and discordInfo is
--- nil (secrets.lua's NILABLE_IN_PRACTICE says why).
+-- ("" / 0 / false), guid is "" (documented non-nil) and the lineID counts up from 1.
+-- [P] discordInfo (names.chatDiscordInfo): for a message that isn't from Discord, a table of empty
+-- strings, false flags and two numbers, without lastOnlineGUID; [G] the numbers are 0.
 function Harness:FireChat(event, text, sender)
     self.chatLineID = self.chatLineID + 1
+    local discordInfo = {
+        userID = 0, globalName = "", type = 0, lastOnlineName = "", hasAttachment = false, hasPoll = false,
+        hasEmbed = false, hasSticker = false, hasEmoji = false, hasError = false, hasForwardedMessage = false,
+        forwardedMessage = "", fromDiscord = false,
+    }
     self:Fire(event, text, sender or "", "", "", "", "", 0, 0, "", 0, self.chatLineID, "", 0,
-        false, false, false, false, nil)
+        false, false, false, false, discordInfo)
 end
 
 -- CHAT_MSG_COMBAT_HONOR_GAIN around text: a system message, with no sender.

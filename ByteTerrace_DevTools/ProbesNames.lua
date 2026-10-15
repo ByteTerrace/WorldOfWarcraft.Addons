@@ -85,9 +85,8 @@ Probes.Define({
         run = function() return JoinSets(Senders) end,
     },
     {
-        -- The shape of each chat event's 18th payload value, discordInfo, heard since load: the docs
-        -- say it's never nil, the harness sends nil for a message that isn't from Discord
-        -- (Harness.NILABLE_IN_PRACTICE, tests/harness/secrets.lua). fields holds each field's
+        -- The shape of each chat event's 18th payload value, discordInfo, heard since load (the docs
+        -- say it's never nil; h:FireChat sends what the client did). fields holds each field's
         -- shapes when it's a table. A message bridged from Discord would add its own shapes.
         name = "names.chatDiscordInfo",
         needs = { "heardChat" },

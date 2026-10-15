@@ -393,7 +393,10 @@ local Needs = {
         text = "someone spoke in say, a channel (General), your group or guild since you logged in",
         step = 1,
         check = function() return next(Probes.DiscordInfo.shapes) ~= nil end, -- any chat event but an addon message
-        harness = "the harness doesn't raise chat from other players",
+        setup = function(h)
+            h:FireChat("CHAT_MSG_SAY", "hello", "Bob Doe")
+            h:FireChat("CHAT_MSG_CHANNEL", "hi", "Cara Doe")
+        end,
     },
     party = {
         label = "in a party",

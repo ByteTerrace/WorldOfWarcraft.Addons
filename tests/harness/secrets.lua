@@ -377,24 +377,16 @@ local PayloadLuaTypes = {
     cstring = "string", string = "string", WOWGUID = "string", bool = "boolean",
 }
 
--- Payload types the harness sends as nil though the docs give them Nilable = false, each with why.
-Harness.NILABLE_IN_PRACTICE = {
-    -- [G] Every chat event documents discordInfo, but a message that isn't from Discord has no
-    -- Discord sender to describe. The names.chatDiscordInfo probe records what the client sends.
-    DiscordChatInfo = "a chat message not from Discord",
-}
-
 -- Errors (at Fire's caller) on a payload the client couldn't send: more values than the event
--- documents, a nil where the docs say Nilable = false (missing trailing values included; see
--- NILABLE_IN_PRACTICE), a secret in an event without secret flags, or a primitive of another type
--- than documented.
+-- documents, a nil where the docs say Nilable = false (missing trailing values included), a
+-- secret in an event without secret flags, or a primitive of another type than documented.
 function Harness.CheckPayload(event, entry, payload)
     local types = Types(entry, "Payload")
     if payload.n > #types then
         error(("Fire: %s documents %d payload values, got %d"):format(event, #types, payload.n), 3)
     end
     for i = 1, #types do
-        if payload[i] == nil and not entry.PayloadNilable[i] and not Harness.NILABLE_IN_PRACTICE[types[i]] then
+        if payload[i] == nil and not entry.PayloadNilable[i] then
             error(("Fire: %s payload #%d (%s) isn't nilable"):format(event, i, types[i]), 3)
         end
     end

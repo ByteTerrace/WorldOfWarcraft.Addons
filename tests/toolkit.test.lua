@@ -273,16 +273,7 @@ test("heals, regeneration and fully absorbed hits don't break flawless; an ambus
     eq(Played(h, "FlawlessVictory.ogg"), 1, "ambushed: not flawless")
 end)
 
--- Combat ends while the Combat restriction still holds, so the meter's numbers are still secret.
--- h:LeaveCombat lifts the restriction first; the order in the client isn't observed, and Kombat
--- waits for the numbers either way.
-local function LeaveCombatStillRestricted(h)
-    h.lockdown, h.inCombat = false, false
-    h:MeterEndSession()
-    h:Fire("PLAYER_REGEN_ENABLED")
-end
-
-test("the victory waits for the damage meter's numbers to stop being secret", function()
+test("a flawless victory counts when the fight ends, unless the damage meter says you took damage", function()
     for _, taken in ipairs({ 50, 0 }) do
         local h, addon = Load()
         local enemy = EnemyPlayer()
@@ -291,41 +282,26 @@ test("the victory waits for the damage meter's numbers to stop being secret", fu
         h:MeterAdd({ unit = "player", amounts = { DamageTaken = taken } })
         enemy.dead = true
         h:Fire("UNIT_HEALTH", "target")
-        LeaveCombatStillRestricted(h)
-        h:Advance(0.5)
-        eq(addon.State:Get("Victory.flawlessWins"), 0, "waiting while the numbers are secret")
-        h:SetRestriction("Combat", false)
-        h:Advance(0.5)
+        eq(addon.State:Get("Victory.flawlessWins"), 0, "counted when the fight ends")
+        h:LeaveCombat()
         eq(addon.State:Get("Victory.flawlessWins"), taken == 0 and 1 or 0,
-            ("the meter said %d damage once it could"):format(taken))
+            ("the meter said %d damage, readable once the Combat restriction lifted"):format(taken))
         h:Advance(10)
         eq(addon.State:Get("Victory.flawlessWins"), taken == 0 and 1 or 0, "counted once")
     end
 end)
 
-test("a victory the meter never stops hiding counts after ten looks, as does one with the meter off", function()
+test("a victory with the damage meter off counts: the meter can't say otherwise", function()
     local h, addon = Load()
+    h:SetMeterAvailable(false, "")
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
     h:EnterCombat()
     h:MeterAdd({ unit = "player", amounts = { DamageTaken = 50 } })
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
-    LeaveCombatStillRestricted(h)
-    h:Advance(4)
-    eq(addon.State:Get("Victory.flawlessWins"), 0, "nine more looks to go")
-    h:Advance(0.5)
-    eq(addon.State:Get("Victory.flawlessWins"), 1, "the live signal saw no hit")
-    h:SetRestriction("Combat", false)
-    h:SetMeterAvailable(false, "")
-    enemy = EnemyPlayer({ name = "Ann" })
-    h:SetTarget(enemy)
-    h:EnterCombat()
-    h:MeterAdd({ unit = "player", amounts = { DamageTaken = 50 } })
-    enemy.dead = true
-    h:Fire("UNIT_HEALTH", "target")
     h:LeaveCombat()
-    eq(addon.State:Get("Victory.flawlessWins"), 2, "a meter that's off can't say otherwise")
+    eq(addon.State:Get("Victory.flawlessWins"), 1, "the live signal saw no hit")
 end)
 
 test("starting health doesn't matter (addons can't read it); a selected corpse never counts", function()

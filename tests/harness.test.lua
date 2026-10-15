@@ -461,7 +461,7 @@ test("a test fires only payloads the event documents: every value, no extras, se
     throws(function() h:Fire("CHAT_MSG_ADDON", "TLK", "hi", "PARTY", 42, "", 0, 0, "", 0) end, "payload #4 is a cstring %(string%), got a number")
     h:Fire("PLAYER_LEVEL_UP", 12, 0, 0, 0, 0, 0, 0, 0, 0)
     h:Fire("RUNE_POWER_UPDATE", Secret(1), true) -- SecretPayloads
-    h:FireChat("CHAT_MSG_SAY", "hi", "Bob Doe") -- discordInfo nil: NILABLE_IN_PRACTICE
+    h:FireChat("CHAT_MSG_SAY", "hi", "Bob Doe") -- every value, discordInfo included
     h:Fire("PLAYER_DEAD")
 end)
 

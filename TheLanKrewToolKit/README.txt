@@ -18,7 +18,7 @@ GETTING AROUND
   /tlk rally      calls the Krew to you
 
 The Krew and Warband features need friends in your group who run the toolkit too.
-The Scholar's challenge (riddles for kids) is off until a parent turns it on for a character.
+The Scholar's challenge (riddles for kids) is off until a parent turns it on for a character. /tlk report shows a parent how it's going: what's mastered, what's being worked on, and the recent misses.
 
 IF SOMETHING GOES WRONG
 1. Type /console scriptErrors 1 once, so the game shows Lua errors.

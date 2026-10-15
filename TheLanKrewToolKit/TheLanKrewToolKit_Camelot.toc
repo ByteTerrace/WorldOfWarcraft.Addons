@@ -17,6 +17,7 @@ ScholarMath.lua
 ScholarReading.lua
 QuestBook.lua
 ScholarQuests.lua
+ScholarSkills.lua
 Cards.lua
 FuckOMeter.lua
 Sounds.lua

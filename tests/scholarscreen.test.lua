@@ -30,7 +30,7 @@ local function MissTwice(h, puzzle)
 end
 
 test("quest riddles never change the difficulty math and reading use", function()
-    local h, addon, ns = LoadKid({ ["Scholar.math"] = false, ["Scholar.reading"] = false, ["Scholar.level"] = 2 })
+    local h, addon, ns = LoadKid({ ["Scholar.math"] = false, ["Scholar.mathLevel"] = 2, ["Scholar.reading"] = false, ["Scholar.readingLevel"] = 2 })
     local shown = Watch(ns)
 
     Accept(h, Wolves)
@@ -38,10 +38,12 @@ test("quest riddles never change the difficulty math and reading use", function(
     for _ = 1, 3 do Solve(h, shown) end
 
     eq(addon.State:Get("Scholar.streak"), 3, "three right in a row")
-    eq(addon.State:Get("Scholar.level"), 2, "and quest riddles are no harder")
+    eq(addon.State:Get("Scholar.mathLevel"), 2, "and quest riddles make math no harder")
+    eq(addon.State:Get("Scholar.readingLevel"), 2, "nor reading")
     h:Slash("/tlk puzzle")
     MissTwice(h, shown[#shown])
-    eq(addon.State:Get("Scholar.level"), 2, "nor two misses on one any easier")
+    eq(addon.State:Get("Scholar.mathLevel"), 2, "nor two misses on one any easier")
+    eq(addon.State:Get("Scholar.readingLevel"), 2)
 end)
 
 -- Opens and closes each window a riddle waits for, by its name in these tests.

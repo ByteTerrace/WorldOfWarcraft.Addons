@@ -49,6 +49,10 @@ local HeldInteractions = {}
 local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NUMPAD2 = 2, NUMPAD3 = 3, NUMPAD4 = 4 }
 local LockedBy = "Scholar.locked"
 local MaxPinMisses = 3
+-- How many recent misses the report shows.
+local MissesKept = 5
+-- The longest prompt, in bytes, a recent miss keeps, on one line.
+local MissPrompt = 160
 local PinWaitSeconds = 60
 -- How many quest riddles come in a row before math or reading takes a turn.
 local QuestShare = 2
@@ -89,6 +93,7 @@ local Addon = ns.Addon
 local Puzzles = ns.Puzzles
 local QuestBook = ns.QuestBook
 local ScholarView = ns.ScholarView
+local Skills = ns.ScholarSkills
 
 local GradeLabels, GradeValues = {}, {}
 
@@ -221,50 +226,6 @@ local function QuestPuzzle()
     return nil
 end
 
--- The next riddle. Quest riddles are preferred: QuestShare of them in a row, then math or reading takes a turn
--- (alternating when both are on), whenever any of those is on. nil when there's nothing to ask.
-local function NextPuzzle()
-    local others = (Scholar:Get("math") or Scholar:Get("reading"))
-
-    if Scholar:Get("quests") and ((Scholar:Get("questRun") < QuestShare) or not others) then
-        local puzzle = QuestPuzzle()
-
-        if puzzle then
-            Scholar:Set("questRun", min(Scholar:Get("questRun") + 1, QuestShare))
-
-            return puzzle
-        end
-    end
-
-    Scholar:Set("questRun", 0)
-    local subjects = {}
-
-    if Scholar:Get("math") then
-        subjects[#subjects + 1] = "math"
-    end
-
-    if Scholar:Get("reading") then
-        subjects[#subjects + 1] = "reading"
-    end
-
-    if #subjects == 0 then
-        return nil
-    end
-
-    local subject = subjects[1]
-
-    if (#subjects == 2) and (LastSubject == subject) then
-        subject = subjects[2]
-    end
-
-    LastSubject = subject
-
-    return Puzzles.Generate({
-        context = Context(), grade = tonumber(Scholar:Get("grade")), level = Scholar:Get("level"), random = random,
-        subject = subject,
-    })
-end
-
 local function Rank(stars)
     local name = Ranks[1][2]
 
@@ -321,6 +282,106 @@ local function Progress(extra)
     return info
 end
 
+-- A Blizzard window opened (open) or closed: window is whether any a riddle waits for is open.
+local function SetWindow(name, open)
+    Windows[name] = (open or nil)
+    Scholar:Set("window", next(Windows) ~= nil)
+end
+
+local function OnInteractionHidden(interaction)
+    SetWindow(interaction, false)
+end
+
+local function OnInteractionShown(interaction)
+    if HeldInteractions[interaction] then
+        SetWindow(interaction, true)
+    end
+end
+
+-- A skill's record (ScholarSkills), with every field filled in.
+local function SkillOf(kind)
+    return (Scholar.Records.skills:Get(kind) or { asked = 0, box = 1, due = 0, firstTry = 0, lastAt = 0, recent = "" })
+end
+
+-- The next riddle. Quest riddles are preferred: QuestShare of them in a row, then math or reading takes a turn
+-- (alternating when both are on), whenever any of those is on. nil when there's nothing to ask.
+local function NextPuzzle()
+    local others = (Scholar:Get("math") or Scholar:Get("reading"))
+
+    if Scholar:Get("quests") and ((Scholar:Get("questRun") < QuestShare) or not others) then
+        local puzzle = QuestPuzzle()
+
+        if puzzle then
+            Scholar:Set("questRun", min(Scholar:Get("questRun") + 1, QuestShare))
+
+            return puzzle
+        end
+    end
+
+    Scholar:Set("questRun", 0)
+    local subjects = {}
+
+    if Scholar:Get("math") then
+        subjects[#subjects + 1] = "math"
+    end
+
+    if Scholar:Get("reading") then
+        subjects[#subjects + 1] = "reading"
+    end
+
+    if #subjects == 0 then
+        return nil
+    end
+
+    local subject = subjects[1]
+
+    if (#subjects == 2) and (LastSubject == subject) then
+        subject = subjects[2]
+    end
+
+    LastSubject = subject
+    local grade = tonumber(Scholar:Get("grade"))
+    local kind = Skills.Choose(Puzzles.Kinds(subject, grade), SkillOf, Scholar:Get(subject .. "Count"), random)
+
+    return Puzzles.Generate({
+        context = Context(), grade = grade, kind = kind, level = Scholar:Get(subject .. "Level"), random = random,
+        subject = subject,
+    })
+end
+
+-- Records the riddle's first try, once: its skill's record moves (ScholarSkills.Next), a math or reading riddle counts
+-- toward its subject's due clock, and a miss joins the report's recent misses. Returns whether this was the first try.
+local function RecordFirstTry(i)
+    if Current.recorded then
+        return false
+    end
+
+    Current.recorded = true
+    local right, count = (i == Current.answer), 0
+
+    if Current.subject ~= "quest" then
+        count = (Scholar:Get(Current.subject .. "Count") + 1)
+        Scholar:Set(Current.subject .. "Count", count)
+    end
+
+    local now = GetServerTime()
+
+    Scholar.Records.skills:Set(Current.kind, Skills.Next(SkillOf(Current.kind), right, count, now))
+
+    if not right then
+        local seq = (Scholar:Get("missCount") + 1)
+
+        Scholar:Set("missCount", seq)
+
+        Scholar.Records.misses:Set(tostring(seq), {
+            at = now, chosen = (Current.choices[i] or ""), kind = Current.kind,
+            prompt = Current.prompt:gsub("%s+", " "):sub(1, MissPrompt), right = Current.choices[Current.answer], seq = seq,
+        })
+    end
+
+    return true
+end
+
 local function Choose(i)
     local buttons = (ScholarView.IsShown() and ScholarView.Frame().Buttons)
 
@@ -328,8 +389,10 @@ local function Choose(i)
         return
     end
 
-    -- The level row is the difficulty math and reading are written at: a quest riddle never changes it.
+    -- Each subject's level row is the difficulty its riddles are written at: a quest riddle never changes one.
     local adapts = (Current.questKey == nil)
+    local firstTry = RecordFirstTry(i)
+    local levelRow, runRow = (Current.subject .. "Level"), (Current.subject .. "Run")
 
     if i == Current.answer then
         -- The riddle stops being due now, so a /reload during the celebration doesn't ask another; solved holds the
@@ -347,10 +410,17 @@ local function Choose(i)
 
         Scholar:Set("streak", streak)
         Scholar:Set("stars", Scholar:Get("stars") + 1)
-        local levelUp = (adapts and ((streak % 3) == 0) and (Scholar:Get("level") < 3))
+        local levelUp = false
 
-        if levelUp then
-            Scholar:Set("level", Scholar:Get("level") + 1)
+        if adapts and firstTry then
+            local run = (Scholar:Get(runRow) + 1)
+
+            Scholar:Set(runRow, run)
+            levelUp = (((run % 3) == 0) and (Scholar:Get(levelRow) < 3))
+
+            if levelUp then
+                Scholar:Set(levelRow, Scholar:Get(levelRow) + 1)
+            end
         end
 
         ScholarView.Correct(i, Current.explanation, Progress({ earned = 1, levelUp = levelUp }))
@@ -361,27 +431,15 @@ local function Choose(i)
         Missed[i] = true
         Scholar:Set("streak", 0)
 
-        if adapts and (Wrongs == 2) and (Scholar:Get("level") > 1) then
-            Scholar:Set("level", Scholar:Get("level") - 1)
+        if adapts then
+            Scholar:Set(runRow, 0)
+        end
+
+        if adapts and (Wrongs == 2) and (Scholar:Get(levelRow) > 1) then
+            Scholar:Set(levelRow, Scholar:Get(levelRow) - 1)
         end
 
         ScholarView.Wrong(i, Current.hint, Scholar:Get("mode") == "gentle")
-    end
-end
-
--- A Blizzard window opened (open) or closed: window is whether any a riddle waits for is open.
-local function SetWindow(name, open)
-    Windows[name] = (open or nil)
-    Scholar:Set("window", next(Windows) ~= nil)
-end
-
-local function OnInteractionHidden(interaction)
-    SetWindow(interaction, false)
-end
-
-local function OnInteractionShown(interaction)
-    if HeldInteractions[interaction] then
-        SetWindow(interaction, true)
     end
 end
 
@@ -499,7 +557,16 @@ local Rows = {
     -- since math or reading last took a turn.
     { default = 0, kind = "number", name = "stars", scope = "character" },
     { default = 0, kind = "number", name = "streak", scope = "character" },
-    { default = 1, kind = "number", max = 3, min = 1, name = "level", scope = "character" },
+    -- Each subject's difficulty (1 to 3), its first-try rights in a row (every third makes it harder), and how many of
+    -- its riddles were answered (the clock its skills come due by, ScholarSkills).
+    { default = 1, kind = "number", max = 3, min = 1, name = "mathLevel", scope = "character" },
+    { default = 0, kind = "number", min = 0, name = "mathRun", scope = "character", step = 1 },
+    { default = 0, kind = "number", min = 0, name = "mathCount", scope = "character", step = 1 },
+    { default = 1, kind = "number", max = 3, min = 1, name = "readingLevel", scope = "character" },
+    { default = 0, kind = "number", min = 0, name = "readingRun", scope = "character", step = 1 },
+    { default = 0, kind = "number", min = 0, name = "readingCount", scope = "character", step = 1 },
+    -- How many first tries have missed, which numbers the report's recent misses.
+    { default = 0, kind = "number", min = 0, name = "missCount", scope = "character", step = 1 },
     { default = 0, kind = "number", name = "elapsed", scope = "character" },
     { default = false, kind = "boolean", name = "pending", scope = "character" },
     { default = 0, kind = "number", min = 0, name = "questRun", scope = "character", step = 1 },
@@ -518,6 +585,65 @@ local Rows = {
     { default = 0, kind = "number", name = "pinWait" },
 }
 
+-- What Scholar remembers per character for the report and the review schedule (ScholarSkills): a record per skill, and
+-- the last MissesKept first tries that missed.
+local Records = {
+    {
+        evict = "lastAt",
+        fields = {
+            { default = 0, kind = "number", min = 0, name = "asked", step = 1 },
+            { default = 1, kind = "number", max = Skills.Boxes, min = 1, name = "box", step = 1 },
+            { default = 0, kind = "number", min = 0, name = "due", step = 1 },
+            { default = 0, kind = "number", min = 0, name = "firstTry", step = 1 },
+            { default = 0, kind = "number", min = 0, name = "lastAt" },
+            { default = "", kind = "string", name = "recent" },
+        },
+        limit = 64, name = "skills", scope = "character",
+    },
+    {
+        evict = "seq",
+        fields = {
+            { default = 0, kind = "number", min = 0, name = "at" },
+            { default = "", kind = "string", name = "chosen" },
+            { default = "", kind = "string", name = "kind" },
+            { default = "", kind = "string", name = "prompt" },
+            { default = "", kind = "string", name = "right" },
+            { default = 0, kind = "number", min = 0, name = "seq", step = 1 },
+        },
+        limit = MissesKept, name = "misses", scope = "character",
+    },
+}
+
+-- The parent's report card, as chat lines (ScholarSkills.Report): each subject's skills by their records, the levels,
+-- and the recent misses, newest first.
+local function ReportLines()
+    local skills = Scholar.Records.skills
+
+    local sections = {
+        { label = "Math", level = Scholar:Get("mathLevel"), records = {}, subject = "math" },
+        { label = "Reading", level = Scholar:Get("readingLevel"), records = {}, subject = "reading" },
+        { label = "Quests", records = {}, subject = "quest" },
+    }
+
+    for _, kind in ipairs(skills:Keys()) do
+        for _, section in ipairs(sections) do
+            if kind:find(section.subject .. ".", 1, true) == 1 then
+                section.records[kind] = skills:Get(kind)
+            end
+        end
+    end
+
+    local misses = {}
+
+    for _, key in ipairs(Scholar.Records.misses:Keys()) do
+        misses[#misses + 1] = Scholar.Records.misses:Get(key)
+    end
+
+    table.sort(misses, function(a, b) return (a.seq > b.seq) end)
+
+    return Skills.Report(ByteTerrace.Names.Mine(), sections, misses)
+end
+
 local Commands = {
     { label = "Show Scholar stars and the next riddle", name = "status",
         run = function()
@@ -528,6 +654,13 @@ local Commands = {
             Addon:Print(("Stars: %d (%s). Next riddle in about %d min."):format(stars, Rank(stars), minutes))
         end,
         slash = "scholar" },
+    { label = "Parents: show Scholar's report card", name = "report",
+        run = function()
+            for _, line in ipairs(ReportLines()) do
+                Addon:Print(line)
+            end
+        end,
+        slash = "report" },
     { label = "Solve a riddle right now", name = "practice",
         run = function()
             Scholar:Set("pending", true)
@@ -789,6 +922,7 @@ Scholar = Addon:Module("Scholar", {
         end, true)
     end,
     page = "Scholar's challenge",
+    records = Records,
     scope = "character",
     state = Rows,
     uses = { "QuestBook" },

@@ -9,6 +9,7 @@ local addonName, ns = ...
 --
 --   ns.Puzzles.Grades     { id, label } from { 0, "Kindergarten" } to { 6, "Grade 6" }, in order.
 --   ns.Puzzles.Generate   see Generate below.
+--   ns.Puzzles.Kinds      Kinds(subject, grade): the puzzle kinds a grade asks, which Generate's kind option takes.
 --   ns.Puzzles.Kit        the building blocks, for the generators (Journal.lua also borrows Count).
 --   ns.Puzzles.MaxChoice  the longest choice, in bytes, a riddle may offer (ScholarQuests.lua cuts its lines to it).
 --                         Kit.Generators[kind] is function(state) -> puzzle.
@@ -265,7 +266,8 @@ end
 ---@param options table subject ("math" | "reading" | "quest"), grade (0..6), level (1..3, easiest first), random
 ---                     (function(m, n) returning an integer from m to n), an optional context { name, class, level,
 ---                     zone, copper, faction ("Alliance" or "Horde"), locale (GetLocale's "enUS") } of plain values,
----                     and for "quest" the quest (a QuestBook record) and known (every record)
+---                     an optional kind (one of Kinds(subject, grade); a random one otherwise), and for "quest" the
+---                     quest (a QuestBook record) and known (every record)
 ---@return table? puzzle { subject, kind, title, prompt, choices (4 distinct strings), answer (1..4), hint,
 ---                      explanation }, plus value, expression, remainder and terms on math puzzles and book (the quest
 ---                      book's text) on quest puzzles
@@ -289,7 +291,39 @@ local function Generate(options)
         error("ScholarPuzzles.Generate: unknown subject " .. tostring(options.subject), 2)
     end
 
-    return Generators[Pick(state, kinds[state.grade])](state)
+    local kind, known = options.kind, false
+
+    for _, listed in ipairs(kinds[state.grade]) do
+        known = (known or (listed == kind))
+    end
+
+    if kind == nil then
+        kind = Pick(state, kinds[state.grade])
+    elseif not known then
+        error(("ScholarPuzzles.Generate: %s isn't a %s kind at grade %d"):format(tostring(kind), options.subject, state.grade), 2)
+    end
+
+    return Generators[kind](state)
+end
+
+--- The puzzle kinds of a subject ("math" or "reading") at a grade (clamped to 0..6), in a fresh array.
+---@param subject string
+---@param grade number
+---@return string[]
+local function Kinds(subject, grade)
+    local kinds = ScholarWords.kinds[subject]
+
+    if not kinds then
+        error("ScholarPuzzles.Kinds: unknown subject " .. tostring(subject), 2)
+    end
+
+    local out = {}
+
+    for i, kind in ipairs(kinds[Clamp(grade, 0, 6, 0)]) do
+        out[i] = kind
+    end
+
+    return out
 end
 
 --- Three distinct plausible wrong numbers from lo to hi: the shuffled candidates first, then near misses. lo defaults
@@ -326,4 +360,4 @@ local Kit = {
     Pick = Pick, Shuffle = Shuffle, Trim = Trim, Vars = Vars, Words = ScholarWords, WrongNumbers = WrongNumbers,
 }
 
-ns.Puzzles = { Generate = Generate, Grades = Grades, Kit = Kit, MaxChoice = MaxChoice }
+ns.Puzzles = { Generate = Generate, Grades = Grades, Kinds = Kinds, Kit = Kit, MaxChoice = MaxChoice }

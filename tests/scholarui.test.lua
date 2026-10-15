@@ -119,7 +119,7 @@ test("a riddle never appears in combat, steps aside when a fight starts, and com
 end)
 
 test("a riddle that comes back after a fight keeps its wrong answers and its Skip", function()
-    local h, addon = LoadKid({ ["Scholar.mode"] = "gentle", ["Scholar.level"] = 2 })
+    local h, addon = LoadKid({ ["Scholar.mode"] = "gentle", ["Scholar.mathLevel"] = 2, ["Scholar.readingLevel"] = 2 })
     local view, puzzle = h.ns.ScholarView, nil
     local show = view.Show
 
@@ -141,10 +141,12 @@ test("a riddle that comes back after a fight keeps its wrong answers and its Ski
     truthy(Showing(h), "it came back")
     eq(frame.Buttons[wrong].State, "wrong", "still marked")
     h:Key(tostring(wrong), true)
-    eq(addon.State:Get("Scholar.level"), 2, "and it can't be picked again: one miss doesn't make riddles easier")
+    local levelRow = ("Scholar." .. puzzle.subject .. "Level")
+
+    eq(addon.State:Get(levelRow), 2, "and it can't be picked again: one miss doesn't make riddles easier")
     truthy(frame.Skip:IsShown(), "gentle mode still offers Skip")
     h:Key(tostring(WrongAnswer(puzzle, wrong)), true)
-    eq(addon.State:Get("Scholar.level"), 1, "a second miss does")
+    eq(addon.State:Get(levelRow), 1, "a second miss makes its subject's easier")
 end)
 
 test("relogging doesn't skip a riddle", function()

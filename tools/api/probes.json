@@ -269,7 +269,12 @@
           "type": "number",
           "userID": "number"
         },
-        "shapes": { "CHAT_MSG_CHANNEL": "table", "CHAT_MSG_SAY": "table", "CHAT_MSG_YELL": "table" }
+        "shapes": {
+          "CHAT_MSG_CHANNEL": "table",
+          "CHAT_MSG_PARTY": "table",
+          "CHAT_MSG_SAY": "table",
+          "CHAT_MSG_YELL": "table"
+        }
       },
       "contexts": { "combat/Combat": true, "idle/none": true }
     },
@@ -277,6 +282,7 @@
       "result": {
         "CHAT_MSG_ADDON": "Aa Aa",
         "CHAT_MSG_CHANNEL": "Aa Aa",
+        "CHAT_MSG_PARTY": "Aa Aa",
         "CHAT_MSG_SAY": "Aa Aa",
         "CHAT_MSG_YELL": "Aa Aa"
       },

@@ -275,8 +275,7 @@
         "stackCount": "number",
         "texture": "number"
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "namePlate.enemyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
@@ -392,13 +391,11 @@
     },
     "quest.turnIn": {
       "result": { "rewardText": "text", "title": "text" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "quest.turnInIdentity": {
       "result": { "hasQuestID": true, "questID": "number", "questNpcName": "string" },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "questLog.countForm": {
       "result": { "forms": "leading,none" },
@@ -427,7 +424,7 @@
         "objectiveType": "nil",
         "text": "text",
         "type": "text",
-        "types": "item,log,object"
+        "types": "item,log,monster,object"
       },
       "context": { "combat": false, "restrictions": "none" }
     },
@@ -512,15 +509,22 @@
     },
     "trainer.services": {
       "result": {
+        "category": "string",
         "count": "number",
+        "description": "nil",
         "greeting": "text",
-        "hasAvailable": false,
+        "hasAvailable": true,
+        "isProfession": "boolean",
         "isTradeskill": "boolean",
-        "serviceTypes": "unavailable",
+        "moneyCost": "number",
+        "name": "text",
+        "reqLevel": "number",
+        "serviceTypes": "available,unavailable",
+        "subText": "empty",
+        "texture": "number",
         "trainerType": "number"
       },
-      "context": { "combat": false, "restrictions": "none" },
-      "build": "1.60.1 (70009)"
+      "context": { "combat": false, "restrictions": "none" }
     },
     "tts.voices": {
       "result": {

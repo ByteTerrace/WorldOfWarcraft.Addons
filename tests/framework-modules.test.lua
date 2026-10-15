@@ -237,6 +237,80 @@ test("group messages keep one per interval from a bounded queue, and nothing whi
     eq(got, 0, "nor hears anything")
 end)
 
+local function Messages(h, from)
+    local texts = {}
+    for i = from or 1, #h.addonMessages do
+        texts[#texts + 1] = h.addonMessages[i].message
+    end
+    return table.concat(texts, " ")
+end
+
+test("an urgent message takes the newest ordinary message's place in a full queue", function()
+    local h, addon = NewAddOn()
+    local module = addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1", queue = 3 } })
+    Start(h)
+    h:JoinGroup("party", { "Bob" })
+    h:Slash("/test debug")
+    for i = 1, 4 do
+        module.Comms:Send("PING", i)
+    end
+    eq(module.Comms:Queued(), 3, "full")
+    module.Comms:Send("RALLY", "now", true)
+    eq(module.Comms:Queued(), 3)
+    truthy(Printed(h):find("TestApp1 message PING dropped: an urgent message took its place", 1, true), Printed(h))
+    module.Comms:Send("HELP", "me", true)
+    h:Advance(10)
+    eq(Messages(h), "PING:1 HELP:me RALLY:now PING:2", "urgent first; PING:4, then PING:3, made room")
+    for i = 1, 5 do
+        module.Comms:Send("SOS", i, true)
+    end
+    truthy(Printed(h):find("TestApp1 message SOS dropped: the queue is full", 1, true),
+        "with every queued message urgent, the newcomer is dropped")
+    h:Advance(10)
+    eq(Messages(h, 5), "SOS:1 SOS:4 SOS:3 SOS:2", "the first went at once; the fifth found no room")
+end)
+
+test("the client's answer decides a message's fate: lockdown drops the queue, a general error retries a few times", function()
+    local h, addon = NewAddOn()
+    local module = addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1" } })
+    Start(h)
+    h:JoinGroup("party", { "Bob" })
+    local results = h.env.Enum.SendAddonMessageResult
+    module.Comms:Send("PING", "a")
+    module.Comms:Send("PING", "b")
+    module.Comms:Send("PING", "c")
+    h:AnswerAddonMessages("AddOnMessageLockdown")
+    h:Advance(1)
+    eq(h.addonMessages[2].result, results.AddOnMessageLockdown)
+    eq(module.Comms:Queued(), 0, "lockdown drops the queue")
+    eq(module:PendingTimers(), 0, "and its pending send")
+    h:Advance(5)
+    eq(Messages(h), "PING:a PING:b", "nothing is retried")
+
+    h:AnswerAddonMessages("GeneralError", 5)
+    module.Comms:Send("PING", "d")
+    module.Comms:Send("PING", "e")
+    h:Advance(10)
+    eq(Messages(h, 3), "PING:d PING:d PING:d PING:e PING:e PING:e", "three tries each")
+    eq(h.addonMessages[#h.addonMessages].result, results.Success, "e's third try went out")
+    eq(module.Comms:Queued(), 0)
+end)
+
+test("a send that raises is reported and leaves the queue, which keeps going", function()
+    local h, addon = NewAddOn()
+    local module = addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1" } })
+    Start(h)
+    h:JoinGroup("party", { "Bob" })
+    h:ExpectErrors("the client raised")
+    h:AnswerAddonMessages("raise")
+    module.Comms:Send("PING", "a")
+    module.Comms:Send("PING", "b")
+    eq(module.Comms:Queued(), 1, "a left the queue")
+    h:Advance(2)
+    eq(Messages(h), "PING:b")
+    eq(module.Comms:Queued(), 0)
+end)
+
 test("a comms prefix longer than the client allows is refused", function()
     local _, addon = NewAddOn()
     local ok, err = pcall(addon.Module, addon, "Chat", { label = "Chat", comms = { prefix = "AVeryLongPrefixIndeed" } })

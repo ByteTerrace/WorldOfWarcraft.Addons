@@ -211,3 +211,71 @@ test("the death fact's recap retries stop when no module uses it any more", func
     h:Advance(60)
     eq(addon.State:Get("death.attributed"), 0, "no retry fired after it stopped")
 end)
+
+-- An addon whose one module (User) uses the restriction fact while its switch is on. Not yet started.
+local function RestrictionAddOn()
+    local h = Harness.New()
+    h:LoadFiles("ByteTerrace_Core")
+    h.declared.TestDB = true
+    rawset(h.env, "TestDB", h.saved.TestDB)
+    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", slash = { "/test" },
+        facts = { "restriction" } })
+    addon:Module("User", { label = "User", uses = { "restriction" } })
+    return h, addon
+end
+
+local RestrictionRows = { Combat = "combat", Encounter = "encounter", ChallengeMode = "challengeMode",
+    PvPMatch = "pvpMatch", Map = "map", Chat = "chat" }
+
+local function Restricted(addon)
+    local active = {}
+    for _, row in ipairs({ "challengeMode", "chat", "combat", "encounter", "map", "pvpMatch" }) do
+        if addon.State:Get("restriction." .. row) then
+            active[#active + 1] = row
+        end
+    end
+    return table.concat(active, " ")
+end
+
+test("each restriction's row turns true as it activates and false when it's lifted, reading no API", function()
+    local h, addon = RestrictionAddOn()
+    Start(h)
+    local frame = addon.Events.Frame
+    truthy(frame:IsEventRegistered("ADDON_RESTRICTION_STATE_CHANGED"))
+    h.apiCalls = {}
+    for restriction, row in pairs(RestrictionRows) do
+        local seen
+        local watcher = addon.State:Watch({ addon.State:Id("restriction." .. row) }, function(state)
+            seen = state:Get("restriction." .. row)
+        end, true)
+        h:SetRestriction(restriction, true)
+        eq(Restricted(addon), row, restriction .. " is in force")
+        truthy(seen, restriction .. " published")
+        h:SetRestriction(restriction, false)
+        eq(Restricted(addon), "", restriction .. " lifted")
+        addon.State:Unwatch(watcher)
+    end
+    h:EnterCombat()
+    eq(Restricted(addon), "combat", "Forever sends Combat Activating and no Active: Activating counts")
+    h:LeaveCombat()
+    eq(Restricted(addon), "")
+    for name in pairs(h.apiCalls) do
+        eq(name, "issecretvalue", "events read no API but State's secret check")
+    end
+    addon.State:Set("User.enabled", false)
+    falsy(frame:IsEventRegistered("ADDON_RESTRICTION_STATE_CHANGED"), "nothing registered while unused")
+end)
+
+test("the restriction rows start from the client's state: a /reload in an encounter is no encounter starting", function()
+    local h, addon = RestrictionAddOn()
+    h:SetRestriction("Encounter", true)
+    h:EnterCombat()
+    Start(h)
+    eq(Restricted(addon), "combat encounter")
+    eq(h.apiCalls["C_RestrictedActions.IsAddOnRestrictionActive"], 6, "one read per restriction")
+    addon.State:Set("User.enabled", false)
+    eq(Restricted(addon), "", "rows reset while unused")
+    h:SetRestriction("Encounter", false)
+    addon.State:Set("User.enabled", true)
+    eq(Restricted(addon), "combat", "a restart reads them again")
+end)

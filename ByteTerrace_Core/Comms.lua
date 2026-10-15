@@ -18,8 +18,13 @@
 --     visible chat; received messages must arrive on a group channel too.
 --   * At most one message per interval (default and least 1 second: the client regains one
 --     message a second per prefix, so a faster transport only meets its throttle) from a small
---     bounded queue (default 8): beyond it messages are dropped, never retried forever. When the
---     client answers with a throttle, the message stays queued for the next turn.
+--     bounded queue (default 8): beyond it messages are dropped, never retried forever. An urgent
+--     message goes first, and into a full queue it takes the place of the newest message that
+--     isn't urgent. A dropped message is named in debug output only.
+--   * The client's answer decides what happens to the message: a throttle keeps it queued for the
+--     next turn, GeneralError keeps it until MaxErrors such answers, and AddOnMessageLockdown
+--     drops the queue. A send that raises reaches the error handler, and the queue moves on
+--     without it.
 --   * A number field goes as tostring writes it; one that wouldn't read back as itself is refused.
 --   * Nothing during chat messaging lockdown (encounters, Mythic+, PvP matches). The queue is
 --     dropped then, and when you leave your group: what it held would be stale later.
@@ -31,6 +36,7 @@
 local MaxMessage = 255 -- bytes: the client's limit for one addon message
 local MaxPrefix = 16   -- bytes: the client's limit for a prefix
 local MinInterval = 1 -- seconds: the client regains one message a second per prefix
+local MaxErrors = 3 -- GeneralError answers to one message before it is dropped
 local Separator = "\t"
 local GroupChannels = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
 local ChatRestrictions = {
@@ -120,6 +126,10 @@ local function DropQueue(self)
     wipe(self.m_queue)
 end
 
+local function Dropped(self, entry, why)
+    self.m_module.Addon:Debug(("%s message %s dropped: %s"):format(self.m_prefix, entry.kind, why))
+end
+
 -- Sends the queue's first message, or waits for the interval. The queue holds a message whenever
 -- this runs: Send pumps after queueing, and emptying the queue cancels the pending pump.
 local function Pump(self)
@@ -134,13 +144,26 @@ local function Pump(self)
         self.m_timer = self.m_module:After(wait, self.m_pump)
         return
     end
-    local result = C_ChatInfo.SendAddonMessage(self.m_prefix, self.m_queue[1], channel)
+    local queue, entry = self.m_queue, self.m_queue[1]
+    local ok, result = SafeCall(C_ChatInfo.SendAddonMessage, self.m_prefix, entry.text, channel)
     self.m_lastSent = GetTime()
     local results = Enum.SendAddonMessageResult
-    if result ~= results.AddonMessageThrottle and result ~= results.ChannelThrottle then
-        remove(self.m_queue, 1)
+    if ok and result == results.AddOnMessageLockdown then
+        DropQueue(self)
+        return
     end
-    if self.m_queue[1] then
+    if not ok then
+        remove(queue, 1) -- SafeCall reported the error
+    elseif result == results.GeneralError then
+        entry.errors = entry.errors + 1
+        if entry.errors >= MaxErrors then
+            remove(queue, 1)
+            Dropped(self, entry, "the client answered GeneralError " .. MaxErrors .. " times")
+        end
+    elseif result ~= results.AddonMessageThrottle and result ~= results.ChannelThrottle then
+        remove(queue, 1)
+    end
+    if queue[1] then
         self.m_timer = self.m_module:After(self.m_interval, self.m_pump)
     end
 end
@@ -245,7 +268,8 @@ function Comms:Close()
 end
 
 --- Queues a message for the group. Dropped while the module is stopped, when you're not in a
---- group, during chat lockdown, or when the queue is full.
+--- group, during chat lockdown, or when the queue is full. An urgent message is dropped only when
+--- every queued message is urgent too; otherwise it takes the newest ordinary message's place.
 ---@param kind string uppercase letters only
 ---@param fields any? a plain string, finite number, boolean, or a dense array of these
 ---@param urgent boolean? goes to the front of the queue
@@ -285,13 +309,21 @@ function Comms:Send(kind, fields, urgent)
         DropQueue(self)
         return
     end
-    if #self.m_queue >= self.m_limit then
-        return
+    -- Urgent messages go in at the front and the rest at the back, so the newest message that
+    -- isn't urgent is the last one, whenever there is one.
+    local queue = self.m_queue
+    local entry = { text = text, kind = kind, urgent = urgent and true or false, errors = 0 }
+    if #queue >= self.m_limit then
+        if not entry.urgent or queue[#queue].urgent then
+            Dropped(self, entry, "the queue is full")
+            return
+        end
+        Dropped(self, remove(queue), "an urgent message took its place")
     end
-    if urgent then
-        insert(self.m_queue, 1, text)
+    if entry.urgent then
+        insert(queue, 1, entry)
     else
-        self.m_queue[#self.m_queue + 1] = text
+        queue[#queue + 1] = entry
     end
     if not self.m_timer then
         Pump(self)

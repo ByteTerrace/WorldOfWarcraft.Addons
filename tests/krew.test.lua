@@ -115,13 +115,59 @@ test("a late joiner learns the existing Krew and syncs their own marks and wars"
     end
     truthy((CardText(dana) or ""):find("Alice Doe, Cara Doe are running the toolkit too", 1, true))
     dana:Slash("/tlk krew")
-    eq(dana.printed[#dana.printed]:match("The Krew: .*$"), "The Krew: Alice Doe, Cara Doe")
-    eq(Sent(dana, "MARK"), 1, "the returning hello triggers one mark sync")
-    eq(Sent(dana, "WAR"), 1, "the burst of replies triggers one war sync")
+    eq(dana.printed[#dana.printed]:match("The Krew: .*$"), "The Krew: Alice Doe (0.1.0), Cara Doe (0.1.0)")
+    eq(Sent(dana, "MARKS"), 1, "the returning hello triggers one mark sync")
+    eq(Sent(dana, "WARS"), 1, "the burst of replies triggers one war sync")
     for _, addon in ipairs({ aliceAddon, caraAddon }) do
         eq(addon.Modules.Warband.Records.ledger:Field("Enemy Doe", "kind"), "mark")
         truthy(addon.Modules.Warband.Records.wars:Has("Red Dawn-" .. dana.env.GetNormalizedRealmName()))
     end
+end)
+
+local function Newer(h)
+    local found = {}
+    for _, line in ipairs(h.printed) do
+        if line:find("A newer TheLanKrewToolKit is out", 1, true) then
+            found[#found + 1] = line:match("A newer.*$")
+        end
+    end
+    return found
+end
+
+test("/tlk krew lists the version each member runs", function()
+    local h = Load()
+    h:JoinGroup("party", { "Bob", "Cara", "Dan", "Eve" })
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t1", "PARTY", "Bob")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.2.0\t1", "PARTY", "Cara")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.0.9\t1", "PARTY", "Dan")
+    h:ReceiveAddonMessage(Prefix, "HELLO:1.x|cff\t1", "PARTY", "Eve")
+    h:Slash("/tlk krew")
+    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe (0.1.0), Cara Doe (0.2.0), Dan Doe (0.0.9), Eve Doe",
+        "an unreadable version is left out")
+    eq(#Newer(h), 0, "one member ahead is no news")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.3.0\t1", "PARTY", "Bob") -- Bob updated and reloaded
+    h:Slash("/tlk krew")
+    truthy(h.printed[#h.printed]:find("Bob Doe (0.3.0)", 1, true), "a later hello updates it")
+end)
+
+test("two Krew members on a newer version say so once per group, compared as numbers", function()
+    local h = Load()
+    h:JoinGroup("party", { "Bob", "Cara", "Dan" })
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.10.0\t1", "PARTY", "Bob")
+    eq(#Newer(h), 0, "one is not enough")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.9.0\t1", "PARTY", "Cara")
+    eq(table.concat(Newer(h), "\n"), "A newer TheLanKrewToolKit is out (2 Krew members run 0.9.0 or newer).",
+        "0.10.0 is newer than 0.9.0")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.10.0\t1", "PARTY", "Dan")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.10.0\t0", "PARTY", "Cara")
+    eq(#Newer(h), 1, "once per group")
+    h:LeaveGroup()
+    h:JoinGroup("party", { "Bob", "Cara" })
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.2.0\t1", "PARTY", "Bob")
+    h:ReceiveAddonMessage(Prefix, "HELLO:0.2.0\t1", "PARTY", "Cara")
+    local said = Newer(h)
+    eq(#said, 2, "a new group hears it again")
+    eq(said[2], "A newer TheLanKrewToolKit is out (2 Krew members run 0.2.0).")
 end)
 
 test("a Krew member's hello shows who's here, merged into one card", function()
@@ -262,7 +308,7 @@ test("someone who leaves the group leaves the Krew", function()
     h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0", "PARTY", "Cara")
     h:RemoveMember("Cara")
     h:Slash("/tlk krew")
-    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe")
+    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe (0.1.0)")
 end)
 
 test("addon messages are only heard in a group: solo, every other addon's chatter costs nothing", function()
@@ -306,7 +352,7 @@ test("a raid forming reads the roster once, after its burst of updates settles",
     h:Advance(2)
     eq(h:CountApiCalls("UnitName"), h.env.GetNumGroupMembers(), "one pass of unit reads")
     h:Slash("/tlk krew")
-    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe", "Cara left; Bob stays")
+    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe (0.1.0)", "Cara left; Bob stays")
 end)
 
 test("the Krew listed mid-burst is the group as it is", function()
@@ -318,7 +364,7 @@ test("the Krew listed mid-burst is the group as it is", function()
     h:AddMember("Dan")
     h:RemoveMember("Cara")
     h:Slash("/tlk krew")
-    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe")
+    eq(h.printed[#h.printed]:match("The Krew: .*$"), "The Krew: Bob Doe (0.1.0)")
     h.apiCalls = {}
     h:Advance(5)
     eq(h:CountApiCalls("UnitName"), 0, "the pass already ran")

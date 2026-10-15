@@ -7,7 +7,10 @@ local addonName, ns = ...
 -- rallyWaypoint on) set a map waypoint; none acts on your behalf, and none is heard while Warband
 -- is off. Every hello (a Krew member joining, coming back, or reloading, and the replies to yours)
 -- brings your SyncCount most recent marks and wars; a burst of hellos gets one sync, and what a
--- member already knows changes nothing for them.
+-- member already knows changes nothing for them. A sync packs the marks into MARKS messages,
+-- entries "First Last;CLASS;level;faction", and the wars into WARS messages, one guild key per
+-- field, each as few as fit Comms' MaxMessage bytes. A mark or war placed live goes as one MARK
+-- or WAR (Warband.lua), and both forms do the same.
 --
 -- What it sets on ns.Warband, for Warband.lua's OnEnable and OnDisable:
 --   Warband.EnableMessages()    listens for the Krew's messages
@@ -17,10 +20,11 @@ local MaxIntel = 999          -- the largest gathering accepted from a message
 local SyncCount = 3           -- your own marks (and wars) shared with Krew members who join
 local SyncAge = 7 * 24 * 3600 -- seconds: older marks and wars aren't shared with one who joins
 local SyncDelay = 2           -- seconds that gather a burst of hellos into one sync
+local MaxMessage = ByteTerrace.Comms.MaxMessage
 
 local GetServerTime, SOUNDKIT = GetServerTime, SOUNDKIT
-local ipairs = ipairs
-local sort = table.sort
+local ipairs, min = ipairs, math.min
+local concat, sort = table.concat, table.sort
 
 local Warband = ns.Warband
 local MyKey, GuildName, ValidKey, ValidGuildKey = Warband.MyKey, Warband.GuildName, Warband.ValidKey, Warband.ValidGuildKey
@@ -35,6 +39,24 @@ local Krew, ShowCard, Alert = ns.Krew, ns.Cards.Show, ns.Cards.Alert
 local WarbandModule, Ledger, Wars = Warband.Module, Warband.Ledger, Warband.Wars
 
 local SyncTimer -- pending timer that answers a burst of hellos with one sync
+
+-- Sends entries as kind's messages, as many entries to a message as fit in MaxMessage bytes.
+local function SendPacked(kind, entries)
+    local room = MaxMessage - #kind - 1 -- "KIND:"
+    local fields, left = {}, room
+    for _, entry in ipairs(entries) do
+        local size = #fields > 0 and #entry + 1 or #entry -- a tab before every entry but the first
+        if size > left then
+            Krew:Send(kind, fields)
+            fields, left, size = {}, room, #entry
+        end
+        fields[#fields + 1] = entry
+        left = left - size
+    end
+    if #fields > 0 then
+        Krew:Send(kind, fields)
+    end
+end
 
 -- Your most recent marks and wars (SyncCount of each, within SyncAge), for the Krew members who
 -- said hello in the last SyncDelay seconds: one sync per burst, not one per member.
@@ -57,13 +79,42 @@ local function Sync()
     local marks = Recent(Ledger, function(key)
         return Ledger:Field(key, "kind") == "mark"
     end)
-    for i = 1, math.min(SyncCount, #marks) do
-        Krew:Send("MARK", InfoFields(Known(marks[i])))
+    local entries = {}
+    for i = 1, min(SyncCount, #marks) do
+        entries[i] = concat(InfoFields(Known(marks[i])), ";")
     end
+    SendPacked("MARKS", entries)
     local declared = Recent(Wars)
-    for i = 1, math.min(SyncCount, #declared) do
-        Krew:Send("WAR", declared[i])
+    for i = SyncCount + 1, #declared do
+        declared[i] = nil
     end
+    SendPacked("WARS", declared)
+end
+
+-- A mark from the Krew: fields are key, class, level and faction (InfoFrom).
+local function HeardMark(sender, fields)
+    local info = InfoFrom(fields)
+    if not info then
+        return
+    end
+    local known = Status(info.key) == "mark"
+    Remember(info.key, info)
+    if known or not SetKind(info.key, "mark", sender) then
+        return -- a mark synced again when someone joins, or a full ledger
+    end
+    ShowCard({ icon = "Interface\\Icons\\Ability_Hunter_MarkedForDeath", sound = SOUNDKIT.RAID_WARNING,
+        title = "Marked for death", body = sender .. " marked " .. Describe(info.key) .. ". Hunt them down." })
+end
+
+-- A war the Krew declared on a guild key.
+local function HeardWar(sender, field)
+    local guild = ValidGuildKey(field) and field
+    if not guild or Wars:Has(guild) then
+        return
+    end
+    Wars:Set(guild, { by = sender, since = GetServerTime() })
+    ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
+        title = "War!", body = sender .. " declared war on <" .. GuildName(guild) .. ">. Every member is an enemy of the Krew." })
 end
 
 --- Owns the Warband message subscriptions. Called by OnEnable.
@@ -83,18 +134,15 @@ function Warband.EnableMessages()
         end
     end)
 
-    WarbandModule:Listen(Krew, "MARK", function(sender, fields)
-        local info = InfoFrom(fields)
-        if not info then
-            return
+    WarbandModule:Listen(Krew, "MARK", HeardMark)
+
+    WarbandModule:Listen(Krew, "MARKS", function(sender, fields)
+        for i = 1, #fields do
+            local key, class, level, faction = fields[i]:match("^([^;]*);([^;]*);([^;]*);([^;]*)$")
+            if key then
+                HeardMark(sender, { key, class, level, faction })
+            end
         end
-        local known = Status(info.key) == "mark"
-        Remember(info.key, info)
-        if known or not SetKind(info.key, "mark", sender) then
-            return -- a mark synced again when someone joins, or a full ledger
-        end
-        ShowCard({ icon = "Interface\\Icons\\Ability_Hunter_MarkedForDeath", sound = SOUNDKIT.RAID_WARNING,
-            title = "Marked for death", body = sender .. " marked " .. Describe(info.key) .. ". Hunt them down." })
     end)
 
     WarbandModule:Listen(Krew, "UNMARK", function(_, fields)
@@ -118,13 +166,13 @@ function Warband.EnableMessages()
     end)
 
     WarbandModule:Listen(Krew, "WAR", function(sender, fields)
-        local guild = ValidGuildKey(fields[1]) and fields[1]
-        if not guild or Wars:Has(guild) then
-            return
+        HeardWar(sender, fields[1])
+    end)
+
+    WarbandModule:Listen(Krew, "WARS", function(sender, fields)
+        for i = 1, #fields do
+            HeardWar(sender, fields[i])
         end
-        Wars:Set(guild, { by = sender, since = GetServerTime() })
-        ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
-            title = "War!", body = sender .. " declared war on <" .. GuildName(guild) .. ">. Every member is an enemy of the Krew." })
     end)
 
     WarbandModule:Listen(Krew, "PEACE", function(_, fields)

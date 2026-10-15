@@ -21,6 +21,7 @@ Facts.lua
 FactsTarget.lua
 FactsKills.lua
 FactsDeath.lua
+FactsRestriction.lua
 Module.lua
 AddOn.lua
 Diagnostics.lua

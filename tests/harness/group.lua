@@ -37,6 +37,12 @@
 --                            server can change them). Only a successful send spends allowance.
 --     Every call is recorded in h.addonMessages = { { prefix, message, chatType, target, result } }
 --     (chatType resolved, so nil records "PARTY").
+--   * h:AnswerAddonMessages(answer, count) fails the next count sends that pass every check above
+--     (default 1). answer is the SendAddonMessageResult name the client hands back instead of
+--     Success: GeneralError (the documented catch-all), or AddOnMessageLockdown (lockdown taking
+--     hold between the caller's check and the send). "raise" makes the call raise a Lua error
+--     instead, as the client does for an argument it can't take; a raising call isn't recorded.
+--     A failed send spends no allowance and isn't echoed.
 --   * Echo: the client delivers your own PARTY, RAID, INSTANCE_CHAT, GUILD and OFFICER messages
 --     (and a whisper to yourself) back to you through CHAT_MSG_ADDON, with your own name as the
 --     sender, so an addon must ignore its own messages. The harness echoes by default
@@ -290,6 +296,13 @@ local function SendResult(h, prefix, message, chatType, target)
     return "Success"
 end
 
+-- Fails the next count sends that would succeed (see the header).
+function Harness:AnswerAddonMessages(answer, count)
+    assert(answer == "raise" or (answer ~= "Success" and __snapshot.enums.SendAddonMessageResult[answer]),
+        "AnswerAddonMessages: answer must be a failing SendAddonMessageResult name or \"raise\"")
+    self.addonAnswer = { answer = answer, count = count or 1 }
+end
+
 -- Whether the client hands this send back to the sender.
 local function Echoes(h, chatType, target)
     if Echoed[chatType] then
@@ -328,6 +341,14 @@ function Harness:AddonMessageFakes()
         SendAddonMessage = function(prefix, message, chatType, target)
             chatType = chatType or "PARTY"
             local name = SendResult(h, prefix, message, chatType, target)
+            local failure = h.addonAnswer
+            if name == "Success" and failure and failure.count > 0 then
+                failure.count = failure.count - 1
+                if failure.answer == "raise" then
+                    error("C_ChatInfo.SendAddonMessage: the client raised (h:AnswerAddonMessages)", 2)
+                end
+                name = failure.answer
+            end
             local result = Result("SendAddonMessageResult", name)
             h.addonMessages[#h.addonMessages + 1] = {
                 prefix = prefix, message = message, chatType = chatType, target = target, result = result,

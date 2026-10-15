@@ -242,7 +242,7 @@ Each card can be switched off in settings. Turning the journal off keeps the pla
 ### Krew
 
 Friends in your group who also run the toolkit share fun moments, each as a card:
-- **Roll call:** when you group up, a card shows who else runs the toolkit. `/tlk krew` lists them; someone who leaves the group leaves the list once the roster settles, a second after the last change.
+- **Roll call:** when you group up, a card shows who else runs the toolkit. `/tlk krew` lists them and the version each runs. When two or more of them run a newer version than yours, chat says so once per group. Someone who leaves the group leaves the list once the roster settles, a second after the last change.
 - **Ding:** your level-ups.
 - **Flawless:** your flawless victories (needs the "Flawless victory" sound on).
 - **Kill streaks:** your first blood and sprees, as raid warnings (see [Sounds](#sounds)).
@@ -250,7 +250,7 @@ Friends in your group who also run the toolkit share fun moments, each as a card
 
 Warband's marks, grudges, sightings, rallies and intel travel the same way. Each can be switched off, and turning Krew messages off stops all of it. It plays by Blizzard's add-on rules, which forbid excessive use of the chat system:
 - It uses hidden addon messages to your own party, raid or instance group only. It never whispers, and never uses public channels or visible chat.
-- It sends only on rare events, never on a timer, and at most one message a second. A queue of up to eight holds the rest, and anything beyond that is dropped.
+- It sends only on rare events, never on a timer, and at most one message a second. A queue of up to eight holds the rest; a rally goes first and takes a waiting message's place when the queue is full, and anything beyond that is dropped.
 - It never sends during chat messaging lockdown (encounters, Mythic+, PvP matches). A celebration that can't go out then is dropped rather than sent late.
 - Received messages are parsed strictly and must come from your group. They only ever show a card or raid warning, update the Warband ledger, or set a map waypoint; none acts on your behalf.
 
@@ -261,7 +261,7 @@ World PvP for a Krew that takes the war seriously. An account-wide ledger rememb
 | Kind | How someone gets there | What it means |
 | --- | --- | --- |
 | Grudge | They killed one of us. When an enemy player kills you, a card names them and the killing blow ("Slain by Bob. Ambush for 700."): left-click holds the grudge, right-click lets it go. Or `/tlk grudge` on your target or a name. | The Krew tallies their kills of us against ours of them: `Krew 3 : 5 Bob`. |
-| Mark for death | `/tlk mark` on your target or a name. `/tlk unmark` lifts it (they stay a grudge). | The Krew hunts them. Your three most recent marks (and wars) reach Krew members who join the group later, come back, or reload, in one message each however many say hello at once. |
+| Mark for death | `/tlk mark` on your target or a name. `/tlk unmark` lifts it (they stay a grudge). | The Krew hunts them. Your three most recent marks (and wars) reach Krew members who join the group later, come back, or reload, packed into as few messages as fit, however many say hello at once. |
 | Champion | `/tlk glory` on your target or a name. Works on either faction. | Someone the Krew aids. |
 | Guild at war | `/tlk war` on your target (their guild) or `/tlk war <guild name>`. `/tlk peace <guild>` ends it. | Every member counts as an enemy of the Krew, with a tally of kills each way. |
 

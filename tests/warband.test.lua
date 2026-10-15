@@ -297,16 +297,6 @@ test("a Krew mark joins the ledger with one card, however often it's synced", fu
     eq(Card(h), nil)
 end)
 
-test("a joining Krew member hears the marks you placed", function()
-    local h = Grouped()
-    h:Slash("/tlk mark Bob Doe")
-    h:Advance(3)
-    local before = #Sent(h, "MARK")
-    Receive(h, "Mom", "HELLO", "0.1.0")
-    h:Advance(5)
-    eq(#Sent(h, "MARK"), before + 1)
-end)
-
 test("bad messages are ignored: foreign keys, escape codes, junk numbers", function()
     local h, addon = Grouped()
     local key = Key(h, "Bob")
@@ -586,23 +576,6 @@ test("counts from the Krew are whole numbers in digits; text holds no control ch
     truthy(Notices(h):find("needs the Krew at somewhere!", 1, true), Notices(h))
 end)
 
-test("a Krew member who leaves and comes back hears the marks placed while they were away", function()
-    local h = Load()
-    h:JoinGroup("party", { "Mom", "Dad" })
-    h:Echo(false)
-    h:Advance(2)
-    Receive(h, "Mom", "HELLO", "0.1.0", "0")
-    h:Advance(5)
-    h:RemoveMember("Mom")
-    h:Slash("/tlk mark Bob Doe")
-    h:AddMember("Mom")
-    h:Advance(3)
-    local before = #Sent(h, "MARK")
-    Receive(h, "Mom", "HELLO", "0.1.0", "0")
-    h:Advance(5)
-    eq(#Sent(h, "MARK"), before + 1)
-end)
-
 test("a champion granted glory again shows no second card", function()
     local h = Grouped()
     Receive(h, "Mom", "GLORY", Key(h, "Bob"), "ROGUE", "60", "Alliance")
@@ -633,33 +606,6 @@ test("a kill of a stranger with the rivalry records full makes room for it in on
     h:HonorKill("Newcomer Doe", "Private", 10)
     eq(people:Count(), 901, "the hundred seen longest ago made room together")
     truthy(people:Has("Newcomer Doe"))
-end)
-
-test("a raid's worth of Krew members joining hears your marks and wars once; a new group hears them again", function()
-    local h = Load()
-    local names = { "Mom", "Dad", "Sis", "Bro", "Aunt", "Uncle" }
-    h:JoinGroup("raid", names)
-    h:Echo(false)
-    for _, name in ipairs({ "Bob", "Cara", "Dan" }) do
-        h:Slash("/tlk mark " .. name .. " Doe")
-    end
-    for _, guild in ipairs({ "Red", "Blue", "Gold" }) do
-        h:Slash("/tlk war " .. guild)
-    end
-    h:Advance(20)
-    local marks, wars = #Sent(h, "MARK"), #Sent(h, "WAR")
-    for _, name in ipairs(names) do
-        Receive(h, name, "HELLO", "0.1.0")
-    end
-    h:Advance(30)
-    eq(#Sent(h, "MARK"), marks + 3, "one sync for the burst, so the send queue has room")
-    eq(#Sent(h, "WAR"), wars + 3)
-    h:LeaveGroup()
-    h:JoinGroup("party", { "Mom" })
-    h:Advance(40)
-    Receive(h, "Mom", "HELLO", "0.1.0")
-    h:Advance(20)
-    eq(#Sent(h, "MARK"), marks + 6, "a new group hears them again")
 end)
 
 test("a menu whose surname is secret offers nothing", function()

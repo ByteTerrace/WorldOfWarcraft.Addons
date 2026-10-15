@@ -16,6 +16,7 @@
 --   target  what your target is (FactsTarget.lua).
 --   kills   your honorable kills and killing blows (FactsKills.lua).
 --   death   your deaths and who dealt them (FactsDeath.lua).
+--   restriction  which addon restrictions are in force (FactsRestriction.lua).
 
 local ByteTerrace = ByteTerrace
 local InCombatLockdown, issecretvalue = InCombatLockdown, issecretvalue

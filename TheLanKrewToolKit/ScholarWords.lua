@@ -31,7 +31,7 @@ ns.ScholarWords = {
             { "reading.vocab", "reading.blank", "reading.story" },
         },
     },
-    -- { first mention, later mentions }
+    -- Each hero is { first mention, later mentions }.
     heroes = {
         { "Pip the gnome", "Pip" }, { "Brom the dwarf", "Brom" }, { "Mira the night elf", "Mira" },
         { "Tavi the tauren", "Tavi" }, { "Zix the goblin", "Zix" }, { "Elly the paladin", "Elly" },
@@ -41,7 +41,7 @@ ns.ScholarWords = {
         "Goldshire", "Stormwind", "Ironforge", "Orgrimmar", "Thunder Bluff", "Darnassus", "the Barrens",
         "Elwynn Forest", "Westfall", "Booty Bay", "Loch Modan", "Mulgore", "Durotar", "Teldrassil",
     },
-    -- { one, many }
+    -- Each item is { one, many }.
     items = {
         adventure = {
             { "potion", "potions" }, { "arrow", "arrows" }, { "candle", "candles" }, { "scroll", "scrolls" },
@@ -62,10 +62,10 @@ ns.ScholarWords = {
         PALADIN = { "hammer", "hammers" }, PRIEST = { "bandage", "bandages" }, ROGUE = { "lockpick", "lockpicks" },
         SHAMAN = { "totem", "totems" }, WARLOCK = { "candle", "candles" }, WARRIOR = { "shield", "shields" },
     },
-    -- Counting rows: { symbol, one, many }
+    -- Each counting row is { symbol, one, many }.
     countables = { { "*", "star", "stars" }, { "o", "apple", "apples" }, { "@", "fish", "fish" } },
     gear = { "sword", "shield", "staff", "bow", "helmet", "cloak", "pair of boots", "wand" },
-    -- Ratio pairs: { first, second, sentence }
+    -- Each ratio pair is { first, second, sentence }.
     ratios = {
         { { "fish", "fish" }, { "clam", "clams" }, "Murloc soup uses {X} for every {Y}." },
         { { "apple", "apples" }, { "carrot", "carrots" }, "A horse treat uses {X} for every {Y}." },
@@ -581,7 +581,7 @@ ns.ScholarWords = {
         { "r", "rat", "red", "ring", "rug", "rock" }, { "s", "sun", "sock", "seal", "sand", "six" },
         { "t", "top", "ten", "tent", "tiger", "toe" }, { "w", "wolf", "web", "wing", "water", "wagon" },
     },
-    -- Sight words: { word, sentence, three misspellings that aren't real words }
+    -- Each sight word is { word, sentence, three misspellings that aren't real words }.
     sight = {
         { t = 1, "the", "Look at ___ big dragon!", "teh", "hte", "tha" },
         { t = 1, "you", "Thank ___, Owl Sage!", "yuo", "yoo", "yuu" },
@@ -621,7 +621,7 @@ ns.ScholarWords = {
 
     -- Reading banks for grades 2 and 3.
 
-    -- { WORD, clue }
+    -- Each entry is { WORD, clue }.
     unscramble = {
         { t = 1, "OWL", "A wise bird that says hoot." }, { t = 1, "MAP", "It shows you the way." },
         { t = 1, "WOLF", "It howls at the moon." }, { t = 1, "GOLD", "Shiny yellow coins." },
@@ -648,7 +648,7 @@ ns.ScholarWords = {
         { t = 2, "rich", "wealthy", "poor" }, { t = 2, "brave", "bold", "afraid" }, { t = 2, "bright", "shiny", "dark" },
         { t = 2, "wet", "damp", "dry" }, { t = 2, "fix", "repair", "break" }, { t = 2, "true", "correct", "false" },
     },
-    -- { word, sentence, three misspellings }
+    -- Each entry is { word, sentence, three misspellings }.
     spelling = {
         { t = 1, "because", "The gnome was late ___ he overslept.", "becuz", "becawse", "beacuse" },
         { t = 1, "people", "Many ___ came to the fair.", "peeple", "pepole", "peopel" },
@@ -679,7 +679,7 @@ ns.ScholarWords = {
 
     -- Reading banks for grades 4 to 6.
 
-    -- { word, sentence, meaning, three wrong meanings }
+    -- Each entry is { word, sentence, meaning, three wrong meanings }.
     vocab = {
         { t = 1, "brave", "Even though the cave was dark, the brave young paladin walked right in.", "not afraid to face danger", "very sleepy", "easily lost", "always hungry" },
         { t = 1, "ancient", "The ancient tree in Ashenvale had been growing for thousands of years.", "very, very old", "brand new", "very tiny", "painted blue" },
@@ -707,7 +707,7 @@ ns.ScholarWords = {
         { t = 3, "sturdy", "The dwarves built a sturdy bridge that could hold a whole army.", "strong and solid", "weak and wobbly", "shiny", "tiny" },
         { t = 3, "serene", "The lake was serene at dawn, with no wind and no waves.", "calm and peaceful", "stormy", "crowded", "freezing" },
     },
-    -- { sentence with ___, answer, three words that don't fit }
+    -- Each entry is { sentence with ___, answer, three words that don't fit }.
     blanks = {
         { t = 1, "The mage lit a ___ so everyone could see inside the dark cave.", "torch", "pillow", "puddle", "sandwich" },
         { t = 1, "Murlocs live near the ___ and love to splash in the waves.", "sea", "desert", "volcano", "library" },

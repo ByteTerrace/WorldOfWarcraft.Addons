@@ -209,7 +209,7 @@ local function Settle(self, list, stamp)
 
                     if (watcher.stamp ~= stamp) and Due(watcher, id, value) then
                         watcher.stamp = stamp
-                        -- running, it reads every row as it stands
+                        -- When it runs, it reads every row as it stands, so it needs no baseline.
                         watcher.baseline = nil
                         count = (count + 1)
                         scheduled[count] = watcher
@@ -512,29 +512,29 @@ function ByteTerrace.NewState(addon)
     return setmetatable({
         Counts = { publishes = 0, watchers = 0 },
         m_addon = addon,
-        -- watchers holding per-row baselines until the batch publishes
+        -- Watchers holding per-row baselines until the batch publishes.
         m_baselined = {},
         m_batchDepth = 0,
         m_declared = {},
-        -- rules waiting for their batch's publish to take a first verdict
+        -- Rules waiting for their batch's publish to take a first verdict.
         m_deferred = {},
-        -- [id] = true while in m_touchedList
+        -- Maps each id in m_touchedList to true.
         m_isTouched = {},
-        -- [id] = value when first touched
+        -- Maps each touched id to its value when first touched.
         m_original = {},
-        -- publishes in progress: each holds one batch level EndBatch can't close
+        -- Publishes in progress: each holds one batch level EndBatch can't close.
         m_publishing = 0,
-        -- reused: watchers to run this round
+        -- The watchers to run this round, in a table reused every round.
         m_scheduled = {},
         m_seq = 0,
-        -- the other half of that double buffer
+        -- The other half of m_deferred's double buffer.
         m_spareDeferred = {},
-        -- the other half of the double buffer
+        -- The other half of m_touchedList's double buffer.
         m_spareList = {},
         m_stamp = 0,
-        -- ids first touched this round, in order
+        -- The ids first touched this round, in order.
         m_touchedList = {},
-        -- [id] = array of watchers reading that row
+        -- Maps each row id to the array of watchers reading that row.
         m_watchersByRow = {},
         Order = {},
     }, State)
@@ -590,7 +590,7 @@ function State:Compile(stores, modules)
             local id = ids[key]
             local claimed = modules[ModuleOf(key) or ""]
 
-            -- every declared row's module is claimed, so no row names this key
+            -- Every declared row's module is claimed, so no row names a key of an unclaimed module.
             if not claimed then
                 unclaimed[#unclaimed + 1] = tostring(key)
             elseif id and specs[id].records then
@@ -744,7 +744,7 @@ function State:Set(ref, value, level)
     local current = self.Values[id]
 
     if (current == value) and (current ~= nil) then
-        -- already validated
+        -- An unchanged value was validated when it was set.
         return
     end
 

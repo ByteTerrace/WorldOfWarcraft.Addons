@@ -861,7 +861,7 @@ function Probes.Record(probe)
         return nil, problem
     end
 
-    -- absent for version 1, like the records made before versions
+    -- Nil for a version 1 probe, so its records match the ones that carry no version.
     local version = probe.version
 
     return { build = Probes.Build(), contexts = { [context] = true }, result = result, version = version }, nil

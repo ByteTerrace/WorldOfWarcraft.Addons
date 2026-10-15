@@ -522,7 +522,7 @@ function AddOn:Start()
     end
 
     for _, module in ipairs(self.m_moduleOrder) do
-        -- one broken module can't stop the rest, or the batch
+        -- SafeCall keeps one broken module from stopping the rest, or the batch.
         SafeCall(module.Start, module)
     end
 
@@ -578,7 +578,7 @@ function ByteTerrace.NewAddOn(options)
         m_moduleOrder = {},
         m_savedVariable = options.savedVariable,
         m_savedVariablePerCharacter = options.savedVariablePerCharacter,
-        -- true once Start begins: nothing declares after it
+        -- True once Start begins; nothing declares after that.
         m_sealed = false,
         Modules = {},
         Name = options.name,

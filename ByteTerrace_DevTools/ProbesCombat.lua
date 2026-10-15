@@ -397,7 +397,7 @@ Probes.Define({
                 sourceName = ((killingBlow and Text(killingBlow.sourceName)) or nil),
             }
         end,
-        -- versions 1 and 2 kept one field list for every event, which depended on how you died
+        -- Records of versions 1 and 2 keep one field list for every event, which depends on how you died.
         version = 3,
     },
     {
@@ -433,7 +433,8 @@ Probes.Define({
 
             if blow and not issecretvalue(recapID) and (type(recapID) == "number") and (recapID ~= 0) then
                 local byID = First(C_DeathRecap.GetRecapEvents(recapID))
-                -- false when a plain field differs, else "secret" when one couldn't be compared.
+                -- True when the recaps agree, false when a plain field differs or there's no recap by ID, else "secret"
+                -- when a field couldn't be compared.
                 local same = (byID ~= nil)
 
                 for _, field in ipairs((byID and { "timestamp", "sourceName", "amount" }) or {}) do

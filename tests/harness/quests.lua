@@ -159,7 +159,7 @@ local function AddToLog(h, quest)
     h:Fire("QUEST_LOG_UPDATE")
 end
 
--- format with its positional conversions ("%2$d/%3$d %1$s") filled from the arguments.
+-- The format string with its positional conversions ("%2$d/%3$d %1$s") filled from the arguments.
 local function FormatPositional(format, ...)
     local args, position = { ... }, 0
 
@@ -184,7 +184,7 @@ local function Objectives(h, quest)
 
     for i, objective in ipairs(quest.objectives) do
         local format = rawget(h.env, ObjectiveFormats[objective.type] or "QUEST_ITEMS_NEEDED")
-        -- an unloaded name is empty
+        -- An uncached objective's name is empty.
         local name = ((objective.uncached and "") or objective.text)
 
         list[i] = {

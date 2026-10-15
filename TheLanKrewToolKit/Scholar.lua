@@ -41,7 +41,7 @@ local ActionKeys = { hint = "H", skip = "Esc", speak = "R" }
 local ActionSources = { hint = "gamepad.leftShoulder", skip = "gamepad.back", speak = "gamepad.rightShoulder" }
 local AnswerSources = { "gamepad.south", "gamepad.east", "gamepad.west", "gamepad.north" }
 local FinishDelay = 1.8
--- seconds after losing control to look for a flight path (UnitOnTaxi)
+-- How long, in seconds, after losing control to look for a flight path (UnitOnTaxi).
 local FlightCheck = 1
 -- The windows Blizzard's interaction manager opens that a riddle waits for (by Enum.PlayerInteractionType name); the
 -- quest dialog and gossip have their own events.
@@ -50,15 +50,15 @@ local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NU
 local LockedBy = "Scholar.locked"
 local MaxPinMisses = 3
 local PinWaitSeconds = 60
--- quest riddles in a row before math or reading takes a turn
+-- How many quest riddles come in a row before math or reading takes a turn.
 local QuestShare = 2
 local Ranks = { { 0, "Apprentice" }, { 10, "Journeyman" }, { 25, "Adept" }, { 50, "Sage" }, { 100, "Archmage" } }
 -- The open quest book scrolls with the arrow keys and the D-pad; held, the D-pad keeps going.
 local ScrollKeys = { DOWN = 1, UP = -1 }
--- seconds between notches while a D-pad direction is held
+-- How long, in seconds, between notches while a D-pad direction is held.
 local ScrollRepeat = 0.12
 local ScrollSources = { scrollDown = "gamepad.dpadDown", scrollUp = "gamepad.dpadUp" }
--- seconds after a turn-in, once QuestBook has noted it and the panel closed
+-- How long, in seconds, after a turn-in the onTurnIn moment waits, so QuestBook has noted it and the panel closed.
 local TurnInDelay = 1
 
 for _, name in ipairs({ "Merchant", "MailInfo", "Banker", "CharacterBanker", "AccountBanker", "GuildBanker",
@@ -74,7 +74,7 @@ local DialogEvents = {
     QUEST_PROGRESS = { "quest", true },
 }
 
--- its map also closes with TAXIMAP_CLOSED
+-- The taxi node's map also closes with TAXIMAP_CLOSED.
 local TaxiNode = Enum.PlayerInteractionType.TaxiNode
 
 local byte, floor, issecretvalue, max, min, random, wipe = string.byte, math.floor, issecretvalue, math.max, math.min, math.random, wipe
@@ -99,15 +99,15 @@ for _, grade in ipairs(Puzzles.Grades) do
     GradeLabels[id] = grade.label
 end
 
--- the play clock runs: no riddle is due, you're not AFK, and a subject is on
+-- Whether the play clock runs, which it does while no riddle is due, you're not AFK, and a subject is on.
 local Counting = false
 -- The riddle on screen (or waiting out a fight) until it's solved or skipped, how many tries missed, and which answers
 -- they picked ([i] = true), so a riddle that comes back keeps them.
 local Current, Missed, Wrongs = nil, {}, 0
 local LastSubject
--- the module, declared at the end
+-- The module is assigned at the end of the file.
 local Scholar
--- GetTime() the running stretch of play started at
+-- The GetTime() the running stretch of play started at.
 local SegmentStart
 -- Blizzard's windows open now that a riddle waits for: "quest", "gossip" and interaction types.
 local Windows = {}
@@ -328,7 +328,7 @@ local function Choose(i)
         return
     end
 
-    -- level is the difficulty math and reading are written at: a quest riddle never changes it.
+    -- The level row is the difficulty math and reading are written at: a quest riddle never changes it.
     local adapts = (Current.questKey == nil)
 
     if i == Current.answer then
@@ -339,7 +339,7 @@ local function Choose(i)
         Scholar:Set("elapsed", 0)
 
         if Current.questKey then
-            -- answered: a /reload in the celebration doesn't ask it again
+            -- Marked answered, so a /reload in the celebration doesn't ask it again.
             QuestBook.Asked(Current.questKey, Current.kind)
         end
 
@@ -630,7 +630,7 @@ Scholar = Addon:Module("Scholar", {
     lockedBy = LockedBy,
     OnDisable = function(module)
         if module:Get("solved") then
-            -- its celebration timer stops with the module; the rank card still shows
+            -- The celebration's timer stops with the module, but the rank card still shows.
             Finish(true)
         end
 
@@ -656,7 +656,7 @@ Scholar = Addon:Module("Scholar", {
                 module:Set("locked", module:Get("pin") ~= 0)
             end
 
-            -- a loading screen closes them all
+            -- A loading screen closes them all.
             wipe(Windows)
             module:Set("window", false)
         end)
@@ -751,7 +751,7 @@ Scholar = Addon:Module("Scholar", {
                     Open()
                 elseif not HasSubject() then
                     module:Set("pending", false)
-                -- else it waits for a quest to ask about
+                -- Otherwise the riddle waits for a quest to ask about.
                 end
             end,
             initial = true, reads = { pending, solved, combat, window },

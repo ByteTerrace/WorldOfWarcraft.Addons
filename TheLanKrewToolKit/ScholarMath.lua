@@ -197,7 +197,7 @@ Generators["math.count"] = function(state)
         v = n }
 
     local puzzle = Numeric(state, "math.count", "count", vars, { (n + 1), (n - 1), (n + 2), (n - 2) }, { hi = 12 })
-    -- row: the prompt's text version of the picture
+    -- vars.row is the prompt's text version of the picture.
     puzzle.picture = { item = thing[2], kind = "count", n = n, row = vars.row }
 
     return puzzle

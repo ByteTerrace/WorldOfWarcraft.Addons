@@ -52,8 +52,8 @@ local function Bump(self)
     state:Set(id, state.Values[id] + 1)
 end
 
--- Whether keep protects key. keep is the feature's code, so an error in it reaches the error handler and the key isn't
--- protected: a broken keep can't stop the addon loading.
+-- Whether keep protects key. The keep function is the feature's code, so an error in it reaches the error handler and
+-- leaves the key unprotected: a broken keep can't stop the addon loading.
 local function Kept(keep, key)
     local ok, kept = SafeCall(keep, key)
 
@@ -94,7 +94,7 @@ function ByteTerrace.NewRecords(addon, name, spec)
         elseif fields[fieldName] then
             problems[#problems + 1] = (name .. ": duplicate field " .. fieldName)
         else
-            -- fields have no settings control of their own
+            -- Fields have no settings control of their own.
             own.persist, own.label = false, nil
             ByteTerrace.State.Prepare(name .. "." .. fieldName, own, problems)
             fields[fieldName] = own
@@ -289,7 +289,7 @@ function Records:Load(stores)
                     record[field] = nil
                     reset = (reset + 1)
                 elseif value == spec.default then
-                    -- a changed default: store only what differs
+                    -- A value equal to the default isn't stored: a record keeps only what differs from it.
                     record[field] = nil
                 end
             end

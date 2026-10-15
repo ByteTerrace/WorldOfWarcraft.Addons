@@ -19,7 +19,7 @@ local issecretvalue, type, UnitGUID = issecretvalue, type, UnitGUID
 -- A Lua pattern from a client format string ("%s dies (Honorable Kill: %s). ..."): each %s is a capture, so the first
 -- capture is the victim's name. Both formats are GlobalStrings the client always defines (tools/api/forever.json).
 local function Pattern(formatString)
-    -- "%1$s" (another locale's order) is "%s"
+    -- A positional "%1$s" (another locale's order) becomes "%s".
     local pattern = formatString:gsub("%%%d+%$([sd])", "%%%1")
 
     pattern = pattern:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
@@ -72,7 +72,7 @@ ByteTerrace.Facts.kills = {
             end
 
             if (attackerGUID ~= me) and ((pet == nil) or (attackerGUID ~= pet)) then
-                -- a groupmate's blow
+                -- The blow is a groupmate's, not yours or your pet's.
                 return
             end
 

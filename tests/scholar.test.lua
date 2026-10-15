@@ -485,7 +485,7 @@ test("loads standalone and defines ns.Puzzles, ns.ScholarWords and no globals", 
     end
 
     table.sort(keys)
-    eq(table.concat(keys, ","), "Generate,Grades,Kit", "exactly the contract's fields")
+    eq(table.concat(keys, ","), "Generate,Grades,Kit,MaxChoice", "exactly the contract's fields")
 end)
 
 test("Grades runs from Kindergarten to Grade 6 in order", function()
@@ -506,7 +506,7 @@ test("randomness comes only from options.random", function()
     local addon = __addons.TheLanKrewToolKit
 
     for i, file in ipairs(addon.files) do
-        -- it needs the whole addon to load, but is just as pure
+        -- ScholarQuests.lua needs the whole addon to load, so it isn't in Files, but it is just as pure.
         if file == "ScholarQuests.lua" then
             sources[#sources + 1] = addon.sources[i]
         end

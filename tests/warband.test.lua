@@ -150,7 +150,7 @@ test("a Krew unmark lifts only a mark, and a Krew peace ends the war", function(
     h:Slash("/tlk war Knights of Light")
     local guild = ("Knights of Light-" .. h.env.GetNormalizedRealmName())
 
-    -- no realm: not a guild key
+    -- A name with no realm isn't a guild key.
     Receive(h, "Mom", "PEACE", "Knights of Light")
     truthy(wars:Has(guild))
     Receive(h, "Mom", "PEACE", guild)
@@ -163,7 +163,7 @@ test("dying to the enemy you targeted asks for a grudge; a click holds it with t
     h:SetTarget(Enemy())
     h:Die()
     eq(Card(h), nil, "waits for the death recap")
-    -- none came: ask about the suspect
+    -- No recap came, so the card asks about the suspect.
     h:Advance(3)
     local text, card = Card(h)
 
@@ -281,7 +281,7 @@ test("bad messages are ignored: foreign keys, escape codes, junk numbers", funct
     local h, addon = Grouped()
     local key = Key(h, "Bob")
 
-    -- a key never carries a realm
+    -- A key never carries a realm.
     Receive(h, "Mom", "MARK", key .. "-Realm", "ROGUE", "60", "Alliance")
     Receive(h, "Mom", "MARK", "Bob|Hlink|h Doe", "ROGUE", "60", "Alliance")
     Receive(h, "Mom", "GRUDGE", key, "rogue|T", "banana", "Martians", "1")
@@ -470,7 +470,7 @@ test("switched off, Warband listens to nothing", function()
     local _, addon = Load()
 
     addon.State:Set("Warband.enabled", false)
-    -- kill streaks read honor kills too
+    -- Kill streaks read honor kills too, so they're switched off as well.
     addon.State:Set("Streaks.enabled", false)
 
     for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "UPDATE_MOUSEOVER_UNIT", "CHAT_MSG_COMBAT_HONOR_GAIN" }) do
@@ -758,7 +758,7 @@ test("the tooltip names a champion and who honored them, and a guild at war", fu
 
     h:Slash("/tlk glory Cara Doe")
     h:Slash("/tlk war Knights of Light")
-    -- a sighting a minute after the record began counts
+    -- A sighting a minute after the record began counts.
     h:Advance(60)
     local cara = h:AddNamePlate(Enemy("Cara", { canAttack = false, faction = "Horde", isEnemy = false }))
     local knight = h:AddNamePlate(Enemy("Bob", { guild = "Knights of Light" }))

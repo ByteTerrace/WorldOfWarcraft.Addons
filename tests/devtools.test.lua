@@ -147,7 +147,7 @@ test("common recap fields exclude optional mitigation and require presence in ev
 
     eq(#h.ns.Probes.Diff(baseline, Record()), 0, "optional mitigation doesn't alter common shapes")
     events[2].amount = nil
-    -- the record grows across deaths: start this one afresh
+    -- The record grows across deaths, so this one starts afresh.
     Records(h)["deathRecap.events"] = nil
     local result = Record()
     local missing = 0
@@ -612,13 +612,13 @@ test("the meter's updates in the seconds after your death are kept by type, for 
     local h = Load()
     local types = h.env.Enum.DamageMeterType
 
-    -- no death yet: not kept
+    -- An update before any death isn't kept.
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageDone, 1)
     h:Fire("PLAYER_DEAD")
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.Deaths, 1)
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageTaken, 1)
     h:Advance(6)
-    -- too long after
+    -- An update more than AfterDeathSeconds after the death isn't kept.
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.HealingDone, 1)
     eq(h.ns.Probes.ByName["damageMeter.afterDeath"].run().types, "DamageTaken,Deaths")
 end)
@@ -784,7 +784,7 @@ test("combat.edges keeps another order as it came, adds it to a saved record, an
     h:Fire("PLAYER_REGEN_DISABLED")
     h:Fire("PLAYER_REGEN_ENABLED")
     h:Fire("ADDON_RESTRICTION_STATE_CHANGED", types.Combat, states.Inactive)
-    -- another restriction's change isn't a step
+    -- Another restriction's change isn't a step.
     h:Fire("ADDON_RESTRICTION_STATE_CHANGED", types.Map, states.Inactive)
 
     local leave = ("PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false] > "
@@ -928,7 +928,7 @@ test("leaving combat in a PvP match keeps the meter's totals' shapes then and la
     eq(probe.run().leftCombat["arena/PvPMatch"].localTotalAmount, "none,number", "no entry of yours without damage dealt")
     h:EnterCombat()
     h:MeterAdd({ amounts = { DamageDone = 50 }, unit = "player" })
-    -- as if PLAYER_REGEN_ENABLED came while the Combat restriction held
+    -- The note is taken as if PLAYER_REGEN_ENABLED came while the Combat restriction still held.
     Probes.NotePvPLeftCombat()
     local read = probe.run().leftCombat["arena/Combat,PvPMatch"]
 

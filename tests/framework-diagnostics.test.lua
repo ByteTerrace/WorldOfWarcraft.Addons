@@ -186,7 +186,7 @@ test("counting adds no allocation to a dispatch: it costs exactly its handlers' 
 
     local function Empty() end
 
-    -- the event's dispatch count gets its key
+    -- The first dispatch gives the event its count key, so the measured dispatches add none.
     events:Dispatch("PLAYER_TARGET_CHANGED")
     eq(rawget(events, "Dispatch"), nil, "profiling is off: the class's counting Dispatch runs")
     local dispatch = BytesPerCall(function() events:Dispatch("PLAYER_TARGET_CHANGED") end, 200)
@@ -245,7 +245,7 @@ test("the profiling dispatch filters units and isolates errors like the counting
     h:Fire("UNIT_HEALTH", "player")
     eq(table.concat(calls, " "), "any:target player:player any:player")
     eq(module.Work.events, 5, "the filtered handler ran once, the others twice")
-    -- no handler: the client's late delivery of a dropped event
+    -- With no handler, as when the client delivers a dropped event late, nothing is counted.
     addon.Events:Dispatch("PLAYER_TARGET_CHANGED")
     eq(addon.Events.Counts.PLAYER_TARGET_CHANGED, nil)
 end)

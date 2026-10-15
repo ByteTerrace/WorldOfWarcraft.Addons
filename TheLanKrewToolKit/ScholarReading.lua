@@ -69,7 +69,7 @@ Generators["reading.sound"] = function(state)
     return Finish(state, "reading.sound", Words.reading.sound, vars, words[2], OneFromEach(state, Words.sounds, group, 2))
 end
 
--- entry = { word, sentence, three misspellings }
+-- The entry is { word, sentence, three misspellings }.
 local function Spelling(state, kind, key, entry)
     local vars = { sentence = entry[2], spelled = concat(Letters(entry[1]), "-"), word = entry[1] }
 
@@ -173,7 +173,7 @@ Generators["reading.unscramble"] = function(state)
     local vars = { clue = entry[2], letters = concat(letters, " "), word = word }
     local puzzle = Finish(state, "reading.unscramble", Words.reading[key], vars, word, wrongs)
 
-    -- ScholarView draws them as letter tiles
+    -- ScholarView draws them as letter tiles.
     puzzle.tiles = letters
 
     return puzzle

@@ -53,7 +53,7 @@ end)
 
 test("a melee killing blow reads as a melee hit, and the suspect fills in what the recap can't", function()
     local h, addon = Grouped()
-    -- no race: the recap can't tell the faction
+    -- Bob has no race, so the recap can't tell his faction; the suspect's faction fills it in.
     local bob = Enemy("Bob")
 
     h:SetTarget(bob)
@@ -93,7 +93,7 @@ test("a recap that lands after the death still names the killer, with the suspec
     truthy(addon.Events.Frame:IsEventRegistered("DAMAGE_METER_COMBAT_SESSION_UPDATED"), "waiting for the meter")
     h:SetTarget(nil)
     h:MeterAdd(KilledBy(bob))
-    -- cards wait out combat
+    -- Cards wait out combat, so this one shows on leaving it.
     h:LeaveCombat()
     truthy(Card(h):find("Slain by Bob Doe\n", 1, true), Card(h))
     eq(People(addon):Field(Key(h, "Bob"), "level"), 60)
@@ -151,16 +151,16 @@ test("a recap that comes too late is set aside, not given to your next death", f
 
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
-    -- given up: unknown
+    -- After the wait the death is given up on, with the killer unknown.
     h:Advance(3)
     eq(addon.State:Get("death.attributed"), 1)
     eq(addon.State:Get("death.killer"), "")
-    -- the first death's recap, late
+    -- The first death's recap arrives late.
     h:MeterAdd(KilledBy(Enemy("Bob")))
     h:LeaveCombat()
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0, "a late recap counts for no one")
     falsy(addon.Events.Frame:IsEventRegistered("DAMAGE_METER_COMBAT_SESSION_UPDATED"))
-    -- a fall, out of combat: no new meter session, no new recap
+    -- A fall out of combat brings no new meter session and no new recap.
     h:Fire("PLAYER_DEAD")
     h:Advance(3)
     eq(addon.State:Get("death.attributed"), 2)
@@ -173,20 +173,20 @@ test("a death inside the late window takes its own recap, not the death before's
 
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
-    -- the first death gives up: unknown
+    -- The first death is given up on, with the killer unknown.
     h:Advance(3)
     h:Advance(7)
-    -- a second death, still in the first one's late window
+    -- A second death comes while still in the first one's late window.
     h:Fire("PLAYER_DEAD")
-    -- the first death's recap, late
+    -- The first death's recap arrives late.
     h:MeterAdd(KilledBy(Enemy("Bob")))
-    -- the second death's
+    -- Then the second death's recap arrives.
     h:MeterAdd(KilledBy(Enemy("Alice")))
     eq(addon.State:Get("death.attributed"), 2)
     eq(addon.State:Get("death.killer"), "Alice Doe")
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0, "the late recap counts for no one")
     h:LeaveCombat()
-    -- a fall, with no recap of its own
+    -- A fall has no recap of its own.
     h:Fire("PLAYER_DEAD")
     h:Advance(3)
     eq(addon.State:Get("death.attributed"), 3)

@@ -44,13 +44,13 @@ local ChatRestrictions = {
 }
 
 local GroupChannels = { INSTANCE_CHAT = true, PARTY = true, RAID = true }
--- GeneralError answers to one message before it is dropped
+-- How many GeneralError answers one message gets before it is dropped.
 local MaxErrors = 3
--- bytes: the client's limit for one addon message
+-- The client's limit, in bytes, for one addon message.
 local MaxMessage = 255
--- bytes: the client's limit for a prefix
+-- The client's limit, in bytes, for a prefix.
 local MaxPrefix = 16
--- seconds: the client regains one message a second per prefix
+-- Seconds between messages: the client regains one message a second per prefix.
 local MinInterval = 1
 local Separator = "\t"
 
@@ -179,7 +179,7 @@ local function Pump(self)
     end
 
     if not ok then
-        -- SafeCall reported the error
+        -- SafeCall already reported the error, so the entry is dropped without another report.
         remove(queue, 1)
     elseif result == results.GeneralError then
         entry.errors = (entry.errors + 1)
@@ -278,7 +278,7 @@ function Comms:Open()
         Report(("%s: message prefix %s can't be registered: %s"):format(self.m_module.Addon.Name, self.m_prefix, reason))
     end
 
-    -- nil while secret; looked up again then
+    -- Your name, nil while it's secret; each message looks it up again until it isn't.
     local me = Names.Mine()
     local module, prefix, listeners = self.m_module, self.m_prefix, self.m_listeners
 
@@ -336,7 +336,7 @@ function Comms:Open()
         end
     end
 
-    -- the CHAT_MSG_ADDON handle, while you're in a group
+    -- The CHAT_MSG_ADDON handle, held while you're in a group.
     local hearing
 
     local function FollowGroup()

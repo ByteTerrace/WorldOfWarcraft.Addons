@@ -47,50 +47,47 @@ local addonName, ns = ...
 -- outside PvP matches. Your honorable kills come from ByteTerrace_Core's kills fact, and your killers from its death
 -- fact (WarbandDeaths.lua).
 
--- seconds between alerts about the same person
+-- How long, in seconds, before the same person alerts again.
 local AlertCooldown = 90
--- seconds after an alert in which further alerts merge into one summary
+-- How long, in seconds, after an alert further alerts merge into one summary.
 local AlertWindow = 3
--- seconds a foe you targeted stays the prime suspect
+-- How long, in seconds, a foe you targeted stays the prime suspect.
 local FoeMemory = 30
--- seconds between alerts about the same guild at war
+-- How long, in seconds, before the same guild at war alerts again.
 local GuildAlertCooldown = 60
--- seconds between reports for the same subzone, yours or the Krew's
+-- How long, in seconds, before the same subzone is reported again, by you or the Krew.
 local IntelCooldown = 300
--- enemy players that make a gathering
+-- How many enemy players make a gathering.
 local IntelThreshold = 5
--- seconds of nameplates counted for a gathering
+-- How long, in seconds, a nameplate counts toward a gathering.
 local IntelWindow = 60
--- seconds in which kills of the same person count once
+-- How long, in seconds, kills of the same person count once.
 local KillDedupe = 15
 local Labels = { glory = "Champion", grudge = "Grudge", mark = "Marked for death", war = "At war" }
 local LedgerLimit = 300
 local PeopleLimit = 1000
--- strangers' records dropped at once when the rivalry records are full
+-- How many strangers' records one trim drops when the rivalry records are full.
 local PeopleTrim = 100
--- seconds between your rally calls
+-- How long, in seconds, before you can call a rally again.
 local RallyCooldown = 15
--- seconds between rivalry updates for the same person
+-- How long, in seconds, before the same person's rivalry record updates again.
 local SeenWriteInterval = 60
--- seconds between Krew reports about the same person
+-- How long, in seconds, before the Krew hears about the same person again.
 local SightCooldown = 120
 local WarsLimit = 50
 
+-- Each standing's raid-target icon: a star for glory, a cross for grudge, a skull for mark and a square for war.
 local Icons = {
-    -- star
     glory = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1",
-    -- cross
     grudge = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_7",
-    -- skull
     mark = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_8",
-    -- square
     war = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_6",
 }
 
--- alert text
+-- Each standing's color code in alert text.
 local Colors = { glory = "|cff40c0ff", grudge = "|cffff8000", mark = "|cffff2020", war = "|cffff8000" }
 
--- each standing as an alert summary counts it: one, and more than one
+-- How an alert summary counts each standing: { one, more than one }.
 local Counted = {
     glory = { "champion", "champions" },
     grudge = { "grudge", "grudges" },
@@ -114,29 +111,29 @@ local GuildNamed, PlayerNamed, Typed = Warband.GuildNamed, Warband.PlayerNamed, 
 local Here, Position = Warband.Here, Warband.Position
 local Hostile, Identify, KeyOf, MyKey = Warband.Hostile, Warband.Identify, Warband.KeyOf, Warband.MyKey
 
--- pending end of the alert window: while it's set, alerts are held for a summary
+-- The pending end of the alert window: while it's set, alerts are held for a summary.
 local AlertTimer
--- [key] = GetTime() of a hostile player's nameplate, in the place you're in
+-- Maps each key to the GetTime() of a hostile player's nameplate in the place you're in.
 local Gathering = {}
--- [key] = standing of each alert held in this window
+-- Maps each key to the standing of its alert held in this window.
 local Held = {}
--- [key] = true for a held champion in a fight
+-- Maps each held champion in a fight to true.
 local HeldFighting = {}
--- [key] = GetTime() of the last alert, Krew report, counted kill
+-- Each maps a key to the GetTime() of its last alert, counted kill and Krew report, in that order.
 local LastAlert, LastKill, LastShared = {}, {}, {}
--- the info of the hostile player you last targeted, plus its time
+-- The info of the hostile player you last targeted, plus its time.
 local LastFoe
--- [guild key] = GetTime()
+-- Maps each guild key to the GetTime() of its last alert.
 local LastGuildAlert = {}
--- [zone .. "/" .. subZone] = GetTime() of the last report, yours or the Krew's
+-- Maps each zone .. "/" .. subZone to the GetTime() of its last report, yours or the Krew's.
 local LastIntel = {}
--- GetTime() of your last rally call
+-- The GetTime() of your last rally call.
 local LastRally
--- the last player unit Seen read, and the GetTime() it was read at
+-- The last player unit Seen read, and the GetTime() it was read at.
 local LastSeen, LastSeenAt
--- the module's collections, bound when it's declared
+-- The module's collections, bound when it's declared.
 local Ledger, Wars, People
--- Here(), read once per place: zone changes and loading screens forget it
+-- Here(), read once per place: zone changes and loading screens forget it.
 local PlaceZone, PlaceSubZone
 local WarbandModule
 
@@ -250,7 +247,7 @@ local function HeldSummary()
     end
 
     sort(keys, ByStanding)
-    -- glory sorts last
+    -- Glory sorts last, so the summary plays a raid warning unless every held alert is a champion.
     local sound = (((Held[keys[1]] ~= "glory") and SOUNDKIT.RAID_WARNING) or nil)
     local segments, names, status = {}, nil, nil
 
@@ -445,7 +442,6 @@ local function CountKill(key)
     end
 
     LastKill[key] = now
-    -- room made in one trim
     Remember(key, nil, { kills = (People:Field(key, "kills") + 1), seen = GetServerTime() })
     local guild = People:Field(key, "guild")
 
@@ -704,7 +700,7 @@ local function Seen(unit, plate, suspect)
     local status = Status(key, info.guild)
 
     if not hostile and not status then
-        -- friendly strangers aren't rivals
+        -- Friendly strangers aren't rivals.
         return
     end
 
@@ -865,7 +861,7 @@ WarbandModule = Addon:Module("Warband", {
         Warband.DisableMenus()
         Warband.DisableMessages()
         LastFoe, LastSeen, PlaceZone, PlaceSubZone = nil, nil, nil, nil
-        -- the module's timers stop with it
+        -- The module's timers stop with it, so only the handles are forgotten.
         AlertTimer = nil
         wipe(Gathering)
         wipe(Held)
@@ -911,7 +907,7 @@ WarbandModule = Addon:Module("Warband", {
     records = {
         { fields = {
                 { default = "grudge", kind = "string", name = "kind", values = { "grudge", "mark", "glory" } },
-                -- who marked or honored them
+                -- The Krew member who marked or honored them.
                 { default = "", kind = "string", name = "by" },
                 { default = 0, kind = "number", min = 0, name = "since" },
             },
@@ -930,9 +926,9 @@ WarbandModule = Addon:Module("Warband", {
                 { default = 0, kind = "number", max = 200, min = 0, name = "level", step = 1 },
                 { default = "", kind = "string", name = "faction", values = { "", "Alliance", "Horde" } },
                 { default = "", kind = "string", name = "guild" },
-                -- times the Krew killed them
+                -- How many times the Krew killed them.
                 { default = 0, kind = "number", min = 0, name = "kills", step = 1 },
-                -- times they killed the Krew
+                -- How many times they killed the Krew.
                 { default = 0, kind = "number", min = 0, name = "deaths", step = 1 },
                 { default = 0, kind = "number", min = 0, name = "sightings", step = 1 },
                 { default = 0, kind = "number", min = 0, name = "seen" },

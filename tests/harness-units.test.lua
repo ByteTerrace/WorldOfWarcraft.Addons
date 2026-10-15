@@ -52,7 +52,7 @@ test("hostility is relative to the player: canAttack, and isEnemy defaulting to 
     truthy(env.UnitCanAttack("target", "player"))
     truthy(env.UnitIsEnemy("player", "target"), "isEnemy follows canAttack")
     falsy(env.UnitIsEnemy("player", "player"))
-    -- an enemy you can't attack (sanctuary)
+    -- In a sanctuary an enemy can't be attacked, but is still an enemy.
     h:SetTarget(EnemyPlayer({ canAttack = false, isEnemy = true }))
     falsy(env.UnitCanAttack("player", "target"))
     truthy(env.UnitIsEnemy("player", "target"))
@@ -121,7 +121,7 @@ test("a secret token passed where secrets are allowed names the unit, and the an
     h:SetTarget({ name = "Hogger" })
     h:SetRestriction("Encounter", true)
     local token = Secret("target")
-    -- UnitName allows secret arguments
+    -- UnitName allows secret arguments.
     local name = h.env.UnitName(token)
 
     truthy(h.env.issecretvalue(name))
@@ -266,7 +266,7 @@ test("death: PLAYER_DEAD in lockdown, then combat ends; release and revive fire 
     falsy(env.UnitIsDeadOrGhost("player"))
     eq(env.UnitHealth("player"), 100)
     h:Die()
-    -- resurrected before releasing
+    -- This time the player is resurrected before releasing.
     h:Revive()
     eq(table.concat(seen, ","), "PLAYER_DEAD,PLAYER_REGEN_ENABLED,PLAYER_ALIVE,PLAYER_UNGHOST,PLAYER_DEAD,PLAYER_ALIVE")
     throws(function() h:ReleaseSpirit() end, "isn't dead")
@@ -275,7 +275,6 @@ end)
 test("addon code can't set raid icons: SetRaidTarget is forbidden, as the client refused it", function()
     local h = Harness.New()
 
-    -- the call under test
     h:ExpectBlocked(1)
     local seen = Watch(h, "ADDON_ACTION_FORBIDDEN", "RAID_TARGET_UPDATE")
 

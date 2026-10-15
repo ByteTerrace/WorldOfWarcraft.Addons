@@ -45,7 +45,7 @@
 --   h:LoadAddon("TheLanKrewToolKit")
 --   h:EnterCombat()
 
--- set by tools/lib/harness.mjs: { [name] = { files, sources, metadata, ... } }
+-- Each addon by name, { files, sources, metadata, ... }, as tools/lib/harness.mjs sets it.
 local Addons = __addons
 
 local function Positions(list)
@@ -214,12 +214,12 @@ local function FillUnit(unit)
     end
 
     if unit.isPlayer and (unit.surname == nil) then
-        -- [E] every Forever character has a surname
+        -- [E] Every Forever character has a surname.
         unit.surname = Harness.DEFAULT_SURNAME
     end
 
     if unit.playerControlled == nil then
-        -- players (and their pets) are player-controlled
+        -- Players are player-controlled; a pet, which is too, needs its test to set playerControlled.
         unit.playerControlled = unit.isPlayer
     end
 
@@ -291,76 +291,71 @@ function Harness.New(player)
     player = (player or {})
     local h = setmetatable({}, Harness)
 
-    -- GetTime()
+    -- GetTime()'s answer, in seconds.
     h.time = 0
-    -- ms the current frame's work has taken: debugprofilestop() adds it to h.time
+    -- The milliseconds the current frame's work has taken, which debugprofilestop() adds to h.time.
     h.workTime = 0
-    -- GetServerTime(), time()
+    -- GetServerTime() and time()'s answer.
     h.serverTime = Harness.SERVER_EPOCH
-    -- the player is in combat (mirrors restrictions.Combat)
+    -- Whether the player is in combat; it mirrors restrictions.Combat.
     h.inCombat = false
-    -- InCombatLockdown()
     h.lockdown = false
-    -- [Enum.AddOnRestrictionType name] = true while active
+    -- Each active restriction is true under its Enum.AddOnRestrictionType name.
     h.restrictions = {}
 
     for _, name in ipairs(Harness.RESTRICTIONS) do
         h.restrictions[name] = false
     end
 
-    -- > 0 while ADDON_RESTRICTION_STATE_CHANGED dispatches
+    -- Above 0 while ADDON_RESTRICTION_STATE_CHANGED dispatches.
     h.restrictionDispatch = 0
-    -- API names blocked (ADDON_ACTION_BLOCKED) or forbidden (_FORBIDDEN)
+    -- The names of the APIs blocked (ADDON_ACTION_BLOCKED) or forbidden (_FORBIDDEN).
     h.blocked = {}
-    -- API names refused with ADDON_ACTION_FORBIDDEN
+    -- The names of the APIs refused with ADDON_ACTION_FORBIDDEN.
     h.forbidden = {}
-    -- frames (event and input receivers), in creation order
+    -- The frames (event and input receivers), in creation order.
     h.frames = {}
-    -- every widget: frames, regions, animations
+    -- Every widget: frames, regions and animations.
     h.widgets = {}
     h.methodCache = {}
-    -- pending C_Timer callbacks and animations, see Advance
+    -- The pending C_Timer callbacks and animations (see Advance).
     h.timers = {}
     h.timerSerial = 0
     h.handles = 0
-    -- [API name] = calls to that wrapped function (h:CountApiCalls)
+    -- The calls to each wrapped function, by API name (h:CountApiCalls).
     h.apiCalls = {}
     -- C_AddOnProfiler's answers: enabled, and [metric] = number for each addon, the application and all addons
     -- together; memory is GetAddOnMemoryUsage's KB by addon.
     h.profiler = { addons = {}, application = {}, enabled = false, memory = {}, overall = {} }
-    -- UpdateAddOnMemoryUsage calls
     h.memoryUpdates = 0
     h.printed = {}
-    -- { path, channel, handle } per PlaySoundFile that played
+    -- The { path, channel, handle } of each PlaySoundFile that played.
     h.sounds = {}
-    -- { kit, channel, handle } per PlaySound / C_Sound.PlaySound
+    -- Each PlaySound or C_Sound.PlaySound call's { kit, channel, handle }.
     h.soundKits = {}
-    -- { handle, fade } per StopSound
+    -- Each StopSound call's { handle, fade }.
     h.stopped = {}
-    -- [path] = true for media that exists (C_UIFileAsset.IsKnownFile knows it)
+    -- The media that exists (C_UIFileAsset.IsKnownFile knows it), as [path] = true.
     h.files = {}
-    -- [channel] = true: PlaySoundFile won't play on it (willPlay false)
+    -- The channels PlaySoundFile won't play on (willPlay false), as [channel] = true.
     h.mutedChannels = {}
-    -- current light bar color {r,g,b}, nil when cleared
+    -- The light bar's color { r, g, b }, or nil when it's cleared.
     h.led = nil
-    -- { type, intensity }
+    -- Each vibration's { type, intensity }.
     h.vibrations = {}
-    -- C_GamePad.StopVibration calls
     h.vibrationsStopped = 0
-    -- settings panel openings (C_SettingsUtil.OpenSettingsPanel ids)
+    -- The settings panel openings (C_SettingsUtil.OpenSettingsPanel ids).
     h.opened = {}
-    -- the Settings fake's registered categories (env.lua)
+    -- The Settings fake's registered categories (env.lua).
     h.categories = {}
     h.spellNames = { [5308] = "Execute" }
-    -- [spellName] = { isUsable, insufficientPower }
+    -- Each spell's { isUsable, insufficientPower }, by spell name.
     h.usable = {}
-    -- GetRealZoneText
+    -- GetRealZoneText's answer.
     h.zone = (player.zone or "Elwynn Forest")
-    -- GetSubZoneText
     h.subZone = (player.subZone or "")
-    -- GetMaxPlayerLevel
     h.maxLevel = 60
-    -- Enum.PowerType.Energy
+    -- The power type defaults to 3, Enum.PowerType.Energy.
     local powerType = (player.powerType or 3)
 
     h.player = FillUnit({
@@ -372,57 +367,56 @@ function Harness.New(player)
     })
 
     h.target = nil
-    -- [token] = unit table for h:SetUnit tokens (pet, focus, party1, ...)
+    -- The unit tables of the tokens h:SetUnit sets (pet, focus, party1, ...), by token.
     h.units = {}
-    -- globals the TOC declares (SavedVariables); nil reads allowed
+    -- The globals the TOC declares (SavedVariables), which may be read while nil.
     h.declared = {}
-    -- messages passed to the error handler; a test fails if any are unexpected
+    -- The messages passed to the error handler; a test fails if any are unexpected.
     h.errors = {}
-    -- a count, or a list of patterns (see ExpectErrors)
+    -- A count, or a list of patterns (see ExpectErrors).
     h.expectedErrors = 0
-    -- a count, or a list of patterns (see ExpectBlocked)
+    -- A count, or a list of patterns (see ExpectBlocked).
     h.expectedBlocked = 0
-    -- gamepad buttons no frame consumed
+    -- The gamepad buttons no frame consumed.
     h.propagated = {}
-    -- keys no frame consumed (h:Key)
+    -- The keys no frame consumed (h:Key).
     h.propagatedKeys = {}
-    -- see group.lua
+    -- The group the player is in (see group.lua).
     h.group = { kind = nil, members = {} }
     h.partySerial = 0
-    -- [prefix] = true once registered (C_ChatInfo); a UI restart clears them
+    -- Each prefix registered with C_ChatInfo is true; a UI restart clears them.
     h.prefixes = {}
     h.prefixOrder = {}
-    -- { prefix, message, chatType, target, result } per SendAddonMessage
+    -- Each SendAddonMessage call's { prefix, message, chatType, target, result }.
     h.addonMessages = {}
-    -- [prefix] = { allowance, time } after its last successful send
+    -- Each prefix's { allowance, time } after its last successful send.
     h.throttle = {}
-    -- your own group addon messages come back to you (h:Echo)
+    -- Your own group addon messages come back to you (h:Echo).
     h.echo = true
-    -- h:SeedRandom state; nil = Lua's math.random
+    -- The h:SeedRandom generator's state, or nil while math.random is Lua's.
     h.rng = nil
-    -- C_GamePad labelStyle of the connected controller; nil = none connected
+    -- The connected controller's C_GamePad labelStyle, or nil when none is connected.
     h.labelStyle = nil
-    -- C_InputInterfaceStyle.GetCurrentStyle: Enum.InputDeviceInterfaceType.Mkb
+    -- C_InputInterfaceStyle.GetCurrentStyle's answer, Enum.InputDeviceInterfaceType.Mkb.
     h.interfaceStyle = 0
-    -- C_GamePad.GetPowerLevel of the connected controller: Enum.GamePadPowerLevel.Wired
+    -- C_GamePad.GetPowerLevel's answer for the connected controller, Enum.GamePadPowerLevel.Wired.
     h.powerLevel = 4
-    -- IsUsingGamepad
     h.usingGamepad = false
     h.loaded = {}
     h.loadOrder = {}
-    -- IsLoggedIn(): true from PLAYER_LOGIN on
+    -- IsLoggedIn() is true from PLAYER_LOGIN on.
     h.loggedIn = false
-    -- GetLocale(); the GlobalStrings stay enUS unless a test rawsets them
+    -- GetLocale()'s answer; the GlobalStrings stay enUS unless a test rawsets them.
     h.locale = "enUS"
-    -- [SavedVariable name] = value, as the client restores it
+    -- Each SavedVariable's value by name, as the client restores it.
     h.saved = (player.saved or {})
-    -- units, maps, waypoints, honor, raid notices (units.lua, world.lua)
+    -- Units, maps, waypoints, honor and raid notices (units.lua, world.lua).
     h:InitWorld(player)
-    -- damage meter sessions and death recaps (meter.lua)
+    -- Damage meter sessions and death recaps (meter.lua).
     h:InitMeter()
-    -- h.spoken and the speech settings (speech.lua)
+    -- The h.spoken list and the speech settings (speech.lua).
     h:InitSpeech(player)
-    -- the quest log and quest dialogs (quests.lua)
+    -- The quest log and quest dialogs (quests.lua).
     h:InitQuests()
     h.env = h:BuildEnvironment()
     Harness.created[#Harness.created + 1] = h
@@ -732,7 +726,7 @@ function Harness:LoadFiles(name)
         local chunk = assert(loadstring(addon.sources[i], "@" .. (addon.as or name) .. "/" .. file))
 
         setfenv(chunk, self.env)
-        -- like the client: a file that errors is reported, the rest still load
+        -- Like the client, a file that errors is reported and the rest still load.
         self:Protect(chunk, name, ns)
     end
 
@@ -806,17 +800,17 @@ function Harness:SetRestriction(name, active)
     end
 
     if active then
-        -- Activating: not enforced during this dispatch
+        -- Activating (1): the restriction isn't enforced during this dispatch.
         self:FireRestriction(index, 1)
         self.restrictions[name] = true
 
         if not Harness.SILENT_ACTIVE[name] then
-            -- Active
+            -- Active (2) fires once the restriction is enforced.
             self:FireRestriction(index, 2)
         end
     else
         self.restrictions[name] = false
-        -- Inactive
+        -- Inactive (0): the restriction is lifted.
         self:FireRestriction(index, 0)
     end
 end

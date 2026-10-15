@@ -142,7 +142,7 @@ test("RaidWarningUtil.AddMessage records the message with its color", function()
     eq(color.r, 1)
     eq(color.b, 0)
     env.RaidWarningUtil.AddMessage("RALLY!", color, 5)
-    -- colors take secrets
+    -- RaidWarningUtil.AddMessage's colors may be secret.
     env.RaidWarningUtil.AddMessage("Second", { b = 0, g = 0, r = Secret(1) })
     eq(#h.raidNotices, 2)
     eq(h.raidNotices[1].text, "RALLY!")

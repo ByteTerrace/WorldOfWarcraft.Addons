@@ -23,8 +23,8 @@ local addonName, ns = ...
 local ContentKinds = { ["quest.count"] = true, ["quest.objective"] = true, ["quest.blank"] = true }
 -- Kinds that ask the same thing another way, by the kind they count as.
 local Families = { ["quest.title"] = "quest.giver" }
--- the longest choice, as ScholarPuzzles allows
-local MaxLine = 40
+-- The longest choice a riddle may offer, which ScholarPuzzles enforces.
+local MaxLine = ns.Puzzles.MaxChoice
 local MaxSentence, MinSentence = 140, 30
 local MaxTitle = 60
 local MaxWord, MinWord = 12, 5
@@ -123,7 +123,7 @@ local function BlankCandidate(state)
                 end
             end
 
-            -- a word used twice would show through its blank
+            -- A word used twice would show through its blank.
             if (#wrongs >= 3) and (uses == 1) then
                 local blanked = gsub(sentence, "%f[%a]" .. word .. "%f[%A]", "___", 1)
 
@@ -337,7 +337,7 @@ Generators["quest.objective"] = function(state)
     local own = {}
 
     for _, objective in ipairs(quest.objectives) do
-        -- the quest's other objectives are right answers too
+        -- The quest's other objectives are right answers too.
         own[lower(objective.name)] = true
     end
 
@@ -355,7 +355,7 @@ Generators["quest.title"] = function(state)
 
     for _, other in ipairs(state.known) do
         if lower(other.giver) == lower(quest.giver) then
-            -- the giver's other quests are right answers too
+            -- The giver's other quests are right answers too.
             theirs[lower(other.title)] = true
         elseif other.key ~= quest.key then
             others[#others + 1] = other.title
@@ -366,7 +366,7 @@ Generators["quest.title"] = function(state)
 
     for _, entry in ipairs(Bank(state).titles) do
         if lower(entry[2]) == lower(quest.giver) then
-            -- the giver really gives that one
+            -- The giver really gives that one.
             theirs[lower(entry[1])] = true
         else
             bank[#bank + 1] = entry[1]

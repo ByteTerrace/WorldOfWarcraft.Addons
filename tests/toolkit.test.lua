@@ -86,7 +86,7 @@ end)
 test("the addon compartment button toggles the settings window", function()
     local h, addon = Load()
     local name = h.env.C_AddOns.GetAddOnMetadata("TheLanKrewToolKit", "AddonCompartmentFunc")
-    -- the client calls the global the TOC names
+    -- The client calls the global the TOC names.
     local click = h.env[name]
 
     falsy(addon.SettingsWindow:IsShown())
@@ -128,7 +128,7 @@ end)
 test("fuck-o-meter ignores other power types and stays unregistered for non-energy users", function()
     local h, addon = Load({ classFile = "DRUID", powerType = 0 })
 
-    -- combo point callouts listen to power too
+    -- Combo point callouts listen to power too, so they're switched off first.
     addon.State:Set("Kombat.comboPoints", false)
     addon.State:Set("Kombat.finishHim", false)
     addon.State:Set("Kombat.fatality", false)
@@ -165,7 +165,7 @@ end)
 test("fom toggles the meter off and removes its events, and on again", function()
     local h, addon = Load({ classFile = "ROGUE", powerType = 3 })
 
-    -- combo point callouts listen to power too
+    -- Combo point callouts listen to power too, so sounds are switched off first.
     addon.State:Set("Sounds.enabled", false)
     local meter = h.env.TheLanKrewToolKitFuckOMeter
 
@@ -297,7 +297,7 @@ test("heals, regeneration and fully absorbed hits don't break flawless; an ambus
     h:SetTarget(enemy)
     h:EnterCombat()
     h:HealPlayer(10)
-    -- regeneration: no combat event
+    -- A health change from regeneration comes with no combat event.
     h:Fire("UNIT_HEALTH", "player")
     h:HitPlayer(0, "ABSORB")
     enemy.dead = true
@@ -307,7 +307,7 @@ test("heals, regeneration and fully absorbed hits don't break flawless; an ambus
     h:Advance(5)
     enemy = EnemyPlayer()
     h:SetTarget(enemy)
-    -- the opening hit lands a moment before the client says combat started
+    -- The opening hit lands a moment before the client says combat started.
     h:HitPlayer(30)
     h:EnterCombat()
     enemy.dead = true
@@ -356,7 +356,7 @@ test("starting health doesn't matter (addons can't read it); a selected corpse n
 
     h:AddMedia(MediaPath .. "FlawlessVictory.ogg")
     h:HitPlayer(60)
-    -- out of combat: not part of any fight
+    -- Out of combat, the hit isn't part of any fight.
     h:Advance(5)
     local corpse = EnemyPlayer({ dead = true })
 
@@ -394,17 +394,17 @@ test("finish him: warriors, once per target, when Execute is actually usable", f
     h:AddMedia(MediaPath .. "FinishHim.ogg")
     h:SetTarget(EnemyPlayer())
     h:EnterCombat()
-    -- not enough rage: not proof of range
+    -- Execute unusable for lack of rage isn't proof of range.
     h.usable.Execute = { false, true }
     h:Fire("SPELL_UPDATE_USABLE")
     eq(Played(h, "FinishHim.ogg"), 0)
     h.usable.Execute = { true, false }
     h:Fire("SPELL_UPDATE_USABLE")
     eq(Played(h, "FinishHim.ogg"), 1)
-    -- Defensive Stance
+    -- In Defensive Stance, Execute isn't usable.
     h.usable.Execute = { false, false }
     h:Fire("UPDATE_SHAPESHIFT_FORM")
-    -- back to Battle Stance
+    -- Back in Battle Stance, Execute is usable again.
     h.usable.Execute = { true, false }
     h:Fire("UPDATE_SHAPESHIFT_FORM")
     eq(Played(h, "FinishHim.ogg"), 1, "a stance dance doesn't repeat it")
@@ -441,10 +441,10 @@ end)
 test("switched-off sounds cost nothing: their events unregister", function()
     local h, addon = Load({ classFile = "WARRIOR", powerType = 1 })
 
-    -- Warband watches targets too
+    -- Warband watches targets too, so it's switched off first.
     addon.State:Set("Warband.enabled", false)
     truthy(Registered(addon, "PLAYER_TARGET_CHANGED"))
-    -- usability is only heard with an enemy player target
+    -- Usability is only heard with an enemy player target.
     h:SetTarget(EnemyPlayer())
     addon.State:Set("Kombat.finishHim", false)
     truthy(Registered(addon, "SPELL_UPDATE_USABLE"), "fatality still needs to know finishing range")
@@ -512,7 +512,7 @@ test("the next login welcomes you back with last session's highlights and rested
 
     truthy(text, "a card is shown")
     truthy(text:find("Welcome back, Tester!", 1, true), text)
-    -- the harness SecondsToTime is a stand-in
+    -- The harness SecondsToTime is a stand-in, so only the start of its text is checked.
     truthy(text:find("You were away 3 Day", 1, true), text)
     truthy(text:find("Rested up: +38% of a level", 1, true), text)
     truthy(text:find("Stranglethorn Vale", 1, true), text)
@@ -615,7 +615,7 @@ test("a duel that isn't with your target wins nothing, and its kill still counts
 
     h:SetTarget(enemy)
     h:EnterCombat()
-    -- a duel request declined nearby
+    -- A duel request declined nearby fires DUEL_FINISHED too.
     h:Fire("DUEL_FINISHED")
     eq(Played(h, "FlawlessVictory.ogg"), 0, "no duel with your target")
     h:HitPlayer(10)
@@ -659,7 +659,7 @@ test("damage the live signal missed stops the victory counting, though the sound
 
     h:SetTarget(enemy)
     h:EnterCombat()
-    -- no UNIT_HEALTH on you: say a shield absorbed it
+    -- No UNIT_HEALTH comes for you, as if a shield absorbed the damage.
     h:MeterAdd({ amounts = { DamageTaken = 120 }, unit = "player" })
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
@@ -712,7 +712,7 @@ end)
 test("finish him alone never tracks targets for classes without a finisher", function()
     local _, addon = Load({ classFile = "MAGE" })
 
-    -- Warband watches targets too
+    -- Warband watches targets too, so it's switched off first.
     addon.State:Set("Warband.enabled", false)
 
     for _, row in ipairs({ "flawlessVictory", "chooseYourDestiny", "testYourMight", "superbVictory" }) do
@@ -761,7 +761,7 @@ test("a new character's 0 copper is a real baseline", function()
 
     h.player.money = 0
     h:LoadAddon("TheLanKrewToolKit")
-    -- short: no welcome card ahead of the Ding! card
+    -- A short absence brings no welcome card ahead of the Ding! card.
     h:Relog(600)
     h.player.money = 6000
     h.player.level = (h.player.level + 1)

@@ -31,19 +31,19 @@ local addonName, ns = ...
 -- them. Showing or listing the Krew reads it first.
 
 local KrewIcon = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend"
--- the highest level accepted from a message
+-- The highest level accepted from a message.
 local MaxLevel = 200
--- the most stars accepted from a message
+-- The most stars accepted from a message.
 local MaxStars = 99999
--- longest text accepted from a message
+-- The longest text, in bytes, accepted from a message.
 local MaxText = 60
--- Krew members on a newer version that make it worth saying
+-- How many Krew members on a newer version make it worth saying so.
 local NewerQuorum = 2
 local PartyUnits, RaidUnits = {}, {}
 local Prefix = "TLKKrew1"
--- seconds without a roster update that end a burst of them
+-- How long, in seconds, without a roster update ends a burst of them.
 local PruneDelay = 1
--- seconds that gather a burst of hellos into one reply
+-- How long, in seconds, a burst of hellos gathers before one reply.
 local ReplyDelay = 1
 local RollCallDelay = 2
 
@@ -60,23 +60,23 @@ local Addon = ns.Addon
 local Names = ByteTerrace.Names
 local ShowCard = ns.Cards.Show
 
--- the module, and its Comms (ns.Krew)
+-- Krew is the module and Messages is its Comms (ns.Krew), both assigned at the end of the file.
 local Krew, Messages
--- [name] = the version its hello named ("" unreadable), for members running the toolkit
+-- Maps each member running the toolkit, by name, to the version its hello named ("" when unreadable).
 local Members = {}
--- scratch: [name] = true for the group's members, while pruning Members
+-- Scratch space while pruning Members: maps each of the group's members, by name, to true.
 local Present = {}
--- pending timer that prunes Members once a burst of roster updates settles
+-- The pending timer that prunes Members once a burst of roster updates settles.
 local PruneTimer
--- pending timer that answers a burst of hellos with one reply
+-- The pending timer that answers a burst of hellos with one reply.
 local ReplyTimer
--- pending timer that merges a burst of hellos into one card
+-- The pending timer that merges a burst of hellos into one card.
 local RollCallTimer
--- GetTime() of the last roster update
+-- The GetTime() of the last roster update.
 local RosterAt = 0
--- you said hello to this group
+-- Whether you said hello to this group.
 local Said = false
--- this group heard that a newer version is out
+-- Whether this group heard that a newer version is out.
 local ToldNewer = false
 
 --- A count from a message: a whole number from 1 to max written in digits only (no sign, exponent, hex or "inf"), or
@@ -145,7 +145,7 @@ local function Prune()
     local units = ((raid and RaidUnits) or PartyUnits)
 
     if not raid then
-        -- party tokens leave out the player
+        -- Party tokens leave out the player.
         count = (count - 1)
     end
 
@@ -343,7 +343,7 @@ Krew = Addon:Module("Krew", {
     OnDisable = function()
         wipe(Members)
         Said, ToldNewer = false, false
-        -- the module's timers stop with it
+        -- The module's timers stop with it.
         RollCallTimer, ReplyTimer, PruneTimer = nil, nil, nil
     end,
     OnEnable = function(module)

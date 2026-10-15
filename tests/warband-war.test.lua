@@ -125,7 +125,7 @@ local function Badge(h, plate)
     local frame = h.env.C_NamePlate.GetNamePlateForUnit(plate)
 
     for _, child in ipairs({ frame:GetChildren() }) do
-        -- Blizzard's UnitFrame rides on the plate too
+        -- Blizzard's UnitFrame rides on the plate too, so the badge is the child with an Icon.
         if rawget(child, "Icon") then
             return child
         end
@@ -244,7 +244,7 @@ test("enemies you see are listed, marked ones first, and the list empties after 
     truthy(Window(h):IsShown(), "the first sighting shows the window at once")
     h:Advance(1)
     h:AddNamePlate(Enemy("Cara", { classFile = "MAGE", level = 58 }))
-    -- the next tick draws her
+    -- The window redraws on its one-second tick, so the next tick draws her.
     h:Advance(1)
     local rows = Rows(h)
 
@@ -355,7 +355,7 @@ test("a redraw touches only the rows in use", function()
     local before = Calls()
 
     h:AddNamePlate(Enemy("Cara"))
-    -- five redraws on the ticker
+    -- Five seconds on the ticker are five redraws.
     h:Advance(5)
     eq(Calls(), before, "a row nobody uses isn't touched")
 end)
@@ -423,7 +423,7 @@ test("a sighting only notes the enemy; a tick sets only the texts that moved", f
     h:Advance(1)
     local dan = Enemy("Dan")
 
-    -- the most recent, so seeing him again keeps the order
+    -- Dan is the most recent, so seeing him again keeps the order.
     h:AddNamePlate(dan)
     h:Advance(1)
     h:ResetCalls()

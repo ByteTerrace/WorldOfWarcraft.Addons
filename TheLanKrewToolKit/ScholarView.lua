@@ -32,17 +32,17 @@ local AnswerHeight = 72
 local CircleMask = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FooterHeight = 44
 local KeycapSize = 34
--- the panel sits this much above the screen's center when it has room
+-- How many pixels the panel sits above the screen's center when it has room.
 local LiftUp = 30
 local NumberColor = "|cffffd100"
 local OwlIcon = "Interface\\Icons\\Ability_Hunter_Pet_Owl"
 local Pad = 28
 local PortraitSize = 60
 local RightIcon = "Interface\\RAIDFRAME\\ReadyCheck-Ready"
--- the least room above and below the panel
+-- The least room, in pixels, above and below the panel.
 local ScreenMargin = 20
 local ScrollBarWidth = 6
--- pixels the quest book scrolls per wheel notch, arrow key or D-pad press
+-- How many pixels the quest book scrolls per wheel notch, arrow key or D-pad press.
 local ScrollStep = 48
 local SpeakerIcon = "Interface\\Common\\VoiceChat-Speaker"
 -- Riddles whose wrong choices are misspellings: Read aloud spells their choices.
@@ -130,7 +130,7 @@ end
 local function Emphasize(text)
     -- Numbers go first: the color codes added for words contain digits of their own.
     text = text:gsub("(%d[%d,%.]*%%?)", function(number)
-        -- a sentence's full stop isn't part of the number
+        -- A sentence's full stop isn't part of the number.
         local trailing = (number:match("[,%.]+$") or "")
 
         return (NumberColor .. number:sub(1, #number - #trailing) .. "|r" .. trailing)
@@ -782,10 +782,10 @@ end
 --- Shows a puzzle, creating the screen on first use. The caller takes the keyboard.
 ---@param puzzle table a puzzle from ns.Puzzles.Generate
 ---@param info table { stars, rank, nextRank?, nextAt?, progress (0 to 1), streak, gentle, canSpeak,
----  controller (a controller is connected), keys = { four answer key labels },
----  actions = { hint, speak, skip key labels }, wrong? ([i] = true for answers already missed, which
----  stay marked and can't be picked), canSkip? (Skip shows), book? (Need a hint? is the quest book,
----  puzzle.book's text) }
+---                  controller (a controller is connected), keys = { four answer key labels },
+---                  actions = { hint, speak, skip key labels }, wrong? ([i] = true for answers already missed, which
+---                  stay marked and can't be picked), canSkip? (Skip shows), book? (Need a hint? is the quest book,
+---                  puzzle.book's text) }
 ---@return table frame the full-screen overlay
 function ScholarView.Show(puzzle, info)
     Overlay = (Overlay or Create())

@@ -130,7 +130,7 @@ SecretMeta.__div, SecretMeta.__mod, SecretMeta.__pow = Refuse("compute with"), R
 SecretMeta.__unm = Refuse("compute with")
 SecretMeta.__call = Refuse("call")
 
--- harness diagnostics; the env's tostring refuses
+-- The "<secret>" text is for harness diagnostics; the env's tostring gives addon code a secret string instead.
 SecretMeta.__tostring = function() return "<secret>" end
 
 SecretMeta.__metatable = false
@@ -205,7 +205,7 @@ function SecretFormat(fmt, ...)
     return Secret(RawFormat(plainFormat, unpack(args, 1, n)))
 end
 
--- tostring of a secret is a secret string [E] (secrets.operations: tostring).
+-- [E] The env's tostring turns a secret into a secret string (secrets.operations: tostring).
 function SecretToString(value, ...)
     if IsSecret(value) then
         return Secret(tostring(Reveal(value)))
@@ -272,7 +272,7 @@ local Predicates = {
     SecretReturns = function() return true end,
     SecretWhenAnchoringSecret = function(h, ctx)
         if ctx.widget then
-            -- ctx.widget is the widget's state
+            -- ctx.widget is the widget's state.
             return (next(ctx.widget.secretAspects) ~= nil)
         end
 
@@ -378,7 +378,7 @@ Harness.OBSERVED_SECRET = {
     UnitHealthMax = function(h, ctx)
         local unit = h:Unit(ctx.unit)
 
-        -- a unit that doesn't exist has nothing to hide
+        -- A unit that doesn't exist has nothing to hide.
         return ((unit ~= nil) and (unit ~= h.player))
     end,
 }
@@ -633,10 +633,11 @@ function Harness:WrapApi(name, entry, fn, isMethod)
         local types = Types(entry, "Arguments")
         local nilable = entry.ArgumentsNilable
 
-        -- widget methods have overloads the docs can't state (SetPoint("CENTER"))
+        -- Widget methods have overloads the docs can't state, like SetPoint("CENTER"), so their nilability isn't
+        -- checked.
         if nilable and not isMethod then
             for i = 1, #types do
-                -- a reference may be nil
+                -- An argument passed by reference (PassThrough) may be nil.
                 if (args[(first + i) - 1] == nil) and not nilable[i] and not PassThrough[types[i]] then
                     error(("%s: argument #%d (%s) isn't nilable"):format(name, i, types[i]), 2)
                 end
@@ -657,7 +658,7 @@ function Harness:WrapApi(name, entry, fn, isMethod)
         local state = (widget and Harness.State(widget))
 
         if preconditions.RequiresFontStringTextAccess and state and state.secretAspects.Text then
-            -- FailureMode ReturnNothing for a tainted caller
+            -- The precondition's FailureMode is ReturnNothing for a tainted caller.
             return
         end
 

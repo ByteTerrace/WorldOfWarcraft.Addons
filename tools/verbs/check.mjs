@@ -75,7 +75,9 @@
 //             camelCase. An alias keeps the name of what it aliases (local floor = math.floor),
 //             a file's own `local addonName, ns = ...` is exempt, and so are metamethods (__index).
 //   COMMENT   no banner dividers (four or more of - = * # _ ~) and no debt markers (TODO, FIXME,
-//             HACK, XXX, KLUDGE, REVISIT in capitals, or "for now"), as Puck's comment-smell gate.
+//             HACK, XXX, KLUDGE, REVISIT in capitals, or "for now"), as Puck's comment-smell gate;
+//             and each paragraph of full-line comments is a sentence: a capital letter, a digit or
+//             code first, and . ! ? or : last (verbatim lines and the gates' annotations are kept).
 //   HYGIENE   luacheck's warnings, as far as a parser decides them: a local, local function or loop
 //             variable nothing reads (a local function only its own body calls counts as unused);
 //             a parameter nothing reads (remove it, or rename it to _ when a later parameter or
@@ -95,7 +97,8 @@
 //   STYLE     LF line endings, final newline, no tabs, no trailing whitespace.
 //
 //   Beyond the addons, tools/ and tests/ get LENGTH and STYLE, and the tests' Lua (tests/*.lua and
-//   tests/harness, not tests/fixtures, which are deliberately bad) gets NAMING, COMMENT and HYGIENE too.
+//   tests/harness, not tests/fixtures, which are deliberately bad) gets NAMING, COMMENT and HYGIENE too,
+//   and GLOBAL as the runner's Lua sees it (tools/lib/check-tests.mjs).
 //
 // Snapshot truth: when the snapshot has a client dump, a global or member counts as known only if
 // the dump has it; documented-only names don't. Without a dump, the documented API is the fallback.
@@ -104,6 +107,9 @@ import { checkStyleRules } from "../lib/check-style.mjs";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { checkLua } from "../lib/check-lua.mjs";
+import { checkTestGlobals } from "../lib/check-tests.mjs";
+import { COVERAGE_LUA } from "../lib/coverage.mjs";
+import { PRELUDE } from "../lib/prelude.mjs";
 import { findAddons, findAmbiguousAddons, findMisnamedAddons, readForbidden, repoRoot, splitList, toPosix } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, buildOf, findForeverInstall, interfaceOf } from "../lib/wow.mjs";
 import { formatFiles, formatRepository } from "./format.mjs";
@@ -292,6 +298,7 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
     }
 
     if (root === repoRoot) {
+        const testLua = [];
         for (const dir of ["tools", "tests"]) {
             for (const file of readdirSync(join(root, dir), { recursive: true }).map(toPosix)) {
                 const skip = file.startsWith("api/") || file.startsWith("fixtures/");
@@ -299,9 +306,17 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
                 const path = join(root, dir, file);
                 const text = readFileSync(path, "utf8");
                 checkStyle(text, path, report);
-                if (dir === "tests" && file.endsWith(".lua")) checkStyleRules(path, text, report);
+                if (dir === "tests" && file.endsWith(".lua")) {
+                    checkStyleRules(path, text, report);
+                    testLua.push({ path, text });
+                }
             }
         }
+        // The globals the runner hands the tests' Lua from JavaScript (lua.ctx.__name).
+        const libDir = join(root, "tools", "lib");
+        const handed = new Set(readdirSync(libDir).filter((file) => file.endsWith(".mjs"))
+            .flatMap((file) => [...readFileSync(join(libDir, file), "utf8").matchAll(/lua\.ctx\.(\w+)/g)].map((match) => match[1])));
+        checkTestGlobals(testLua, [PRELUDE, COVERAGE_LUA], handed, report);
         for (const finding of formatFindings(root)) report(join(root, finding.path), finding.line, finding.rule, finding.message);
     }
 

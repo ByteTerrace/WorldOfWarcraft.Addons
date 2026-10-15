@@ -148,7 +148,7 @@ local Layout = Harness.Layout
 local Anchor, Anchored, Axes, LineHeight = Layout.Anchor, Layout.Anchored, Layout.Axes, Layout.LineHeight
 local Lines, Longest, Size = Layout.Lines, Layout.Longest, Layout.Size
 
--- behavior(state, widget, ...args)
+-- Each behavior is called as behavior(state, widget, ...args).
 local Behaviors = {}
 
 function Behaviors.GetAttribute(s, _, name) return (s.attributes or {})[name] end

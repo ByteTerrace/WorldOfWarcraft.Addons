@@ -50,4 +50,10 @@ for _, name in ipairs({ "a" }) do
 end
 
 -- Debt markers are the capitalized words: a hack or a revisit in prose is fine.
+
+-- A comment is a sentence that may start with code instead:
+--   aligned  columns and indented items are kept as written
+-- - and so are list items
+-- `format` starts it here, and so could ns.Krew, h:Fire or powerToken.
+-- secret: annotations the gates read keep their own form
 print(addonName, ns, format, C_Timer, Clamp, Pump)

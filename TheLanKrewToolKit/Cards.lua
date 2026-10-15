@@ -25,7 +25,7 @@ local insert, remove = table.insert, table.remove
 
 local Addon = ns.Addon
 local Card, HideTimer, Current
--- the module, declared at the end; it always runs
+-- The module is assigned at the end of the file, and it always runs.
 local Cards
 local InCombat = false
 local Queue = {}

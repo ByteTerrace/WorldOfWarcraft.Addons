@@ -272,7 +272,7 @@ end
 
 local function DescribeTable(name, value)
     if value == _G then
-        -- its members are the dump itself
+        -- _G's members are the dump itself.
         return { type = "table" }
     end
 

@@ -20,7 +20,7 @@ test("keyboard input: a keyboard-enabled frame consumes keys unless it propagate
 
     top:SetScript("OnKeyDown", function(self, key)
         log[#log + 1] = ("top:" .. key)
-        -- decided per key, after the script
+        -- The client reads propagation after the script runs, so the script decides it per key.
         self:SetPropagateKeyboardInput((key ~= "ESCAPE") and (key ~= "1"))
     end)
 
@@ -71,7 +71,6 @@ end)
 test("EnableKeyboard is blocked in combat only on protected frames; SetPropagateKeyboardInput on any", function()
     local h = Harness.New()
 
-    -- the calls under test
     h:ExpectBlocked(2)
     local env = h.env
     local plain = env.CreateFrame("Frame")
@@ -95,7 +94,6 @@ end)
 test("frame strata and levels: set, inherited, validated", function()
     local h = Harness.New()
 
-    -- the calls under test
     h:ExpectBlocked(1)
     local env = h.env
     local parent = env.CreateFrame("Frame", nil, env.UIParent)

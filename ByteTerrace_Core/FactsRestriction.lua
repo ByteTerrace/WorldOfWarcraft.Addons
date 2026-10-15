@@ -33,7 +33,7 @@ ByteTerrace.Facts.restriction = {
     demand = true,
     OnEnable = function(module)
         local state, inactive = module.Addon.State, Enum.AddOnRestrictionState.Inactive
-        -- [Enum.AddOnRestrictionType value] = row id
+        -- Maps each Enum.AddOnRestrictionType value to its row id.
         local ids = {}
 
         for _, restriction in ipairs(Restrictions) do

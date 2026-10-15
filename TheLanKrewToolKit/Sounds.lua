@@ -53,7 +53,7 @@ Addon:Module("Sounds", {
 
 Addon:Module("CombatStartSound", {
     active = SoundBank:WhileOn("combatStart"),
-    -- turning the sound off stops it mid-play
+    -- Turning the sound off stops it mid-play.
     OnDisable = StopCombatStart,
     OnEnable = function(module)
         local combat = module:Id("combat.active")

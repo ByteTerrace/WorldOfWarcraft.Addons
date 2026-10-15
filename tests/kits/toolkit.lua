@@ -13,7 +13,7 @@ end
 
 --- The card on screen as "Title\nBody", and the card's frame; nil while none shows.
 local function Card(h)
-    -- created lazily with the first card
+    -- The card frame is created lazily with the first card, so it may not exist yet.
     local card = rawget(h.env, "TheLanKrewToolKitCard")
 
     if not (card and card:IsShown()) then

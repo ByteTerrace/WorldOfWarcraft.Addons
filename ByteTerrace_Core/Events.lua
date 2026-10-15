@@ -123,7 +123,7 @@ local function Refresh(self, event)
 
     if self.m_registered[event] then
         frame:UnregisterEvent(event)
-        -- stays accurate if registering below fails
+        -- Cleared now, so it stays accurate if registering below fails.
         self.m_registered[event] = nil
     end
 
@@ -235,7 +235,7 @@ function Events:On(event, fn, unit, work)
     if not ok then
         self.m_handlers[event] = list
         pcall(Refresh, self, event)
-        -- the client's message already says where
+        -- Level 0 adds no position: the client's message already says where.
         error(err, 0)
     end
 

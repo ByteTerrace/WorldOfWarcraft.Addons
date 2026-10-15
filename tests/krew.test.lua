@@ -45,7 +45,7 @@ test("you say hello once per group; hellos that aren't replies get one reply per
     h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t1", "PARTY", "Bob")
     h:Advance(3)
     eq(Sent(h, "HELLO"), 2, "a reply is never answered: no ping-pong")
-    -- Cara reloaded
+    -- Cara reloaded and says hello again.
     h:ReceiveAddonMessage(Prefix, "HELLO:0.1.0\t0", "PARTY", "Cara")
     h:Advance(3)
     eq(Sent(h, "HELLO"), 3, "a member saying hello again hears back")
@@ -157,7 +157,7 @@ test("/tlk krew lists the version each member runs", function()
         "an unreadable version is left out")
 
     eq(#Newer(h), 0, "one member ahead is no news")
-    -- Bob updated and reloaded
+    -- Bob updated and reloaded.
     h:ReceiveAddonMessage(Prefix, "HELLO:0.3.0\t1", "PARTY", "Bob")
     h:Slash("/tlk krew")
     truthy(h.printed[#h.printed]:find("Bob Doe (0.3.0)", 1, true), "a later hello updates it")
@@ -247,7 +247,7 @@ end)
 test("the client's echo of our own message is ours, though it names us with our surname", function()
     local h = Load()
 
-    -- we say hello; the echo arrives as "Tester Doe", UnitName says "Tester", "Doe"
+    -- We say hello; the echo arrives as "Tester Doe", while UnitName says "Tester", "Doe".
     h:JoinGroup("party", { "Bob" })
     h:Advance(3)
     h:Slash("/tlk krew")

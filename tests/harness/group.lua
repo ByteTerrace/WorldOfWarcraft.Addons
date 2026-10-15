@@ -51,7 +51,7 @@
 --     (for WHISPER the sender, per the event's documentation; otherwise ""), zoneChannelID 0,
 --     localID 0, name "", instanceID 0.
 
--- LE_PARTY_CATEGORY_HOME / _INSTANCE
+-- LE_PARTY_CATEGORY_HOME and LE_PARTY_CATEGORY_INSTANCE have these values.
 Harness.PARTY_CATEGORY = { HOME = 1, INSTANCE = 2 }
 Harness.MAX_PREFIX_LENGTH, Harness.MAX_ADDON_MESSAGE_BYTES, Harness.MAX_PREFIXES = 16, 255, 512
 Harness.ADDON_THROTTLE = { allowance = 10, perSecond = 1 }
@@ -401,7 +401,7 @@ function Harness:ReceiveAddonMessage(prefix, text, channel, sender, target)
 
     local member = (self.group.kind and self:FindMember(sender))
 
-    -- a member named by first name: their full name
+    -- A sender who is a member named by first name gets their full name.
     sender = ((member and self:FullName(member)) or self:FullName(sender))
 
     if target == nil then

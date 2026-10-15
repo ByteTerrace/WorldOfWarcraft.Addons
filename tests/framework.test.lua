@@ -394,7 +394,7 @@ test("a release goes to its press's command; a held command whose map goes away 
     Start(h)
     addon.Input:SetActiveMaps({ "one" })
     h:Gamepad("PAD1", true)
-    -- "two" overrides south, so a's hold is canceled
+    -- "two" overrides south, so a's hold is canceled.
     addon.Input:SetActiveMaps({ "one", "two" })
     h:Gamepad("PAD1", false)
     eq(table.concat(log, ","), "a:down,a:cancel")

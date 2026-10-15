@@ -80,12 +80,12 @@
 
 local Snapshot = __snapshot
 
--- SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
+-- 856 is SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON.
 local CheckboxSound = 856
 local Enums = Snapshot.enums
--- MenuConstants.lua
+-- Blizzard's MenuConstants.lua defines these values.
 local MenuInputContext = { MouseButton = 2, MouseWheel = 3, None = 1 }
--- MenuConstants.lua
+-- Blizzard's MenuConstants.lua defines these values.
 local MenuResponse = { Close = 3, CloseAll = 4, Open = 1, Refresh = 2 }
 
 -- A description's harness side: its kind and child elements (the private description).
@@ -338,7 +338,7 @@ function Harness:OpenMenu(tag, contextData, owner)
     root:SetTag(tag, contextData)
 
     if which then
-        -- UnitPopupManager's title; its text comes from an initializer
+        -- UnitPopupManager creates a title; its text comes from an initializer.
         root:CreateTitle()
     end
 
@@ -485,7 +485,7 @@ local function ColorFakes()
     return { RAID_CLASS_COLORS = classColors }
 end
 
--- TooltipDataProcessor.AllTypes
+-- TooltipDataProcessor.AllTypes has this value.
 local AllTypes = "ALL"
 local LineTypes = Enums.TooltipDataLineType
 local TooltipTypes = Enums.TooltipDataType

@@ -119,7 +119,7 @@ test("combo callouts are rogues' and druids' only, and switch off with their set
     local _, warrior = Load({ classFile = "WARRIOR", powerType = 1 })
 
     falsy(warrior.Events.Frame:IsEventRegistered("UNIT_POWER_FREQUENT"), "warriors have no combo points")
-    -- caster form: the fuck-o-meter stays off
+    -- A druid in caster form keeps the fuck-o-meter off, so the power events are the callouts' alone.
     local h, addon = Load({ classFile = "DRUID", powerType = 0 })
 
     Media(h, "ComboPoint1.ogg")
@@ -144,7 +144,7 @@ test("a kill after finish him is a fatality; flawless still comes first", functi
     Kill(h, enemy, true)
     eq(Heard(h), "FinishHim.ogg Fatality.ogg")
     h:LeaveCombat()
-    -- the last fight's hit is long past
+    -- Five seconds on, the last fight's hit is long past, so the next fight starts untouched.
     h:Advance(5)
     h.sounds = {}
     enemy = EnemyPlayer()
@@ -304,7 +304,7 @@ test("the Krew hears your first blood, sprees and a spree's end, and yours yield
     eq(#Sent(h, "STREAK"), 1, "first blood was Mom's")
     eq(Sent(h, "STREAK")[1], "STREAK:killingSpree\t5")
     h:Die()
-    -- no death recap: after the wait, the spree ends with no killer named
+    -- No death recap comes, so after the wait the spree ends with no killer named.
     h:Advance(4)
     eq(Sent(h, "STREAK")[2], "STREAK:ended\t5")
     h:ReceiveAddonMessage(Prefix, "STREAK:rampage\t10", "PARTY", "Mom")
@@ -341,12 +341,12 @@ test("a duel you were hit in may be one you lost: it plays nothing", function()
     local rival = EnemyPlayer({ canAttack = false })
 
     h:SetTarget(rival)
-    -- the duel starts
+    -- The duel starts: the rival becomes attackable.
     rival.canAttack = true
     h:Fire("UNIT_FLAGS", "target")
     h:EnterCombat()
     h:HitPlayer(h.player.health - 1)
-    -- you lost at 1 HP; your opponent is alive and still attackable
+    -- You lost at 1 HP, and your opponent is alive and still attackable.
     h:Fire("DUEL_FINISHED")
     eq(Heard(h), "")
 end)
@@ -394,7 +394,7 @@ test("a death ends the spree and the multi kill at once, even before the recap n
     h:Advance(3)
     h:Die()
     h:Advance(1)
-    -- the group's kill, credited while you're dead
+    -- The group's kill is credited while you're dead.
     Blow(h, "Foe9")
     h:Advance(4)
     eq(Heard(h), "", "a death between two kills ends the multi kill")
@@ -410,7 +410,7 @@ test("a kill streak counts your killing blows and your pet's, not a groupmate's 
     h:SetUnit("pet", pet)
     local mom = { isPlayer = true, name = "Mom" }
 
-    -- honor credit for a groupmate's kill
+    -- You get honor credit for a groupmate's kill, which isn't your blow.
     h:HonorKill("Ann", "Private", 10)
     h:Fire("PARTY_KILL", h:GUID(mom), h:GUID({ isPlayer = true, name = "Ben" }))
     h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ name = "Kobold" }))

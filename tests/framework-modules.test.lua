@@ -346,7 +346,7 @@ end)
 test("an alias the chat frame already imported is taken too", function()
     local h, addon = NewAddOn()
 
-    -- the chat frame empties SlashCmdList into it on first use
+    -- The chat frame empties SlashCmdList into hash_SlashCmdList on first use.
     h.env.hash_SlashCmdList["/TEST"] = function() end
     h:ExpectErrors("already taken")
     Start(h)

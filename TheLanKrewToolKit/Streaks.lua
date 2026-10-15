@@ -16,7 +16,7 @@ local addonName, ns = ...
 -- warning. Whether first blood is drawn, and your kills since you last died, are saved per character, so a /reload
 -- continues the session; the next login, or switching streaks off, starts them over.
 
--- the largest count accepted from a Krew message
+-- The largest count accepted from a Krew message.
 local MaxCount = 9999
 
 local MultiKills = {
@@ -29,9 +29,9 @@ local MultiKills = {
     { file = "HolyShit", key = "holyShit", label = "Holy shit", word = "holy" },
 }
 
--- seconds between kills; Unreal's 4 is too short for WoW's fights
+-- The longest gap, in seconds, between the kills of one multi kill; Unreal's 4 is too short for WoW's fights.
 local MultiKillWindow = 10
--- kills: a shorter run ending isn't news
+-- The fewest kills in a run whose end is news; a shorter run ending isn't.
 local SpreeEndMinimum = 5
 
 local Sprees = {
@@ -66,11 +66,11 @@ end
 
 SoundBank:Define("firstBlood", { file = "FirstBlood", label = "First blood", row = "Streaks.firstBlood", word = "first" })
 
--- the spree your last death ended, until its killer is known
+-- The spree your last death ended, until its killer is known.
 local EndedAt
--- GetTime() of your last killing blow
+-- The GetTime() of your last killing blow.
 local LastKillAt
--- kills in the current multi kill
+-- The number of kills in the current multi kill.
 local Multi = 0
 local StreaksModule
 
@@ -144,7 +144,7 @@ end
 
 -- A death ends the streak and any multi kill at once; its report waits for the killer.
 local function OnDeath()
-    -- an earlier death whose killer never came
+    -- Reports first an earlier death whose killer never came.
     ReportEnd("")
     local streak = StreaksModule:Get("streak")
 
@@ -168,7 +168,7 @@ StreaksModule = Addon:Module("Streaks", {
     end,
     OnEnable = function(module)
         if IsLoggedIn() then
-            -- switched on mid-session
+            -- The module was switched on mid-session.
             StartOver()
         end
 

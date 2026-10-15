@@ -113,9 +113,9 @@ function Harness:InitUnits(player)
     self.player.guild, self.player.guildRealm = player.guild, player.guildRealm
     self.player.guildRank, self.player.guildRankIndex = player.guildRank, player.guildRankIndex
     self.guidSerial = 0
-    -- [guid] = the unit table it was given to
+    -- The unit table each GUID was given to, by GUID.
     self.guidUnits = {}
-    -- [auraSoundID] = { trigger, sound } (C_UnitAuras.AddAuraSound)
+    -- Each auraSoundID's { trigger, sound } (C_UnitAuras.AddAuraSound).
     self.auraSounds = {}
     self.auraSoundSerial = 0
 end
@@ -394,7 +394,7 @@ function Harness:UnitFakes()
         GetNormalizedRealmName = function() return Harness.NormalizeRealm(h.player.realm) end,
         GetRealmName = function() return h.player.realm end,
         IsInGuild = function() return (h.player.guild ~= nil) end,
-        -- forbidden to addons (tools/api/forbidden.json): never runs
+        -- Forbidden to addons (tools/api/forbidden.json), so it never runs.
         SetRaidTarget = function() end,
         UnitAffectingCombat = function(u)
             local unit = Unit(u)

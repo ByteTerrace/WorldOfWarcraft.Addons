@@ -36,7 +36,7 @@ local function CoversScreen(h, region, depth)
         byPoint[p.point] = p
     end
 
-    -- sx, sy: the sign an offset may have to stay flush or push the corner outward.
+    -- An offset whose signs match sx and sy keeps the corner flush or pushes it outward.
     local function Corner(point, sx, sy)
         local p = byPoint[point]
 
@@ -76,7 +76,7 @@ function Harness:Drag(frame, dx, dy, button)
     if s.scripts.OnDragStart then self:Protect(s.scripts.OnDragStart, frame, button) end
 
     if s.moving then
-        -- the anchors now carry offsets
+        -- The anchors now carry offsets, so the frame no longer fills its SetAllPoints target.
         s.allPoints = nil
 
         for _, p in ipairs(s.points) do
@@ -139,7 +139,7 @@ function Harness:Key(key, down)
         local frame = receiver.frame
         local state = Harness.State(frame)
 
-        -- an earlier script may change either
+        -- An earlier receiver's script may disable this frame's keyboard input or hide it.
         if state.keyboardEnabled and self:IsVisibleWidget(frame) then
             local handler = state.scripts[script]
 

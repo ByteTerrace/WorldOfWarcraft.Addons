@@ -273,7 +273,7 @@ function Harness:BuildEnvironment()
         end,
         CreateColor = Color,
         SlashCmdList = {},
-        -- the chat frame's imported commands, [uppercased alias] = handler
+        -- The chat frame's imported commands, each handler under its uppercased alias.
         hash_SlashCmdList = {},
 
         -- Units.
@@ -357,7 +357,7 @@ function Harness:BuildEnvironment()
         IsResting = function() return h.player.resting end,
         GetMoney = function() return h.player.money end,
         UnitPowerType = function(u)
-            -- every unit has a primary power type
+            -- Every unit has a primary power type.
             local powerType = (Field(u, "powerType", 0) or 0)
 
             return powerType, (PowerTokens[powerType] or "MANA")
@@ -459,7 +459,7 @@ function Harness:BuildEnvironment()
             -- [D] The device's Enum.GamePadPowerLevel (GamePadDocumentation; the ID is Nilable). [G] h.powerLevel for
             -- the connected controller, Unknown without one.
             GetPowerLevel = function()
-                -- 5: Enum.GamePadPowerLevel.Unknown
+                -- 5 is Enum.GamePadPowerLevel.Unknown.
                 return ((h.labelStyle and h.powerLevel) or 5)
             end,
             SetLedColor = function(color) h.led = { color:GetRGB() } end,

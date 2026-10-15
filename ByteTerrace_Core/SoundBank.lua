@@ -22,8 +22,8 @@
 --   sounds:Test(arg)           the "<word> [variant]" test command: plays regardless of switches
 --                              and says why nothing played; no word lists every sound.
 --
--- master names the boolean row that switches every sound, channel the string row naming the volume channel they play on
--- (Master, SFX, Music, Ambience, Dialog).
+-- The master option names the boolean row that switches every sound, and channel the string row naming the volume
+-- channel they play on (Master, SFX, Music, Ambience, Dialog).
 
 local Extensions = { ".ogg", ".mp3" }
 local FadeOutMilliseconds = 1000
@@ -102,16 +102,16 @@ function ByteTerrace.NewSoundBank(addon, options)
 
     return setmetatable({
         m_addon = addon,
-        -- [word] = spec
+        -- Maps each test word to its sound's spec.
         m_byWord = {},
-        -- [key] = the sound's spec
+        -- Maps each key to its sound's spec.
         m_catalog = {},
         m_channel = options.channel,
         m_folder = (options.folder or ("Interface\\AddOns\\" .. addon.Name .. "\\Media\\")),
-        -- [key] = GetTime() when it last played, for cooldowns
+        -- Maps each key to GetTime() when it last played, for cooldowns.
         m_lastPlayed = {},
         m_master = options.master,
-        -- keys in definition order, for Test
+        -- The keys in definition order, for Test.
         m_order = {},
     }, SoundBank)
 end

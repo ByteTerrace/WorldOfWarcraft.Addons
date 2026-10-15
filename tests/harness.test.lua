@@ -153,7 +153,7 @@ test("addon code is tainted: a secret argument is refused unless the API allows 
     truthy(h.env.issecretvalue(health), "issecretvalue takes it by reference")
     local text = frame:CreateFontString()
 
-    -- AllowedWhenTainted
+    -- FontString:SetText's secret arguments are AllowedWhenTainted, as are StatusBar:SetValue's.
     text:SetText(health)
     local bar = h.env.CreateFrame("StatusBar")
 
@@ -200,7 +200,6 @@ end
 test("protected methods on protected frames are blocked during lockdown: the call does nothing, the caller continues", function()
     local h = Harness.New()
 
-    -- the calls under test
     h:ExpectBlocked(2)
     local seen = WatchBlocked(h)
     local secure = h.env.CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
@@ -231,7 +230,6 @@ end)
 test("opening Blizzard's settings panel from addon code is forbidden: it froze the client on close", function()
     local h = Harness.New()
 
-    -- the calls under test
     h:ExpectBlocked(3)
     h.env.Settings.OpenToCategory(7)
     h.env.SettingsPanel:OpenToCategory(7)
@@ -243,7 +241,6 @@ end)
 test("a protected global is forbidden to addon code at any time", function()
     local h = Harness.New()
 
-    -- the calls under test
     h:ExpectBlocked(1)
     local seen = WatchBlocked(h)
     local ran = false
@@ -258,17 +255,16 @@ end)
 test("HasRestrictions: a specific marker replaces the lockdown rule, otherwise lockdown blocks", function()
     local h = Harness.New()
 
-    -- the calls under test
     h:ExpectBlocked(1)
     local calls = 0
     local send = h:WrapFunction("C_ChatInfo.SendChatMessage", function() calls = (calls + 1) end)
     local propagate = h.env.CreateFrame("Frame")
 
     h:EnterCombat()
-    -- RestrictedForMacroChatMessages: macros only
+    -- SendChatMessage's RestrictedForMacroChatMessages marker restricts only macros, so addon code sends in combat.
     send("hi", "PARTY")
     eq(calls, 1)
-    -- HasRestrictions, no marker: blocked in lockdown
+    -- SetPropagateKeyboardInput HasRestrictions with no marker, so lockdown blocks it.
     propagate:SetPropagateKeyboardInput(true)
     eq(h.blocked[1], "Frame:SetPropagateKeyboardInput (SimpleFrameAPI)")
 end)
@@ -524,9 +520,9 @@ test("a test fires only payloads the event documents: every value, no extras, se
     throws(function() h:Fire("PLAYER_LEVEL_UP", unpack(level)) end, "PLAYER_LEVEL_UP has no secret flags, so payload #1 can't be secret")
     throws(function() h:Fire("CHAT_MSG_ADDON", "TLK", "hi", "PARTY", 42, "", 0, 0, "", 0) end, "payload #4 is a cstring %(string%), got a number")
     h:Fire("PLAYER_LEVEL_UP", 12, 0, 0, 0, 0, 0, 0, 0, 0)
-    -- SecretPayloads
+    -- RUNE_POWER_UPDATE is flagged SecretPayloads, so its payload may be secret.
     h:Fire("RUNE_POWER_UPDATE", Secret(1), true)
-    -- every value, discordInfo included
+    -- FireChat fills in every value, discordInfo included.
     h:FireChat("CHAT_MSG_SAY", "hi", "Bob Doe")
     h:Fire("PLAYER_DEAD")
 end)
@@ -537,12 +533,12 @@ test("a documented function's arguments that aren't nilable can't be nil; a Defa
 
     throws(function() speak(nil, "hi", 0, 100) end, "C_VoiceChat.SpeakText: argument #1 %(number%) isn't nilable")
     throws(function() speak(0, "hi", 0) end, "argument #4 %(number%) isn't nilable")
-    -- overlap has a Default
+    -- The fifth argument, overlap, has a Default, so it may be left out.
     speak(0, "hi", 0, 100)
     falsy(h.env.issecretvalue(nil), "issecretvalue takes any value, nil included")
     local frame = h.env.CreateFrame("Frame")
 
-    -- widget methods have overloads the docs can't state
+    -- Widget methods have overloads the docs can't state, so SetPoint takes a point alone.
     frame:SetPoint("CENTER")
     eq(#h.spoken, 1)
 end)
@@ -581,7 +577,7 @@ test("only real API is allowed", function()
 
     throws(function() frame:RegisterEvent("NOT_A_REAL_EVENT") end, "unknown event")
     throws(function() frame:NotARealMethod() end, "no method")
-    -- a Region method, not a Frame's
+    -- SetVertexColor is a Region method, not a Frame's.
     throws(function() frame:SetVertexColor(1, 1, 1) end, "no method")
     throws(function() return h.env.NotARealGlobal end, "undefined global")
     eq(h.env.string.dump, nil, "the client has no string.dump")

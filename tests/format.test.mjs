@@ -324,6 +324,11 @@ export const tests = [
             assert(lines.every((line) => line.length <= 120), filled);
             assert((lines[0].length > 110) && (lines[1] === "-- word word word word word word word more"), filled);
             assert(filled.endsWith(lua("--", "--   Indented  aligned", "-- - a list item", "-- secret: why")), filled);
+            // 23 words fill 117 columns, so "10." would start the next line and read as a list item.
+            const numbered = formatLua(lua(`-- ${"abcd ".repeat(23)}10. Then more.`), ["comment-fill"]);
+            assert(numbered === lua(`-- ${"abcd ".repeat(22).trim()}`, "-- abcd 10. Then more."), numbered);
+            const annotated = formatLua(lua(`-- ${"abcd ".repeat(21)}leaves secret: values alone.`), ["comment-fill"]);
+            assert(!/\n-- secret:/.test(annotated), annotated);
         },
     },
     {

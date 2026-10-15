@@ -52,6 +52,7 @@ Blank lines separate functions and groups; there are no banner dividers. Within 
 The rules are Puck's: a comment earns its place by stating what the code can't, and what a reader would get wrong without it. That means an invariant, a unit, a client quirk with its source, or a coupling the code can't check (name the other side).
 
 - **Public functions and methods** get a `---` doc comment: a sentence of behavior, then `---@param` and `---@return` where they aren't obvious. These are the Lua language server's annotations, Lua's XML docs.
+- **Comments are sentences:** capitalized (or starting with code: `` `level` ``, `ns.Krew`), ending with a period, on their own lines above what they describe. A label that only names the value below it is deleted; a fragment becomes a sentence that says what the code can't. `check`'s COMMENT rule enforces the capital and the period.
 - **No** banner dividers (`-- Section ------`), debt markers (TODO, FIXME, HACK, "for now"), dates, history ("used to", "previously"), reviews or conversations, commented-out code, or capitals for emphasis.
 - **Annotations the gates read** stay exactly as they are: `-- secret: <why>`, `-- protected: <why>`, `-- global: <why>`.
 - Delete a stale comment rather than replacing it with a longer one.

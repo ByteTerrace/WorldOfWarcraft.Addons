@@ -192,8 +192,8 @@ local function Position()
     return mapID, floor((x * 10000) + 0.5), floor((y * 10000) + 0.5)
 end
 
---- Sets and tracks a map waypoint from message fields (see Position): each a whole number in digits, the position 0 to
---- 10000. Refuses anything else and maps that take no waypoint.
+--- Sets and tracks a map waypoint from message fields (see Position): each a whole number in digits, with the position
+--- from 0 to 10000. Refuses anything else and maps that take no waypoint.
 ---@param mapID string
 ---@param x string
 ---@param y string

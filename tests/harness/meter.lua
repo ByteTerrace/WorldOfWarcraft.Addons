@@ -265,7 +265,7 @@ local function RecapEvents(h, session, record, death, time, victim)
 
             if d.unit then
                 h.meterGUIDs[key] = h:GUID(d.unit)
-                -- [G] a recap names a player as chat does
+                -- [G] A recap names a player as chat does.
                 from = h:FullName(d.unit)
             end
 
@@ -469,7 +469,7 @@ end
 
 function Harness:InitMeter()
     self.meter = { available = true, failureReason = "", nextID = 1, nextRecap = 1, recaps = {}, sessions = {} }
-    -- [name], or ["mob:"|"player:" .. name] for a recap attacker, = its GUID
+    -- Each GUID by name, or for a recap attacker by "mob:" or "player:" followed by the name.
     self.meterGUIDs = (self.meterGUIDs or {})
 end
 

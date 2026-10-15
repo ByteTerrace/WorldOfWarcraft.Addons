@@ -10,6 +10,7 @@ import { loadAddons } from "../tools/lib/harness.mjs";
 import { findAddons } from "../tools/lib/repo.mjs";
 import { FIXTURES, assert, assertSame, captureLog, withTemp } from "../tools/lib/test-support.mjs";
 import { buildOf, interfaceOf } from "../tools/lib/wow.mjs";
+import { checkTestGlobals } from "../tools/lib/check-tests.mjs";
 import { formatFindings, loadApi, runChecks } from "../tools/verbs/check.mjs";
 
 const SECRET_CALL = "check issecretvalue on each result before any use or annotate \"-- secret: <why>\"";
@@ -146,6 +147,8 @@ const EXPECTED = [
     `${BS}:22: ${DEBT("TODO")}`,
     `${BS}:23: ${DEBT("for now")}`,
     `${BS}:26: NAMING local 'BAD_VALUE' should be camelCase (badValue)`,
+    `${BS}:32: COMMENT a comment is a sentence: start it with a capital letter, or with \`code\``,
+    `${BS}:35: COMMENT a comment is a sentence: end it with a period (or ! ? :)`,
     // Hygiene (GoodAddon/GoodHygiene.lua holds the allowed constructs).
     `${BH}:3: HYGIENE unused local Unread: nothing reads it`,
     `${BH}:4: HYGIENE unused local function Uncalled: nothing calls or reads it`,
@@ -293,5 +296,21 @@ export const tests = [
             const findings = formatFindings(dir).map((finding) => `${finding.path}:${finding.line}`);
             assertSame(findings, ["tests/loose.test.lua:2"]);
         }),
+    },
+    {
+        // The tests' Lua runs in the runner's Lua, where an undefined global reads nil.
+        name: "check reports a global the tests' Lua reads that nothing in the tests' world defines",
+        run: () => {
+            const found = [];
+            checkTestGlobals([
+                { path: "tests/harness/a.lua", text: "Harness = {}\nfunction Harness.Size() return LineHeight * 2 end\n" },
+                { path: "tests/b.test.lua", text: "test(\"x\", function() eq(Harness.Size(), __build, tostring(Helper)) end)\n" },
+                { path: "tests/kits/c.lua", text: "Helper = 1\nreturn { Missing = Missng }\n" },
+            ], ["function test(name, fn) end\nfunction eq() end"], ["__build"], (path, line, rule, message) => found.push(`${path}:${line}: ${rule} ${message}`));
+            assertSame(found, [
+                "tests/harness/a.lua:2: GLOBAL read of LineHeight, which nothing in the tests' Lua, the runner or Lua defines",
+                "tests/kits/c.lua:2: GLOBAL read of Missng, which nothing in the tests' Lua, the runner or Lua defines",
+            ]);
+        },
     },
 ];

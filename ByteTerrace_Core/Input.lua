@@ -21,7 +21,7 @@
 -- is deactivated while its button is down receives "cancel"; when its own press is what changed the maps, the cancel
 -- comes after that press's "down" returns. Captured input is insecure: bind commands, never protected actions.
 
--- { source, WoW key, label key }
+-- Each entry is { source, WoW key, label key }.
 local Sources = {
     { "gamepad.south", "PAD1", "south" },
     { "gamepad.east", "PAD2", "east" },
@@ -145,22 +145,22 @@ end
 ---@param addon table the owning AddOn, whose commands bindings run
 function ByteTerrace.NewInput(addon)
     return setmetatable({
-        -- [key] = command id, for the active maps
+        -- Maps each key to its command id in the active maps.
         m_active = {},
-        -- the active maps' names, in order
+        -- The active maps' names, in order.
         m_activeMaps = {},
         m_addon = addon,
-        -- { map, source, command } until compile
+        -- Each entry is { map, source, command }, kept until compile.
         m_declared = {},
-        -- [key] = command id its press went to
+        -- Maps each held key to the command id its press went to.
         m_latched = {},
-        -- [map] = { [key] = command id }
+        -- Maps each map to its { [key] = command id } table.
         m_maps = {},
-        -- [map] = the module whose commands it binds, or false for the addon's
+        -- Maps each map to the module whose commands it binds, or false for the addon's.
         m_owners = {},
-        -- the command that press's own map change canceled, for after it
+        -- The command a press's own map change canceled, to cancel once that press returns.
         m_pendingCancel = nil,
-        -- the key whose press is running its command
+        -- The key whose press is running its command.
         m_pressing = nil,
     }, Input)
 end

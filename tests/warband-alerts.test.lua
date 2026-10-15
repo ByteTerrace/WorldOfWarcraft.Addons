@@ -26,7 +26,7 @@ test("five marked enemies at once: one alert now, one summary after, every name 
         h:Slash("/tlk mark " .. name .. " Doe")
     end
 
-    -- the marks reach the Krew
+    -- Six seconds on, the marks have reached the Krew.
     h:Advance(6)
     local sounds = Sounds(h, h.env.SOUNDKIT.RAID_WARNING)
 

@@ -426,7 +426,7 @@ function SettingsWindow:Register()
 
     self.Canvas = canvas
     canvas:Hide()
-    -- SmartNavigation_IsFrameIgnored: the canvas and its children
+    -- SmartNavigation_IsFrameIgnored skips the canvas and its children.
     canvas.smartNavigationIgnored = true
     canvas:SetScript("OnShow", function() Present(self, canvas) end)
     local category = Settings.RegisterCanvasLayoutCategory(canvas, self.m_addon.Title)

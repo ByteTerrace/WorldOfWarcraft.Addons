@@ -26,9 +26,9 @@
 -- recaps in order: each new ID, oldest first, belongs to the oldest death still owed one. A death that gave up still
 -- takes its recap if it comes within LateWait, and sets it aside, so a later death never takes another death's recap.
 
--- seconds after that in which a late recap is still your last death's
+-- Seconds after RecapWait in which a late recap is still your last death's.
 local LateWait = 30
--- COMBATLOG_OBJECT_CONTROL_PLAYER in a combat log event's flags
+-- The COMBATLOG_OBJECT_CONTROL_PLAYER bit in a combat log event's flags.
 local PlayerControlled = 0x100
 
 -- UnitRace's raceFile for each race a Forever character can be, by faction.
@@ -37,9 +37,9 @@ local RaceFactions = {
     Tauren = "Horde", Troll = "Horde",
 }
 
--- seconds after the death to look again, whatever the meter says
+-- Seconds after the death to look again, whatever the meter says.
 local RecapRetries = { 0.3, 1 }
--- seconds to wait for the damage meter to record your death
+-- Seconds to wait for the damage meter to record your death.
 local RecapWait = 3
 
 local ByteTerrace = ByteTerrace
@@ -143,11 +143,11 @@ ByteTerrace.Facts.death = {
     OnEnable = function(module)
         local state = module.Addon.State
         local count = module:Id("count")
-        -- the highest recap ID a death took (or there at start)
+        -- The highest recap ID a death took, or the one there at start.
         local handled = NewestDeath()
-        -- the deaths still owed a recap, oldest first: { number, gaveUp, settled, timers }
+        -- The deaths still owed a recap, oldest first; each is { number, gaveUp, settled, timers }.
         local owed = {}
-        -- the meter-update handler while any death is owed a recap
+        -- The meter-update handler, held while any death is owed a recap.
         local waitHandle
 
         -- Publishes the killer of death number (nil: unknown).
@@ -209,7 +209,7 @@ ByteTerrace.Facts.death = {
             TryRecap()
 
             if death.settled then
-                -- its recap was already there
+                -- Its recap was already there.
                 return
             end
 

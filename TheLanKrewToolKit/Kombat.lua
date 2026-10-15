@@ -43,9 +43,9 @@ local addonName, ns = ...
 --   DeathTaunt  plays deathTaunt on PLAYER_DEAD.
 
 local ExecuteSpellID = 5308
--- Forever's rogues and druids hold at most 5 (ComboFrame shows 5 unless the max is 6 or 9)
+-- Forever's rogues and druids hold at most 5 combo points (ComboFrame shows 5 unless the max is 6 or 9).
 local FullComboPoints = 5
--- seconds: a hit this soon before combat starts opened the fight
+-- How long, in seconds, before combat starts a hit still counts as opening the fight.
 local OpeningHitWindow = 1
 local TargetCooldown = 10
 
@@ -221,7 +221,7 @@ Addon:Module("Finish", {
         -- only COMBO_TARGET_CHANGED.
         local function ReadPoints(_, powerType)
             if powerType and (powerType ~= "COMBO_POINTS") then
-                -- a druid's mana or energy tick
+                -- This is a druid's mana or energy tick.
                 return
             end
 
@@ -287,7 +287,7 @@ Addon:Module("Finish", {
                 state:Set(announced, state.Values[serial])
 
                 if not SoundBank:Play("finishHim") and (state.Values[points] >= FullComboPoints) then
-                    -- finish him has no file: the fifth point still calls out
+                    -- When finishHim has no file, the fifth point still calls out.
                     SoundBank:Play(ComboSounds[FullComboPoints])
                 end
             end
@@ -309,9 +309,9 @@ Addon:Module("Victory", {
         local flawless, combat = module:Id("flawless"), module:Id("combat.active")
         local died, duelEnded = module:Id("target.died"), module:Id("target.duelEnded")
         local serial, announced = module:Id("target.serial"), module:Id("Finish.announced")
-        -- flawless kills this fight, counted when it ends
+        -- This fight's flawless kills, counted when it ends.
         local wins = 0
-        -- GetTime() of your last hit
+        -- The GetTime() of your last hit.
         local lastHit = -math.huge
 
         -- Counts a fight's flawless kills unless the meter says you took damage.
@@ -362,14 +362,14 @@ Addon:Module("Victory", {
         module:Rule({
             changed = function(active, state)
                 if not active or not state.Values[combat] then
-                    -- someone else's kill, out of combat
+                    -- A kill while you're out of combat is someone else's.
                     return
                 end
 
                 local outcome = Outcome()
 
                 if state.Values[duelEnded] and not state.Values[died] and (outcome ~= "flawlessVictory") then
-                    -- a duel you were hit in may be one you lost
+                    -- A duel you were hit in may be one you lost.
                     return
                 end
 

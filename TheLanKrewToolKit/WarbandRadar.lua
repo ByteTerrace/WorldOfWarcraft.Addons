@@ -19,7 +19,7 @@ local MaxMessage = ByteTerrace.Comms.MaxMessage
 local MaxRows = 10
 local NearbySeconds = 120
 local Points = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
--- bytes of entries and their tab separators per message
+-- How many bytes of entries and their tab separators fit in one message.
 local Room = (MaxMessage - #"NEARBY:")
 local RowHeight = 18
 local ShareInterval = 10
@@ -35,11 +35,11 @@ local Krew = ns.Krew
 local Warband = ns.Warband
 
 local FlushTimer, Window, Ticker
--- scratch: the entries a redraw shows, in order
+-- Scratch space for the entries a redraw shows, in order.
 local List = {}
--- [key] = { key, class, level, faction, guild, time, by, status }
+-- Maps each key to { key, class, level, faction, guild, time, by, status }.
 local Nearby = {}
--- [key] = true for your own sightings not yet shared
+-- Maps each key of your own sightings not yet shared to true.
 local Pending = {}
 local Radar
 
@@ -135,14 +135,14 @@ local function Flush()
         local entry = Nearby[key]
 
         if not entry then
-            -- gone from the list: nothing to share
+            -- An entry gone from the list has nothing to share.
             Pending[key] = nil
         else
             local text = (key .. ";" .. entry.class .. ";" .. entry.level)
             local size = (((#fields > 0) and (#text + 1)) or #text)
 
             if size > room then
-                -- the rest wait for the next message
+                -- The rest wait for the next message.
                 break
             end
 
@@ -190,14 +190,14 @@ local function Note(info, by)
     end
 
     if not by or not entry.time or entry.by then
-        -- your own sighting wins over a Krew report
+        -- Your own sighting wins over a Krew report.
         entry.by = by
     end
 
     entry.time = GetTime()
 
     if not Ticker then
-        -- the window is hidden: show it now; while it shows, the tick draws
+        -- The window is hidden, so show it now; while it shows, the tick draws.
         Render()
     end
 end
@@ -325,7 +325,7 @@ function Render()
 
     local count = (((#list < MaxRows) and #list) or MaxRows)
 
-    -- rows in use, and rows to clear
+    -- Walk the rows in use, then the rows to clear.
     for i = 1, (((Window.m_count or 0) > count) and Window.m_count) or count do
         local row = Window.Rows[i]
 
@@ -356,7 +356,7 @@ Radar = Addon:Module("Radar", {
         wipe(Nearby)
         wipe(Pending)
         wipe(List)
-        -- the module's timers stop with it
+        -- The module's timers stop with it, so only the handles are forgotten.
         FlushTimer, Ticker = nil, nil
 
         if Window then

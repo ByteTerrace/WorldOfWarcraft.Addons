@@ -1,6 +1,6 @@
 -- Facts: game state that several modules rule over, published as runtime (unpersisted) rows. Each fact is a module
--- whose event adapter is the only code that reads the WoW API; every reader works from the row. A fact never holds a
--- secret: an adapter whose API can return one checks issecretvalue and keeps the last known value.
+-- whose event adapter is the only code that reads the WoW API; every reader works from the row. No fact holds a secret:
+-- an adapter whose API can return one checks issecretvalue and keeps the last known value.
 --
 -- An addon opts in with NewAddOn's facts = { ... }. Facts are declared before its own modules, so they're enabled first
 -- and hold their real value before any other module's rules take their first reading (a /reload in combat must not look

@@ -218,7 +218,7 @@ local Needs = {
         text = "dead or a ghost after letting a mob kill you (type it before you resurrect)",
     },
     encounter = {
-        -- ProbesCombat.lua's
+        -- Probes.EncounterWarnings comes from ProbesCombat.lua.
         check = function() return Probes.EncounterWarnings.started end,
         label = "boss encounter",
         setup = function(h) h:StartEncounter({ name = "Hogger" }) end,
@@ -287,7 +287,7 @@ local Needs = {
         text = "in a guild",
     },
     heardChat = {
-        -- any chat event but an addon message
+        -- Any chat event but an addon message notes a discordInfo shape.
         check = function() return (next(Probes.DiscordInfo.shapes) ~= nil) end,
         label = "heard chat",
         setup = function(h)
@@ -413,7 +413,7 @@ local Needs = {
     },
     pvpFight = {
         check = function()
-            -- ProbesCombat.lua's, which loads after this file
+            -- Probes.PvPMeter comes from ProbesCombat.lua, which loads after this file.
             local meter = Probes.PvPMeter
 
             return ((next(meter.leftCombat) ~= nil) and (next(meter.later) ~= nil))

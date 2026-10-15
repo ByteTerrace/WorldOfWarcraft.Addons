@@ -12,6 +12,52 @@ const BANNER = /[-=*#_~]{4,}/;
 // Debt markers are the conventional capitalized words; "hack" or "revisit" in prose isn't one.
 const DEBT = /\b(?:TODO|FIXME|HACK|XXX|KLUDGE|REVISIT)\b|\b[Ff]or now\b/;
 
+// A comment paragraph's first word: anything but a lower-case word of prose (a capital, a digit,
+// punctuation, or code such as ns.Krew, h:Fire, powerToken, docs/Conventions.md or `level`;
+// "lower-case" and "it's" are prose).
+const SENTENCE_START = /^(?:[^a-z]|[a-z]+[A-Z0-9_.:([=/])/;
+// Its last line's end: a sentence's punctuation, maybe inside closing quotes or brackets.
+const SENTENCE_END = /[.!?:]["')\]`]*$/;
+// Comment lines kept as written: aligned columns and indented items, ---@ annotations, list items
+// and the annotations the gates read.
+const VERBATIM = /^(?: {2,}|@|[-*+] |\d+[.)] |(?:secret|protected|global|order):)/;
+
+// The paragraphs of prose comments: consecutive full-line comments with the same prefix (-- or
+// ---) and indentation, ended by an empty comment line or a verbatim one. { first, last, startLine,
+// endLine } each: the first line's text and the last line's.
+function proseParagraphs(text, ast) {
+    const lines = text.split("\n");
+    const paragraphs = [];
+    let current = null;
+    let previousLine = -1;
+    const close = () => {
+        if (current) paragraphs.push(current);
+        current = null;
+    };
+    for (const comment of ast.comments ?? []) {
+        const line = comment.loc.start.line;
+        const match = /^( *)(---?)(?: (.*))?$/.exec(lines[line - 1]);
+        if (comment.raw.startsWith("--[") || (comment.loc.end.line !== line) || !match) {
+            close();
+            continue;
+        }
+        const [, indent, prefix, words = ""] = match;
+        const key = `${indent}${prefix}`;
+        if ((words.trim() === "") || VERBATIM.test(words)) {
+            close();
+        } else if (current && (current.key === key) && (line === previousLine + 1)) {
+            current.last = words;
+            current.endLine = line;
+        } else {
+            close();
+            current = { endLine: line, first: words, key, last: words, startLine: line };
+        }
+        previousLine = line;
+    }
+    close();
+    return paragraphs;
+}
+
 // `local x = x` or `local floor = math.floor`: an alias keeps the name of what it aliases.
 function isAlias(name, init) {
     if (!init) return false;
@@ -201,6 +247,14 @@ export function checkStyleRules(file, text, report) {
         const debt = DEBT.exec(comment.value);
         if (debt) {
             report(file, comment.loc.start.line, "COMMENT", `debt marker "${debt[0]}": do the work, or say what's true today`);
+        }
+    }
+    for (const paragraph of proseParagraphs(text, ast)) {
+        if (!SENTENCE_START.test(paragraph.first)) {
+            report(file, paragraph.startLine, "COMMENT", "a comment is a sentence: start it with a capital letter, or with `code`");
+        }
+        if (!SENTENCE_END.test(paragraph.last)) {
+            report(file, paragraph.endLine, "COMMENT", "a comment is a sentence: end it with a period (or ! ? :)");
         }
     }
 

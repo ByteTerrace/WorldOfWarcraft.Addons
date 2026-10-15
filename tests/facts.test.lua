@@ -122,7 +122,7 @@ test("a player who becomes attackable is an enemy by their next health change", 
     duelist.canAttack = false
     h:SetTarget(duelist)
     falsy(addon.State:Get("target.enemyPlayer"))
-    -- a duel starts; say the client fires nothing else
+    -- A duel starts with no event of its own, so the next UNIT_HEALTH has to catch it.
     duelist.canAttack = true
     h:Fire("UNIT_HEALTH", "target")
     truthy(addon.State:Get("target.enemyPlayer"))
@@ -132,20 +132,20 @@ test("a duel ends only for the target that became attackable while you targeted 
     local h, addon = NewAddOn()
 
     Start(h)
-    -- a bystander of the other faction, attackable from the start
+    -- The target is a bystander of the other faction, attackable from the start.
     h:SetTarget(EnemyPlayer())
-    -- someone else's duel, or a declined request
+    -- Someone else's duel ends, or a request is declined.
     h:Fire("DUEL_FINISHED")
     falsy(addon.State:Get("target.duelEnded"), "not your duel")
     local duelist = EnemyPlayer()
 
     duelist.canAttack = false
     h:SetTarget(duelist)
-    -- the duel starts
+    -- The duel starts: the target becomes attackable.
     duelist.canAttack = true
     h:Fire("UNIT_FLAGS", "target")
     h:Fire("DUEL_OUTOFBOUNDS")
-    -- back before the countdown ran out: no forfeit
+    -- Back in bounds before the countdown ran out, so there's no forfeit.
     h:Fire("DUEL_INBOUNDS")
     h:Fire("DUEL_FINISHED")
     truthy(addon.State:Get("target.duelEnded"), "your duel")
@@ -207,9 +207,9 @@ test("killing blows count yours on players, not a groupmate's or a creature's, a
     local victim = h:GUID({ isPlayer = true, name = "Bob" })
 
     h:Fire("PARTY_KILL", me, victim)
-    -- a groupmate's blow
+    -- A groupmate's killing blow isn't yours.
     h:Fire("PARTY_KILL", h:GUID({ isPlayer = true, name = "Ann" }), victim)
-    -- a creature
+    -- A creature's death isn't a player kill.
     h:Fire("PARTY_KILL", me, h:GUID({ name = "Wolf" }))
     eq(addon.State:Get("kills.blows"), 1)
     h:Die()

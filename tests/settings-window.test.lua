@@ -208,7 +208,7 @@ test("the page list's buttons switch pages, and the close button closes the wind
     local riddles
 
     for _, child in ipairs({ window.View:GetChildren() }) do
-        -- the content frame has none
+        -- The content frame has no Label, so it's skipped.
         local label = rawget(child, "Label")
 
         if label and (label:GetText() == "Riddles") then

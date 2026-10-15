@@ -154,7 +154,6 @@ end)
 test("moving a protected frame is blocked in combat lockdown", function()
     local h = Harness.New()
 
-    -- the calls under test
     h:ExpectBlocked(2)
     local env = h.env
     local secure = env.CreateFrame("Button", nil, env.UIParent, "SecureActionButtonTemplate")

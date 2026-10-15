@@ -11,7 +11,7 @@ local addonName, ns = ...
 -- change repaints from those readings. A plate without a readable player (a creature) wears no badge and costs nothing.
 
 local BadgeSize = 24
--- nameplate1 to nameplate40
+-- Nameplate unit tokens run from nameplate1 to nameplate40.
 local MaxNameplates = 40
 
 local C_NamePlate, CreateFrame, UnitExists = C_NamePlate, CreateFrame, UnitExists
@@ -19,11 +19,11 @@ local C_NamePlate, CreateFrame, UnitExists = C_NamePlate, CreateFrame, UnitExist
 local Addon = ns.Addon
 local Warband = ns.Warband
 
--- [nameplate frame] = badge frame
+-- Maps each nameplate frame to its badge frame.
 local Badges = {}
--- [unit token] = the plate it showed on, for player plates on screen
+-- Maps each unit token to the plate it showed on, for player plates on screen.
 local Shown = {}
--- [unit token] = that plate's info, as Warband read it when the plate appeared
+-- Maps each unit token to that plate's info, as Warband read it when the plate appeared.
 local Who = {}
 
 local function BadgeFor(plate)
@@ -79,7 +79,7 @@ local function Show(unit, info)
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
 
     if not plate then
-        -- a plate addons can't touch (friendly plates in instances)
+        -- Addons get no plate frame for some units (friendly plates in instances).
         return
     end
 
@@ -112,7 +112,7 @@ Addon:Module("Badges", {
 
         module:Watch({ "Warband.ledger", "Warband.wars" }, RefreshAll, true)
 
-        -- plates already on screen (a /reload, or switched back on)
+        -- Badge the plates already on screen, after a /reload or when switched back on.
         for i = 1, MaxNameplates do
             local unit = ("nameplate" .. i)
 

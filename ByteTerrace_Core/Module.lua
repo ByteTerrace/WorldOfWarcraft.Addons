@@ -354,7 +354,7 @@ end
 ---@param enabled boolean
 function Module:SetEnabled(enabled)
     if (enabled == self.Enabled) or self.m_stopping then
-        -- a stop in progress finishes first; a nested start or stop is ignored
+        -- A stop in progress finishes first; a nested start or stop is ignored.
         return
     end
 
@@ -401,7 +401,7 @@ function Module:SetEnabled(enabled)
         SafeCall(spec.OnDisable, self)
     end
 
-    -- its maps, even when OnDisable failed to give the controller back
+    -- Releases its maps even when OnDisable failed to give the controller back.
     addon.Input:Release(self)
 
     for timer in pairs(self.m_timers) do
@@ -466,7 +466,7 @@ function Module:Watch(rows, fn, skipInitial)
     self.m_watchers[#self.m_watchers + 1] = watcher
 
     if not skipInitial then
-        -- ownership precedes a callback that may stop this module
+        -- The module owns the watcher before its first run, since the callback may stop this module.
         state:Run(watcher)
     end
 

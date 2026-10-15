@@ -10,12 +10,13 @@ local addonName, ns = ...
 --   ns.Puzzles.Grades     { id, label } from { 0, "Kindergarten" } to { 6, "Grade 6" }, in order.
 --   ns.Puzzles.Generate   see Generate below.
 --   ns.Puzzles.Kit        the building blocks, for the generators (Journal.lua also borrows Count).
+--   ns.Puzzles.MaxChoice  the longest choice, in bytes, a riddle may offer (ScholarQuests.lua cuts its lines to it).
 --                         Kit.Generators[kind] is function(state) -> puzzle.
 --
 -- A generator's state is one generation's record: roll (options.random), subject, grade, level and a sanitized context.
 -- The Kit functions that only draw (Pick, Chance, Shuffle, WrongNumbers) read nothing but state.roll.
 
--- UnitFactionGroup's factions a context may name
+-- The factions a context may name, as UnitFactionGroup names them.
 local Factions = { Alliance = true, Horde = true }
 local MaxChoice, MaxPrompt = 40, 240
 
@@ -115,7 +116,7 @@ local function Shuffle(state, list)
     return out
 end
 
---- text without leading or trailing whitespace.
+--- Returns text without leading or trailing whitespace.
 local function Trim(text)
     return (gsub(gsub(text, "^%s+", ""), "%s+$", ""))
 end
@@ -146,8 +147,8 @@ local function Arrange(state, correct, wrongs)
     return { choices[1], choices[2], choices[3], choices[4] }, answer
 end
 
---- text, trimmed, when it's plain and at most maxLength long: no control characters, escape codes or template braces.
---- Anything else is nil.
+--- Returns text, trimmed, when it's plain and at most maxLength long: no control characters, escape codes or template
+--- braces. Anything else is nil.
 local function Clean(text, maxLength)
     text = (((type(text) == "string") and Trim(text)) or "")
 
@@ -171,7 +172,7 @@ local function Vars(state, vars)
     return out
 end
 
---- n as a number when it's a whole number from lo to hi (a numeric string counts), else nil.
+--- Returns n as a number when it's a whole number from lo to hi (a numeric string counts), else nil.
 local function WholeNumber(n, lo, hi)
     n = tonumber(n)
 
@@ -212,7 +213,7 @@ local Pictures = {
     end,
 }
 
--- n as a whole number clamped to lo..hi; default when it isn't a number (or is NaN).
+-- Returns n as a whole number clamped to lo..hi, or default when it isn't a number (or is NaN).
 local function Clamp(n, lo, hi, default)
     n = tonumber(n)
 
@@ -261,13 +262,13 @@ end
 --- Generates a puzzle. Every math and reading puzzle fits the length limits, with any context SafeContext admits. Bad
 --- options (no random, an unknown subject) raise an error; grade and level are read as numbers and clamped. A quest
 --- puzzle ignores grade and level, and is nil when no question fits the quest.
----@param options table subject ("math" | "reading" | "quest"), grade (0..6), level (1..3, easiest
---- first), random (function(m, n) returning an integer from m to n), an optional context { name, class, level, zone,
---- copper, faction ("Alliance" or "Horde"), locale (GetLocale's "enUS") } of plain values, and for "quest" the quest (a
---- QuestBook record) and known (every record)
----@return table? puzzle { subject, kind, title, prompt, choices (4 distinct strings), answer (1..4),
---- hint, explanation }, plus value, expression, remainder and terms on math puzzles and book (the quest book's text) on
---- quest puzzles
+---@param options table subject ("math" | "reading" | "quest"), grade (0..6), level (1..3, easiest first), random
+---                     (function(m, n) returning an integer from m to n), an optional context { name, class, level,
+---                     zone, copper, faction ("Alliance" or "Horde"), locale (GetLocale's "enUS") } of plain values,
+---                     and for "quest" the quest (a QuestBook record) and known (every record)
+---@return table? puzzle { subject, kind, title, prompt, choices (4 distinct strings), answer (1..4), hint,
+---                      explanation }, plus value, expression, remainder and terms on math puzzles and book (the quest
+---                      book's text) on quest puzzles
 local function Generate(options)
     if (type(options) ~= "table") or (type(options.random) ~= "function") then
         error("ScholarPuzzles.Generate: options.random must be a function", 2)
@@ -325,4 +326,4 @@ local Kit = {
     Pick = Pick, Shuffle = Shuffle, Trim = Trim, Vars = Vars, Words = ScholarWords, WrongNumbers = WrongNumbers,
 }
 
-ns.Puzzles = { Generate = Generate, Grades = Grades, Kit = Kit }
+ns.Puzzles = { Generate = Generate, Grades = Grades, Kit = Kit, MaxChoice = MaxChoice }

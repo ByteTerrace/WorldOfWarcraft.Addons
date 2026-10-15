@@ -100,7 +100,7 @@ test("a sync packs three marks and three wars into two messages, and a Krew memb
 
     eq(#synced, 2, table.concat(synced, " | "))
 
-    -- the message's entries, sorted: marks placed in one second tie
+    -- Entries returns the message's entries sorted, since marks placed in one second tie.
     local function Entries(text, kind)
         local entries = {}
 
@@ -142,7 +142,7 @@ test("marks too long for one message go in as few as fit", function()
     local names = {}
 
     for i, letter in ipairs({ "A", "B", "C" }) do
-        -- "Aaaa... Doe": 60 bytes, so an entry is 84
+        -- "Aaaa... Doe" is 60 bytes, so an entry is 84.
         names[i] = (letter .. string.rep("a", 55))
         h:SetTarget(Enemy(names[i], { classFile = "DEATHKNIGHT" }))
         h:Slash("/tlk mark")

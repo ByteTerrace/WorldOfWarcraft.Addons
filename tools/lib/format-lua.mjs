@@ -589,6 +589,15 @@ const Passes = {
             let line = "";
             for (const word of words.join(" ").split(" ")) {
                 if (line && lead.length + line.length + 1 + word.length > MaxColumns) {
+                    // A line starting "10." or "-" would read as a list item, and one starting
+                    // "secret:" as an annotation the gates read: its word moves down with the one
+                    // before it.
+                    const space = line.lastIndexOf(" ");
+                    if (/^(?:\d+[.)]|[-*+]|(?:secret|protected|global|order):)$/.test(word) && (space > 0)) {
+                        filled.push(lead + line.slice(0, space));
+                        line = `${line.slice(space + 1)} ${word}`;
+                        continue;
+                    }
                     filled.push(lead + line);
                     line = word;
                 } else {

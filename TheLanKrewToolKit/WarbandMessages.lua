@@ -15,14 +15,14 @@ local addonName, ns = ...
 --   Warband.EnableMessages()    listens for the Krew's messages
 --   Warband.DisableMessages()   forgets the pending sync when Warband stops
 
--- the largest gathering accepted from a message
+-- The largest gathering accepted from a message.
 local MaxIntel = 999
 local MaxMessage = ByteTerrace.Comms.MaxMessage
--- seconds: older marks and wars aren't shared with one who joins
+-- How old, in seconds, a mark or war can be and still be shared with one who joins.
 local SyncAge = ((7 * 24) * 3600)
--- your own marks (and wars) shared with Krew members who join
+-- How many of your own marks, and of your wars, are shared with Krew members who join.
 local SyncCount = 3
--- seconds that gather a burst of hellos into one sync
+-- How long, in seconds, a burst of hellos gathers before one sync.
 local SyncDelay = 2
 
 local concat, sort = table.concat, table.sort
@@ -41,7 +41,7 @@ local GuildName, MyKey, ValidGuildKey, ValidKey = Warband.GuildName, Warband.MyK
 local Ledger, WarbandModule, Wars = Warband.Ledger, Warband.Module, Warband.Wars
 local SetWaypoint, Where = Warband.SetWaypoint, Warband.Where
 
--- pending timer that answers a burst of hellos with one sync
+-- The pending timer that answers a burst of hellos with one sync.
 local SyncTimer
 
 -- A mark from the Krew: fields are key, class, level and faction (InfoFrom).
@@ -57,7 +57,7 @@ local function HeardMark(sender, fields)
     Remember(info.key, info)
 
     if known or not SetKind(info.key, "mark", sender) then
-        -- a mark synced again when someone joins, or a full ledger
+        -- A mark synced again when someone joins, or a full ledger, shows no card.
         return
     end
 
@@ -87,7 +87,7 @@ local function SendPacked(kind, entries)
     local fields, left = {}, room
 
     for _, entry in ipairs(entries) do
-        -- a tab before every entry but the first
+        -- A tab goes before every entry but the first.
         local size = (((#fields > 0) and (#entry + 1)) or #entry)
 
         if size > left then
@@ -149,7 +149,7 @@ end
 
 --- Forgets the pending sync; OnDisable calls it after subscriptions are removed.
 function Warband.DisableMessages()
-    -- the module's timers stop with it
+    -- The module's timers stop with it, so only the handles are forgotten.
     SyncTimer = nil
 end
 

@@ -19,7 +19,7 @@
 -- player is read once per target, and its rank once per target too, only when it's attackable.
 
 local FormidableClassifications = { elite = true, rareelite = true, worldboss = true }
--- UnitLevel of a unit too far above you to show its level
+-- UnitLevel's answer for a unit too far above you to show its level.
 local SkullLevel = -1
 
 local issecretvalue, UnitCanAttack, UnitClassification = issecretvalue, UnitCanAttack, UnitClassification
@@ -53,11 +53,11 @@ ByteTerrace.Facts.target = {
         local state = module.Addon.State
         local serial, enemy, formidable = module:Id("serial"), module:Id("enemyPlayer"), module:Id("formidable")
         local alive, died, duelEnded = module:Id("alive"), module:Id("died"), module:Id("duelEnded")
-        -- the target is a player, as of the last target change
+        -- Whether the target is a player, as of the last target change.
         local isPlayer = false
-        -- the target's rank is formidable; nil until read for this target
+        -- Whether the target's rank is formidable, or nil until it's read for this target.
         local rank
-        -- the target became attackable while targeted: your duel partner
+        -- Whether the target became attackable while targeted, which makes it your duel partner.
         local dueling = false
 
         -- Whether the target is an attackable player, formidable, and alive.
@@ -79,7 +79,7 @@ ByteTerrace.Facts.target = {
         -- attackable as it dies).
         local function Live(isAlive, wasEnemy)
             if isAlive and not state.Values[alive] then
-                -- resurrected: a death from here on counts again
+                -- The target was resurrected, so a death from here on counts again.
                 state:Set(died, false)
             elseif not isAlive and state.Values[alive] and wasEnemy and not IsTrue(UnitIsFeignDeath("target")) then
                 state:Set(died, true)
@@ -151,7 +151,7 @@ ByteTerrace.Facts.target = {
         module:On("UNIT_LEVEL", RankChanged, "target")
         isPlayer = IsTrue(UnitIsPlayer("target"))
         Refresh()
-        -- an attackable target at a /reload may be anyone
+        -- An attackable target at a /reload may be anyone, so it isn't taken for a duel partner.
         dueling = false
     end,
     state = {

@@ -39,7 +39,7 @@ local function SettingsPages(addon)
             local pageName = (moduleSpec and moduleSpec.page)
             local page = main
 
-            -- a page named for the addon is the main page
+            -- A page named for the addon is the main page.
             if pageName and (pageName ~= addon.Title) then
                 page = byName[pageName]
 

@@ -34,9 +34,9 @@ local addonName, ns = ...
 -- count).
 
 local Limit = 30
--- characters kept of a title, name, place, goal or objective
+-- How many bytes of a title, name, place, goal or objective are kept.
 local MaxLine = 120
--- QUEST_LOG_UPDATEs an unnamed quest's objectives are read on before the book gives up
+-- How many QUEST_LOG_UPDATEs an unnamed quest's objectives are read on before the book gives up.
 local MaxNameReads = 20
 local MaxObjectives = 3
 
@@ -85,12 +85,12 @@ local CountPatterns = {
 
 local Addon = ns.Addon
 
--- the first QUEST_LOG_UPDATE since the start records the log again
+-- Whether the first QUEST_LOG_UPDATE since the module started records the log again.
 local LookAgain = false
--- what the open offer showed: { id, title, text, goal, giver }
+-- What the open offer showed, as { id, title, text, goal, giver }.
 local Offer
 local QuestBookModule
--- what the open reward panel showed: { id, title, ender, reward }
+-- What the open reward panel showed, as { id, title, ender, reward }.
 local TurnIn
 -- The keys of quests whose objectives wait for their names (ObjectiveFields' unnamed), each with the reads it has left.
 local Unnamed = {}
@@ -164,8 +164,8 @@ end
 
 -- A text the client gave, plain: "" for a secret or a non-string; its escape codes undone (a link keeps its text, a
 -- texture goes, |n is a line break), other control characters but line breaks removed and trimmed. With length (a
--- one-line field), it's cut to length characters, at the last whole sentence (else word) that fits; a quest's text is
--- kept whole, as the log shows it.
+-- one-line field), it's cut to length bytes, at the last whole sentence (else word) that fits; a quest's text is kept
+-- whole, as the log shows it.
 local function Plain(text, length)
     if issecretvalue(text) or (type(text) ~= "string") then
         return ""
@@ -323,7 +323,7 @@ local function OnAccepted(questID)
     end
 
     if values.title == "" then
-        -- nothing to name it by
+        -- A quest without a title has nothing to name it by.
         return
     end
 
@@ -372,14 +372,14 @@ local function OnLogUpdate()
             local values = ObjectiveFields(questID, {})
 
             if values.unnamed and (reads <= 1) then
-                -- the names never came: the named objectives are all it has
+                -- The names never came, so the named objectives are all it has.
                 values.unnamed = false
             end
 
             quests:Set(key, values)
             Unnamed[key] = ((values.unnamed and (reads - 1)) or nil)
         else
-            -- turned in or abandoned: its log entry, and the names, are gone
+            -- Turned in or abandoned, the quest's log entry and its names are gone.
             Unnamed[key] = nil
         end
     end

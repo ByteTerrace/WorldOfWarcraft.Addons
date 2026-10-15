@@ -55,7 +55,7 @@ local Addon = ns.Addon
 local Count = ns.Puzzles.Kit.Count
 local ShowCard = ns.Cards.Show
 
--- the Journal module, declared last
+-- The module is assigned at the end of the file.
 local Journal
 
 -- Played time since the last checkpoint is folded into the session and level totals.
@@ -254,7 +254,7 @@ Journal = Addon:Module("Journal", {
     description = "Celebrates your play: a welcome-back card at login, a Ding! card at level-up, and /tlk journal for this session's highlights.",
     label = "Session journal",
     OnDisable = function()
-        -- keep the played time so far
+        -- Saves the played time so far.
         SaveSeen()
     end,
     OnEnable = function(module)
@@ -271,7 +271,7 @@ Journal = Addon:Module("Journal", {
                 end
             elseif not (BegunThisLoad or (isReload and (Get("sessionStart") ~= 0))
                 or ((Get("sessionStart") ~= 0) and ((GetServerTime() - Get("sessionSeen")) < ContinueWindowSeconds))) then
-                -- enabled late with an older session on file: start fresh, no card
+                -- Enabled late with an older session on file, the journal starts a fresh session and shows no card.
                 StartSession()
             end
 
@@ -285,7 +285,7 @@ Journal = Addon:Module("Journal", {
         end)
 
         if IsLoggedIn() and not BegunThisLoad then
-            -- enabled mid-session
+            -- The journal was enabled mid-session.
             Begin(false, false)
         end
 

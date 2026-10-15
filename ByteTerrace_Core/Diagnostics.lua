@@ -29,7 +29,7 @@
 -- The counts it reads are always kept: an integer increment per dispatch and per publish, and a field increment on the
 -- work record the dispatched handler, watcher, timer or command holds.
 
--- the framework's addon: its dispatch and publishes are counted there
+-- The framework's addon, where its dispatch and publishes are counted.
 local CoreName = "ByteTerrace_Core"
 local MaxLines = 40
 

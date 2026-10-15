@@ -17,9 +17,9 @@ local ShowCard = ns.Cards.Show
 local Warband = ns.Warband
 local KeyOf = Warband.KeyOf
 
--- that suspect, or nil for none
+-- The prime suspect taken at PLAYER_DEAD, or nil for none.
 local Suspect
--- the prime suspect was taken at PLAYER_DEAD, for a killer not known yet
+-- Whether the prime suspect was taken at PLAYER_DEAD, for a killer not known yet.
 local Taken = false
 
 local function Ask(info, title, body, counted)

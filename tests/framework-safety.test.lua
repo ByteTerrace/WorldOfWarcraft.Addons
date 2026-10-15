@@ -381,7 +381,7 @@ test("a keep function that errors while a collection loads costs the addon nothi
         keep = function() error("keep broke") end, limit = 2, name = "people" } },
         toggle = false })
 
-    -- asked once per record
+    -- The keep function is asked once per record, and each call breaks.
     h:ExpectErrors("keep broke", "keep broke", "keep broke")
     Start(h)
     truthy(addon.Started)

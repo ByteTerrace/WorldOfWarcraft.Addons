@@ -27,3 +27,10 @@ local function Unpack(...)
     return BAD_VALUE
 end
 print(Unpack)
+-- The comment paragraphs below each break the sentence rule once.
+
+-- lower-case start, though it ends right.
+
+-- Starts right, but the paragraph's last line
+-- never ends
+print(1)

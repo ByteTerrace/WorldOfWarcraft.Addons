@@ -102,7 +102,7 @@ local function NamePlateShape(enemy)
     return {
         -- secret: recorded by Value as a marker
         forbidden = Value(plate:IsForbidden()),
-        -- Blizzard_NamePlateBase assigns it as a plain field
+        -- Blizzard_NamePlateBase assigns UnitFrame as a plain field.
         hasUnitFrame = (rawget(plate, "UnitFrame") ~= nil),
         -- secret: recorded by Value as a marker
         objectType = Value(plate:GetObjectType()),

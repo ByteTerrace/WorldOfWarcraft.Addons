@@ -110,7 +110,7 @@ test("Blizzard's windows cost nothing while the challenge is off, and a loading 
     addon.State:Set("Scholar.enabled", true)
     truthy(frame:IsEventRegistered("PLAYER_INTERACTION_MANAGER_FRAME_SHOW"), "registered while it runs")
     h:OpenInteraction("Merchant")
-    -- zoning closes every window without a word
+    -- Zoning closes every window without a word.
     h:Fire("PLAYER_ENTERING_WORLD", false, false)
     h:Slash("/tlk puzzle")
     truthy(Showing(h), "nothing holds the riddle after a loading screen")

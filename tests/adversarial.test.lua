@@ -98,21 +98,6 @@ test("scalar and array message fields obey the same encoding rules", function()
     eq(#h.addonMessages, 0)
 end)
 
-test("a brief lockdown discards queued messages before the next send deadline", function()
-    local h, addon = NewAddOn()
-    local module = addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1", interval = 5 } })
-    Start(h)
-    h:JoinGroup("party", { "Bob" })
-    module.Comms:Send("PING", "first")
-    module.Comms:Send("PING", "stale")
-    h:SetRestriction("Encounter", true)
-    h:SetRestriction("Encounter", false)
-    h:Advance(6)
-    eq(#h.addonMessages, 1)
-    eq(module.Comms:Queued(), 0)
-    eq(module:PendingTimers(), 0)
-end)
-
 for _, restriction in ipairs({ "Encounter", "ChallengeMode", "PvPMatch", "Map", "Chat" }) do
     test(restriction .. " activation drops queued messages before chat lockdown applies", function()
         local h, addon = NewAddOn()
@@ -177,12 +162,20 @@ test("stopping a transport inside a listener stops the rest of that delivery", f
     eq(runs, 0)
 end)
 
-test("command validation sees the declared callback before module gating", function()
+test("restarting a transport inside a listener ends the old delivery", function()
     local h, addon = NewAddOn()
-    addon:Module("M", { label = "M", commands = { { name = "broken", label = "Broken" } } })
-    h:ExpectErrors("run must be a function")
+    local module = addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1" } })
+    local runs = 0
+    module.Comms:Listen("PING", function()
+        module:SetEnabled(false)
+        module:SetEnabled(true)
+    end)
+    module.Comms:Listen("PING", function() runs = runs + 1 end)
     Start(h)
-    falsy(addon.Started)
+    h:JoinGroup("party", { "Bob" })
+    h:ReceiveAddonMessage("TestApp1", "PING", "PARTY", "Bob")
+    eq(runs, 0, "the old delivery ended with the transport it began on")
+    truthy(module.Comms:Ready(), "the restarted transport is open")
 end)
 
 test("a failed declaration leaves no rows, commands or records and can be retried", function()
@@ -253,7 +246,7 @@ test("module message subscriptions stop immediately and do not accumulate across
     throws(function() listener:Listen(chat.Comms, "PING", function() end) end, "stopped")
 end)
 
-test("message fields reject secrets, sparse arrays and non-finite numbers before sending", function()
+test("messages reject secrets, sparse arrays, non-scalar fields, non-finite numbers and excess length before sending", function()
     local h, addon = NewAddOn()
     local chat = addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1" } })
     Start(h)
@@ -261,11 +254,21 @@ test("message fields reject secrets, sparse arrays and non-finite numbers before
     for _, fields in ipairs({ Secret("hidden"), { Secret(3) }, { math.huge }, 0 / 0, { [2] = "gap" } }) do
         throws(function() chat.Comms:Send("PING", fields) end, "field")
     end
+    throws(function() chat.Comms:Send("PING", { "a", nil, "c" }) end, "dense array")
+    throws(function() chat.Comms:Send("PING", { {} }) end, "must be a string, number or boolean")
+    throws(function() chat.Comms:Send("PING", print) end, "must be a string, number or boolean")
+    throws(function() chat.Comms:Send("PING", ("x"):rep(251)) end, "message PING is longer than 255 bytes")
+    throws(function() chat.Comms:Listen("ping", function() end) end, "uppercase message kind and a function")
+    throws(function() chat.Comms:Listen("PING") end, "uppercase message kind and a function")
+    eq(#h.addonMessages, 0, "nothing refused went out")
+    chat.Comms:Send("PING", ("x"):rep(250))
+    eq(#h.addonMessages[1].message, 255, "a message at the limit goes")
+    h:Advance(1)
     chat.Comms:Send("PING", { true, false, 3, "" })
-    eq(h.addonMessages[1].message, "PING:true\tfalse\t3\t")
+    eq(h.addonMessages[2].message, "PING:true\tfalse\t3\t")
     chat.Comms:Send("PING", {})
     h:Advance(1)
-    eq(h.addonMessages[2].message, "PING", "empty arrays carry no fields")
+    eq(h.addonMessages[3].message, "PING", "empty arrays carry no fields")
 end)
 
 test("an open Warband menu cannot act after its module stops or restarts", function()
@@ -295,12 +298,19 @@ test("a grudge card cannot act after Warband stops or restarts", function()
 end)
 
 test("a malformed binding cannot leave a partial module declaration", function()
-    local _, addon = NewAddOn()
+    local h, addon = NewAddOn()
     throws(function()
         addon:Module("M", { label = "M", bindings = { false } })
-    end)
+    end, "a binding must be a table")
+    throws(function()
+        addon:Module("M", { label = "M", commands = { { name = "go", label = "Go", run = function() end } },
+            bindings = { { source = "gamepad.south", command = "M.go" } } })
+    end, "a binding needs a map, source and command name")
     local module = addon:Module("M", { label = "M" })
-    truthy(module)
+    Start(h)
+    truthy(addon.Started, "the refused declarations left nothing that fails compile")
+    truthy(module.Enabled)
+    falsy(addon.Commands:Run("M.go"), "the refused declaration's command is gone")
 end)
 
 test("numeric declarations reject invalid bounds before reaching settings controls", function()
@@ -341,13 +351,13 @@ test("early event removal keeps teardown work independent of past registrations"
         module:Off(module:On("PLAYER_TARGET_CHANGED", function() end))
     end
     module:On("PLAYER_TARGET_CHANGED", function() end)
-    local count, offAll = 0, addon.Events.OffAll
-    addon.Events.OffAll = function(events, handles)
-        count = #handles
-        return offAll(events, handles)
-    end
+    local frame = addon.Events.Frame
+    Harness.State(frame).calls = {}
     module:SetEnabled(false)
-    eq(count, 1, "teardown visits only the remaining live subscription")
+    local calls = Harness.State(frame).calls
+    eq(calls.UnregisterEvent, 1, "one unregister for the one live subscription")
+    eq(calls.RegisterEvent, nil)
+    falsy(frame:IsEventRegistered("PLAYER_TARGET_CHANGED"))
 end)
 
 test("dependency teardown cannot restart a module whose stop is still in progress", function()
@@ -387,6 +397,7 @@ test("bound callbacks preserve nil arguments and publish once, then expire perma
     module:SetEnabled(true)
     action()
     eq(runs, 1)
+    throws(function() module:Callback("Mark") end, "Callback needs a function")
 end)
 
 test("a live bound menu action preserves Blizzard's default close response", function()

@@ -42,8 +42,8 @@ test("Blizzard's panel gets one canvas page, kept out of controller focus, and n
     eq(h.category.name, "Test App")
     eq(h.category.canvas, window.Canvas, "the page is the view's canvas")
     truthy(window.Canvas.smartNavigationIgnored, "SmartNavigation ignores the canvas and every child")
-    eq(next(h.settings), nil, "no Blizzard setting controls, whose focus froze controller players")
-    eq(#h.settingsPages, 1, "one page; the view draws its own subpages")
+    -- Blizzard setting controls, whose focus froze controller players, aren't in the harness at all.
+    eq(#h.categories, 1, "one page; the view draws its own subpages")
 end)
 
 test("the view moves to whichever host shows it, and works in both", function()
@@ -69,20 +69,7 @@ test("the toolkit registers its canvas page and no Blizzard setting controls", f
     local addon = h:LoadAddon("TheLanKrewToolKit").Addon
     eq(h.category.name, addon.Title)
     truthy(addon.SettingsWindow.Canvas.smartNavigationIgnored)
-    eq(next(h.settings), nil)
-end)
-
-test("a checkbox flips its row, and a change made elsewhere shows while the window is open", function()
-    local h, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
-    window:Show()
-    local box = window.Controls[state:Id("Meter.enabled")]
-    truthy(box.Check:IsShown(), "on by default")
-    box:Click()
-    falsy(state:Get("Meter.enabled"))
-    falsy(box.Check:IsShown())
-    h:Slash("/test toggle Meter.enabled")
-    truthy(box.Check:IsShown(), "a slash change refreshes the open window")
+    eq(#h.categories, 1)
 end)
 
 test("window and external writes each refresh the changed control once", function()
@@ -90,13 +77,15 @@ test("window and external writes each refresh the changed control once", functio
     local window, state = addon.SettingsWindow, addon.State
     window:Show()
     local box = window.Controls[state:Id("Meter.enabled")]
+    truthy(box.Check:IsShown(), "on by default")
     local calls = Harness.State(box.Check).calls.SetShown
     box:Click()
+    falsy(state:Get("Meter.enabled"), "the checkbox flips its row")
     eq(Harness.State(box.Check).calls.SetShown, calls + 1)
     falsy(box.Check:IsShown())
     h:Slash("/test toggle Meter.enabled")
     eq(Harness.State(box.Check).calls.SetShown, calls + 2)
-    truthy(box.Check:IsShown())
+    truthy(box.Check:IsShown(), "a slash change refreshes the open window")
 end)
 
 test("an enum button steps forward on a left click and back on a right click, wrapping", function()
@@ -130,16 +119,6 @@ test("number steppers move by the row's step and stop at its bounds", function()
     eq(state:Get("Meter.volume"), 0, "stops at min")
 end)
 
-test("a locked row refuses the window's change and says so", function()
-    local h, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
-    window:Show(2)
-    state:Set("Riddles.locked", true)
-    window.Controls[state:Id("Riddles.minutes")].Plus:Click()
-    eq(state:Get("Riddles.minutes"), 30)
-    truthy(h.printed[#h.printed]:find("Minutes is locked", 1, true), h.printed[#h.printed])
-end)
-
 test("the page list switches pages, and the window fits the page it shows", function()
     local _, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
@@ -157,19 +136,6 @@ test("the page list switches pages, and the window fits the page it shows", func
     eq(window:Page(), 2, "it reopens on the last page shown")
 end)
 
-test("a hidden window does no widget work when its rows change", function()
-    local h, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
-    window:Show()
-    window:Hide()
-    local before = h:CountCalls("SetText") + h:CountCalls("SetShown")
-    state:Set("Meter.size", "wider")
-    state:Set("Meter.enabled", false)
-    eq(h:CountCalls("SetText") + h:CountCalls("SetShown"), before)
-    window:Show()
-    eq(window.Controls[state:Id("Meter.size")].Label:GetText(), "Wider", "shown values catch up when it opens")
-end)
-
 test("a hidden window, or a page not shown, costs nothing when its rows change", function()
     local h, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
@@ -177,8 +143,12 @@ test("a hidden window, or a page not shown, costs nothing when its rows change",
     window:Hide()
     h:ResetCalls()
     state:Set("Meter.size", "wider")
+    state:Set("Meter.enabled", false)
+    eq(h:CountCalls("SetText") + h:CountCalls("SetShown"), 0, "the hidden window does no widget work")
     eq(h:CountCalls("IsVisible"), 0, "nothing asks whether the hidden window shows")
     window:Show(1)
+    eq(window.Controls[state:Id("Meter.size")].Label:GetText(), "Wider", "shown values catch up when it opens")
+    falsy(window.Controls[state:Id("Meter.enabled")].Check:IsShown())
     h:ResetCalls()
     state:Set("Riddles.minutes", 40)
     eq(h:CountCalls("SetText") + h:CountCalls("IsVisible"), 0, "a row on a page not shown")
@@ -186,6 +156,39 @@ test("a hidden window, or a page not shown, costs nothing when its rows change",
     window:Show(2)
     eq(window.Controls[state:Id("Riddles.minutes")].Label:GetText(), "40", "it catches up when its page shows")
     eq(h:CountCalls("SetText"), 1, "showing a page refreshes only its own rows")
+end)
+
+test("hovering a setting shows its label and description; leaving hides them", function()
+    local h, addon = NewAddOn()
+    local window, state = addon.SettingsWindow, addon.State
+    window:Show()
+    local tooltip = h.env.GameTooltip
+    truthy(h:Hover(window.Controls[state:Id("Meter.enabled")]))
+    eq(table.concat(Harness.State(tooltip).lines, "|"), "Meter|A meter.")
+    eq(tooltip:GetOwner(), window.Controls[state:Id("Meter.enabled")])
+    truthy(tooltip:IsShown())
+    truthy(h:Hover(window.Controls[state:Id("Meter.size")]))
+    eq(table.concat(Harness.State(tooltip).lines, "|"), "Size", "a setting without a description shows its label")
+    truthy(h:Hover(window.Controls[state:Id("Meter.size")], false))
+    falsy(tooltip:IsShown())
+end)
+
+test("the page list's buttons switch pages, and the close button closes the window", function()
+    local h, addon = NewAddOn()
+    local window = addon.SettingsWindow
+    window:Show()
+    local riddles
+    for _, child in ipairs({ window.View:GetChildren() }) do
+        local label = rawget(child, "Label") -- the content frame has none
+        if label and label:GetText() == "Riddles" then
+            riddles = child
+        end
+    end
+    truthy(h:Click(riddles), "the Riddles button is in the page list")
+    eq(window:Page(), 2)
+    truthy(window.Controls[addon.State:Id("Riddles.minutes")]:IsVisible())
+    truthy(h:Click(window.Frame.Close))
+    falsy(window:IsShown())
 end)
 
 test("the window can be dragged by its frame", function()

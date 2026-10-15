@@ -150,14 +150,16 @@ for i = 1, 4 do ConfigurableUnits["party" .. i] = true end
 for i = 1, 40 do ConfigurableUnits["nameplate" .. i] = true end
 
 -- Defines a test-only addon (for the harness's own tests): spec = { sources = { "lua", ... },
--- savedVariables, savedVariablesPerCharacter, dependencies, metadata, missing = { TOC files the disk lacks } }.
+-- savedVariables, savedVariablesPerCharacter, dependencies, metadata, missing = { TOC files the disk lacks },
+-- files = { a name per source (default File1.lua...) }, as = the real addon whose files the sources
+-- are (their chunks are named after it, so errors and coverage point at the real files) }.
 function Harness.DefineAddOn(name, spec)
     local files = {}
     for i in ipairs(spec.sources) do
-        files[i] = "File" .. i .. ".lua"
+        files[i] = spec.files and spec.files[i] or "File" .. i .. ".lua"
     end
     Addons[name] = {
-        files = files, sources = spec.sources, metadata = spec.metadata or {},
+        files = files, sources = spec.sources, metadata = spec.metadata or {}, as = spec.as,
         savedVariables = spec.savedVariables or {}, savedVariablesPerCharacter = spec.savedVariablesPerCharacter or {},
         dependencies = spec.dependencies or {}, missing = spec.missing or {},
     }
@@ -207,7 +209,6 @@ function Harness.New(player)
     for _, name in ipairs(Harness.RESTRICTIONS) do
         h.restrictions[name] = false
     end
-    h.restrictionStates = {}  -- [name] = Enum.AddOnRestrictionState while changing or active
     h.restrictionDispatch = 0 -- > 0 while ADDON_RESTRICTION_STATE_CHANGED dispatches
     h.blocked = {}            -- API names blocked (ADDON_ACTION_BLOCKED) or forbidden (_FORBIDDEN)
     h.forbidden = {}          -- API names refused with ADDON_ACTION_FORBIDDEN
@@ -232,11 +233,10 @@ function Harness.New(player)
     h.vibrations = {}         -- { type, intensity }
     h.vibrationsStopped = 0   -- C_GamePad.StopVibration calls
     h.opened = {}             -- settings panel openings (C_SettingsUtil.OpenSettingsPanel ids)
-    h.settings = {}           -- [variable] = setting
-    h.settingsPages = {}      -- the Settings fake's pages and their entries (env.lua)
+    h.categories = {}         -- the Settings fake's registered categories (env.lua)
     h.spellNames = { [5308] = "Execute" }
     h.usable = {}             -- [spellName] = { isUsable, insufficientPower }
-    h.zone = player.zone or "Elwynn Forest"   -- GetRealZoneText / GetZoneText
+    h.zone = player.zone or "Elwynn Forest"   -- GetRealZoneText
     h.subZone = player.subZone or ""          -- GetSubZoneText
     h.maxLevel = 60           -- GetMaxPlayerLevel
     local powerType = player.powerType or 3   -- Enum.PowerType.Energy
@@ -253,7 +253,6 @@ function Harness.New(player)
     h.units = {}              -- [token] = unit table for h:SetUnit tokens (pet, focus, party1, ...)
     h.declared = {}           -- globals the TOC declares (SavedVariables); nil reads allowed
     h.errors = {}             -- messages passed to the error handler; a test fails if any are unexpected
-    h.notified = {}           -- [settings variable] = Settings.NotifyUpdate calls
     h.expectedErrors = 0      -- a count, or a list of patterns (see ExpectErrors)
     h.expectedBlocked = 0     -- a count, or a list of patterns (see ExpectBlocked)
     h.propagated = {}         -- gamepad buttons no frame consumed
@@ -393,21 +392,13 @@ function Harness:SetRestriction(name, active)
         return
     end
     if active then
-        self.restrictionStates[name] = 1
         self:FireRestriction(index, 1) -- Activating: not enforced during this dispatch
         self.restrictions[name] = true
-        self.restrictionStates[name] = 2
         self:FireRestriction(index, 2) -- Active
     else
         self.restrictions[name] = false
-        self.restrictionStates[name] = 0
         self:FireRestriction(index, 0) -- Inactive
     end
-end
-
--- Enum.AddOnRestrictionState of a restriction.
-function Harness:RestrictionState(name)
-    return self.restrictionStates[name] or (self.restrictions[name] and 2 or 0)
 end
 
 -- Combat: the Combat restriction and PLAYER_REGEN_DISABLED, then lockdown and a new damage meter
@@ -492,11 +483,13 @@ end
 -- Dispatches an event to every frame registered for it when the dispatch starts (frames created
 -- or registered during it wait for the next one). Unit registrations filter on the raw unit
 -- token, before any wrapping. A payload the snapshot flags as secret is wrapped when its
--- predicate holds, except its unit-token fields. Handler errors reach the error handler.
+-- predicate holds, except its unit-token fields. Handler errors reach the error handler; a payload
+-- the event couldn't carry (Harness.CheckPayload) is the test's error.
 function Harness:Fire(event, ...)
     local entry = Snapshot.events[event]
     assert(entry, "Fire: unknown event " .. tostring(event))
     local payload = { n = select("#", ...), ... }
+    Harness.CheckPayload(event, entry, payload)
     local unit = payload[1]
     local receivers = {}
     for _, frame in ipairs(self.frames) do
@@ -574,7 +567,7 @@ function Harness:LoadFiles(name)
     local ns = {}
     self.loading = addon
     for i, file in ipairs(addon.files) do
-        local chunk = assert(loadstring(addon.sources[i], "@" .. name .. "/" .. file))
+        local chunk = assert(loadstring(addon.sources[i], "@" .. (addon.as or name) .. "/" .. file))
         setfenv(chunk, self.env)
         self:Protect(chunk, name, ns) -- like the client: a file that errors is reported, the rest still load
     end
@@ -670,7 +663,7 @@ function Harness:Restart(isInitialLogin, isReloadingUi, whileAway)
     -- The quest dialog closes with the old UI, and its giver with it.
     self.loggedIn, self.ns, self.questDialog = false, nil, nil
     self.units.questnpc, self.units.npc = nil, nil
-    self.settings, self.settingsOrder, self.settingsPages, self.category = {}, nil, {}, nil
+    self.categories, self.category = {}, nil
     self.prefixes, self.prefixOrder = {}, {}
     self.env = self:BuildEnvironment()
     for _, name in ipairs(order) do
@@ -699,7 +692,6 @@ function Harness:Relog(serverSecondsLater, whileAway)
         for _, name in ipairs(Harness.RESTRICTIONS) do
             self.restrictions[name] = false
         end
-        self.restrictionStates = {}
         self:InitMeter()
         self.target, self.comboHolder = nil, nil
         for token in pairs(self.units) do

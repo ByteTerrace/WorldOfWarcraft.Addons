@@ -196,9 +196,8 @@ export async function readDefinitions(files = probeFiles()) {
 // Two values of the kind a record holds, as one, the way Probes.Merge (ByteTerrace_DevTools)
 // merges an accumulating probe's sessions: a string meets a string or a secret's marker as the
 // sorted union of their comma-separated items (the marker as "secret"), objects merge key by key,
-// two booleans are true if either is, and otherwise b stands (a when b is undefined).
+// two booleans are true if either is, and otherwise b stands.
 export function mergeResults(a, b) {
-    if (b === undefined) return a;
     const item = (value) => (value && typeof value === "object" && value.secret === true ? "secret" : value);
     const [itemA, itemB] = [item(a), item(b)];
     if ((typeof a === "string" || typeof b === "string") && typeof itemA === "string" && typeof itemB === "string") {

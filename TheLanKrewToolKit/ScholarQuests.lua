@@ -52,9 +52,6 @@ end
 -- A record as the riddles read it: { title, giver, place, zone, ender, endPlace, endZone, turnedIn,
 -- goal, text, objectives = { { text, required } } }, every field cleaned; nil without a title.
 local function Clean(record)
-    if type(record) ~= "table" then
-        return nil
-    end
     local quest = {
         key = record.key, title = Line(record.title, MaxTitle), giver = Line(record.giver, MaxLine),
         place = Line(record.place, MaxLine), zone = Line(record.zone, MaxLine), ender = Line(record.ender, MaxLine),

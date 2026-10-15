@@ -31,38 +31,6 @@ local function Hit(spellID, name)
     }
 end
 
-test("the controller probe sees the documented mapped state with independent typed arrays", function()
-    local h = Load()
-    local gamePad = h.env.C_GamePad
-    eq(gamePad.GetDeviceMappedState(gamePad.GetActiveDeviceID()), nil, "no connected controller")
-    h.labelStyle = "Letters"
-    h:Slash("/btdev probe")
-    local result = Records(h)["gamePad.device"].result
-    eq(result.fields, "axes,axisCount,buttonCount,buttons,labelStyle,name,stickCount,sticks")
-    truthy(result.isKnownLabelStyle)
-    local state = gamePad.GetDeviceMappedState(gamePad.GetActiveDeviceID())
-    eq(state.name, "Test Controller")
-    eq(state.labelStyle, "Letters")
-    eq(state.buttonCount, #state.buttons)
-    eq(state.axisCount, #state.axes)
-    eq(state.stickCount, #state.sticks)
-    truthy(state.buttonCount > 0 and state.axisCount > 0 and state.stickCount > 0)
-    for _, button in ipairs(state.buttons) do eq(type(button), "boolean") end
-    for _, axis in ipairs(state.axes) do eq(type(axis), "number") end
-    for _, stick in ipairs(state.sticks) do
-        eq(type(stick.x), "number")
-        eq(type(stick.y), "number")
-        eq(type(stick.len), "number")
-    end
-    state.buttons[1], state.axes[1], state.sticks[1].x = true, 1, 1
-    local again = gamePad.GetDeviceMappedState(1)
-    eq(again.buttons[1], false)
-    eq(again.axes[1], 0)
-    eq(again.sticks[1].x, 0)
-    eq(again.sticks[2].x, 0)
-    eq(gamePad.GetDeviceMappedState(999), nil)
-end)
-
 test("death recap common shapes are stable for melee, spell and mixed deaths in either order", function()
     local baseline
     for _, spells in ipairs({
@@ -166,7 +134,7 @@ test("/btdev probe records the probes whose needs are met, with build and contex
     local h = Load()
     h:Slash("/btdev probe")
     local record = Records(h)["chatTypeInfo.raidWarning"]
-    eq(record.build, "1.60.1 (70009)")
+    eq(record.build, Harness.BUILD)
     eq(record.context.combat, false)
     eq(record.context.restrictions, "none")
     eq(record.result.g, 72)
@@ -193,19 +161,22 @@ test("running again merges: new probes are added, unchanged ones stay, changes a
     local before = 0
     for _ in pairs(Records(h)) do before = before + 1 end
     Records(h)["chatTypeInfo.raidWarning"].result.g = 1
+    Records(h)["chatTypeInfo.raidWarning"].result.r = { secret = true, type = "number" }
     h:SetTarget({ name = "Kobold Vermin", classFile = "WARRIOR" })
     local from = #h.printed + 1
     h:Slash("/btdev probe")
     local text = Printed(h, from)
-    truthy(text:find("(4 new, 1 changed)", 1, true), text)
+    local after = 0
+    for _ in pairs(Records(h)) do after = after + 1 end
+    truthy(after > before, "the target's probes are added")
+    truthy(text:find(("(%d new, 1 changed)"):format(after - before), 1, true), "the summary counts what was added: " .. text)
     truthy(text:find("probe chatTypeInfo.raidWarning changed at result.g: was 1, now 72", 1, true), text)
+    truthy(text:find('probe chatTypeInfo.raidWarning changed at result.r: was { secret = true, type = "number" }, now 255',
+        1, true), "a table prints with its keys sorted: " .. text)
     truthy(Records(h)["unitIdentity.npcTarget"], "now recorded")
     truthy(Records(h)["unitClassification.npcTarget"], "now recorded")
     truthy(Records(h)["power.npcTarget"], "now recorded")
     eq(Records(h)["chatTypeInfo.raidWarning"].result.g, 72)
-    local after = 0
-    for _ in pairs(Records(h)) do after = after + 1 end
-    eq(after, before + 4)
 end)
 
 test("probes survive a reload, and a dump already saved is kept", function()
@@ -234,7 +205,7 @@ test("/btdev probe list shows the probes still without a result, grouped by what
     h:Slash("/btdev probe list")
     local text = Printed(h)
     local count = #h.ns.Probes.List
-    truthy(text:find(("%d of %d probes have no result for 1.60.1 (70009) yet"):format(count, count), 1, true), text)
+    truthy(text:find(("%d of %d probes have no result for %s yet"):format(count, count, Harness.BUILD), 1, true), text)
     truthy(text:find("in a guild: guild.player", 1, true), text)
     h:Slash("/btdev probe")
     local from = #h.printed + 1
@@ -281,7 +252,7 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
     h:Fire("UNIT_COMBAT", "target", "DODGE", "", 0, 1)
     h:Slash("/btdev probe")
     eq(Records(h)["unitCombat.seen"], nil, "waits until the player has been hit too")
-    h:Fire("UNIT_COMBAT", "player", "WOUND", "", Secret(7), 1)
+    h:Fire("UNIT_COMBAT", "player", "WOUND", "", 7, 1)
     h:Fire("UNIT_COMBAT", "party1", "PARRY", "", 0, 1)
     h:Slash("/btdev probe")
     local result = Records(h)["unitCombat.seen"].result
@@ -290,8 +261,16 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
     eq(result.target.WOUND.flagText, "text")
     eq(result.target.WOUND.amount, "number")
     eq(result.target.DODGE.flagText, "empty")
-    eq(result.player.WOUND.amount, "secret", "a secret amount is recorded as secret")
+    eq(result.player.WOUND.amount, "number")
     eq(result.player.WOUND.schoolMask, "number")
+    eq(result.amountInCombat, nil, "no hit on you in combat yet")
+    h:EnterCombat()
+    h:Fire("UNIT_COMBAT", "target", "WOUND", "", 30, 1)
+    h:Slash("/btdev probe")
+    eq(Records(h)["unitCombat.seen"].result.amountInCombat, nil, "a hit on the target isn't one on you")
+    h:Fire("UNIT_COMBAT", "player", "WOUND", "", 12, 1)
+    h:Slash("/btdev probe")
+    eq(Records(h)["unitCombat.seen"].result.amountInCombat, "number", "the amount of a hit on you in combat")
 end)
 
 test("a record from another build counts as missing", function()
@@ -301,7 +280,7 @@ test("a record from another build counts as missing", function()
 end)
 
 test("a record from another version of its probe counts as missing, and a new run replaces it", function()
-    local old = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = { fields = "amount" } }
+    local old = { build = Harness.BUILD, context = { combat = false, restrictions = "none" }, result = { fields = "amount" } }
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["deathRecap.events"] = old } } })
     h:Slash("/btdev probe list")
     truthy(Printed(h):find("deathRecap.events", 1, true), Printed(h))
@@ -341,9 +320,11 @@ test("chat senders are kept as name shapes, never names", function()
     local ns = h:LoadAddon("ByteTerrace_DevTools")
     h:Fire("CHAT_MSG_SAY", "hello", "Dh Taketwo-Realm")
     h:Fire("CHAT_MSG_CHANNEL", "hi", "Bob")
+    h:Fire("CHAT_MSG_ADDON", "TLK", "HELLO", "PARTY", "Cara Doe-Realm")
     local senders = ns.Probes.ByName["names.chatSenders"].run()
     eq(senders.CHAT_MSG_SAY, "Aa Aa-Aa")
     eq(senders.CHAT_MSG_CHANNEL, "Aa")
+    eq(senders.CHAT_MSG_ADDON, "Aa Aa-Aa", "an addon message's sender is its fourth argument")
 end)
 
 test("kill events accumulate: a player kill after a mob kill keeps both kinds", function()
@@ -357,7 +338,7 @@ test("kill events accumulate: a player kill after a mob kill keeps both kinds", 
 end)
 
 test("an accumulating probe's record grows across sessions and reloads", function()
-    local record = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },
+    local record = { build = Harness.BUILD, context = { combat = false, restrictions = "none" },
         result = { partyKill = { attacker = "pet", attackerKind = "Pet", target = "Creature" }, targetDied = true } }
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["kills.seen"] = record } } })
     h:Fire("PARTY_KILL", h:GUID(h.player), h:GUID({ name = "Cara", isPlayer = true }))
@@ -401,7 +382,7 @@ test("a secret never erases what was seen before it, nor what's seen after", fun
 end)
 
 test("a saved accumulating record keeps its items when a session saw a secret", function()
-    local record = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },
+    local record = { build = Harness.BUILD, context = { combat = false, restrictions = "none" },
         result = { CHAT_MSG_SAY = "Aa,Aa Aa" } }
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["names.chatSenders"] = record } } })
     h:Fire("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
@@ -414,19 +395,25 @@ test("a name's shape keeps no digits: realms like Area 52 compare with any other
     eq(h.ns.Probes.NameShape("Dh Taketwo-Area 52"), "Aa Aa-Aa 0")
 end)
 
-test("a recap comparison that met a secret isn't a match", function()
+test("the latest recap matches the meter's, a differing field doesn't, and one that met a secret isn't a match", function()
     local h = Load()
     DieToDamage(h, { Hit(133, "Fireball") })
+    local latest = h.ns.Probes.ByName["deathRecap.latest"]
+    eq(latest.run().sameAsMeter, true)
     local recap = h.env.C_DeathRecap
     local getEvents = recap.GetRecapEvents
+    local Alter
     rawset(recap, "GetRecapEvents", function(id)
         local events = getEvents(id)
         if id == nil and events[1] then
-            events[1].timestamp = Secret(events[1].timestamp)
+            Alter(events[1])
         end
         return events
     end)
-    eq(h.ns.Probes.ByName["deathRecap.latest"].run().sameAsMeter, "secret")
+    Alter = function(blow) blow.timestamp = Secret(blow.timestamp) end
+    eq(latest.run().sameAsMeter, "secret")
+    Alter = function(blow) blow.timestamp, blow.amount = Secret(blow.timestamp), blow.amount + 1 end
+    eq(latest.run().sameAsMeter, false, "a plain field that differs decides, whatever else was secret")
 end)
 
 test("another player's kill doesn't count as a mob you killed yourself", function()
@@ -456,8 +443,109 @@ test("the meter's updates in the seconds after your death are kept by type, for 
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageDone, 1) -- no death yet: not kept
     h:Fire("PLAYER_DEAD")
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.Deaths, 1)
-    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", Secret(types.DamageTaken), 1)
+    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageTaken, 1)
     h:Advance(6)
     h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.HealingDone, 1) -- too long after
-    eq(h.ns.Probes.ByName["damageMeter.afterDeath"].run().types, "Deaths,secret")
+    eq(h.ns.Probes.ByName["damageMeter.afterDeath"].run().types, "DamageTaken,Deaths")
+end)
+
+test("the shape helpers record a secret as its marker and anything else by its type", function()
+    local h = Load()
+    local Probes = h.ns.Probes
+    for _, helper in ipairs({ "Value", "Shape", "NameShape", "Text", "Byte", "Fields" }) do
+        local marker = Probes[helper](Secret(7))
+        eq(marker.secret, true, helper)
+        eq(marker.type, "number", helper)
+    end
+    eq(Probes.NameShape(42), "number")
+    eq(Probes.Text(false), "boolean")
+    eq(Probes.Byte(nil), "nil")
+    eq(Probes.Byte(1), 255)
+    eq(Probes.Fields("x"), "string")
+    eq(Probes.First(Secret({ 1 })), nil, "a secret list has no first entry")
+    eq(Probes.First(nil), nil)
+end)
+
+test("a result that can't be saved fails its probe with the path that's wrong, and isn't recorded", function()
+    local h = Load()
+    h.ns.Probes.Define({
+        { name = "test.secret", needs = {}, run = function() return { nested = { health = Secret(5) } } end },
+        { name = "test.function", needs = {}, run = function() return { fn = function() end } end },
+        { name = "test.list", needs = {}, run = function() return { list = { "a" } } end },
+    })
+    h:Slash("/btdev probe")
+    local text = Printed(h)
+    truthy(text:find("probe test.secret failed: result.nested.health is a secret", 1, true), text)
+    truthy(text:find("probe test.function failed: result.fn is a function", 1, true), text)
+    truthy(text:find("probe test.list failed: result.list has a key that isn't a string", 1, true), text)
+    for _, name in ipairs({ "test.secret", "test.function", "test.list" }) do
+        eq(Records(h)[name], nil, name)
+    end
+end)
+
+test("kill events under an instance restriction keep their secret GUIDs as secret, and no blow counts as yours", function()
+    local h = Load()
+    local Probes = h.ns.Probes
+    h:SetRestriction("Encounter", true)
+    h:Fire("PARTY_KILL", h:GUID(h.player), h:GUID({ name = "Kobold" }))
+    h:Fire("UNIT_DIED", h:GUID({ name = "Kobold" }))
+    h:Fire("PLAYER_TARGET_DIED")
+    local kills = Probes.ByName["kills.seen"].run()
+    eq(kills.partyKill.attacker, "secret")
+    eq(kills.partyKill.attackerKind, "secret")
+    eq(kills.partyKill.target, "secret")
+    eq(kills.unitDied.unit, "secret")
+    falsy((Probes.Check(Probes.ByName["kills.seen"])), "a secret attacker isn't known to be you")
+end)
+
+test("a death the damage meter has no entry for records no local death and no recap", function()
+    local h = Load()
+    h:Die()
+    h:Slash("/btdev probe")
+    eq(Records(h)["damageMeter.death"].result.localPlayer, false)
+    eq(Records(h)["deathRecap.events"].result.recapID, "nil")
+    eq(Records(h)["deathRecap.latest"].result.sameAsMeter, nil, "nothing to compare the latest recap with")
+end)
+
+test("an enemy hunter's Feign Death is recorded only while they feign or lie dead", function()
+    local function Hunter(fields)
+        local unit = { name = "Rexxar", isPlayer = true, canAttack = true, classFile = "HUNTER", race = "Orc",
+            faction = "Horde", level = 20 }
+        for key, value in pairs(fields) do unit[key] = value end
+        return unit
+    end
+    local h = Load()
+    h:SetTarget(Hunter({}))
+    h:Slash("/btdev probe")
+    eq(Records(h)["feign.enemyHunter"], nil, "standing")
+    h:SetTarget(Hunter({ feign = true }))
+    h:Slash("/btdev probe")
+    local result = Records(h)["feign.enemyHunter"].result
+    eq(result.feigning, true)
+    eq(result.dead, false)
+    local dead = Load()
+    dead:SetTarget(Hunter({ dead = true }))
+    dead:Slash("/btdev probe")
+    eq(Records(dead)["feign.enemyHunter"].result.dead, true, "dead counts too: the client may report a feign as one")
+end)
+
+test("a quest log whose quests have no objectives records that it has none", function()
+    local h = Load()
+    h:AutoAcceptQuest({ title = "Report to Goldshire" })
+    h:Slash("/btdev probe")
+    eq(Records(h)["questLog.objectives"].result.hasObjectives, false)
+    eq(Records(h)["questLog.countForm"].result.forms, "", "no objective text, so no count form")
+end)
+
+test("/btdev probe list says so when every probe has a result for this build", function()
+    local h = Load()
+    local records = {}
+    for _, probe in ipairs(h.ns.Probes.List) do
+        records[probe.name] = { build = Harness.BUILD, context = { combat = false, restrictions = "none" }, result = {},
+            version = probe.version }
+    end
+    h.env.ByteTerraceDevToolsDB = { probes = records }
+    local from = #h.printed + 1
+    h:Slash("/btdev probe list")
+    eq(Printed(h, from), "ByteTerrace DevTools: every probe has a result for " .. Harness.BUILD .. ".")
 end)

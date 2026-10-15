@@ -1,5 +1,5 @@
 -- ByteTerrace framework: what a module owns beyond handlers and watchers (timers, rising counts,
--- demand dependencies, group messages) and the debug command.
+-- demand dependencies, group messages, sounds), names, slash registration and the debug command.
 
 -- A harness with the framework loaded and a bare addon, not yet started.
 local function NewAddOn(options)
@@ -204,6 +204,11 @@ test("group messages: sent to the group, received from it, never your own", func
     h:ReceiveAddonMessage("TestApp1", "PING:x", "WHISPER", "Bob")
     h:ReceiveAddonMessage("TestApp1", "ping", "PARTY", "Bob")
     eq(table.concat(got, " "), "Bob Doe:x", "only well-formed group messages arrive, from the sender's full name")
+    h:LeaveGroup()
+    h:JoinGroup("instance", { "Ann" })
+    module.Comms:Send("PING")
+    eq(h.addonMessages[#h.addonMessages].chatType, "INSTANCE_CHAT", "an instance group talks on instance chat")
+    eq(h.addonMessages[#h.addonMessages].result, h.env.Enum.SendAddonMessageResult.Success)
 end)
 
 test("group messages keep one per interval from a bounded queue, and nothing while stopped", function()
@@ -265,17 +270,92 @@ test("finding taken aliases never walks every global", function()
     eq(walks, 0)
 end)
 
-test("debug status names running, stopped and demand modules", function()
+test("debug status names running, stopped and demand modules, their records and queued messages", function()
     local h, addon = NewAddOn()
     addon:Module("Fact", { toggle = false, demand = true })
     addon:Module("On", { label = "On", uses = { "Fact" } })
     addon:Module("Off", { label = "Off", default = false })
+    local ledger = addon:Module("Ledger", { toggle = false, records = { {
+        name = "people", limit = 5, fields = { { name = "seen", kind = "number", default = 0 } },
+    } } })
+    addon:Module("Chat", { label = "Chat", comms = { prefix = "TestApp1" } })
     Start(h)
+    ledger.Records.people:Set("Bob", { seen = 1 })
     h:Slash("/test debug status")
     local text = Printed(h)
-    truthy(text:find("Running (demand modules with their users): Fact (1), On", 1, true), text)
+    truthy(text:find("Running (demand modules with their users): Chat, Fact (1), Ledger, On", 1, true), text)
     truthy(text:find("Stopped: Off", 1, true), text)
+    truthy(text:find("4 events registered", 1, true), "the transport follows the group and restrictions: " .. text)
     truthy(text:find("0 errors caught", 1, true), text)
+    truthy(text:find("Records: Ledger.people 1/5", 1, true), text)
+    truthy(text:find("Messages queued: Chat 0", 1, true), text)
+end)
+
+test("debug toggles debug output, explains itself, and lists at most a screenful", function()
+    local h, addon = NewAddOn()
+    local rows, events = {}, {}
+    for i = 1, 41 do
+        rows[i] = { name = "row" .. i, kind = "number", default = 0, persist = false }
+    end
+    for name, entry in pairs(__snapshot.events) do
+        if not entry.HasRestrictions then
+            events[#events + 1] = name
+        end
+    end
+    table.sort(events)
+    addon:Module("Big", { toggle = false, state = rows, OnEnable = function(module)
+        for i = 1, 41 do
+            module:On(events[i], function() end)
+        end
+    end })
+    Start(h)
+    h:Slash("/test debug")
+    eq(addon.State:Get("addon.debug"), true)
+    truthy(Printed(h):find("Debug output enabled.", 1, true), Printed(h))
+    h:Slash("/test debug")
+    eq(addon.State:Get("addon.debug"), false)
+    h.printed = {}
+    h:Slash("/test debug rows big.row")
+    truthy(Printed(h):find("41 rows matching 'big.row':", 1, true), Printed(h))
+    truthy(Printed(h):find("... and 1 more; narrow the text", 1, true), Printed(h))
+    h.printed = {}
+    h:Slash("/test debug events")
+    truthy(Printed(h):find("41 events registered", 1, true), Printed(h))
+    truthy(Printed(h):find("... and 1 more", 1, true), Printed(h))
+    h.printed = {}
+    h:Slash("/test debug trace nothing")
+    truthy(Printed(h):find("No row matches 'nothing'.", 1, true), Printed(h))
+    h:Slash("/test debug bogus")
+    truthy(Printed(h):find("Usage: /test debug [status | events | rows <text> | trace <text> | trace off | cpu | reset]", 1, true),
+        Printed(h))
+end)
+
+test("a sound bank plays only what's switched on, and defines each sound and test word once", function()
+    local h, addon = NewAddOn()
+    local ByteTerrace = h.env.ByteTerrace
+    throws(function() ByteTerrace.NewSoundBank(addon, { master = "Sounds.enabled" }) end,
+        "needs the master and channel row names")
+    local sounds = ByteTerrace.NewSoundBank(addon, { master = "Sounds.enabled", channel = "Sounds.channel" })
+    sounds:Define("cheer", { file = "Cheer", word = "cheer", label = "Cheer", row = "Sounds.cheer" })
+    sounds:Define("boo", { file = "Boo", word = "boo", label = "Boo", row = "Sounds.boo" })
+    throws(function() sounds:Define("cheer", { file = "Yay", word = "yay", label = "Yay", row = "Sounds.cheer" }) end,
+        "sound cheer %(yay%) is already defined")
+    throws(function() sounds:Define("hiss", { file = "Hiss", word = "boo", label = "Hiss", row = "Sounds.boo" }) end,
+        "sound hiss %(boo%) is already defined")
+    addon:Module("Sounds", { label = "Sounds", state = {
+        { name = "channel", kind = "string", default = "SFX", values = { "Master", "SFX" }, label = "Channel" },
+        sounds:Row("cheer", "Cheer", "When you win.", { "cheer" }),
+        sounds:Row("boo", "Boo", "When you lose.", { "boo" }),
+    } })
+    h.files["Interface\\AddOns\\TestApp\\Media\\Cheer.ogg"] = true
+    h.files["Interface\\AddOns\\TestApp\\Media\\Boo.ogg"] = true
+    Start(h)
+    addon.State:Set("Sounds.boo", false)
+    eq(sounds:Play("boo"), nil, "a sound switched off plays nothing")
+    eq(#h.sounds, 0)
+    truthy(sounds:Play("cheer"))
+    eq(h.sounds[1].path, "Interface\\AddOns\\TestApp\\Media\\Cheer.ogg")
+    eq(h.sounds[1].channel, "SFX")
 end)
 
 test("debug events counts dispatches per registered event; reset zeroes them", function()
@@ -349,9 +429,32 @@ test("the counts cost no registrations: a quiet addon registers only what it han
     local h, addon = NewAddOn()
     addon:Module("M", { label = "M" })
     Start(h)
-    local registered = 0
-    for _ in pairs(addon.Events:Registrations()) do
-        registered = registered + 1
+    local registered = {}
+    for event in pairs(Harness.State(addon.Events.Frame).events) do
+        registered[#registered + 1] = event
     end
-    eq(registered, 0)
+    table.sort(registered)
+    eq(table.concat(registered, ","), "", "the client frame has no event registered")
+end)
+
+test("an addon whose slash key another addon took reports it and registers no aliases", function()
+    local h, addon = NewAddOn()
+    local function Theirs() end
+    h.env.SlashCmdList.TESTAPP = Theirs
+    h:ExpectErrors("slash command key TESTAPP is already registered; slash commands are off")
+    Start(h)
+    truthy(addon.Started)
+    eq(h.env.SlashCmdList.TESTAPP, Theirs, "the other addon keeps its command")
+    eq(rawget(h.env, "SLASH_TESTAPP1"), nil)
+end)
+
+test("a unit's full name joins its surname; a name without one stands alone", function()
+    local h = Harness.New()
+    h:LoadFiles("ByteTerrace_Core")
+    local Names = h.env.ByteTerrace.Names
+    eq(Names.Mine(), h.player.name .. " " .. h.player.surname)
+    h:SetTarget({ name = "Hogger", canAttack = true })
+    eq(Names.OfUnit("target"), "Hogger", "an NPC has no surname")
+    eq(Names.Full("Bob", ""), "Bob")
+    eq(Names.OfUnit("focus"), nil, "no unit")
 end)

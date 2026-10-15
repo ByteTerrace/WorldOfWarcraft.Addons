@@ -4,7 +4,6 @@
 --   Define(spec)  before compile. spec: name (unique), label, run(arg, phase, source),
 --                 slash (the lowercase word after the slash command; "" for a bare slash command),
 --                 held (true to also receive "up" and "cancel" phases).
---   Id(name)      the command's id; unknown names are an error.
 --   Run(ref, arg, phase, source)
 --                 ref is an id (hot path) or a name. phase defaults to "down"; a command that
 --                 isn't held ignores other phases. Each run is one state batch, so a command that
@@ -27,27 +26,14 @@ ByteTerrace.Commands = Commands
 --- Creates an addon's command table, empty and uncompiled.
 ---@param addon table the owning AddOn
 function ByteTerrace.NewCommands(addon)
-    return setmetatable({ m_addon = addon, m_declared = {}, m_compiled = false }, Commands)
+    return setmetatable({ m_addon = addon, m_declared = {} }, Commands)
 end
 
---- Checks a command name before a module commits its declarations.
----@param name string
-function Commands:CheckDeclaration(name)
-    if type(name) ~= "string" or name == "" then
-        error(self.m_addon.Name .. ": command needs a name", 2)
-    end
-    if self.m_compiled then
-        error(self.m_addon.Name .. ": command " .. name .. " defined after compile", 2)
-    end
-    if self.m_declared[name] then
-        error(self.m_addon.Name .. ": duplicate command " .. name, 2)
-    end
-end
-
---- Declares a command before compile. The spec is copied.
+--- Declares a command before compile. The spec is copied. AddOn.lua checks names before
+--- defining: each is "<Module>.<command>" (the addon's own are "addon.<command>"), unique, and
+--- defined before compile.
 ---@param spec table see the file header
 function Commands:Define(spec)
-    self:CheckDeclaration(spec.name)
     local own = {}
     for key, value in pairs(spec) do
         own[key] = value
@@ -86,18 +72,6 @@ function Commands:Compile()
     Refuse(self.m_addon.Name .. " commands", problems)
     self.Ids, self.m_specs, self.m_bySlash = ids, specs, bySlash
     self.m_declared = nil
-    self.m_compiled = true
-end
-
---- A command's id. An unknown name is an error.
----@param name string
----@return integer
-function Commands:Id(name)
-    local id = self.Ids[name]
-    if not id then
-        error(self.m_addon.Name .. ": unknown command " .. tostring(name), 2)
-    end
-    return id
 end
 
 --- The module a command belongs to, or nil for the addon's own (help, settings, debug...).

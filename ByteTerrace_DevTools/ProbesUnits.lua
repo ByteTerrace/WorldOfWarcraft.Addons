@@ -191,13 +191,11 @@ Probes.Define({
     {
         name = "unitHealthPercent.player",
         needs = { "idle" },
-        harness = "the harness doesn't fake UnitHealthPercent or UnitHealthMissing",
         run = function() return HealthSignals("player") end,
     },
     {
         name = "unitHealthPercent.playerInCombat",
         needs = { "combat" },
-        harness = "the harness doesn't fake UnitHealthPercent or UnitHealthMissing",
         run = function() return HealthSignals("player") end,
     },
     {

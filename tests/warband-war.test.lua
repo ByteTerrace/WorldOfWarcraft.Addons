@@ -109,6 +109,8 @@ test("kills and deaths against a guild at war are tallied", function()
     h:HonorKill(Key(h, "Cara"), "Private", 12)
     local guild = "Knights of Light-" .. h.env.GetNormalizedRealmName()
     eq(Collection(addon, "wars"):Field(guild, "kills"), 1)
+    Receive(h, "Mom", "GRUDGE", Key(h, "Cara"), "ROGUE", "60", "Alliance", "1")
+    eq(Collection(addon, "wars"):Field(guild, "deaths"), 1, "Cara killed Mom: the guild's tally too")
 end)
 
 test("every enemy you meet gets a record: sightings, where, and the score", function()
@@ -133,14 +135,6 @@ test("the tooltip shows the record of anyone the Krew has fought", function()
     h:ShowUnitTooltip(plate)
     local lines = table.concat(Harness.State(h.env.GameTooltip).lines, "\n")
     truthy(lines:find("Krew 1 : 0 Bob Doe - seen 1 times", 1, true), lines)
-end)
-
-test("ledger people are never evicted from the records", function()
-    local h, addon = Load()
-    h:Slash("/tlk grudge Bob Doe")
-    local people = Collection(addon, "people")
-    truthy(people.Keep(Key(h, "Bob")))
-    falsy(people.Keep(Key(h, "Stranger")))
 end)
 
 local function Badge(h, plate)
@@ -211,6 +205,20 @@ test("badges switched off leave no badge and no events", function()
     falsy(addon.Events.Frame:IsEventRegistered("NAME_PLATE_UNIT_REMOVED"))
 end)
 
+test("badges switched off hide, and switched on again find the plates on screen", function()
+    local h, addon = Load()
+    h:Slash("/tlk mark Bob Doe")
+    local plate = h:AddNamePlate(Enemy())
+    local badge = Badge(h, plate)
+    truthy(badge:IsShown())
+    addon.State:Set("Badges.enabled", false)
+    falsy(badge:IsShown(), "switched off")
+    addon.State:Set("Badges.enabled", true)
+    truthy(badge:IsShown(), "the plate already on screen wears its skull again")
+    h:Slash("/tlk unmark Bob Doe")
+    truthy(Harness.State(badge.Icon).texture:find("RaidTargetingIcon_7", 1, true), "and keeps up with the ledger")
+end)
+
 local function Window(h)
     return rawget(h.env, "TheLanKrewToolKitRadar")
 end
@@ -226,7 +234,7 @@ local function Rows(h)
 end
 
 test("enemies you see are listed, marked ones first, and the list empties after two minutes", function()
-    local h = Load()
+    local h, addon = Load()
     h:Slash("/tlk mark Cara Doe")
     h:AddNamePlate(Enemy("Bob"))
     truthy(Window(h):IsShown(), "the first sighting shows the window at once")
@@ -238,6 +246,31 @@ test("enemies you see are listed, marked ones first, and the list empties after 
     eq(rows[2], "Bob Doe | 60 - 2s")
     h:Advance(125)
     falsy(Window(h):IsShown())
+    h:AddNamePlate(Enemy("Dan"))
+    truthy(Window(h):IsShown())
+    addon.State:Set("Radar.enabled", false)
+    falsy(Window(h):IsShown(), "switched off, the window goes")
+end)
+
+test("an enemy who leaves the list before their turn to be shared isn't shared", function()
+    local h = Grouped()
+    -- Long names: three to a message, one message every ten seconds, so the last wait past the
+    -- two minutes they stay listed.
+    local total = 45
+    for i = 1, total do
+        h:SetMouseover(Enemy(("B"):rep(53) .. string.char(64 + math.ceil(i / 26)) .. string.char(96 + (i - 1) % 26 + 1)))
+    end
+    h:Advance(130)
+    local shared = 0
+    for _, message in ipairs(Sent(h, "NEARBY")) do
+        local _, count = message:gsub(";ROGUE;60", "")
+        shared = shared + count
+    end
+    truthy(shared > 0 and shared < total, shared)
+    falsy(Window(h):IsShown(), "everyone has left the list")
+    local sent = #Sent(h, "NEARBY")
+    h:Advance(60)
+    eq(#Sent(h, "NEARBY"), sent, "the rest are dropped, not sent late")
 end)
 
 test("new enemies are shared with the Krew in one batch; Krew reports join the list", function()

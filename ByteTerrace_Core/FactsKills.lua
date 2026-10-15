@@ -18,11 +18,9 @@ local issecretvalue, type, UnitGUID = issecretvalue, type, UnitGUID
 local ipairs = ipairs
 
 -- A Lua pattern from a client format string ("%s dies (Honorable Kill: %s). ..."): each %s is a
--- capture, so the first capture is the victim's name.
+-- capture, so the first capture is the victim's name. Both formats are GlobalStrings the client
+-- always defines (tools/api/forever.json).
 local function Pattern(formatString)
-    if type(formatString) ~= "string" then
-        return nil
-    end
     local pattern = formatString:gsub("%%%d+%$([sd])", "%%%1") -- "%1$s" (another locale's order) is "%s"
     pattern = pattern:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
     pattern = pattern:gsub("%%s", "(.-)"):gsub("%%d", "%%d+")

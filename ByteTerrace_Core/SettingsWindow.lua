@@ -50,15 +50,13 @@ local floor, max, min = math.floor, math.max, math.min
 local SettingsWindow = {}
 SettingsWindow.__index = SettingsWindow
 
--- A value as the window shows it: an enum's label, a number without trailing zeros.
+-- A value as the window shows it: an enum's label, a number without trailing zeros. Only enums
+-- and numbers show text; a boolean shows a check.
 local function ValueText(spec, value)
     if spec.values then
         return spec.valueLabels and spec.valueLabels[value] or tostring(value)
     end
-    if spec.kind == "number" then
-        return ("%g"):format(value)
-    end
-    return tostring(value)
+    return ("%g"):format(value)
 end
 
 -- A flat button with a label, the window's one button style.
@@ -74,7 +72,8 @@ local function NewButton(parent, width, text)
     return button
 end
 
--- The next or previous enum value, wrapping around.
+-- The next or previous enum value, wrapping around. State admits only the row's values, so value
+-- is one of them.
 local function StepEnum(spec, value, delta)
     local count = #spec.values
     for i, candidate in ipairs(spec.values) do
@@ -82,7 +81,6 @@ local function StepEnum(spec, value, delta)
             return spec.values[(i - 1 + delta) % count + 1]
         end
     end
-    return spec.values[1]
 end
 
 -- A number one step from value. With a step, it moves along the row's grid (multiples of step

@@ -153,13 +153,11 @@ Probes.Define({
     {
         name = "realm.normalized",
         needs = {},
+        -- Both names are plain strings once the player can type (neither API has secret flags).
         run = function()
             local normalized, realm = GetNormalizedRealmName(), GetRealmName()
-            if type(normalized) ~= "string" or type(realm) ~= "string" then
-                return { normalized = Shape(normalized), realm = Shape(realm) }
-            end
             return {
-                normalized = "string", realm = "string", hasSpaceOrHyphen = normalized:find("[%s%-]") ~= nil,
+                normalized = Shape(normalized), realm = Shape(realm), hasSpaceOrHyphen = normalized:find("[%s%-]") ~= nil,
                 isRealmWithoutSpacesOrHyphens = normalized == (realm:gsub("[%s%-]", "")),
             }
         end,

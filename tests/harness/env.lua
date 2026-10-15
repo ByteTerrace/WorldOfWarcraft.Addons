@@ -9,12 +9,14 @@
 --
 -- Names [E]: Forever's names are regionally unique "First Last". UnitName, UnitNameUnmodified and
 -- UnitFullName return (first, surname) for a player and (name, nil) for an NPC; no realm.
--- GetPlayerInfoByGUID's name is "First Last" with realm "" on your realm. Ambiguate follows the
--- documented context table (all, guild, mail, none, short, craftingorder). The harness has no
--- guild roster, so no name counts as a guildmate: "all" and "guild" act like "none", dropping the
--- realm only for the player's own realm.
+-- GetPlayerInfoByGUID's name is "First Last" with realm "" on your realm.
 
 local Snapshot = __snapshot
+
+-- [E] The client build the API snapshot was dumped from ("1.60.1 (70374)"), so the harness is the
+-- client its snapshot describes and probes record that build. [G] The build date, which nothing reads.
+Harness.BUILD = __build ~= "" and __build or "0.0.0 (0)"
+local BuildVersion, BuildNumber = Harness.BUILD:match("^(%S+) %((%d+)%)$")
 
 local function Color(r, g, b, a)
     return {
@@ -43,8 +45,7 @@ local Classes = {
 -- A few real SOUNDKIT entries (Blizzard_SharedXML/Mainline/SoundKitConstants.lua). Reading any
 -- other key is an error: add it here, with its real value, when an addon needs it.
 local Soundkits = {
-    IG_SPELLBOOK_OPEN = 829, IG_QUEST_LOG_OPEN = 844, IG_MAINMENU_OPTION_CHECKBOX_ON = 856,
-    IG_QUEST_LIST_COMPLETE = 878, RAID_WARNING = 8959, READY_CHECK = 8960, LFG_REWARDS = 17316,
+    IG_SPELLBOOK_OPEN = 829, IG_QUEST_LOG_OPEN = 844, IG_QUEST_LIST_COMPLETE = 878, RAID_WARNING = 8959, READY_CHECK = 8960, LFG_REWARDS = 17316,
     UI_EPICLOOT_TOAST = 31578,
 }
 
@@ -70,20 +71,6 @@ local function Library(name)
         lib[member] = _G[name][member]
     end
     return lib
-end
-
--- WoW's strsplit: every character of delimiter separates (a set, not a sequence).
-local function Strsplit(delimiter, s, limit)
-    local set = "[" .. delimiter:gsub("[%]%[%^%-%%]", "%%%0") .. "]"
-    local parts, start = {}, 1
-    while not limit or #parts < limit - 1 do
-        local i = s:find(set, start)
-        if not i then break end
-        parts[#parts + 1] = s:sub(start, i - 1)
-        start = i + 1
-    end
-    parts[#parts + 1] = s:sub(start)
-    return unpack(parts)
 end
 
 local function Strtrim(s, chars)
@@ -178,7 +165,7 @@ function Harness:BuildEnvironment()
         math = Library("math"), string = Library("string"), table = Library("table"),
         tinsert = table.insert, tremove = table.remove,
         wipe = function(t) for k in pairs(t) do t[k] = nil end return t end,
-        strtrim = Strtrim, strsplit = Strsplit, strjoin = function(sep, ...) return table.concat({ ... }, sep) end,
+        strtrim = Strtrim,
         print = function(...)
             Refuse("print", ...)
             local parts = {}
@@ -200,7 +187,7 @@ function Harness:BuildEnvironment()
         end,
         InCombatLockdown = function() return h.lockdown end,
         IsLoggedIn = function() return h.loggedIn end,
-        GetBuildInfo = function() return "1.60.1", "70009", "Sep 22 2025", 16001 end,
+        GetBuildInfo = function() return BuildVersion, BuildNumber, "Oct 1 2026", 16001 end,
         -- The harness is an enUS client: its GlobalStrings (world.lua) are the enUS ones.
         GetLocale = function() return "enUS" end,
 
@@ -224,6 +211,17 @@ function Harness:BuildEnvironment()
         UnitIsAFK = function(u) return Field(u, "afk", false) end,
         UnitHealth = function(u) return Field(u, "health", 0) end,
         UnitHealthMax = function(u) return Field(u, "maxHealth", 0) end,
+        -- [D] UnitHealthMax() - UnitHealth() (its doc string). Predicted healing isn't modeled, so
+        -- usePredicted changes nothing.
+        UnitHealthMissing = function(u) return Field(u, "maxHealth", 0) - Field(u, "health", 0) end,
+        -- [D] "percent of health remaining", scaled by an optional curve. [G] Without a curve it's the
+        -- 0-1 fraction (the client's CurveConstants offer ScaleTo100), and 0 for a unit without max
+        -- health. Curves aren't modeled: passing one is a harness error.
+        UnitHealthPercent = function(u, usePredicted, curve)
+            assert(curve == nil, "UnitHealthPercent: the harness doesn't model curves")
+            local max = Field(u, "maxHealth", 0)
+            return max > 0 and Field(u, "health", 0) / max or 0
+        end,
         UnitName = function(u)
             local unit = Unit(u)
             if unit then return unit.name, unit.surname end
@@ -239,41 +237,11 @@ function Harness:BuildEnvironment()
             local unit = Unit(u)
             if unit then return unit.name, unit.surname end
         end,
-        -- Group membership (group.lua). UnitInParty is true for the player in any group and for
-        -- the members of their party (in a raid, their subgroup); UnitInRaid is a raid member's
-        -- raid index.
+        -- Group membership (group.lua).
         IsInGroup = function(category) return h:InGroupCategory(category) end,
         IsInRaid = function(category) return h:InGroupCategory(category) and h:GroupIsRaid() end,
         GetNumGroupMembers = function(category)
             return h:InGroupCategory(category) and #h.group.members + 1 or 0
-        end,
-        UnitInParty = function(u)
-            local unit = Unit(u)
-            if not unit or not h.group.kind then return false end
-            if unit == h.player then return true end
-            for _, member in ipairs(h.group.members) do
-                if member == unit then return not h:GroupIsRaid() or member.partyUnit ~= nil end
-            end
-            return false
-        end,
-        UnitInRaid = function(u)
-            local unit = Unit(u)
-            if not unit or not h:GroupIsRaid() then return nil end
-            if unit == h.player then return #h.group.members + 1 end
-            for i, member in ipairs(h.group.members) do
-                if member == unit then return i end
-            end
-            return nil
-        end,
-        Ambiguate = function(name, context)
-            local short, realm = name:match("^([^%-]+)%-(.+)$")
-            if not short then return name end
-            if context == "short" then return short end
-            if context == "mail" or context == "craftingorder" then return name end
-            if context == "none" or context == "all" or context == "guild" then
-                return realm == Harness.NormalizeRealm(h.player.realm) and short or name
-            end
-            error("Ambiguate: unknown context " .. tostring(context), 3)
         end,
         -- A unit's classFile is its classFile field; className defaults to
         -- the class's enUS name.
@@ -289,7 +257,7 @@ function Harness:BuildEnvironment()
             if not unit or not unit.isPlayer or not unit.name then return end
             local class, race = Classes[unit.classFile or ""], unit.race and Harness.RACES[unit.race]
             local realm = (unit.realm == nil or unit.realm == h.player.realm) and "" or unit.realm
-            return class and (unit.className or class[1]), unit.classFile, race and race[1], unit.race, unit.sex or 2,
+            return class and (unit.className or class[1]), unit.classFile, race, unit.race, unit.sex or 2,
                 Harness.DisplayName(unit), realm
         end,
         UnitIsBossMob = function(u)
@@ -326,7 +294,6 @@ function Harness:BuildEnvironment()
         end,
 
         -- Zones.
-        GetZoneText = function() return h.zone end,
         GetRealZoneText = function() return h.zone end,
         GetSubZoneText = function() return h.subZone end,
 
@@ -433,17 +400,12 @@ function Harness:BuildEnvironment()
                 local name = Harness.RESTRICTIONS[(kind or -1) + 1]
                 return name ~= nil and h.restrictionDispatch == 0 and h.restrictions[name] == true
             end,
-            GetAddOnRestrictionState = function(kind)
-                local name = Harness.RESTRICTIONS[(kind or -1) + 1]
-                return name and h:RestrictionState(name) or 0
-            end,
         },
         C_SettingsUtil = {
             OpenSettingsPanel = function(categoryID) h.opened[#h.opened + 1] = categoryID end,
         },
 
         PowerBarColor = { ENERGY = { r = 1, g = 1, b = 0 } },
-        LE_PARTY_CATEGORY_HOME = Harness.PARTY_CATEGORY.HOME,
         LE_PARTY_CATEGORY_INSTANCE = Harness.PARTY_CATEGORY.INSTANCE,
     }
     -- math.random and random are Lua's until h:SeedRandom (see wow.lua).
@@ -452,7 +414,7 @@ function Harness:BuildEnvironment()
     for key, value in pairs(Soundkits) do
         rawset(fakes.SOUNDKIT, key, value)
     end
-    fakes.string.trim, fakes.string.split, fakes.string.join = Strtrim, Strsplit, fakes.strjoin
+    fakes.string.trim = Strtrim
     fakes.string.format = SecretFormat
     fakes.format = SecretFormat
     -- ("%d"):format(x) reaches format through the string metatable, not the env: route it too.
@@ -482,7 +444,7 @@ function Harness:BuildEnvironment()
     end
     -- units.lua, world.lua, ui.lua, meter.lua, speech.lua and quests.lua; a name defined twice is a harness bug.
     local sources = {
-        h:UnitFakes(), h:WorldFakes(fakes.UIParent), h:InterfaceFakes(fakes.UIParent), h:MeterFakes(), h:SpeechFakes(),
+        h:UnitFakes(), h:WorldFakes(), h:InterfaceFakes(fakes.UIParent), h:MeterFakes(), h:SpeechFakes(),
         h:QuestFakes(fakes.UIParent),
     }
     for _, more in ipairs(sources) do
@@ -491,7 +453,6 @@ function Harness:BuildEnvironment()
             fakes[name] = value
         end
     end
-    fakes.MinimalSliderWithSteppersMixin = { Label = { Left = 1, Right = 2, Top = 3, Min = 4, Max = 5 } }
     fakes._G = fakes
 
     -- Documented fakes follow their snapshot entry (secrets, secret arguments, restrictions).
@@ -504,9 +465,7 @@ function Harness:BuildEnvironment()
             end
         end
     end
-    local header
-    fakes.Settings, header = h:BuildSettings(fakes)
-    fakes.CreateSettingsListSectionHeaderInitializer = h:WrapFunction("CreateSettingsListSectionHeaderInitializer", header)
+    fakes.Settings = h:BuildSettings(fakes)
 
     return setmetatable(fakes, {
         __index = function(_, key)
@@ -518,143 +477,31 @@ function Harness:BuildEnvironment()
     })
 end
 
--- Settings panel fake, after Blizzard_Settings_Shared (forever branch):
--- - RegisterVerticalLayoutCategory(name) and RegisterVerticalLayoutSubcategory(parent, name) return a
---   category and its vertical layout; layout:AddInitializer appends to the page in order.
--- - CreateCheckbox / CreateDropdown / CreateSlider add their control's initializer to the
---   category's own layout (SettingsPanel:GetLayout(category)), so a category must have one.
--- - CreateSettingsListSectionHeaderInitializer (a global) wraps Settings.CreateElementInitializer
---   with "SettingsListSectionHeaderTemplate".
--- - RegisterAddOnSetting stores into the variable table like SettingsInbound.CreateAddOnSetting.
+-- Settings panel fake, after Blizzard_Settings_Shared (forever branch), for what the addons call:
+-- - RegisterCanvasLayoutCategory(frame, name) returns a category whose page is the addon's own frame
+--   (Blizzard shows it when the player chooses the category; tests show it directly) and its layout.
+-- - RegisterAddOnCategory(category) lists it under Esc > Options > AddOns.
 -- - OpenToCategory calls C_SettingsUtil.OpenSettingsPanel, as Blizzard_Settings.lua does, which
 --   addon code must never call (tools/api/forbidden.json).
 -- - The SettingsPanel global (a frame, see the env) refuses addon code's Open and OpenToCategory.
--- What tests read: h.settings[variable] (with control, options and tooltip once a control is made),
--- h.settingsOrder (proxy settings in registration order), h.category (the RegisterAddOnCategory
--- argument) and h.settingsPages, each { name, parent (the parent page's name, or nil),
--- entries = { { header = text } or { variable = setting variable }, ... } } in registration order.
--- Returns the Settings table and the header initializer global.
+-- What tests read: h.categories (every category registered, { name, canvas }, in order) and
+-- h.category (the RegisterAddOnCategory argument).
 function Harness:BuildSettings(env)
     local h = self
-    local nextID = 0
-    local layouts = {} -- [category] = layout
-
-    local function NewInitializer(template, data)
-        return { template = template, data = data, GetData = function(self) return self.data end }
-    end
-
-    local function RegisterCategory(name, parent)
-        nextID = nextID + 1
-        local id = nextID
-        local category = { name = name, parent = parent, GetID = function() return id end }
-        local page = { name = name, parent = parent and parent.name or nil, entries = {} }
-        h.settingsPages[#h.settingsPages + 1] = page
-        local layout = { initializers = {} }
-        function layout:AddInitializer(initializer)
-            self.initializers[#self.initializers + 1] = initializer
-            local data = initializer:GetData()
-            if initializer.template == "SettingsListSectionHeaderTemplate" then
-                page.entries[#page.entries + 1] = { header = data.name }
-            elseif data.setting then
-                page.entries[#page.entries + 1] = { variable = data.setting.variable }
-            end
-            return initializer
-        end
-        layouts[category] = layout
-        return category, layout
-    end
-
-    local function AddControl(control, template, category, setting, options, tooltip)
-        local layout = layouts[category]
-        assert(layout, "Settings.Create" .. control .. ": the category has no layout")
-        setting.control, setting.options, setting.tooltip = control:lower(), options, tooltip
-        local initializer = NewInitializer(template, { setting = setting, options = options, tooltip = tooltip })
-        return layout:AddInitializer(initializer)
-    end
-
-    local settings
-    settings = {
-        VarType = { Boolean = "boolean", String = "string", Number = "number" },
-        RegisterVerticalLayoutCategory = function(name)
-            return RegisterCategory(name, nil)
-        end,
-        -- A canvas page: the addon's own frame shown as the category's content (Blizzard shows it
-        -- when the player chooses the category; tests show it directly).
+    return {
         RegisterCanvasLayoutCategory = function(frame, name)
-            local category = RegisterCategory(name, nil)
-            category.canvas = frame
-            layouts[category] = nil
-            h.settingsPages[#h.settingsPages].canvas = frame
+            local id = #h.categories + 1
+            local category = { name = name, canvas = frame, GetID = function() return id end }
+            h.categories[id] = category
             return category, { frame = frame }
         end,
-        RegisterVerticalLayoutSubcategory = function(parentCategory, name)
-            assert(layouts[parentCategory], "RegisterVerticalLayoutSubcategory: unknown parent category")
-            return RegisterCategory(name, parentCategory)
-        end,
-        CreateElementInitializer = NewInitializer,
-        RegisterAddOnSetting = function(category, variable, key, tbl, varType, name, default)
-            assert(type(default) == varType, ("setting %s: default is %s, declared %s"):format(variable, type(default), varType))
-            assert(h.settings[variable] == nil, "duplicate setting variable " .. variable)
-            local setting = { variable = variable, key = key, name = name, default = default, category = category }
-            function setting:GetValue() return tbl[key] end
-            function setting:SetValue(value)
-                tbl[key] = value
-                if self.callback then self.callback(self, value) end
-            end
-            function setting:SetValueChangedCallback(fn) self.callback = fn end
-            h.settings[variable] = setting
-            return setting
-        end,
-        RegisterProxySetting = function(category, variable, varType, name, default, getValue, setValue)
-            assert(layouts[category], "RegisterProxySetting: unknown category")
-            assert(type(default) == varType, ("setting %s: default is %s, declared %s"):format(variable, type(default), varType))
-            assert(h.settings[variable] == nil, "duplicate setting variable " .. variable)
-            local setting = { variable = variable, name = name, default = default, category = category }
-            function setting:GetValue() return getValue() end
-            function setting:SetValue(value) setValue(value) end
-            h.settings[variable] = setting
-            h.settingsOrder = h.settingsOrder or {}
-            h.settingsOrder[#h.settingsOrder + 1] = variable
-            return setting
-        end,
-        CreateCheckbox = function(category, setting, tooltip)
-            return AddControl("Checkbox", "SettingsCheckboxControlTemplate", category, setting, nil, tooltip)
-        end,
-        CreateDropdown = function(category, setting, options, tooltip)
-            return AddControl("Dropdown", "SettingsDropdownControlTemplate", category, setting, options(), tooltip)
-        end,
-        CreateSliderOptions = function(minValue, maxValue, rate)
-            return {
-                minValue = minValue, maxValue = maxValue, steps = (maxValue - minValue) / rate,
-                SetLabelFormatter = function(self, label, formatter) self.label, self.formatter = label, formatter end,
-            }
-        end,
-        CreateSlider = function(category, setting, options, tooltip)
-            return AddControl("Slider", "SettingsSliderControlTemplate", category, setting, options, tooltip)
-        end,
-        NotifyUpdate = function(variable)
-            h.notified[variable] = (h.notified[variable] or 0) + 1
-        end,
-        CreateControlTextContainer = function()
-            local data = {}
-            return {
-                Add = function(_, value, label) data[#data + 1] = { value = value, label = label } end,
-                GetData = function() return data end,
-            }
-        end,
         RegisterAddOnCategory = function(category)
-            assert(category.parent == nil, "RegisterAddOnCategory: a subcategory is listed under its parent already")
             h.category = category
         end,
         OpenToCategory = function(categoryID, scrollToElementName)
             env.C_SettingsUtil.OpenSettingsPanel(categoryID, scrollToElementName)
         end,
     }
-    local function CreateSettingsListSectionHeaderInitializer(name, tooltip, newTagID)
-        local data = { name = name, tooltip = tooltip, newTagID = newTagID }
-        return settings.CreateElementInitializer("SettingsListSectionHeaderTemplate", data)
-    end
-    return settings, CreateSettingsListSectionHeaderInitializer
 end
 
 -- Every fake's name ("Name" or "Table.member"), for the test runner's check that each one exists
@@ -668,6 +515,31 @@ function Harness.FakeNames()
         if type(value) == "table" and name ~= "_G" and not Harness.State(value) then
             for member in pairs(value) do
                 if type(member) == "string" then
+                    names[#names + 1] = name .. "." .. member
+                end
+            end
+        end
+    end
+    table.sort(names)
+    return table.concat(names, "\n")
+end
+
+-- Tables whose functions are Lua's own library: the runner doesn't ask whether an addon calls them.
+local LuaLibraries = { _G = true, math = true, string = true, table = true }
+
+-- Every fake that's a function ("Name" or "Table.member"), for the test runner's check that an
+-- addon calls each one. Lua's functions (Harness.LUA_FAKES, Lua's libraries) and widgets'
+-- methods aren't listed.
+function Harness.FakeFunctionNames()
+    local h = Harness.New()
+    Harness.created = {}
+    local names = {}
+    for name, value in pairs(h.env) do
+        if type(value) == "function" and not Harness.LUA_FAKES[name] then
+            names[#names + 1] = name
+        elseif type(value) == "table" and not LuaLibraries[name] and not Harness.State(value) then
+            for member, fn in pairs(value) do
+                if type(member) == "string" and type(fn) == "function" then
                     names[#names + 1] = name .. "." .. member
                 end
             end

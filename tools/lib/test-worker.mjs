@@ -2,16 +2,22 @@
 // setup is done (the parent's timeout starts then), then { results: [{ name, ok, pending, err }] }
 // or { error }. A pending result passed nothing and failed nothing: the Lua test called
 // pending(reason), and err holds the reason. Jobs:
-//   { kind: "lua", file, filter }   a tests/*.test.lua file in a fresh Lua 5.1 VM with the harness
+//   { kind: "lua", file, filter, coverage }
+//                                   a tests/*.test.lua file in a fresh Lua 5.1 VM with the harness;
+//                                   with coverage, the message also carries coverage: the lines its
+//                                   tests ran in the addons' files (see tools/lib/coverage.mjs)
 //   { kind: "mjs", file, filter }   a tests/*.test.mjs module exporting tests = [{ name, run }]
-//   { kind: "fakes", filter }       every harness fake names a global (or member) the client dump has
+//   { kind: "fakes", filter }       every harness fake names a global (or member) the client dump has,
+//                                   and every fake function is one an addon calls
 // filter is a list of filters (see matches), or null for every test.
 
-import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
 import { loadSnapshot, withHarness } from "./harness.mjs";
+import { parse, stringValue, walk } from "./lua-scope.mjs";
+import { findAddons, readForbidden } from "./repo.mjs";
 
 const PRELUDE = `
     local tests = {}
@@ -41,8 +47,42 @@ const PRELUDE = `
         for i, t in ipairs(tests) do names[i] = escape(t.name) end
         return table.concat(names, "\\n")
     end
+    -- With __coverageOn, a line hook records the lines run in chunks named "@<path>" (the addons'
+    -- files): hits[source][linedefined][line]. A hook belongs to one coroutine; the tests run on this one.
+    local hits = {}
+    local getinfo, byte = debug.getinfo, string.byte
+    local function Hook(_, line)
+        local info = getinfo(2, "S")
+        local source = info.source
+        if byte(source, 1) == 64 then
+            local owners = hits[source]
+            if not owners then
+                owners = {}
+                hits[source] = owners
+            end
+            local lines = owners[info.linedefined]
+            if not lines then
+                lines = {}
+                owners[info.linedefined] = lines
+            end
+            lines[line] = true
+        end
+    end
+    -- The hits, one "<source>\\t<linedefined>\\t<line>,<line>..." line per function that ran.
+    function __coverage()
+        local out = {}
+        for source, owners in pairs(hits) do
+            for owner, lines in pairs(owners) do
+                local list = {}
+                for line in pairs(lines) do list[#list + 1] = line end
+                out[#out + 1] = source .. "\\t" .. owner .. "\\t" .. table.concat(list, ",")
+            end
+        end
+        return table.concat(out, "\\n")
+    end
     -- Status per test: 1 passed, 0 failed, 2 pending.
     function __run(selected)
+        if __coverageOn then debug.sethook(Hook, "l") end
         local lines = {}
         for _, t in ipairs(tests) do
             if selected[t.name] then
@@ -65,6 +105,7 @@ const PRELUDE = `
                 lines[#lines + 1] = status .. "\\t" .. escape(t.name) .. "\\t" .. detail
             end
         end
+        debug.sethook()
         return table.concat(lines, "\\n")
     end
 `;
@@ -81,7 +122,8 @@ const ready = () => parentPort.postMessage({ ready: true });
 
 async function runLua(job, snapshot) {
     const label = basename(job.file);
-    return withHarness(snapshot, async (lua) => {
+    let coverage = "";
+    const results = await withHarness(snapshot, async (lua) => {
         await lua.doString(PRELUDE);
         await lua.doString(readFileSync(job.file, "utf8"));
         const names = ((await lua.doString("return __names()")) ?? "").split("\n").filter(Boolean).map(unescape);
@@ -89,12 +131,15 @@ async function runLua(job, snapshot) {
         if (selected.length === 0) return [];
         ready();
         lua.ctx.__selected = Object.fromEntries(selected.map((name) => [name, true]));
+        lua.ctx.__coverageOn = job.coverage === true;
         const encoded = await lua.doString("return __run(__selected)");
+        if (job.coverage) coverage = (await lua.doString("return __coverage()")) ?? "";
         return encoded ? encoded.split("\n").map((line) => {
             const [status, name, err] = line.split("\t");
             return { ok: status !== "0", pending: status === "2", name: unescape(name), err: unescape(err ?? "") };
         }) : [];
     });
+    return { results, coverage };
 }
 
 async function runModule(job) {
@@ -123,40 +168,82 @@ const UNRECORDED_MEMBERS = {
     ChatTypeInfo: { RAID_WARNING: "Blizzard_ChatFrameBase/Shared/ChatTypeInfoConstants.lua" },
 };
 
-// A fake that isn't in the client dump models an API that doesn't exist.
+const CALLED_TEST = "every fake function is called by an addon";
+
+// Fake functions no addon names, each with why the harness has it anyway: Blizzard's UI code that
+// the harness runs on the addons' behalf calls them, or Lua the client exposes.
+const UNCALLED_FAKES = {};
+
+// Every name the addons' code mentions: identifiers, and the identifier-shaped words in string
+// literals (a probe can name an API by string). Comments don't count.
+function addonIdentifiers() {
+    const names = new Set();
+    for (const addon of findAddons()) {
+        for (const file of addon.files.filter((f) => f.endsWith(".lua"))) {
+            const path = join(addon.dir, file);
+            if (!existsSync(path)) continue;
+            walk(parse(readFileSync(path, "utf8")), (node) => {
+                if (node.type === "Identifier") names.add(node.name);
+                const text = stringValue(node);
+                if (text) for (const word of text.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []) names.add(word);
+            });
+        }
+    }
+    return names;
+}
+
+// A fake that isn't in the client dump models an API that doesn't exist; a fake function no addon
+// calls (by its last dotted segment) models nothing the addons need.
 async function runFakes(job, snapshot) {
-    if (!matches(job.filter, "harness", FAKES_TEST)) return [];
+    const checkNames = matches(job.filter, "harness", FAKES_TEST);
+    const checkCalls = matches(job.filter, "harness", CALLED_TEST);
+    if (!checkNames && !checkCalls) return [];
     const { globals, members } = snapshot.raw;
     const memberSets = new Map(Object.entries(members).map(([name, keys]) => [name, new Set(keys)]));
-    const names = await withHarness(snapshot, (lua) => {
+    const [names, functions] = await withHarness(snapshot, async (lua) => {
         ready();
-        return lua.doString("return Harness.FakeNames()");
+        return [await lua.doString("return Harness.FakeNames()"), await lua.doString("return Harness.FakeFunctionNames()")];
     });
-    const missing = names.split("\n").filter((name) => {
-        const dot = name.indexOf(".");
-        if (dot < 0) return !(name in globals);
-        const table = name.slice(0, dot);
-        const member = name.slice(dot + 1);
-        if (!memberSets.has(table) && UNRECORDED_MEMBERS[table]?.[member]) return !(table in globals);
-        return !memberSets.get(table)?.has(member);
-    });
-    return [{
-        name: FAKES_TEST,
-        ok: missing.length === 0,
-        err: missing.length ? `not in the client dump: ${missing.join(", ")}` : "",
-    }];
+    const results = [];
+    if (checkNames) {
+        const missing = names.split("\n").filter((name) => {
+            const dot = name.indexOf(".");
+            if (dot < 0) return !(name in globals);
+            const table = name.slice(0, dot);
+            const member = name.slice(dot + 1);
+            if (!memberSets.has(table) && UNRECORDED_MEMBERS[table]?.[member]) return !(table in globals);
+            return !memberSets.get(table)?.has(member);
+        });
+        results.push({
+            name: FAKES_TEST,
+            ok: missing.length === 0,
+            err: missing.length ? `not in the client dump: ${missing.join(", ")}` : "",
+        });
+    }
+    if (checkCalls) {
+        const called = addonIdentifiers();
+        const forbidden = readForbidden();
+        const uncalled = functions.split("\n").filter(Boolean).filter((name) =>
+            !called.has(name.split(".").pop()) && !(name in forbidden) && !(name in UNCALLED_FAKES));
+        results.push({
+            name: CALLED_TEST,
+            ok: uncalled.length === 0,
+            err: uncalled.length ? `no addon calls these fakes (delete them, with their tests): ${uncalled.join(", ")}` : "",
+        });
+    }
+    return results;
 }
 
 try {
     const job = workerData;
-    let results;
+    let outcome;
     if (job.kind === "mjs") {
-        results = await runModule(job);
+        outcome = { results: await runModule(job) };
     } else {
         const snapshot = loadSnapshot();
-        results = job.kind === "fakes" ? await runFakes(job, snapshot) : await runLua(job, snapshot);
+        outcome = job.kind === "fakes" ? { results: await runFakes(job, snapshot) } : await runLua(job, snapshot);
     }
-    parentPort.postMessage({ results });
+    parentPort.postMessage(outcome);
 } catch (error) {
     parentPort.postMessage({ error: String(error?.stack ?? error) });
 }

@@ -5,7 +5,7 @@
 --   name, surname (players default to Harness.DEFAULT_SURNAME; UnitName returns name, surname,
 --   as Forever does), realm (nil = the player's realm; only chat senders and GUID lookups show it),
 --   class (the classFile, "WARRIOR"; UnitClass returns className, classFile, classID), level,
---   race (the raceFile, "Human"; UnitRace returns raceName, raceFile, raceID), faction ("Alliance"
+--   race (the raceFile, "Human"; GetPlayerInfoByGUID returns its enUS name and it), faction ("Alliance"
 --   or "Horde"; UnitFactionGroup returns it and its enUS name; nil = none), isPlayer,
 --   playerControlled (defaults to isPlayer), canAttack and isEnemy (relative to the player;
 --   isEnemy defaults to canAttack), inCombat (UnitAffectingCombat; the player's is h.inCombat),
@@ -13,7 +13,7 @@
 --   classification (UnitClassification: "normal" when unset; "elite", "rareelite", "worldboss",
 --   "rare", "trivial" or "minus"; level -1 is a skull-level unit), comboPoints (the player's on
 --   this unit; set through h:SetComboPoints), boss (UnitIsBossMob),
---   raidTarget (the raid icon, set through h:MarkRaidTarget), and guild, guildRank,
+--   and guild, guildRank,
 --   guildRankIndex and guildRealm (nil = the player's realm) for a guild member (Harness.New
 --   takes the same four for the player).
 -- The secret predicates (secrets.lua) stay authoritative: a player-controlled unit's name, class,
@@ -44,16 +44,8 @@
 --               a revive restores full health.
 --   Raid icons  SetRaidTarget is forbidden to addon code (verified in game; see
 --               Harness.FORBIDDEN_IN_GAME in secrets.lua, and the wiki says it's protected from
---               12.0.0). Icons are set by players through Blizzard's UI: h:MarkRaidTarget(token,
---               index) is that path. [D] Marking toggles: the unit's own icon again removes it; a
---               unit holds one icon and an icon marks one unit; anyone may mark solo or in a
---               party, only the leader and assistants in a raid (warcraft.wiki.gg
---               API_SetRaidTarget). RAID_TARGET_UPDATE fires on every change, and on joining or
---               leaving a group (its event page). [G] Index 0
---               clears the unit's icon; any other index outside 1-8 is a harness error. [G] A
---               call the player isn't allowed to make, or for a missing unit, does nothing.
---               The player's rank: h.group.leader / h.group.assistant (each member's leader /
---               assistant fields for UnitIsGroupLeader and UnitIsGroupAssistant).
+--               12.0.0). Players set icons through Blizzard's UI; nothing reads them, so icons
+--               aren't modeled.
 --   Combo points [D] They sit on the target: Blizzard's Forever ComboFrame reads
 --               GetComboPoints("player", "target") on UNIT_POWER_FREQUENT and PLAYER_TARGET_CHANGED.
 --               GetComboPoints(unit, target) answers the target unit's comboPoints when unit is
@@ -65,7 +57,7 @@
 --               h:MoveComboPoints(unit) moves them.
 --   GUIDs       [D] "Player-<server>-<id>" and "Creature-0-<server>-0-<zone>-<npcID>-<spawn>"
 --               (the UnitGUID page's format). [G] The ids are deterministic stand-ins.
---               UnitTokenFromGUID answers the first token that names the unit, in the order
+--               A GUID's unit (h:UnitTokenForGUID) is the first token that names it, in the order
 --               player, target, focus, mouseover, pet, vehicle, party, raid, nameplate ([G]).
 --               [D] GetPlayerInfoByGUID(guid) returns localizedClass, englishClass, localizedRace,
 --               englishRace, sex, name and realmName ("" on your own realm) (warcraft.wiki.gg
@@ -79,17 +71,16 @@
 --               takes no secret arguments and [G] returns no secrets: players' identity isn't
 --               secret anyway, and an NPC has no guild. [G] The rank defaults to "Member", index 1.
 --               The client only knows a nearby unit's guild; the harness answers for any unit.
---               [D] IsInGuild() (no secret flags) is whether the player has a guild; [G]
---               UnitIsInMyGuild(unit) is true when the unit's guild and guild realm are the
---               player's. Guild rosters and PLAYER_GUILD_UPDATE aren't modeled.
+--               [D] IsInGuild() (no secret flags) is whether the player has a guild. Guild
+--               rosters and PLAYER_GUILD_UPDATE aren't modeled.
 
 Harness.MAX_NAMEPLATES = 40
 local ServerId = 5000
 
--- UnitRace: raceName (enUS), raceFile, raceID, for the races Forever characters can be.
+-- Each raceFile's enUS race name, for the races Forever characters can be.
 local Races = {
-    Human = { "Human", 1 }, Orc = { "Orc", 2 }, Dwarf = { "Dwarf", 3 }, NightElf = { "Night Elf", 4 },
-    Scourge = { "Undead", 5 }, Tauren = { "Tauren", 6 }, Gnome = { "Gnome", 7 }, Troll = { "Troll", 8 },
+    Human = "Human", Orc = "Orc", Dwarf = "Dwarf", NightElf = "Night Elf", Scourge = "Undead", Tauren = "Tauren",
+    Gnome = "Gnome", Troll = "Troll",
 }
 Harness.RACES = Races
 
@@ -125,7 +116,7 @@ function Harness:GUID(unit)
     return unit.guid
 end
 
--- Every token that can name a unit, in UnitTokenFromGUID's order.
+-- Every token that can name a unit, in the client's order (see the header).
 local function Tokens(h)
     local tokens = { "player", "target", "focus", "mouseover", "pet", "vehicle" }
     for i = 1, 4 do tokens[#tokens + 1] = "party" .. i end
@@ -266,48 +257,6 @@ function Harness:Revive()
     self:Fire(wasGhost and "PLAYER_UNGHOST" or "PLAYER_ALIVE")
 end
 
--- Whether the player may set raid target icons: solo and in a party anyone, in a raid the leader
--- and assistants.
-function Harness:CanMarkTargets()
-    return not self:GroupIsRaid() or self.group.leader == true or self.group.assistant == true
-end
-
--- The group's other units, for clearing an icon from whichever unit holds it.
-local function KnownUnits(h)
-    local units, seen = {}, {}
-    for _, token in ipairs(Tokens(h)) do
-        local unit = h:Unit(token)
-        if unit and not seen[unit] then
-            seen[unit] = true
-            units[#units + 1] = unit
-        end
-    end
-    return units
-end
-
--- A player sets a raid icon through Blizzard's UI (the target menu, or a keybinding).
-function Harness:MarkRaidTarget(token, index)
-    local h = self
-    if type(index) ~= "number" or index % 1 ~= 0 or index < 0 or index > 8 then
-        error("MarkRaidTarget: index must be 0-8, got " .. tostring(index), 2)
-    end
-    local unit = h:Unit(token)
-    if not unit or not h:CanMarkTargets() then
-        return
-    end
-    if index == 0 or unit.raidTarget == index then
-        unit.raidTarget = nil
-    else
-        for _, other in ipairs(KnownUnits(h)) do
-            if other.raidTarget == index then
-                other.raidTarget = nil
-            end
-        end
-        unit.raidTarget = index
-    end
-    h:Fire("RAID_TARGET_UPDATE")
-end
-
 -- The unit fakes, merged into the env (env.lua) before it wraps them.
 function Harness:UnitFakes()
     local h = self
@@ -331,10 +280,6 @@ function Harness:UnitFakes()
             local unit = Unit(u)
             return unit ~= nil and unit.dead == true
         end,
-        UnitIsGhost = function(u)
-            local unit = Unit(u)
-            return unit ~= nil and unit.ghost == true
-        end,
         UnitIsDeadOrGhost = function(u)
             local unit = Unit(u)
             return unit ~= nil and (unit.dead == true or unit.ghost == true)
@@ -343,13 +288,6 @@ function Harness:UnitFakes()
             local unit = Unit(u)
             if unit == h.player then return h.inCombat end
             return unit ~= nil and unit.inCombat == true
-        end,
-        UnitRace = function(u)
-            local unit = Unit(u)
-            if not unit or unit.race == nil then return end
-            local race = Races[unit.race]
-            assert(race, "UnitRace: unknown raceFile " .. tostring(unit.race) .. " (Harness.RACES)")
-            return race[1], unit.race, race[2]
         end,
         UnitFactionGroup = function(u)
             local unit = Unit(u)
@@ -361,25 +299,7 @@ function Harness:UnitFakes()
             local unit = Unit(u)
             return unit and h:GUID(unit) or nil
         end,
-        UnitTokenFromGUID = function(guid) return h:UnitTokenForGUID(guid) end,
-        -- The player's rank is h.group.leader / .assistant; a member's its leader / assistant.
-        UnitIsGroupLeader = function(u)
-            local unit = Unit(u)
-            if not unit or not h.group.kind then return false end
-            if unit == h.player then return h.group.leader == true end
-            return unit.inGroup == true and unit.leader == true
-        end,
-        UnitIsGroupAssistant = function(u)
-            local unit = Unit(u)
-            if not unit or not h:GroupIsRaid() then return false end
-            if unit == h.player then return h.group.assistant == true end
-            return unit.inGroup == true and unit.assistant == true
-        end,
-        SetRaidTarget = function(token, index) h:MarkRaidTarget(token, index) end, -- forbidden to addons: never runs
-        GetRaidTargetIndex = function(token)
-            local unit = Unit(token)
-            return unit and unit.raidTarget or nil
-        end,
+        SetRaidTarget = function() end, -- forbidden to addons (tools/api/forbidden.json): never runs
         GetRealmName = function() return h.player.realm end,
         GetGuildInfo = function(u)
             local unit = Unit(u)
@@ -391,25 +311,11 @@ function Harness:UnitFakes()
             return unit.guild, unit.guildRank or "Member", unit.guildRankIndex or 1, realm
         end,
         IsInGuild = function() return h.player.guild ~= nil end,
-        UnitIsInMyGuild = function(u)
-            local unit, me = Unit(u), h.player
-            if not unit or me.guild == nil or unit.guild ~= me.guild then return false end
-            local function Realm(r) return Harness.NormalizeRealm(r or me.realm) end
-            return Realm(unit.guildRealm) == Realm(me.guildRealm)
-        end,
         GetNormalizedRealmName = function() return Harness.NormalizeRealm(h.player.realm) end,
         C_NamePlate = {
             GetNamePlateForUnit = function(token)
                 local plate = PlateTokenFor(h, Unit(token))
                 return plate and h:NamePlateFrame(plate) or nil
-            end,
-            GetNamePlates = function()
-                local plates = {}
-                for i = 1, Harness.MAX_NAMEPLATES do
-                    local token = "nameplate" .. i
-                    if h.units[token] then plates[#plates + 1] = h:NamePlateFrame(token) end
-                end
-                return plates
             end,
         },
     }

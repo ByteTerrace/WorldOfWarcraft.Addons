@@ -49,7 +49,7 @@ local function Sources()
 end
 
 local function Load()
-    Harness.DefineAddOn("ScholarOnly", { sources = (Sources()) })
+    Harness.DefineAddOn("ScholarOnly", { sources = (Sources()), files = Files, as = "TheLanKrewToolKit" })
     local h = Harness.New()
     return h:LoadFiles("ScholarOnly"), h
 end
@@ -101,17 +101,44 @@ local function Where(p, options)
     return ("%s grade %d level %d (%s): %q"):format(options.subject, options.grade, options.level, tostring(p.kind), tostring(p.prompt))
 end
 
-local function Plain(text, allowNewline, where)
-    truthy(type(text) == "string" and text ~= "", "non-empty text at " .. where)
-    for i = 1, #text do
-        local byte = text:byte(i)
-        truthy((byte >= 32 and byte <= 126) or (allowNewline and byte == 10), ("plain ASCII (byte %d) in %q at %s"):format(byte, text, where))
+-- Fails with message (formatted with ...) and the puzzle it's about. The message is only built on
+-- a failure: the sweeps check tens of thousands of facts.
+local function Expect(ok, p, options, message, ...)
+    if not ok then
+        error(message:format(...) .. " at " .. Where(p, options), 2)
     end
-    falsy(text:find("[{}|]"), "no template braces or escape codes in " .. text)
-    falsy(HasWord(text, "nil"), "no nil in " .. text)
-    for _, word in ipairs(Unkind) do
-        falsy(HasWord(text, word), ("kind words only (%s) in %q"):format(word, text))
+end
+
+local UnkindPatterns = {}
+for i, word in ipairs({ "nil", unpack(Unkind) }) do
+    UnkindPatterns[i] = { word = word, pattern = "%f[%w]" .. word .. "%f[%W]" }
+end
+
+-- What keeps text from being plain, or nil: empty, a byte outside printable ASCII (a line break
+-- only with allowNewline), template braces or escape codes, "nil", or an unkind word.
+local function Unplain(text, allowNewline)
+    if type(text) ~= "string" or text == "" then
+        return "empty text"
     end
+    local at = text:find(allowNewline and "[^\n -~]" or "[^ -~]")
+    if at then
+        return ("byte %d in %q"):format(text:byte(at), text)
+    end
+    if text:find("[{}|]") then
+        return ("template braces or escape codes in %q"):format(text)
+    end
+    local lowered = text:lower()
+    for _, unkind in ipairs(UnkindPatterns) do
+        if lowered:find(unkind.pattern) then
+            return ("%q in %q"):format(unkind.word, text)
+        end
+    end
+    return nil
+end
+
+local function ExpectPlain(text, allowNewline, p, options)
+    local problem = Unplain(text, allowNewline)
+    Expect(problem == nil, p, options, "plain text, not %s", problem)
 end
 
 local function Contains(list, value)
@@ -125,27 +152,25 @@ end
 
 -- The shape every puzzle has, whatever its kind.
 local function CheckShape(p, options)
-    local where = Where(p, options)
-    eq(p.subject, options.subject, "subject at " .. where)
-    truthy(Contains(Kinds[options.subject][options.grade], p.kind), "kind belongs to the grade at " .. where)
-    Plain(p.title, false, where)
-    truthy(#p.title <= 40, "short title at " .. where)
-    Plain(p.prompt, true, where)
-    truthy(#p.prompt <= 240, ("prompt within 240 chars (%d) at %s"):format(#p.prompt, where))
-    eq(#p.choices, 4, "four choices at " .. where)
-    falsy(p.choices[5], "exactly four choices at " .. where)
+    Expect(p.subject == options.subject, p, options, "subject %s", tostring(p.subject))
+    Expect(Contains(Kinds[options.subject][options.grade], p.kind), p, options, "kind belongs to the grade")
+    ExpectPlain(p.title, false, p, options)
+    Expect(#p.title <= 40, p, options, "short title")
+    ExpectPlain(p.prompt, true, p, options)
+    Expect(#p.prompt <= 240, p, options, "prompt within 240 chars (%d)", #p.prompt)
+    Expect(#p.choices == 4 and p.choices[5] == nil, p, options, "exactly four choices")
     local seen = {}
     for _, choice in ipairs(p.choices) do
-        Plain(choice, false, where)
-        truthy(#choice <= 40, ("choice %q within 40 chars at %s"):format(choice, where))
-        falsy(seen[Fold(choice)], ("distinct choice %q at %s"):format(choice, where))
+        ExpectPlain(choice, false, p, options)
+        Expect(#choice <= 40, p, options, "choice %q within 40 chars", choice)
+        Expect(not seen[Fold(choice)], p, options, "distinct choice %q", choice)
         seen[Fold(choice)] = true
     end
-    truthy(type(p.answer) == "number" and p.answer >= 1 and p.answer <= 4 and p.answer % 1 == 0, "answer in 1..4 at " .. where)
-    Plain(p.hint, false, where)
-    Plain(p.explanation, false, where)
-    falsy(HasWord(p.hint, p.choices[p.answer]), ("hint %q doesn't give away %q at %s"):format(p.hint, p.choices[p.answer], where))
-    falsy(p.explanation:lower():find("wrong") or p.title:lower():find("wrong"), "encouraging words at " .. where)
+    Expect(type(p.answer) == "number" and p.answer >= 1 and p.answer <= 4 and p.answer % 1 == 0, p, options, "answer in 1..4")
+    ExpectPlain(p.hint, false, p, options)
+    ExpectPlain(p.explanation, false, p, options)
+    Expect(not HasWord(p.hint, p.choices[p.answer]), p, options, "hint %q doesn't give away %q", p.hint, p.choices[p.answer])
+    Expect(not (p.explanation:lower():find("wrong") or p.title:lower():find("wrong")), p, options, "encouraging words")
 end
 
 -- An independent evaluator for expressions: numbers (with decimals), + - x / and parentheses.
@@ -235,65 +260,66 @@ local Shown = {
 }
 
 local function CheckMath(p, options)
-    local where, band = Where(p, options), Band[options.grade]
-    truthy(type(p.value) == "number", "numeric value at " .. where)
+    local band = Band[options.grade]
+    Expect(type(p.value) == "number", p, options, "numeric value")
     local expected = p.kind == "math.remainder" and { p.value, p.remainder } or p.value
     local correct = ChoiceValue(p.kind, p.choices[p.answer])
-    truthy(Same(correct, expected), ("the correct choice %q is the value %s at %s"):format(p.choices[p.answer], tostring(p.value), where))
+    Expect(Same(correct, expected), p, options, "the correct choice %q is the value %s", p.choices[p.answer], tostring(p.value))
     for i, choice in ipairs(p.choices) do
         local value = ChoiceValue(p.kind, choice)
-        truthy(value ~= nil and (type(value) ~= "table" or value[1]), ("choice %q has a number at %s"):format(choice, where))
+        Expect(value ~= nil and (type(value) ~= "table" or value[1]), p, options, "choice %q has a number", choice)
         if i ~= p.answer then
-            falsy(Same(value, expected), ("distractor %q isn't also correct at %s"):format(choice, where))
+            Expect(not Same(value, expected), p, options, "distractor %q isn't also correct", choice)
         end
         if p.value > 0 then
-            truthy((type(value) == "table" and value[1] or value) > 0, ("distractor %q is positive at %s"):format(choice, where))
+            Expect((type(value) == "table" and value[1] or value) > 0, p, options, "distractor %q is positive", choice)
         end
     end
-    truthy(p.value >= 0 and p.value <= band, ("value %s within grade band %d at %s"):format(tostring(p.value), band, where))
+    Expect(p.value >= 0 and p.value <= band, p, options, "value %s within grade band %d", tostring(p.value), band)
     if p.expression then
-        truthy(Same(Evaluate(p.expression), p.value), ("%s = %s at %s"):format(p.expression, tostring(p.value), where))
+        Expect(Same(Evaluate(p.expression), p.value), p, options, "%s = %s", p.expression, tostring(p.value))
         for _, n in ipairs(Numbers(p.expression)) do
-            truthy(n <= band, ("%s stays within grade band %d at %s"):format(p.expression, band, where))
+            Expect(n <= band, p, options, "%s stays within grade band %d", p.expression, band)
             if Shown[p.kind] then
-                truthy(p.prompt:find("%f[%d]" .. Escape(tostring(n)) .. "%f[%D]"), ("the prompt shows %s at %s"):format(tostring(n), where))
+                Expect(p.prompt:find("%f[%d]" .. Escape(tostring(n)) .. "%f[%D]"), p, options, "the prompt shows %s", tostring(n))
             end
         end
     elseif p.kind == "math.count" then
         local row = p.prompt:match("\n([^\n]+)\n")
-        eq(select(2, row:gsub("[^ ]", "")), p.value, "counted symbols at " .. where)
+        local counted = select(2, row:gsub("[^ ]", ""))
+        Expect(counted == p.value, p, options, "%d symbols to count, not %d", counted, p.value)
     elseif p.kind == "math.remainder" then
         local n, d = p.terms[1], p.terms[2]
-        eq(p.value, math.floor(n / d), "quotient at " .. where)
-        eq(p.remainder, n % d, "remainder at " .. where)
-        truthy(p.remainder >= 1 and n <= 200 and d <= 9, "a small remainder at " .. where)
+        Expect(p.value == math.floor(n / d), p, options, "quotient")
+        Expect(p.remainder == n % d, p, options, "remainder")
+        Expect(p.remainder >= 1 and n <= 200 and d <= 9, p, options, "a small remainder")
     else
-        truthy(p.kind == "math.compare" or p.kind == "math.decimal", "only comparisons lack an expression at " .. where)
+        Expect(p.kind == "math.compare" or p.kind == "math.decimal", p, options, "only comparisons lack an expression")
         local best = p.terms[1]
         for _, n in ipairs(p.terms) do
             best = p.prompt:find("biggest") and math.max(best, n) or math.min(best, n)
         end
-        eq(p.value, best, "the extreme of the four at " .. where)
+        Expect(p.value == best, p, options, "the extreme of the four")
         for _, n in ipairs(p.terms) do
-            truthy(n <= band, "compared numbers within band at " .. where)
+            Expect(n <= band, p, options, "compared numbers within band")
         end
     end
 end
 
 -- Kind-specific checks for the grade bands that the shape can't see.
 local function CheckBand(p, options)
-    local where, e = Where(p, options), p.expression
+    local e = p.expression
     if options.grade == 3 and (p.kind == "math.multiply" or p.kind == "math.groups") then
         local a, b = e:match("^(%d+) x (%d+)$")
-        truthy(tonumber(a) <= 10 and tonumber(b) <= 10, "facts to 10 x 10 at " .. where)
+        Expect(tonumber(a) <= 10 and tonumber(b) <= 10, p, options, "facts to 10 x 10")
     elseif options.grade == 3 and p.kind == "math.divide" then
         local _, b = e:match("^(%d+) / (%d+)$")
-        truthy(tonumber(b) <= 10 and p.value <= 10, "division facts at " .. where)
+        Expect(tonumber(b) <= 10 and p.value <= 10, p, options, "division facts")
     elseif options.grade == 4 and p.kind == "math.multiply" then
         local a, b = e:match("^(%d+) x (%d+)$")
-        truthy(tonumber(a) >= 10 and tonumber(a) <= 99 and tonumber(b) >= 2 and tonumber(b) <= 9, "2-digit x 1-digit at " .. where)
+        Expect(tonumber(a) >= 10 and tonumber(a) <= 99 and tonumber(b) >= 2 and tonumber(b) <= 9, p, options, "2-digit x 1-digit")
     elseif p.kind == "math.decimal" then
-        truthy(math.abs(p.value * 10 - math.floor(p.value * 10 + 0.5)) < 1e-9, "tenths at " .. where)
+        Expect(math.abs(p.value * 10 - math.floor(p.value * 10 + 0.5)) < 1e-9, p, options, "tenths")
     end
 end
 
@@ -307,28 +333,28 @@ local function Sorted(word)
 end
 
 local function CheckReading(p, options)
-    local where, correct = Where(p, options), p.choices[p.answer]
+    local correct = p.choices[p.answer]
     if p.kind == "reading.rhyme" then
         local target = p.prompt:match("rhymes with \"(%a+)\"")
-        truthy(correct ~= target and correct:sub(-2) == target:sub(-2), "the answer rhymes at " .. where)
+        Expect(correct ~= target and correct:sub(-2) == target:sub(-2), p, options, "the answer rhymes")
         for i, choice in ipairs(p.choices) do
-            truthy(i == p.answer or choice:sub(-2) ~= target:sub(-2), ("distractor %q doesn't look like a rhyme at %s"):format(choice, where))
+            Expect(i == p.answer or choice:sub(-2) ~= target:sub(-2), p, options, "distractor %q doesn't look like a rhyme", choice)
         end
     elseif p.kind == "reading.sound" then
         local target = p.prompt:match("same sound as \"(%a+)\"")
         for i, choice in ipairs(p.choices) do
-            eq(choice:sub(1, 1) == target:sub(1, 1), i == p.answer, ("first sound of %q at %s"):format(choice, where))
+            Expect((choice:sub(1, 1) == target:sub(1, 1)) == (i == p.answer), p, options, "first sound of %q", choice)
         end
     elseif p.kind == "reading.cvc" then
         local sounds = p.prompt:match("\n(%a %- %a %- %a)\n")
         local was, from, now = p.prompt:match("Change the \"(%a)\" in \"(%a+)\" to \"(%a)\"")
         local expected = sounds and sounds:gsub(" %- ", "") or (from and from:gsub(was, now))
-        eq(correct, expected, "the built word at " .. where)
+        Expect(correct == expected, p, options, "the built word %q, not %q", tostring(expected), correct)
     elseif p.kind == "reading.unscramble" then
         local letters = p.prompt:match("\n([A-Z][A-Z ]+)")
-        falsy(letters:gsub(" ", "") == correct, "the letters are scrambled at " .. where)
+        Expect(letters:gsub(" ", "") ~= correct, p, options, "the letters are scrambled")
         for i, choice in ipairs(p.choices) do
-            eq(Sorted(choice) == Sorted(letters), i == p.answer, ("anagram check for %q at %s"):format(choice, where))
+            Expect((Sorted(choice) == Sorted(letters)) == (i == p.answer), p, options, "anagram check for %q", choice)
         end
     end
 end
@@ -355,7 +381,7 @@ test("the TOC lists ScholarWords.lua right before ScholarPuzzles.lua, and the ge
 end)
 
 test("loads standalone and defines ns.Puzzles, ns.ScholarWords and no globals", function()
-    Harness.DefineAddOn("ScholarOnly", { sources = (Sources()) })
+    Harness.DefineAddOn("ScholarOnly", { sources = (Sources()), files = Files, as = "TheLanKrewToolKit" })
     local h = Harness.New()
     local before = {}
     for key in pairs(h.env) do
@@ -387,8 +413,17 @@ test("Grades runs from Kindergarten to Grade 6 in order", function()
 end)
 
 test("randomness comes only from options.random", function()
-    for _, source in ipairs((Sources())) do
-        for _, banned in ipairs({ "math.random", "os%.", "time%(", "GetTime", "date%(", "random%(" }) do
+    local sources = Sources()
+    local addon = __addons.TheLanKrewToolKit
+    for i, file in ipairs(addon.files) do
+        if file == "ScholarQuests.lua" then -- it needs the whole addon to load, but is just as pure
+            sources[#sources + 1] = addon.sources[i]
+        end
+    end
+    eq(#sources, #Files + 1, "ScholarQuests.lua is listed")
+    for _, source in ipairs(sources) do
+        -- Whole words: BlankCandidate( isn't date(.
+        for _, banned in ipairs({ "math.random", "%f[%w]os%.", "%f[%w]time%(", "GetTime", "%f[%w]date%(", "%f[%w]random%(" }) do
             falsy(source:find(banned), "the source doesn't use " .. banned)
         end
     end
@@ -401,6 +436,10 @@ test("bad options fail loudly instead of guessing", function()
     local p = puzzles.Generate({ subject = "math", grade = "3", level = "9", random = Rng(5) })
     truthy(Contains(Kinds.math[3], p.kind), "grade and level strings are read and clamped")
     CheckShape(p, { subject = "math", grade = 3, level = 3 })
+    local text = { prompt = "What is 1 + 2?", hint = "Count on.", explain = "1 + 2 = 3." }
+    throws(function()
+        puzzles.Kit.Finish({ roll = Rng(1), subject = "math", grade = 1 }, "math.add", text, {}, "3", { "4", " 4 ", "3", "" })
+    end, "too few distractors", "a generator without three distinct wrong answers is refused")
 end)
 
 test("every puzzle is well formed and correct, without context", function()
@@ -409,6 +448,14 @@ end)
 
 test("every puzzle is well formed and correct, with a full context", function()
     Sweep(Load().Puzzles, 100, Context, CheckAll)
+end)
+
+test("every puzzle fits its limits with the longest context the generator admits", function()
+    -- A 12-character name and a 24-character zone are the most SafeContext keeps.
+    for _, class in ipairs({ "WARRIOR", "PALADIN", "WARLOCK" }) do
+        Sweep(Load().Puzzles, 40, { name = "Maximilianus", class = class, level = 99, zone = "Swamp of Sorrows Outpost",
+            copper = 999999999 }, CheckAll)
+    end
 end)
 
 test("the same options and random sequence give the same puzzle", function()
@@ -546,7 +593,7 @@ test("banks hold distinct, plain, short options", function()
             local seen = {}
             for i = bank[2], bank[3] do
                 local option = entry[i]
-                Plain(option, false, "bank entry " .. entry[1])
+                eq(Unplain(option, false), nil, "bank entry " .. entry[1])
                 truthy(#option <= 40, option .. " fits a choice")
                 falsy(seen[Fold(option)], "distinct option " .. option)
                 seen[Fold(option)] = true

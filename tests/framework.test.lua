@@ -42,11 +42,23 @@ test("compile reports every bad declaration at once", function()
         { name = "kind", kind = "table", default = {} },
         { name = "default", kind = "boolean", default = "yes" },
         { name = "enum", kind = "string", default = "c", values = { "a", "b" } },
+        { name = "numberEnum", kind = "number", default = 0, values = { "a" } },
+        { name = "boundedFlag", kind = "boolean", default = false, min = 0 },
+        { name = "inverted", kind = "number", default = 5, min = 10, max = 1 },
+        { name = "labels", kind = "string", default = "", valueLabels = { a = "A" } },
+        { name = "realm", kind = "boolean", default = false, scope = "realm" },
+        { name = "lock", kind = "boolean", default = false, lockedBy = 3 },
     } })
-    local err = StartRefused(h, addon)
-    truthy(tostring(err):find("Bad.kind: unknown kind table", 1, true), "reports kind")
-    truthy(tostring(err):find("Bad.default: default expects boolean", 1, true), "reports default")
-    truthy(tostring(err):find("Bad.enum: default expects one of a, b", 1, true), "reports enum")
+    local err = tostring(StartRefused(h, addon))
+    truthy(err:find("Bad.kind: unknown kind table", 1, true), "reports kind")
+    truthy(err:find("Bad.default: default expects boolean", 1, true), "reports default")
+    truthy(err:find("Bad.enum: default expects one of a, b", 1, true), "reports enum")
+    truthy(err:find("Bad.numberEnum: values only apply to string rows", 1, true), err)
+    truthy(err:find("Bad.boundedFlag: min / max / step only apply to number rows", 1, true), err)
+    truthy(err:find("Bad.inverted: min must not exceed max", 1, true), err)
+    truthy(err:find("Bad.labels: valueLabels needs values", 1, true), err)
+    truthy(err:find("Bad.realm: unknown scope realm", 1, true), err)
+    truthy(err:find("Bad.lock: lockedBy must be a row name", 1, true), err)
 end)
 
 test("writes are validated and secrets are refused", function()
@@ -58,13 +70,20 @@ test("writes are validated and secrets are refused", function()
     Start(h)
     throws(function() addon.State:Set("M.mode", "c") end, "expects one of a, b")
     throws(function() addon.State:Set("M.n", 11) end, "at most 10")
+    throws(function() addon.State:Set("M.n", -1) end, "at least 0")
     throws(function() addon.State:Set("M.n", "5") end, "expects number")
+    throws(function() addon.State:Set("M.missing", 1) end, "unknown state row M.missing")
+    throws(function() addon.State:Set(999, 1) end, "unknown state row id 999")
+    throws(function() addon.State:Toggle("M.n") end, "M.n is not boolean")
+    eq(addon.State:Get("M.n"), 1, "a refused write changes nothing")
     h:EnterCombat()
     throws(function() addon.State:Set("M.n", h.env.UnitHealth("player")) end, "secret")
 end)
 
-test("saved values load; invalid ones reset, undeclared ones are kept for a module that failed to load", function()
-    local h, addon = NewAddOn({ harness = { saved = { TestDB = { ["M.flag"] = true, ["M.mode"] = "zzz", ["Old.row"] = 1 } } } })
+test("saved values load; invalid and renamed ones reset, undeclared ones are kept for a module that failed to load", function()
+    local h, addon = NewAddOn({ harness = { saved = { TestDB = {
+        ["M.flag"] = true, ["M.mode"] = "zzz", ["M.old"] = 1, ["Old.row"] = 1,
+    } } } })
     addon:Module("M", { toggle = false, state = {
         { name = "flag", kind = "boolean", default = false },
         { name = "mode", kind = "string", default = "a", values = { "a", "b" } },
@@ -75,6 +94,7 @@ test("saved values load; invalid ones reset, undeclared ones are kept for a modu
     local saved = h.env.TestDB
     eq(saved["Old.row"], 1, "undeclared key kept (its module may have failed to load)")
     eq(saved["M.mode"], nil, "invalid value dropped")
+    eq(saved["M.old"], nil, "a declared module's stale key (a renamed row) is dropped")
 end)
 
 test("persisted rows store only values that differ from the default", function()
@@ -179,8 +199,9 @@ test("unit handlers only receive their unit", function()
     local h, addon = NewAddOn()
     Start(h)
     local seen = {}
-    addon.Events:On("UNIT_HEALTH", function(unit) seen[#seen + 1] = "p:" .. unit end, "player")
     addon.Events:On("UNIT_HEALTH", function(unit) seen[#seen + 1] = "t:" .. unit end, "target")
+    addon.Events:On("UNIT_HEALTH", function(unit) seen[#seen + 1] = "p:" .. unit end, "player")
+    eq(addon.Events:Registrations().UNIT_HEALTH, "player|target", "the same units give the same registration, in any order")
     h:Fire("UNIT_HEALTH", "player")
     h:Fire("UNIT_HEALTH", "target")
     h:Fire("UNIT_HEALTH", "focus")
@@ -246,6 +267,10 @@ test("slash words run their commands with the rest as the argument", function()
     eq(got, "hello world")
     h:Slash("/test")
     truthy(addon.SettingsWindow:IsShown(), "bare slash shows the settings window")
+    got = nil
+    falsy(h:Slash("/test bogus words"))
+    eq(got, nil)
+    truthy(h.printed[#h.printed]:find("Unknown command 'bogus'. Type /test help.", 1, true), h.printed[#h.printed])
 end)
 
 test("help lists every slash command", function()
@@ -256,12 +281,18 @@ test("help lists every slash command", function()
     local text = table.concat(h.printed, "\n")
     truthy(text:find("/test echo - Echo things", 1, true))
     truthy(text:find("/test set - Set a setting", 1, true))
+    h:Slash("/test version")
+    truthy(h.printed[#h.printed]:find("Version 1.0", 1, true), h.printed[#h.printed])
 end)
 
 test("set and toggle change settings from text", function()
     local h, addon = NewAddOn()
-    addon:Module("M", { label = "M", state = { { name = "mode", kind = "string", default = "a", values = { "a", "b" }, label = "Mode" } } })
+    addon:Module("M", { label = "M", state = {
+        { name = "mode", kind = "string", default = "a", values = { "a", "b" }, label = "Mode" },
+        { name = "size", kind = "number", default = 1, min = 0, max = 10, label = "Size" },
+    } })
     Start(h)
+    local function Last() return h.printed[#h.printed] end
     h:Slash("/test set M.mode b")
     eq(addon.State:Get("M.mode"), "b")
     h:Slash("/test set M.mode nope")
@@ -270,32 +301,32 @@ test("set and toggle change settings from text", function()
     eq(addon.State:Get("M.enabled"), false)
     h:Slash("/test set M.enabled on")
     eq(addon.State:Get("M.enabled"), true)
+    h:Slash("/test set M.enabled off")
+    eq(addon.State:Get("M.enabled"), false)
+    h:Slash("/test set M.enabled maybe")
+    truthy(Last():find("M.enabled can't be set to 'maybe'.", 1, true), Last())
+    eq(addon.State:Get("M.enabled"), false)
+    h:Slash("/test set M.size 7")
+    eq(addon.State:Get("M.size"), 7)
+    h:Slash("/test set M.size big")
+    eq(addon.State:Get("M.size"), 7, "a word isn't a number")
+    h:Slash("/test toggle M.mode")
+    truthy(Last():find("toggle <setting>. Settings: M.enabled, addon.debug", 1, true), "only booleans toggle: " .. Last())
+    eq(addon.State:Get("M.mode"), "b")
 end)
 
-test("duplicate slash words are refused at compile", function()
+test("duplicate slash words and commands without a label are refused at compile", function()
     local h, addon = NewAddOn()
     addon:Module("M", { toggle = false, commands = {
         { name = "one", slash = "x", label = "One", run = function() end },
         { name = "two", slash = "x", label = "Two", run = function() end },
+        { name = "three", run = function() end },
     } })
     local err = StartRefused(h, addon)
     truthy(tostring(err):find("slash word 'x' is taken", 1, true))
+    truthy(tostring(err):find("M.three: needs a label", 1, true), tostring(err))
 end)
 
-
-test("labels follow the connected controller family", function()
-    local h = Harness.New()
-    h:LoadFiles("ByteTerrace_Core")
-    local Input = h.env.ByteTerrace.Input
-    eq(Input.Label("gamepad.south"), "South", "no controller: positional")
-    h.labelStyle = "Letters"
-    eq(Input.Label("gamepad.south"), "A")
-    h.labelStyle = "Shapes"
-    eq(Input.Label("gamepad.south"), "Cross")
-    h.labelStyle = "Reverse"
-    eq(Input.Label("gamepad.south"), "B")
-    eq(Input.Label("gamepad.dpadUp"), "D-pad Up")
-end)
 
 test("bound buttons run commands; while a map is active, unbound buttons are taken too", function()
     local h, addon = NewAddOn()
@@ -341,16 +372,6 @@ test("a release goes to its press's command; a held command whose map goes away 
     addon.Input:SetActiveMaps({ "two" })
     h:Gamepad("PAD1", false)
     eq(table.concat(log, ","), "a:down,a:cancel,b:down,b:up")
-end)
-
-test("bindings to unknown sources or commands are refused at compile", function()
-    local h, addon = NewAddOn()
-    addon:Module("M", { toggle = false, bindings = {
-        { map = "menu", source = "gamepad.nope", command = "M.missing" },
-    } })
-    local err = StartRefused(h, addon)
-    truthy(tostring(err):find("unknown source gamepad.nope", 1, true))
-    truthy(tostring(err):find("unknown command M.missing", 1, true))
 end)
 
 
@@ -445,17 +466,6 @@ test("labeled bounded numbers get steppers; a labeled number without bounds is r
     truthy(err:find("needs min and max", 1, true))
 end)
 
-test("a control refreshes when its row changes elsewhere", function()
-    local h, addon = NewAddOn()
-    addon:Module("M", { label = "M" })
-    Start(h)
-    addon.SettingsWindow:Show()
-    local box = addon.SettingsWindow.Controls[addon.State:Id("M.enabled")]
-    truthy(box.Check:IsShown())
-    h:Slash("/test toggle M.enabled")
-    falsy(box.Check:IsShown())
-end)
-
 test("a handler removed mid-dispatch doesn't receive the rest of that dispatch", function()
     local h, addon = NewAddOn()
     local m = addon:Module("M", { toggle = false })
@@ -534,6 +544,7 @@ test("module Get and Set accept a resolved id", function()
     local id = m:Id("x")
     m:Set(id, 3)
     eq(m:Get(id), 3)
+    eq(addon.State:Get(id), 3, "so does the state's")
 end)
 
 test("non-finite numbers are refused", function()
@@ -717,13 +728,24 @@ test("a taken slash alias is reported and skipped; the addon still starts", func
     truthy(addon.Started)
 end)
 
-test("errors from module Set point at the caller", function()
+test("a module's errors for a bad value or an unknown row point at the module's caller", function()
     local h, addon = NewAddOn()
     local m = addon:Module("M", { toggle = false, state = { { name = "n", kind = "number", default = 0 } } })
     Start(h)
-    local ok, err = pcall(function() m:Set("n", "bad") end)
-    falsy(ok)
-    falsy(tostring(err):find("AddOn.lua", 1, true), tostring(err))
+    local _, mark = pcall(function() error("mark") end)
+    local chunk = tostring(mark):match("^(.-):%d+: mark$")
+    truthy(chunk, "this test's own chunk name: " .. tostring(mark))
+    for _, call in ipairs({
+        function() m:Set("n", "bad") end,
+        function() m:Get("typo") end,
+        function() m:Set("typo", 1) end,
+    }) do
+        local ok, err = pcall(call)
+        falsy(ok)
+        err = tostring(err)
+        falsy(err:find("ByteTerrace_Core/", 1, true), err)
+        eq(err:sub(1, #chunk + 1), chunk .. ":", "the error names the calling chunk: " .. err)
+    end
 end)
 
 test("reserved module names are refused", function()
@@ -739,14 +761,6 @@ test("number rows honor their step", function()
     throws(function() m:Set("n", 3) end, "multiple of 2")
     m:Set("n", 4)
     eq(m:Get("n"), 4)
-end)
-
-test("a renamed row's stale key is dropped; a failed module's keys are kept", function()
-    local h, addon = NewAddOn({ harness = { saved = { TestDB = { ["M.old"] = 1, ["Gone.row"] = 2 } } } })
-    addon:Module("M", { toggle = false, state = { { name = "new", kind = "number", default = 0 } } })
-    Start(h)
-    eq(h.env.TestDB["M.old"], nil, "stale key under a declared module")
-    eq(h.env.TestDB["Gone.row"], 2, "module that didn't load keeps its key")
 end)
 
 test("a stopped module's runtime rows return to their defaults", function()

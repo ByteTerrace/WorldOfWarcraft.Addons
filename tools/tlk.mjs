@@ -2,7 +2,7 @@
 // Repository automation. Every operation is a verb here; there are no loose scripts.
 //
 //   node tools/tlk.mjs check [--quiet] [--wow-root <path>]           static gates over every addon
-//   node tools/tlk.mjs test [filter | files...] [--timeout <s>] [--dir <folder>] behavioral tests in real Lua 5.1
+//   node tools/tlk.mjs test [filter | files...] [--timeout <s>] [--dir <folder>] [--coverage] behavioral tests in real Lua 5.1
 //   node tools/tlk.mjs deploy [--unlink] [--no-test] [--addon <name>]... [--wow-root <path>] [--flavor <_folder_>]
 //   node tools/tlk.mjs package [--addon <name>]... [--no-test]            the zip players install, in dist/
 //   node tools/tlk.mjs api-sync [--docs <Blizzard_APIDocumentationGenerated dir>] [--globals <dump>]

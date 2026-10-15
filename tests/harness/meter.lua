@@ -11,7 +11,7 @@
 --       and recap; a /reload keeps them (they're the client's, not the UI's).
 --   [G] Current is the latest session, in progress or ended, until the next combat starts one.
 --       [E] Expired is empty after ordinary fights (damageMeter.typesIdle: no sources and no
---       duration, idle after two kills); what it holds later isn't known yet. Overall merges every session since the last reset:
+--       duration, idle after two kills); what it holds later isn't known yet. Overall merges every session:
 --       sources merge by GUID (else creature ID, else name), amounts add up, and its duration is
 --       the sum of the sessions' durations.
 --   [G] GetAvailableCombatSessions lists every session oldest first ({ sessionID, name,
@@ -19,14 +19,12 @@
 --       empty in the client (damageMeter.sessions); its format isn't known, so it's what the test
 --       gave (h:MeterFight's name), else "Combat <id>".
 --       The client's cap on kept sessions is unknown; the harness keeps them all.
---   [G] ResetAllCombatSessions clears every session (not the recaps) and fires DAMAGE_METER_RESET
---       inside the call; in combat a fresh session starts and becomes Current.
 --   [D] Adding data fires DAMAGE_METER_COMBAT_SESSION_UPDATED twice per changed type: (type, 0)
 --       for Overall, then (type, sessionID) for the current session (DamageMeterSessionWindow.lua:
 --       "Two events are always dispatched"). [G] A DamageDone change also fires for Dps and a
 --       HealingDone change for Hps (Blizzard's window filters by its own type); a death fires for
 --       Deaths. Ending a session fires nothing.
---   [G] No session of the asked kind (or an unknown ID) returns an empty session: no sources,
+--   [G] No session of the asked kind returns an empty session: no sources,
 --       amounts 0, durationSeconds nil (the return isn't Nilable). An unknown source returns no
 --       spells and amounts 0.
 -- Data:
@@ -51,13 +49,13 @@
 --       same one for the same name, so Overall merges it across fights), a creature (creatureID)
 --       has sourceGUID nil.
 -- Secrets:
---   [D] The four session getters are SecretWhenInCombat: while the Combat restriction holds, their
+--   [D] The two session getters are SecretWhenInCombat: while the Combat restriction holds, their
 --       fields are secret except the NeverSecret ones (classFilename, specIconID, isLocalPlayer,
 --       deathRecapID, classification; the details' unitClassFilename, classification,
 --       specIconID). [G] ConditionalSecret fields (name, sourceGUID) are secret whenever the
 --       predicate holds, since the docs don't name their condition; the tables and lists stay
 --       plain (Blizzard's untainted window ipairs them in combat, and nothing documents secret
---       tables here). GetAvailableCombatSessions and GetSessionDurationSeconds have no flags.
+--       tables here). GetAvailableCombatSessions has no flags.
 --   [D] SecretArguments AllowedWhenUntainted: addon code can't pass back a secret GUID (a
 --       third-party meter hit exactly that refusal in game).
 -- Death recaps:
@@ -77,11 +75,9 @@
 --       gives one, critical, glancing, crushing and
 --       isOffHand false, raid flags 0, flags 0xA48 for a hostile mob, 0x548 for a hostile player,
 --       0x1148 for a hostile player's pet and 0x511 for the player dying, and currentHP the health left after the hit (0
---       for the killing blow). An unknown ID returns no events, max health 0 and link "".
+--       for the killing blow). An unknown ID returns no events and max health 0.
 --       [D] A nil ID means your latest death: Blizzard's death popup calls HasRecapEvents() and
 --       OpenDeathRecapUI() with none (GameDialogDefs.lua). [G] Deaths of other units don't count.
---   [D] GetRecapLink formats DEATH_RECAP_LINK ("|cff71d5ff|Hdeath:%i|h[You died.]|h", the forever
---       enUS GlobalStrings); [G] that the C function uses that string.
 -- Availability: [D] IsDamageMeterAvailable returns isAvailable, failureReason; true, "" by default
 -- (the real client returned true in game). h:SetMeterAvailable(false, reason) changes it.
 --
@@ -104,9 +100,6 @@ local Snapshot = __snapshot
 local Types = Snapshot.enums.DamageMeterType
 local SessionTypes = Snapshot.enums.DamageMeterSessionType
 local DisplayTypes = Snapshot.enums.DamageMeterSourceDisplayType
-
--- The GlobalString GetRecapLink formats (Ketho/BlizzardInterfaceResources, forever, enUS).
-local DeathRecapLink = "|cff71d5ff|Hdeath:%i|h[You died.]|h"
 
 -- Rate types read their base type's entries; a base type's change also updates its rate type.
 local Base = { [Types.Dps] = Types.DamageDone, [Types.Hps] = Types.HealingDone }
@@ -187,15 +180,6 @@ local function SessionsOfType(h, sessionType)
         return {}
     end
     error("C_DamageMeter: unknown DamageMeterSessionType " .. tostring(sessionType), 4)
-end
-
-local function SessionWithID(h, id)
-    for _, session in ipairs(h.meter.sessions) do
-        if session.id == id then
-            return { session }
-        end
-    end
-    return {}
 end
 
 -- A source's identity from its spec (see the header).
@@ -529,9 +513,7 @@ local function ShapeSessionSource(source)
 end
 
 Harness.SECRET_SHAPES["C_DamageMeter.GetCombatSessionFromType"] = ShapeSession
-Harness.SECRET_SHAPES["C_DamageMeter.GetCombatSessionFromID"] = ShapeSession
 Harness.SECRET_SHAPES["C_DamageMeter.GetCombatSessionSourceFromType"] = ShapeSessionSource
-Harness.SECRET_SHAPES["C_DamageMeter.GetCombatSessionSourceFromID"] = ShapeSessionSource
 
 local function CopyEvents(events)
     local out = {}
@@ -560,26 +542,8 @@ function Harness:MeterFakes()
             GetCombatSessionFromType = function(sessionType, meterType)
                 return CombatSession(h, SessionsOfType(h, sessionType), meterType, sessionType == SessionTypes.Overall)
             end,
-            GetCombatSessionFromID = function(sessionID, meterType)
-                return CombatSession(h, SessionWithID(h, sessionID), meterType, false)
-            end,
             GetCombatSessionSourceFromType = function(sessionType, meterType, guid, creatureID)
                 return SessionSource(h, SessionsOfType(h, sessionType), meterType, guid, creatureID)
-            end,
-            GetCombatSessionSourceFromID = function(sessionID, meterType, guid, creatureID)
-                return SessionSource(h, SessionWithID(h, sessionID), meterType, guid, creatureID)
-            end,
-            GetSessionDurationSeconds = function(sessionType)
-                local _, duration = Merge(h, SessionsOfType(h, sessionType))
-                return duration
-            end,
-            ResetAllCombatSessions = function()
-                local wasActive = h:MeterActive() ~= nil
-                h.meter.sessions = {}
-                h:Fire("DAMAGE_METER_RESET")
-                if wasActive then
-                    h:MeterStartSession()
-                end
             end,
         },
         C_DeathRecap = {
@@ -594,9 +558,6 @@ function Harness:MeterFakes()
             GetRecapMaxHealth = function(id)
                 local recap = Recap(id)
                 return recap and recap.maxHealth or 0
-            end,
-            GetRecapLink = function(id)
-                return Recap(id) and DeathRecapLink:format(id) or ""
             end,
         },
     }

@@ -61,7 +61,8 @@ end
 
 -- The damage you took in the fight that just ended, from Blizzard's damage meter, and whether
 -- that answer is final: nil, true when the meter can't say (it's off); nil, false while its
--- numbers are still secret.
+-- numbers are still secret. The session's combatSources list stays a plain table in combat
+-- (probed: damageMeter.currentInCombat); only the numbers in it turn secret.
 local function DamageTakenLastFight()
     if not C_DamageMeter.IsDamageMeterAvailable() then
         return nil, true
@@ -71,11 +72,7 @@ local function DamageTakenLastFight()
     if issecretvalue(session) or type(session) ~= "table" then
         return nil, false
     end
-    local sources = session.combatSources
-    if issecretvalue(sources) or type(sources) ~= "table" then
-        return nil, false
-    end
-    for _, source in ipairs(sources) do
+    for _, source in ipairs(session.combatSources) do
         if IsTrue(source.isLocalPlayer) then
             local total = source.totalAmount
             if issecretvalue(total) then

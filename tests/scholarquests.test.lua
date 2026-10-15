@@ -76,7 +76,8 @@ test("a turned-in quest adds who took it, where, and the reward text, and is fre
 end)
 
 test("an area trigger's quest is recorded from the quest log, the player's open book", function()
-    local h, addon = LoadKid()
+    local h, addon, ns = LoadKid()
+    h:SetLocation({ zone = "Elwynn Forest", subZone = "Goldshire" })
     local id = h:AutoAcceptQuest({ title = "A Threat Within", text = "Report to Marshal McBride in Northshire Abbey.",
         goal = "Speak with Marshal McBride.", objectives = { { text = "Report to Marshal McBride", type = "log" } } })
     local record = Quests(addon):Get(tostring(id))
@@ -84,6 +85,41 @@ test("an area trigger's quest is recorded from the quest log, the player's open 
     eq(record.text, "Report to Marshal McBride in Northshire Abbey.")
     eq(record.goal, "Speak with Marshal McBride.")
     eq(record.giver, "", "no dialog named a giver")
+    local shown = Watch(ns)
+    h:Slash("/tlk puzzle")
+    eq(shown[1].subject, "quest")
+    truthy(shown[1].book:find("Taken in Goldshire.", 1, true), "the book says where it began: " .. shown[1].book)
+end)
+
+test("a quest giver whose name is secret is left out, and the quest is still recorded", function()
+    local h, addon = LoadKid()
+    h:SetRestriction("Encounter", true) -- an escort that starts inside a boss encounter
+    Accept(h, Wolves)
+    eq(Quests(addon):Field("33", "title"), "Wolves Across the Border")
+    eq(Quests(addon):Field("33", "giver"), "", "the giver's name was secret")
+end)
+
+test("a quest the client can't name isn't recorded", function()
+    local h, addon = LoadKid()
+    h:Fire("QUEST_ACCEPTED", 4242) -- not in the log, so GetTitleForQuestID has no title for it
+    falsy(Quests(addon):Has("4242"))
+end)
+
+test("a quest the book never saw is recorded when turned in, from its reward panel", function()
+    local h, addon = LoadKid({ ["Scholar.enabled"] = false })
+    Accept(h, Wolves)
+    addon.State:Set("Scholar.enabled", true)
+    h:SetLocation({ zone = "Elwynn Forest", subZone = "Eastvale Logging Camp" })
+    h:OpenTurnIn(33, "Marshal McBride", "The farmers thank you.")
+    h:CompleteQuest()
+    local record = Quests(addon):Get("33")
+    eq(record.title, "Wolves Across the Border", "the reward panel named it")
+    eq(record.ender, "Marshal McBride")
+    eq(record.endPlace, "Eastvale Logging Camp")
+    truthy(record.turnedIn)
+    eq(record.giver, "", "nobody saw who gave it")
+    h:Fire("QUEST_TURNED_IN", 9001, 0, 0) -- a hidden tracking quest: no panel named it
+    falsy(Quests(addon):Has("9001"))
 end)
 
 -- Asks a riddle now and answers it right.
@@ -106,6 +142,8 @@ test("quest riddles are preferred, two to every math or reading riddle: fresh qu
     local third = Solve(h, shown).subject
     truthy(third == "math" or third == "reading", "then math or reading takes a turn: " .. third)
     eq(Solve(h, shown).subject, "quest", "and quests again")
+    eq(Solve(h, shown).subject, "quest")
+    eq(Solve(h, shown).subject, third == "math" and "reading" or "math", "math and reading take turns")
 end)
 
 test("with only quest riddles on, older quests come back for review", function()
@@ -167,6 +205,7 @@ test("every kind asks what the quest holds, with the right answer among four", f
         for _ in pairs(distinct) do count = count + 1 end
         eq(count, 4, "four different choices")
         truthy(puzzle.book:find(Wolves.text, 1, true), "the book holds the text")
+        truthy(puzzle.book:find(answer, 1, true), puzzle.kind .. "'s answer is in the book")
     end
     for kind in pairs(expected) do
         truthy(seen[kind], kind .. " was asked")
@@ -178,10 +217,45 @@ test("a quest nothing can be asked about counts as asked, and the riddle falls b
     local h, addon, ns = LoadKid()
     local shown = Watch(ns)
     Quests(addon):Set("99", { title = "Hmm", fresh = true, seen = 1 }) -- a title and nothing else
+    -- Everything to ask about, but a title too long to show in a riddle.
+    Quests(addon):Set("98", { title = "The Long and Winding Road to the Edge of the Known World Today",
+        giver = "Eagan Peltskinner", place = "Goldshire", fresh = true, seen = 2 })
     eq(ns.Puzzles.Generate({ subject = "quest", random = h.env.math.random, quest = Quests(addon):Get("99") }), nil)
+    eq(ns.Puzzles.Generate({ subject = "quest", random = h.env.math.random, quest = Quests(addon):Get("98") }), nil)
     h:Slash("/tlk puzzle")
     truthy(shown[1].subject ~= "quest", shown[1].subject)
     falsy(Quests(addon):Field("99", "fresh"))
+    falsy(Quests(addon):Field("98", "fresh"))
+end)
+
+test("the quest book names who gave a quest and where, whichever the record holds", function()
+    local h, _, ns = LoadKid()
+    local function Book(quest)
+        h:SeedRandom(1)
+        return ns.Puzzles.Generate({ subject = "quest", random = h.env.math.random, quest = quest, known = { quest } }).book
+    end
+    local both = Book({ key = "1", title = "Wolves", giver = "Eagan Peltskinner", place = "Goldshire", seen = 1 })
+    truthy(both:find("From Eagan Peltskinner, in Goldshire.", 1, true), both)
+    local giver = Book({ key = "1", title = "Wolves", giver = "Eagan Peltskinner", seen = 1 })
+    truthy(giver:find("From Eagan Peltskinner.", 1, true), giver)
+    local place = Book({ key = "1", title = "Wolves", place = "Goldshire", seen = 1 })
+    truthy(place:find("Taken in Goldshire.", 1, true), place)
+end)
+
+test("the quest book asks fresh quests newest first, then the rest, the one asked longest ago first", function()
+    local h, addon, ns = LoadKid()
+    local quests = Quests(addon)
+    quests:Set("1", { title = "Old Fresh", fresh = true, seen = 5 })
+    quests:Set("2", { title = "New Fresh", fresh = true, seen = 10 })
+    quests:Set("3", { title = "Asked Lately", seen = 7, askedAt = 30 })
+    quests:Set("5", { title = "Asked Long Ago B", seen = 7, askedAt = 20 })
+    quests:Set("4", { title = "Asked Long Ago A", seen = 8, askedAt = 20 })
+    eq(table.concat(ns.QuestBook.Order(), ","), "2,1,4,5,3", "a tie goes by key")
+    local all = {}
+    for i, record in ipairs(ns.QuestBook.All()) do
+        all[i] = record.key
+    end
+    eq(table.concat(all, ","), "2,4,3,5,1", "every record, newest seen first; a tie goes by key")
 end)
 
 test("the quest book opens in the riddle's place with the quest's text, and closes the same way", function()
@@ -205,6 +279,18 @@ test("with only quest riddles on, a riddle that comes due waits for a quest", fu
     falsy(Showing(h), "nothing to ask yet")
     Accept(h, Wolves)
     truthy(Showing(h), "the quest gives it one")
+end)
+
+test("a riddle waiting for a quest is dropped when quest riddles are switched off too", function()
+    local h, addon = LoadKid({ ["Scholar.math"] = false, ["Scholar.reading"] = false })
+    h:Advance(31 * 60)
+    eq(addon.State:Get("Scholar.pending"), true, "it waits")
+    addon.State:Set("Scholar.quests", false)
+    eq(addon.State:Get("Scholar.pending"), false, "with no subject on, nothing is due")
+    addon.State:Set("Scholar.math", true)
+    falsy(Showing(h), "so a subject switched back on asks nothing yet")
+    h:Advance(31 * 60)
+    truthy(Showing(h), "only after an interval of play")
 end)
 
 test("quest riddles are behind the parent's PIN like every Scholar setting", function()
@@ -290,14 +376,17 @@ test("a fill-in-the-blank never leaves the missing word elsewhere in the sentenc
     local h, _, ns = LoadKid()
     local mine = { key = "1", title = "Boars", seen = 1,
         text = "The wolves raided the farm, and the wolves fled north. Hunters, traders, farmers and miners watched closely." }
+    local asked = 0
     for seed = 1, 200 do
         h:SeedRandom(seed)
         local puzzle = ns.Puzzles.Generate({ subject = "quest", random = h.env.math.random, quest = mine, known = { mine } })
         if puzzle and puzzle.kind == "quest.blank" then
+            asked = asked + 1
             local word = puzzle.choices[puzzle.answer]
             falsy(puzzle.prompt:find("%f[%a]" .. word .. "%f[%A]"), word .. " shows in: " .. puzzle.prompt)
         end
     end
+    truthy(asked > 0, "a blank was asked")
 end)
 
 test("a /reload during a quest riddle's celebration doesn't ask that quest again", function()

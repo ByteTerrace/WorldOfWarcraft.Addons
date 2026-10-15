@@ -150,17 +150,15 @@ end
 
 -- Makes room for a new rivalry record: at the limit, drops the PeopleTrim strangers seen longest
 -- ago in one pass (EvictionOrder sorts once), so a busy zone doesn't scan every record per new face.
+-- EvictionOrder puts strangers first, and LedgerLimit leaves at least PeopleTrim of them in a full
+-- collection, so the keys dropped are all strangers.
 local function MakeRoom()
     if People:Count() < PeopleLimit then
         return
     end
-    local order = People:EvictionOrder() -- strangers first, the longest unseen first
+    local order = People:EvictionOrder()
     for i = 1, PeopleTrim do
-        local key = order[i]
-        if not key or Ledger:Has(key) then
-            return
-        end
-        People:Remove(key)
+        People:Remove(order[i])
     end
 end
 

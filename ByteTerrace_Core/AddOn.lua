@@ -110,6 +110,7 @@ function ByteTerrace.NewAddOn(options)
         m_savedVariablePerCharacter = options.savedVariablePerCharacter,
         m_moduleOrder = {},
         m_collections = {},
+        m_sealed = false, -- true once Start begins: nothing declares after it
     }, AddOn)
     addon.m_prefix = "|cff33ccff" .. addon.Title .. "|r:"
     addon.State = ByteTerrace.NewState(addon)
@@ -142,7 +143,7 @@ end
 ---@param spec table
 ---@return table module
 function AddOn:Module(name, spec)
-    if self.Started then
+    if self.m_sealed then
         error(self.Name .. ": module " .. name .. " declared after start", 2)
     end
     if self.Modules[name] then
@@ -176,7 +177,6 @@ function AddOn:Module(name, spec)
             error(self.Name .. ": row name '" .. tostring(rowName) .. "' in module " .. name .. " must be an identifier", 2)
         end
         local full = name .. "." .. rowName
-        self.State:CheckDeclaration(full)
         if rowNames[full] then
             error(self.Name .. ": duplicate state row " .. full, 2)
         end
@@ -208,7 +208,6 @@ function AddOn:Module(name, spec)
             error(self.Name .. ": command name in module " .. name .. " must be an identifier", 2)
         end
         local full = name .. "." .. command.name
-        self.Commands:CheckDeclaration(full)
         if commandNames[full] then
             error(self.Name .. ": duplicate command " .. full, 2)
         end
@@ -288,8 +287,9 @@ end
 
 --- Compiles every declaration, loads SavedVariables, creates the settings window and slash commands, then
 --- starts the modules in one batch. ADDON_LOADED calls it; a refused declaration raises before
---- anything starts.
+--- anything starts. Declarations close as it begins, so none follows even a refused start.
 function AddOn:Start()
+    self.m_sealed = true
     local usesOf = self:ResolveUses()
     self.State:Declare("addon.debug", {
         kind = "boolean", default = false, label = "Debug output", description = "Print diagnostic messages to chat.",

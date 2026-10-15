@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { coverageReport, mergeHits } from "../tools/lib/coverage.mjs";
 import { repoRoot } from "../tools/lib/repo.mjs";
 import { loadApi, runChecks } from "../tools/verbs/check.mjs";
 import { MIN_DOC_FUNCTIONS, MIN_GLOBALS, readDocs, readGlobals, serialize } from "../tools/verbs/api-sync.mjs";
@@ -280,12 +281,12 @@ export const tests = [
         // the quick file; the hanging one never finishes, however long the timeout.
         name: "the test runner fails on an unmatched filter and times out a hanging file without stopping the rest",
         run: async () => {
-            const none = tlk(["test", "no test is named this"]);
+            const none = tlk(["test", "--dir", join(FIXTURES, "runner"), "no test is named this"]);
             assert(none.status === 1 && none.stdout.includes("No test matches"), `unmatched filter: ${none.status} ${none.stdout}`);
             const hang = tlk(["test", "--dir", join(FIXTURES, "runner"), "--timeout", "1"]);
             assert(hang.status === 1, `hang exits non-zero (got ${hang.status})`);
             assert(/FAIL hang\.test\.lua: timed out after 1s/.test(hang.stdout), hang.stdout);
-            assert(/\b2 passed, 1 failed/.test(hang.stdout), hang.stdout);
+            assert(/\b3 passed, 1 failed/.test(hang.stdout), hang.stdout);
             const typo = tlk(["test", "tests/facts.test.lua", "tests/nope.test.lua"]);
             assert(typo.status === 1 && typo.stdout.includes("No test file named nope.test.lua"), `a missing file fails: ${typo.stdout}`);
             const either = tlk(["test", "--dir", join(FIXTURES, "runner"), "no such test", "passes"]);
@@ -298,7 +299,7 @@ export const tests = [
         name: "the test runner keeps test names with newlines, tabs and backslashes intact",
         run: async () => {
             const run = tlk(["test", "--dir", join(FIXTURES, "runner-names")]);
-            assert(/\b3 passed, 1 failed/.test(run.stdout), run.stdout);
+            assert(/\b4 passed, 1 failed/.test(run.stdout), run.stdout);
             assert(run.stdout.includes('FAIL names.test.lua > "tab\\tin name"'), run.stdout);
             assert(/line one\n {5}line two/.test(run.stdout), run.stdout);
             const filtered = tlk(["test", "--dir", join(FIXTURES, "runner-names"), "with\nnewline"]);
@@ -376,13 +377,48 @@ export const tests = [
         },
     },
     {
+        // A nested function's lines count for it, not for the code around it; `local b` compiles to
+        // nothing, so it's no statement; an if counts by its condition.
+        name: "coverage counts each statement in the function that holds it",
+        run: async () => {
+            const dir = mkdtempSync(join(tmpdir(), "tlk-coverage-"));
+            try {
+                writeFileSync(join(dir, "File.lua"), [
+                    "local a = 1", "local b", "local function f(x)", "    if x then", "        return 1", "    end",
+                    "    return 2", "end", "local t = { g = function() return 3 end }", "f(a)", "",
+                ].join("\n"));
+                const ran = ["@Fixture/File.lua\t0\t1,8,9,10", "@Fixture/File.lua\t3\t4,7"];
+                const [file] = coverageReport(mergeHits(ran), [{ name: "Fixture", dir, files: ["File.lua"] }]);
+                assert(file.file === "Fixture/File.lua" && file.total === 8, `statements: ${JSON.stringify(file)}`);
+                assert(file.covered === 6 && file.missed.join(" ") === "5 9", `return 1 and g's body missed: ${JSON.stringify(file)}`);
+                const none = coverageReport(new Map(), [{ name: "Fixture", dir, files: ["File.lua"] }])[0];
+                assert(none.covered === 0 && none.missed.join(" ") === "1-10", `a run of misses: ${JSON.stringify(none)}`);
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        },
+    },
+    {
+        name: "the test runner's --coverage reports the statements the tests reached",
+        run: async () => {
+            const run = tlk(["test", "--dir", join(FIXTURES, "runner-coverage"), "--coverage"]);
+            assert(run.status === 0 && /\b3 passed, 0 failed/.test(run.stdout), run.stdout);
+            assert(/^coverage: \d+ of \d+ statements \(\d+\.\d%\)$/m.test(run.stdout), run.stdout);
+            // Loading ran Core's top levels but not its functions; nothing ran Krew.
+            assert(/^ {2}ByteTerrace_Core\/State\.lua (?!0\.0%)\d+\.\d% \(\d+ missed\): /m.test(run.stdout), run.stdout);
+            assert(/^ {2}TheLanKrewToolKit\/Krew\.lua 0\.0% /m.test(run.stdout), run.stdout);
+            const plain = tlk(["test", "--dir", join(FIXTURES, "runner-coverage")]);
+            assert(!plain.stdout.includes("coverage:"), plain.stdout);
+        },
+    },
+    {
         name: "the test runner reports pending tests without failing the run",
         run: async () => {
             const run = tlk(["test", "--dir", join(FIXTURES, "runner-pending")]);
             assert(run.status === 0, `pending doesn't fail (got ${run.status}): ${run.stdout}`);
             assert(run.stdout.includes("PEND pending.test.lua > waits: no observation yet"), run.stdout);
-            // The fixture's passing test and the runner's fakes check.
-            assert(/\b2 passed, 0 failed, 1 pending/.test(run.stdout), run.stdout);
+            // The fixture's passing test and the runner's two fakes checks.
+            assert(/\b3 passed, 0 failed, 1 pending/.test(run.stdout), run.stdout);
         },
     },
     {

@@ -13,8 +13,7 @@
 -- group; the harness models one group at a time. Removing the last member disbands the group
 -- (GROUP_LEFT), like the client. partyGUID is a deterministic stand-in ("Party-0-<hex>").
 -- Joining or leaving fires RAID_TARGET_UPDATE after GROUP_ROSTER_UPDATE (its event page says it
--- fires when the player joins or leaves a party or raid). The player's rank is h.group.leader /
--- h.group.assistant (a test sets them; leaving clears them), a member's its leader / assistant.
+-- fires when the player joins or leaves a party or raid).
 --
 -- Addon messages (C_ChatInfo), from ChatInfoDocumentation and the community's API pages:
 --   * RegisterAddonMessagePrefix returns Enum.RegisterAddonMessagePrefixResult: InvalidPrefix
@@ -191,7 +190,6 @@ function Harness:LeaveGroup()
     assert(self.group.kind, "LeaveGroup: not in a group")
     local category, guid = self:GroupCategory(), self.group.guid
     self.group.kind, self.group.members, self.group.guid, self.group.playerUnit = nil, {}, nil, nil
-    self.group.leader, self.group.assistant = nil, nil
     self:Fire("GROUP_LEFT", category, guid)
     self:Fire("GROUP_ROSTER_UPDATE")
     self:Fire("RAID_TARGET_UPDATE")
@@ -323,16 +321,6 @@ function Harness:AddonMessageFakes()
             h.prefixes[prefix] = true
             h.prefixOrder[#h.prefixOrder + 1] = prefix
             return Result("RegisterAddonMessagePrefixResult", "Success")
-        end,
-        IsAddonMessagePrefixRegistered = function(prefix)
-            return h.prefixes[prefix] == true
-        end,
-        GetRegisteredAddonMessagePrefixes = function()
-            local copy = {}
-            for i, prefix in ipairs(h.prefixOrder) do
-                copy[i] = prefix
-            end
-            return copy
         end,
         InChatMessagingLockdown = function()
             return h:InChatMessagingLockdown()

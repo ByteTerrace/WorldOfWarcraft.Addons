@@ -182,11 +182,9 @@ Probes.Define({
     {
         name = "damageMeter.enemySource",
         needs = { "afterFight" },
+        -- The need saw a plain sources list with an entry, so the first source is there.
         run = function()
             local source = First(CurrentSession(Enum.DamageMeterType.EnemyDamageTaken).combatSources)
-            if not source then
-                return { hasSources = false }
-            end
             return {
                 hasSources = true, fields = Fields(source), name = Text(source.name),
                 sourceGUID = Shape(source.sourceGUID), sourceCreatureID = Shape(source.sourceCreatureID),

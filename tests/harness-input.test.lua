@@ -169,3 +169,29 @@ test("an error in a gamepad handler reaches the error handler, like a key handle
     h:ExpectErrors("pad broke")
     h:Gamepad("PAD1", true)
 end)
+
+test("C_GamePad answers the connected controller's mapped state as fresh typed arrays", function()
+    local h = Harness.New()
+    local gamePad = h.env.C_GamePad
+    eq(gamePad.GetDeviceMappedState(gamePad.GetActiveDeviceID()), nil, "no connected controller")
+    h.labelStyle = "Letters"
+    local state = gamePad.GetDeviceMappedState(gamePad.GetActiveDeviceID())
+    eq(state.name, "Test Controller")
+    eq(state.labelStyle, "Letters")
+    eq(state.buttonCount, #state.buttons)
+    eq(state.axisCount, #state.axes)
+    eq(state.stickCount, #state.sticks)
+    truthy(state.buttonCount > 0 and state.axisCount > 0 and state.stickCount > 0)
+    for _, button in ipairs(state.buttons) do eq(type(button), "boolean") end
+    for _, axis in ipairs(state.axes) do eq(type(axis), "number") end
+    for _, stick in ipairs(state.sticks) do
+        eq(type(stick.x) .. type(stick.y) .. type(stick.len), "numbernumbernumber")
+    end
+    state.buttons[1], state.axes[1], state.sticks[1].x = true, 1, 1
+    local again = gamePad.GetDeviceMappedState(1)
+    eq(again.buttons[1], false, "each call answers a fresh table")
+    eq(again.axes[1], 0)
+    eq(again.sticks[1].x, 0)
+    eq(again.sticks[2].x, 0, "sticks are separate tables")
+    eq(gamePad.GetDeviceMappedState(999), nil, "an unknown device")
+end)

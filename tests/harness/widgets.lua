@@ -333,6 +333,12 @@ function Behaviors.GetTexture(s) return s.texture end
 function Behaviors.SetAtlas(s, _, atlas) s.atlas, s.texture = atlas, nil end
 function Behaviors.GetAtlas(s) return s.atlas end
 function Behaviors.SetColorTexture(s, _, r, g, b, a) s.color = { r, g, b, a or 1 } end
+-- [D] BackdropTemplateMixin (Blizzard_SharedXML/Backdrop.lua): the border color tints the border's
+-- pieces, and does nothing before SetBackdrop gave the frame a backdrop.
+function Behaviors.SetBackdrop(s, _, info) s.backdrop = info end
+function Behaviors.SetBackdropBorderColor(s, _, r, g, b, a)
+    if s.backdrop then s.borderColor = { r, g, b, a or 1 } end
+end
 function Behaviors.SetJustifyH(s, _, justify) s.justifyH = justify end
 function Behaviors.GetJustifyH(s) return s.justifyH or "CENTER" end
 function Behaviors.SetWordWrap(s, _, wrap) s.wordWrap = wrap and true or false end

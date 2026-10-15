@@ -67,15 +67,6 @@ test("wrapping keeps return arity: nil stays nil and trailing values survive", f
     eq(Reveal(surname), Harness.DEFAULT_SURNAME, "the trailing surname survives")
 end)
 
--- GetRaidTargetIndex carries SecretReturns, which is secret always (probed: UnitHealth and
--- UnitHealthPercent, the flag's other users, came back secret with no restriction).
-local function Marked(h)
-    if h.player.raidTarget ~= 1 then
-        h:MarkRaidTarget("player", 1) -- marking the same icon twice would clear it
-    end
-    return h.env.GetRaidTargetIndex("player")
-end
-
 -- UnitIsAFK is secret during chat messaging lockdown (encounter, challenge mode, PvP match,
 -- restricted map, chat): the witness for a restriction being enforced.
 local function Restricted(h)
@@ -90,11 +81,6 @@ test("UnitHealth is always secret, for every unit, even with no restriction (pro
     falsy(h.env.issecretvalue(h.env.UnitHealthMax("player")), "your max health is readable")
 end)
 
-test("SecretReturns is secret always, even with no restriction (probed in game)", function()
-    local h = Harness.New()
-    truthy(h.env.issecretvalue(Marked(h)))
-end)
-
 test("restriction changes fire Activating, then Active once enforced, and Inactive after", function()
     local h = Harness.New()
     local env = h.env
@@ -102,16 +88,13 @@ test("restriction changes fire Activating, then Active once enforced, and Inacti
     local frame = env.CreateFrame("Frame")
     frame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     frame:SetScript("OnEvent", function(_, _, kind, state)
-        seen[#seen + 1] = ("%d:%d active=%s state=%d secret=%s"):format(kind, state,
-            tostring(env.C_RestrictedActions.IsAddOnRestrictionActive(kind)),
-            env.C_RestrictedActions.GetAddOnRestrictionState(kind), tostring(Restricted(h)))
+        seen[#seen + 1] = ("%d:%d active=%s secret=%s"):format(kind, state,
+            tostring(env.C_RestrictedActions.IsAddOnRestrictionActive(kind)), tostring(Restricted(h)))
     end)
     h:SetRestriction("Encounter", true)
     truthy(env.C_RestrictedActions.IsAddOnRestrictionActive(env.Enum.AddOnRestrictionType.Encounter))
-    eq(env.C_RestrictedActions.GetAddOnRestrictionState(env.Enum.AddOnRestrictionType.Encounter), 2)
     h:SetRestriction("Encounter", false)
-    eq(table.concat(seen, ","), "1:1 active=false state=1 secret=false,1:2 active=false state=2 secret=true,"
-        .. "1:0 active=false state=0 secret=false")
+    eq(table.concat(seen, ","), "1:1 active=false secret=false,1:2 active=false secret=true,1:0 active=false secret=false")
 end)
 
 test("secrets held in a table argument count, and LuaValueVariant arguments are read", function()
@@ -222,34 +205,6 @@ test("opening Blizzard's settings panel from addon code is forbidden: it froze t
     h.env.SettingsPanel:Open()
     eq(#h.opened, 0, "nothing opened")
     eq(table.concat(h.forbidden, ","), "C_SettingsUtil.OpenSettingsPanel,SettingsPanel:OpenToCategory,SettingsPanel:Open")
-end)
-
-test("Settings layouts: controls join their own category's layout, headers go where they're added", function()
-    local h = Harness.New()
-    local Settings = h.env.Settings
-    local main, mainLayout = Settings.RegisterVerticalLayoutCategory("Main")
-    local sub, subLayout = Settings.RegisterVerticalLayoutSubcategory(main, "Sub")
-    truthy(main:GetID() ~= sub:GetID(), "each category has its own id")
-    local a = Settings.RegisterProxySetting(main, "A", "boolean", "A", false, function() return false end, function() end)
-    local b = Settings.RegisterProxySetting(sub, "B", "boolean", "B", false, function() return false end, function() end)
-    subLayout:AddInitializer(h.env.CreateSettingsListSectionHeaderInitializer("Top"))
-    Settings.CreateCheckbox(sub, b, "tip")
-    local header = h.env.CreateSettingsListSectionHeaderInitializer("Head", "tooltip")
-    eq(header:GetData().name, "Head")
-    eq(header:GetData().tooltip, "tooltip")
-    mainLayout:AddInitializer(header)
-    Settings.CreateCheckbox(main, a)
-    eq(h.settingsPages[1].name, "Main")
-    eq(h.settingsPages[1].parent, nil)
-    eq(h.settingsPages[1].entries[1].header, "Head")
-    eq(h.settingsPages[1].entries[2].variable, "A")
-    eq(h.settingsPages[2].parent, "Main")
-    eq(h.settingsPages[2].entries[1].header, "Top")
-    eq(h.settingsPages[2].entries[2].variable, "B")
-    eq(b.control, "checkbox")
-    throws(function() Settings.RegisterAddOnCategory(sub) end, "subcategory")
-    Settings.RegisterAddOnCategory(main)
-    eq(h.category, main)
 end)
 
 test("a protected global is forbidden to addon code at any time", function()
@@ -493,6 +448,17 @@ test("a dispatch goes to the frames registered when it starts, and handler error
     falsy(late.got, "created during the dispatch")
 end)
 
+test("a test fires only payloads the event documents: no extra values, secrets only where flagged, primitives of their type", function()
+    local h = Harness.New()
+    throws(function() h:Fire("PLAYER_DEAD", 1) end, "PLAYER_DEAD documents 0 payload values, got 1")
+    throws(function() h:Fire("PLAYER_LEVEL_UP", "12") end, "PLAYER_LEVEL_UP payload #1 is a number %(number%), got a string")
+    throws(function() h:Fire("CHAT_MSG_ADDON", "TLK", "hi", "PARTY", 42) end, "payload #4 is a cstring %(string%), got a number")
+    throws(function() h:Fire("PLAYER_LEVEL_UP", Secret(12)) end, "PLAYER_LEVEL_UP has no secret flags, so payload #1 can't be secret")
+    h:Fire("PLAYER_LEVEL_UP", 12, nil, 3)
+    h:Fire("RUNE_POWER_UPDATE", Secret(1), true) -- SecretPayloads
+    h:Fire("PLAYER_DEAD")
+end)
+
 test("ExpectErrors takes a count or patterns", function()
     local h = Harness.New()
     h:ReportError("alpha")
@@ -700,13 +666,6 @@ test("UnitPowerType returns the token for each type", function()
         h.player.powerType = powerType
         eq(select(2, h.env.UnitPowerType("player")), expected)
     end
-end)
-
-test("strsplit splits on any delimiter character, and honors its limit", function()
-    local h = Harness.New()
-    eq(table.concat({ h.env.strsplit(", ", "a,b c") }, "|"), "a|b|c")
-    eq(table.concat({ h.env.strsplit(":", "a:b:c", 2) }, "|"), "a|b:c")
-    eq(table.concat({ h.env.strsplit("%", "x%y") }, "|"), "x|y", "magic characters are literal")
 end)
 
 test("session fakes: money, XP, zones, clocks and formatting", function()

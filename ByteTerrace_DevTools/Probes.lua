@@ -205,12 +205,8 @@ end
 
 -- Two values of the kind a record holds, as one: a string meets a string or a secret's marker as
 -- the sorted union of their comma-separated items (the marker as "secret", so neither side is
--- lost), tables merge key by key, two booleans are true if either is, and otherwise b stands (a
--- when b is nil).
+-- lost), tables merge key by key, two booleans are true if either is, and otherwise b stands.
 local function Merge(a, b)
-    if b == nil then
-        return a
-    end
     local itemA, itemB = Item(a), Item(b)
     if (type(a) == "string" or type(b) == "string") and type(itemA) == "string" and type(itemB) == "string" then
         if itemA == itemB then
@@ -403,14 +399,11 @@ local function Note(sets, key, item)
     set[item] = true
 end
 
---- Keeps a UNIT_COMBAT payload's shapes for unitCombat.seen (DevTools.lua passes every payload for
---- the player and the target): per unit and action, each field's shapes, and the plain action and
---- flag strings seen. Payloads for other units are ignored.
+--- Keeps a UNIT_COMBAT payload's shapes for unitCombat.seen: per unit and action, each field's
+--- shapes, and the plain action and flag strings seen. DevTools.lua passes every payload it
+--- registers for, so unit is "player" or "target" (UNIT_COMBAT carries no secret flags).
 function Probes.NoteUnitCombat(unit, action, flagText, amount, schoolMask)
-    local byAction = not issecretvalue(unit) and UnitCombat.units[unit]
-    if not byAction then
-        return
-    end
+    local byAction = UnitCombat.units[unit]
     local plainAction = not issecretvalue(action) and type(action) == "string" and action ~= ""
     local key = plainAction and action or Token(action)
     local fields = byAction[key]
@@ -571,12 +564,8 @@ end
 ---@return table? record { build, context, result, version? }
 ---@return string? problem
 function Probes.Record(probe)
-    local ok, context = pcall(Probes.Context)
-    if not ok then
-        return nil, tostring(context)
-    end
-    local result
-    ok, result = pcall(probe.run)
+    local context = Probes.Context()
+    local ok, result = pcall(probe.run)
     if not ok then
         return nil, tostring(result)
     end

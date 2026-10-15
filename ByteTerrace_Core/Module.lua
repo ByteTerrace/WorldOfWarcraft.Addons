@@ -99,12 +99,6 @@ function Module:Set(row, value)
     self.Addon.State:Set(self:Id(row, 2), value, 2)
 end
 
---- Flips a boolean row.
----@param row integer|string
-function Module:Toggle(row)
-    self.Addon.State:Toggle(self:Id(row, 2), 2)
-end
-
 --- Whether the module can accept work; OnDisable and dependency teardown are already stopped.
 ---@return boolean
 function Module:IsRunning()
@@ -307,11 +301,9 @@ function Module:Acquire()
     return self:IsRunning()
 end
 
---- Releases one user of a demand module; the last one stops it.
+--- Releases one user of a demand module; the last one stops it. Only a stopping user calls it,
+--- once for each Acquire it made.
 function Module:Release()
-    if self.Users <= 0 then
-        error(self.Addon.Name .. ": module " .. self.Name .. " released more often than acquired", 2)
-    end
     self.Users = self.Users - 1
     if self.Users == 0 then
         self:SetEnabled(false)

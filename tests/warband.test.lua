@@ -124,6 +124,13 @@ test("a champion in a fight asks for aid", function()
     h:Slash("/tlk glory Cara Doe")
     h:AddNamePlate(Enemy("Cara", { inCombat = true, canAttack = false, isEnemy = false, faction = "Horde" }))
     truthy(Notices(h):find("Aid them", 1, true), Notices(h))
+    h:Advance(3)
+    eq(#Sent(h, "SIGHT"), 1, "the Krew hears a champion in a fight")
+    h:Slash("/tlk glory Dan Doe")
+    h:AddNamePlate(Enemy("Dan", { canAttack = false, isEnemy = false, faction = "Horde" }))
+    truthy(Notices(h):find("Champion|r Dan Doe is nearby.", 1, true), Notices(h))
+    h:Advance(3)
+    eq(#Sent(h, "SIGHT"), 1, "a champion out of a fight needs no aid")
 end)
 
 test("strangers raise no alert and join no ledger, but their rivalry record starts", function()
@@ -149,6 +156,42 @@ test("a Krew sighting alerts with the place, and stops us repeating it", functio
     h:AddNamePlate(Enemy())
     h:Advance(3)
     eq(#Sent(h, "SIGHT"), 0, "Mom already told the Krew")
+end)
+
+test("a Krew sighting of a champion asks for aid; one of a stranger shows nothing, nor any with alerts off", function()
+    local h, addon = Grouped()
+    Receive(h, "Mom", "SIGHT", Key(h, "Dan"), "Hillsbrad Foothills", "Tarren Mill", "1")
+    eq(#h.raidNotices, 0, "a stranger to the ledger")
+    h:Slash("/tlk glory Cara Doe")
+    Receive(h, "Mom", "SIGHT", Key(h, "Cara"), "Hillsbrad Foothills", "Tarren Mill", "1")
+    truthy(Notices(h):find("Mom Doe: champion Cara Doe needs aid at Tarren Mill (Hillsbrad Foothills)!", 1, true),
+        Notices(h))
+    addon.State:Set("Warband.alerts", false)
+    h:Slash("/tlk mark Bob Doe")
+    Receive(h, "Mom", "SIGHT", Key(h, "Bob"), "Hillsbrad Foothills", "Tarren Mill", "0")
+    eq(#h.raidNotices, 1, "alerts are off")
+    h:AddNamePlate(Enemy())
+    h:Advance(3)
+    eq(#Sent(h, "SIGHT"), 0, "Mom already told the Krew, alerts or not")
+end)
+
+test("a Krew unmark lifts only a mark, and a Krew peace ends the war", function()
+    local h, addon = Grouped()
+    local wars = addon.Modules.Warband.Records.wars
+    h:Slash("/tlk mark Bob Doe")
+    h:Slash("/tlk glory Cara Doe")
+    Receive(h, "Mom", "UNMARK", Key(h, "Bob"))
+    eq(Ledger(addon):Field(Key(h, "Bob"), "kind"), "grudge", "the enemy stays a grudge")
+    Receive(h, "Mom", "UNMARK", Key(h, "Cara"))
+    eq(Ledger(addon):Field(Key(h, "Cara"), "kind"), "glory", "an unmark lifts no glory")
+    Receive(h, "Mom", "UNMARK", Key(h, "Dan"))
+    falsy(Ledger(addon):Has(Key(h, "Dan")), "nor puts a stranger on the ledger")
+    h:Slash("/tlk war Knights of Light")
+    local guild = "Knights of Light-" .. h.env.GetNormalizedRealmName()
+    Receive(h, "Mom", "PEACE", "Knights of Light") -- no realm: not a guild key
+    truthy(wars:Has(guild))
+    Receive(h, "Mom", "PEACE", guild)
+    falsy(wars:Has(guild))
 end)
 
 test("dying to the enemy you targeted asks for a grudge; a click holds it with the Krew", function()
@@ -177,6 +220,23 @@ test("a right-click lets it go", function()
     eq(Ledger(addon):Count(), 0)
 end)
 
+test("the enemy you targeted stays the prime suspect for 30 seconds after you look away", function()
+    for _, wait in ipairs({ 29, 31 }) do
+        local h = Grouped()
+        h:SetTarget(Enemy())
+        h:SetTarget(nil)
+        h:Advance(wait)
+        h:Die()
+        h:Advance(3)
+        local text = Card(h)
+        if wait < 30 then
+            truthy(text and text:find("Slain by Bob Doe?", 1, true), text)
+        else
+            eq(text, nil, "forgotten after 30 seconds")
+        end
+    end
+end)
+
 test("dying with no enemy player in sight asks nothing", function()
     local h = Grouped()
     h:SetTarget({ name = "Wolf", canAttack = true })
@@ -196,6 +256,16 @@ test("an honorable kill on a grudge settles the score, once for the whole Krew",
     eq(#Sent(h, "KILL"), 1)
     Receive(h, "Mom", "KILL", key)
     eq(People(addon):Field(key, "kills"), 1, "Mom's credit for the same kill doesn't count twice")
+end)
+
+test("a Krew member's kill of a hunted enemy pays the mark and names who did it; a stranger's counts nothing", function()
+    local h, addon = Grouped()
+    h:Slash("/tlk mark Cara Doe")
+    Receive(h, "Mom", "KILL", Key(h, "Cara"))
+    local text = Card(h)
+    truthy(text and text:find("The mark is paid!\nMom Doe took down Cara Doe. Krew 1 : 0 Cara Doe", 1, true), text)
+    Receive(h, "Mom", "KILL", Key(h, "Dan"))
+    falsy(People(addon):Has(Key(h, "Dan")), "the Krew's kills of strangers are theirs to count")
 end)
 
 test("honorable kills on strangers count in their record, quietly", function()
@@ -243,6 +313,10 @@ test("bad messages are ignored: foreign keys, escape codes, junk numbers", funct
     Receive(h, "Mom", "MARK", key .. "-Realm", "ROGUE", "60", "Alliance") -- a key never carries a realm
     Receive(h, "Mom", "MARK", "Bob|Hlink|h Doe", "ROGUE", "60", "Alliance")
     Receive(h, "Mom", "GRUDGE", key, "rogue|T", "banana", "Martians", "1")
+    Receive(h, "Mom", "GRUDGE", "Bob|Hlink|h Doe", "ROGUE", "60", "Alliance", "1")
+    Receive(h, "Mom", "GLORY", "Cara Doe-Realm", "MAGE", "60", "Horde")
+    Receive(h, "Mom", "UNMARK", "Bob|Hlink|h Doe")
+    eq(People(addon):Count(), 1, "bad keys start no record")
     eq(Ledger(addon):Count(), 1)
     truthy(Ledger(addon):Has(key), "only the well-formed key")
     eq(People(addon):Field(key, "class"), "")
@@ -262,6 +336,16 @@ test("a rally goes out first, with your position", function()
     h:Slash("/tlk rally")
     h:Advance(2)
     eq(#Sent(h, "RALLY"), 1, "one call per cooldown")
+end)
+
+test("a rally from inside an instance has no position to share", function()
+    local h = Grouped()
+    h:AddMap(1424, { name = "Hillsbrad Foothills", mapType = "Zone" })
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Tarren Mill", mapID = 1424, x = 0.5, y = 0.25,
+        instance = "party" })
+    h:Slash("/tlk rally")
+    h:Advance(2)
+    eq(Sent(h, "RALLY")[1], "RALLY:0\t0\t0\tHillsbrad Foothills\tTarren Mill")
 end)
 
 test("a Krew rally alerts and sets a waypoint", function()
@@ -303,6 +387,26 @@ test("a gathering counts the enemies of one place: moving on starts the count ov
     h:AddNamePlate(Enemy("Foe5"))
     h:Advance(3)
     eq(#Sent(h, "INTEL"), 0, "four at Southshore and one at Darrow Hill aren't five at Darrow Hill")
+end)
+
+test("a gathering counts the last minute's enemies, and isn't reported with the setting off", function()
+    local h, addon = Grouped()
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Southshore" })
+    for i = 1, 4 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    h:Advance(61)
+    for i = 5, 8 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    h:Advance(3)
+    eq(#Sent(h, "INTEL"), 0, "four a minute ago and four now aren't five within a minute")
+    addon.State:Set("Warband.intel", false)
+    for i = 9, 14 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+    h:Advance(3)
+    eq(#Sent(h, "INTEL"), 0, "intel is off")
 end)
 
 test("a reported gathering costs no zone reads while it lasts; the next place is read afresh", function()
@@ -403,6 +507,10 @@ test("a full ledger refuses newcomers and forgets no one, for you and from the K
     eq(Card(h), nil, "no card for a mark the ledger refused")
     h:Advance(5)
     eq(#Sent(h, "MARK"), 0, "a refused mark isn't sent")
+    h:Slash("/tlk grudge Dan Doe")
+    truthy(h.printed[#h.printed]:find("so Dan Doe isn't on it.", 1, true), h.printed[#h.printed])
+    h:Advance(5)
+    eq(#Sent(h, "GRUDGE"), 0, "nor a refused grudge")
     h:Slash("/tlk forgive foe1 doe")
     h:Slash("/tlk mark Bob Doe")
     eq(Ledger(addon):Field(Key(h, "Bob"), "kind"), "mark", "forgiving made room")
@@ -495,27 +603,6 @@ test("a Krew member who leaves and comes back hears the marks placed while they 
     eq(#Sent(h, "MARK"), before + 1)
 end)
 
-test("a raid's worth of Krew members joining at once still hears every mark and war", function()
-    local h = Load()
-    local names = { "Mom", "Dad", "Sis", "Bro", "Aunt", "Uncle" }
-    h:JoinGroup("raid", names)
-    h:Echo(false)
-    for _, name in ipairs({ "Bob", "Cara", "Dan" }) do
-        h:Slash("/tlk mark " .. name .. " Doe")
-    end
-    for _, guild in ipairs({ "Red", "Blue", "Gold" }) do
-        h:Slash("/tlk war " .. guild)
-    end
-    h:Advance(20)
-    local marks, wars = #Sent(h, "MARK"), #Sent(h, "WAR")
-    for _, name in ipairs(names) do
-        Receive(h, name, "HELLO", "0.1.0", "0")
-    end
-    h:Advance(30)
-    eq(#Sent(h, "MARK"), marks + 3, "the queue has room: one reply, not one per hello")
-    eq(#Sent(h, "WAR"), wars + 3)
-end)
-
 test("a champion granted glory again shows no second card", function()
     local h = Grouped()
     Receive(h, "Mom", "GLORY", Key(h, "Bob"), "ROGUE", "60", "Alliance")
@@ -537,7 +624,7 @@ test("a rally's map and position are whole numbers in digits, or no waypoint", f
     eq(h.waypoint and h.waypoint.uiMapID, 1424, "the edges are fine")
 end)
 
-test("a kill of a stranger with the rivalry records full makes room in one trim, not one scan per kill", function()
+test("a kill of a stranger with the rivalry records full makes room for it in one trim", function()
     local h, addon = Grouped()
     local people = People(addon)
     for i = 1, 1000 do
@@ -548,9 +635,10 @@ test("a kill of a stranger with the rivalry records full makes room in one trim,
     truthy(people:Has("Newcomer Doe"))
 end)
 
-test("a burst of Krew members joining hears your marks and wars once; a new group hears them again", function()
+test("a raid's worth of Krew members joining hears your marks and wars once; a new group hears them again", function()
     local h = Load()
-    h:JoinGroup("party", { "Mom", "Dad", "Sis", "Bro" })
+    local names = { "Mom", "Dad", "Sis", "Bro", "Aunt", "Uncle" }
+    h:JoinGroup("raid", names)
     h:Echo(false)
     for _, name in ipairs({ "Bob", "Cara", "Dan" }) do
         h:Slash("/tlk mark " .. name .. " Doe")
@@ -560,11 +648,11 @@ test("a burst of Krew members joining hears your marks and wars once; a new grou
     end
     h:Advance(20)
     local marks, wars = #Sent(h, "MARK"), #Sent(h, "WAR")
-    for _, name in ipairs({ "Mom", "Dad", "Sis", "Bro" }) do
+    for _, name in ipairs(names) do
         Receive(h, name, "HELLO", "0.1.0")
     end
-    h:Advance(20)
-    eq(#Sent(h, "MARK"), marks + 3, "one sync for the burst")
+    h:Advance(30)
+    eq(#Sent(h, "MARK"), marks + 3, "one sync for the burst, so the send queue has room")
     eq(#Sent(h, "WAR"), wars + 3)
     h:LeaveGroup()
     h:JoinGroup("party", { "Mom" })
@@ -587,4 +675,102 @@ test("unmarking someone unmarked, or forgiving a stranger, says so rather than h
     eq(h.printed[#h.printed]:match("Bob Doe isn't marked for death%."), "Bob Doe isn't marked for death.")
     h:Slash("/tlk forgive Cara Doe")
     eq(h.printed[#h.printed]:match("Cara Doe isn't on the ledger%."), "Cara Doe isn't on the ledger.")
+end)
+
+test("a command with no name and no player target says how to name someone", function()
+    local h = Grouped()
+    h:SetTarget({ name = "Wolf", canAttack = true })
+    for _, verb in ipairs({ "mark", "unmark", "grudge", "glory", "forgive" }) do
+        h:Slash("/tlk " .. verb)
+        local last = h.printed[#h.printed]
+        truthy(last:find("Target a player, or name them: /tlk " .. verb .. " <name>", 1, true), last)
+    end
+    h:Slash("/tlk war")
+    truthy(h.printed[#h.printed]:find("name the guild: /tlk war <name>", 1, true), h.printed[#h.printed])
+    h:Slash("/tlk peace Knights of Light")
+    truthy(h.printed[#h.printed]:find("name the guild: /tlk peace <name>", 1, true), "no war to end")
+end)
+
+test("the ledger lists marks first, the most recently seen first, then the wars", function()
+    local h = Grouped()
+    h:Slash("/tlk ledger")
+    truthy(h.printed[#h.printed]:find("The ledger is empty. Mark someone with /tlk mark.", 1, true), h.printed[#h.printed])
+    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Tarren Mill" })
+    h:Slash("/tlk grudge Ann Doe")
+    h:Advance(10)
+    h:AddNamePlate(Enemy("Bob"))
+    h:Slash("/tlk grudge Bob Doe")
+    h:Slash("/tlk glory Dan Doe")
+    h:Slash("/tlk mark Cara Doe")
+    h:Slash("/tlk war Knights of Light")
+    h:HonorKill(Key(h, "Bob"), "Private", 12)
+    h.printed = {}
+    h:Slash("/tlk ledger")
+    truthy(h.printed[1]:find("The ledger (4 of 300):", 1, true), h.printed[1])
+    eq(table.concat(h.printed, "\n", 2), table.concat({
+        "  Marked for death: Cara Doe - Krew 0 : 0 Cara Doe",
+        "  Grudge: Bob Doe (60 Rogue) - Krew 1 : 0 Bob Doe - last seen in Hillsbrad Foothills",
+        "  Grudge: Ann Doe - Krew 0 : 0 Ann Doe",
+        "  Champion: Dan Doe",
+        "  At war: <Knights of Light> - Krew 0 : 0 them",
+    }, "\n"))
+end)
+
+test("a rival with no record says so", function()
+    local h = Grouped()
+    h:Slash("/tlk rival Zed Doe")
+    truthy(h.printed[#h.printed]:find("No record of Zed Doe yet.", 1, true), h.printed[#h.printed])
+    h:Slash("/tlk rival")
+    truthy(h.printed[#h.printed]:find("No record of them yet.", 1, true), h.printed[#h.printed])
+end)
+
+test("the right-click menu offers peace with a guild at war, and nothing while Warband is off", function()
+    local h, addon = Load()
+    h:SetTarget(Enemy("Bob", { guild = "Knights of Light" }))
+    h:Slash("/tlk war")
+    local guild = "Knights of Light-" .. h.env.GetNormalizedRealmName()
+    h:OpenTargetMenu():Click("Make peace with <Knights of Light>")
+    falsy(addon.Modules.Warband.Records.wars:Has(guild))
+    addon.State:Set("Warband.enabled", false)
+    eq(h:OpenTargetMenu():Find("Mark for death"), nil, "switched off")
+    addon.State:Set("Warband.enabled", true)
+    local count = 0
+    for _, text in ipairs(h:OpenTargetMenu():Texts()) do
+        if text == "Mark for death" then count = count + 1 end
+    end
+    eq(count, 1, "switched on again, the menu is hooked once")
+end)
+
+-- The tooltip lines Warband added after the unit's name line.
+local function TooltipExtra(h, token)
+    h:ShowUnitTooltip(token)
+    local lines = Harness.State(h.env.GameTooltip).lines
+    return table.concat(lines, "\n", 2)
+end
+
+test("the tooltip names a champion and who honored them, and a guild at war", function()
+    local h, addon = Load()
+    h:Slash("/tlk glory Cara Doe")
+    h:Slash("/tlk war Knights of Light")
+    h:Advance(60) -- a sighting a minute after the record began counts
+    local cara = h:AddNamePlate(Enemy("Cara", { canAttack = false, isEnemy = false, faction = "Horde" }))
+    local knight = h:AddNamePlate(Enemy("Bob", { guild = "Knights of Light" }))
+    h:Advance(1)
+    h.apiCalls = {}
+    eq(TooltipExtra(h, cara), "Champion (" .. Key(h, (h.env.UnitName("player"))) .. ")\nKrew 0 : 0 Cara Doe - seen 1 times")
+    eq(h:CountApiCalls("UnitClass"), 1, "a later frame reads the unit afresh")
+    eq(TooltipExtra(h, knight), "At war: <Knights of Light>\nKrew 0 : 0 Bob Doe - seen 1 times")
+end)
+
+test("the tooltip adds nothing for a creature, a hidden unit, or while Warband is off", function()
+    local h, addon = Load()
+    h:Slash("/tlk grudge Bob Doe")
+    local wolf = h:AddNamePlate({ name = "Wolf", canAttack = true })
+    eq(TooltipExtra(h, wolf), "", "a creature in the open world")
+    h:SetRestriction("Encounter", true)
+    eq(TooltipExtra(h, wolf), "", "a creature whose identity is secret")
+    h:SetRestriction("Encounter", false)
+    local bob = h:AddNamePlate(Enemy())
+    addon.State:Set("Warband.enabled", false)
+    eq(TooltipExtra(h, bob), "", "Warband is off")
 end)

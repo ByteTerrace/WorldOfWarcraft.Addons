@@ -22,7 +22,8 @@
 -- built-in debug command.
 --
 -- Declare once, compile once: names resolve to dense integer ids when the addon loads, and the
--- hot paths index arrays. Declaring after compile is an error.
+-- hot paths index arrays. Declaring once the addon starts loading is an error, even after a
+-- refused start.
 --
 -- This file loads first and exports the helpers every other file uses: SortedKeys, Report,
 -- SafeCall and Refuse. ByteTerrace.Errors counts the errors SafeCall has caught since load, in

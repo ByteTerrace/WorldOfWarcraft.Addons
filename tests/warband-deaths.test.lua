@@ -228,6 +228,21 @@ test("an attacker the recap hides is unknown: the card asks about the suspect", 
     truthy(Card(h):find("Slain by Bob Doe?", 1, true), Card(h))
 end)
 
+-- Blizzard_DeathRecap.lua guards its damage line with "if elementData.amount": a recap event may
+-- have no amount.
+test("a killing blow the recap gives no amount for names the killer without a damage line", function()
+    local h, addon = Grouped()
+    local bob = Enemy("Bob")
+    h:MeterFight({ duration = 5, sources = { { unit = "player", death = { events = {
+        { event = "SPELL_INSTAKILL", spellId = 8676, spellName = "Ambush", sourceName = Key(h, "Bob"),
+            sourceGUID = h:GUID(bob), sourceFlags = 0x548 },
+    } } } } })
+    eq(addon.State:Get("death.killer"), "Bob Doe")
+    eq(addon.State:Get("death.killerDamage"), 0)
+    local text = Card(h)
+    truthy(text:find("Slain by Bob Doe\nKrew 0 : 1 Bob Doe.", 1, true), text)
+end)
+
 test("the recap is read again shortly after the death, even without a meter update", function()
     local h, addon = Grouped()
     h:EnterCombat()

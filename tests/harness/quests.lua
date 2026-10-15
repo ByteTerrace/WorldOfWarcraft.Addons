@@ -258,9 +258,6 @@ function Harness:QuestFakes(uiParent)
             GetSelectedQuest = function()
                 return 0
             end,
-            IsOnQuest = function(questID)
-                return LogQuest(h, questID) ~= nil
-            end,
         },
     }
     local frame = h:CreateWidget("Frame", "QuestFrame", uiParent)

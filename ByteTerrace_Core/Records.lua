@@ -34,7 +34,7 @@ local FieldPattern = "^%a[%w_]*$"
 local ByteTerrace = ByteTerrace
 local Refuse, SafeCall = ByteTerrace.Refuse, ByteTerrace.SafeCall
 local issecretvalue = issecretvalue
-local ipairs, next, pairs, tostring, type = ipairs, next, pairs, tostring, type
+local ipairs, pairs, tostring, type = ipairs, pairs, tostring, type
 local sort = table.sort
 
 local Records = {}
@@ -222,17 +222,17 @@ function Records:Keys()
 end
 
 --- The key with the lowest evict field (ties by key, so eviction is deterministic), skipping
---- keys Keep protects.
+--- keys Keep protects. Only a collection with an evict field has one.
 ---@return string? key nil when every key is kept
 function Records:EvictionCandidate()
     local store, evict, keep = Loaded(self), self.m_evict, self.Keep
-    local default = evict and self.m_fields[evict].default
+    local default = self.m_fields[evict].default
     local best, bestValue
     for key, record in pairs(store) do
         if not (keep and Kept(keep, key)) then
-            local value = evict and record[evict]
+            local value = record[evict]
             if value == nil then
-                value = default or 0
+                value = default
             end
             if not best or value < bestValue or (value == bestValue and key < best) then
                 best, bestValue = key, value
@@ -333,17 +333,4 @@ function Records:Remove(key)
     self.m_count = self.m_count - 1
     Bump(self)
     return true
-end
-
---- Removes every record.
-function Records:Clear()
-    local store = Loaded(self)
-    if next(store) == nil then
-        return
-    end
-    for key in pairs(store) do
-        store[key] = nil
-    end
-    self.m_count = 0
-    Bump(self)
 end

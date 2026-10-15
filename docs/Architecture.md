@@ -15,7 +15,7 @@ settings window ───────────────────┘
 
 State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", default, values?, valueLabels?, min?, max?, step?, persist?, scope?, lockedBy?, label?, description?, section? }`. A module's rows are named `<Module>.<name>`; both parts are identifiers. Specs are copied when declared, so the caller's tables are never changed and one spec can be shared by several addons.
 
-- **Compile once.** When the addon loads, rows are sorted by name and given dense integer ids, so the ids don't depend on declaration order. Every declaration is validated, and all problems are reported together. Numeric bounds must be finite and ordered, and a step must be finite and positive. Declaring after compile is an error.
+- **Compile once.** When the addon loads, rows are sorted by name and given dense integer ids, so the ids don't depend on declaration order. Every declaration is validated, and all problems are reported together. Numeric bounds must be finite and ordered, and a step must be finite and positive. Declaring once the addon starts loading is an error, even after a refused start.
 - **One admission path.** Every write goes through `State:Set`, which checks kind, enum, bounds and finiteness, and refuses secret values because rules compute over rows. Defaults and saved values use the same secret-safe admission check, including record fields. Writing the plain value a row already holds returns before schema validation, the common case in handlers.
 - **Persistence.** Persisted rows load from the addon's SavedVariables (`scope = "account"`, the default) or its per-character SavedVariables (`scope = "character"`, which needs `savedVariablePerCharacter`).
   - A saved value that no longer validates is reset to the default, and so is a key under a declared module that no row declares (a renamed row).
@@ -38,7 +38,7 @@ State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", d
 
 A module's `records = { { name, fields, limit, evict?, scope? } }` declares a keyed collection, `module.Records.<name>`, for data that's one entry per thing (a ledger of players, say) rather than one value.
 
-- **Fields** are declared like rows (`kind`, `default`, `values`, `min` / `max` / `step`), and every write goes through the same admission check, secrets included. `Set(key, fields)` validates everything before writing anything and merges into the record. `Field(key, name)` reads one value, defaulting for an absent record. `Get`, `Has`, `Keys`, `Count`, `Remove` and `Clear` do the rest. Keys are plain strings of 1 to 64 bytes (an accented letter takes two). A `keep` function that errors protects nothing, and the error reaches the error handler: it can't stop the addon loading.
+- **Fields** are declared like rows (`kind`, `default`, `values`, `min` / `max` / `step`), and every write goes through the same admission check, secrets included. `Set(key, fields)` validates everything before writing anything and merges into the record. `Field(key, name)` reads one value, defaulting for an absent record. `Get`, `Has`, `Keys`, `Count` and `Remove` do the rest. Keys are plain strings of 1 to 64 bytes (an accented letter takes two). A `keep` function that errors protects nothing, and the error reaches the error handler: it can't stop the addon loading.
 - **Limit.** At `limit`, a new key evicts the record with the lowest `evict` field (a last-seen time, say), skipping keys the optional `keep(key)` protects. Without `evict`, or when every key is kept, a full collection refuses new keys.
 - **Version row.** The collection is also a runtime number row of the same name that moves on every change, so watchers and rules react to it and it publishes with its batch. Evicting and inserting a replacement is one change: watchers see the complete collection, never a temporary vacancy.
 - **Persistence.** The collection lives under its name in the addon's SavedVariables (by `scope`), storing only fields that differ from their defaults. Loading drops records that aren't tables or have bad keys, and resets fields that no longer validate.
@@ -176,7 +176,7 @@ ns.Addon:Module("Example", {
 To finish a new module:
 
 1. List the file in the TOC.
-2. Add behavioral tests to `tests/`.
+2. Add behavioral tests to `tests/`; `node tools/tlk.mjs test --coverage <your test files>` lists the module's statements they never reach.
 3. Run `node tools/tlk.mjs check` and `node tools/tlk.mjs test`.
 
 Register shared messages with `module:Listen` inside `OnEnable`, and bind deferred menu or card actions with `module:Callback`. These methods provide lifetime checks and batching at the boundary, so feature handlers only implement their behavior. For example, a running module can create a menu choice with `root:CreateButton("Mark", module:Callback(Mark, info))`; stopping it expires that choice automatically.

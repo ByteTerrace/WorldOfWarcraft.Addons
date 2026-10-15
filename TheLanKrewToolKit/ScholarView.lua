@@ -568,12 +568,9 @@ function ScholarView.Show(puzzle, info)
 end
 
 --- Opens the quest book in the story's place, or closes it again: the quest's text, as the player
---- saw it, holds every answer to a quest riddle.
+--- saw it, holds every answer to a quest riddle. Only while a puzzle with a book is on screen.
 function ScholarView.ToggleBook()
-    local puzzle = Overlay and Overlay.m_puzzle
-    if not (puzzle and puzzle.book) then
-        return
-    end
+    local puzzle = Overlay.m_puzzle
     Overlay.m_bookOpen = not Overlay.m_bookOpen
     local story = Overlay.m_bookOpen and puzzle.book or Overlay.m_story
     Overlay.Story:SetText(Emphasize(story))

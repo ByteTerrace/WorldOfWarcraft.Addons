@@ -371,6 +371,32 @@ local function TypeAt(types, i)
 end
 Harness.Types, Harness.TypeAt = Types, TypeAt
 
+-- The Lua type each primitive documented type arrives as.
+local PayloadLuaTypes = {
+    number = "number", luaIndex = "number", time_t = "number", BigUInteger = "number",
+    cstring = "string", string = "string", WOWGUID = "string", bool = "boolean",
+}
+
+-- Errors (at Fire's caller) on a payload the client couldn't send: more values than the event
+-- documents, a secret in an event without secret flags, or a primitive of another type than
+-- documented. A nil passes: the snapshot doesn't record which fields are Nilable.
+function Harness.CheckPayload(event, entry, payload)
+    local types = Types(entry, "Payload")
+    if payload.n > #types then
+        error(("Fire: %s documents %d payload values, got %d"):format(event, #types, payload.n), 3)
+    end
+    for i = 1, payload.n do
+        local value, want = payload[i], PayloadLuaTypes[types[i]]
+        if IsSecret(value) then
+            if not entry.secret then
+                error(("Fire: %s has no secret flags, so payload #%d can't be secret"):format(event, i), 3)
+            end
+        elseif want and value ~= nil and type(value) ~= want then
+            error(("Fire: %s payload #%d is a %s (%s), got a %s"):format(event, i, types[i], want, type(value)), 3)
+        end
+    end
+end
+
 -- Arguments passed by reference: the client never reads them, so a secret passes through (this
 -- is how issecretvalue, AllowedWhenUntainted, still takes a secret from addon code).
 local PassThrough = { LuaValueReference = true }
@@ -448,8 +474,7 @@ Harness.LUA_FAKES = {
     assert = true, error = true, ipairs = true, next = true, pairs = true, pcall = true, select = true,
     setmetatable = true, getmetatable = true, rawget = true, rawset = true, rawequal = true, unpack = true,
     xpcall = true, type = true, tostring = true, format = true, tonumber = true, print = true, tinsert = true, tremove = true,
-    wipe = true, CreateColor = true, GetMoneyString = true, SecondsToTime = true, random = true,
-    CreateVector2D = true, RaidNotice_AddMessage = true,
+    wipe = true, CreateColor = true, GetMoneyString = true, SecondsToTime = true, random = true, date = true,
 }
 
 -- An undocumented C API fake gets the default policy: no secret arguments.

@@ -89,6 +89,8 @@ test("a target is read once when chosen; a flag change re-reads attackability, n
     elite.classification = "normal"
     h:Fire("UNIT_CLASSIFICATION_CHANGED", "target")
     falsy(addon.State:Get("target.formidable"), "a rank change re-reads the rank")
+    h:SetTarget({ name = "Overlord", canAttack = true, boss = true })
+    truthy(addon.State:Get("target.formidable"), "a boss mob is formidable whatever its classification")
 end)
 
 test("a player who becomes attackable is an enemy by their next health change", function()
@@ -114,8 +116,23 @@ test("a duel ends only for the target that became attackable while you targeted 
     h:SetTarget(duelist)
     duelist.canAttack = true -- the duel starts
     h:Fire("UNIT_FLAGS", "target")
+    h:Fire("DUEL_OUTOFBOUNDS")
+    h:Fire("DUEL_INBOUNDS") -- back before the countdown ran out: no forfeit
     h:Fire("DUEL_FINISHED")
     truthy(addon.State:Get("target.duelEnded"), "your duel")
+end)
+
+test("a duel you flee out of bounds doesn't end as a fought duel", function()
+    local h, addon = NewAddOn()
+    Start(h)
+    local duelist = EnemyPlayer()
+    duelist.canAttack = false
+    h:SetTarget(duelist)
+    duelist.canAttack = true
+    h:Fire("UNIT_FLAGS", "target")
+    h:Fire("DUEL_OUTOFBOUNDS")
+    h:Fire("DUEL_FINISHED")
+    falsy(addon.State:Get("target.duelEnded"))
 end)
 
 test("an enemy that stops being attackable as it dies still died while targeted", function()
@@ -171,6 +188,17 @@ test("a killing blow whose GUIDs are secret (a PvP match hides identities) isn't
     h:SetRestriction("PvPMatch", false)
     h:Fire("PARTY_KILL", me, h:GUID({ name = "Bob", isPlayer = true }))
     eq(addon.State:Get("kills.blows"), 1, "counted again outside the match")
+end)
+
+test("a death whose recap holds no events is attributed to no one, at once", function()
+    local h, addon = NewAddOn()
+    Start(h)
+    h:MeterFight({ duration = 5, sources = { { unit = "player", death = {} } } })
+    eq(addon.State:Get("death.count"), 1)
+    eq(addon.State:Get("death.attributed"), 1, "the recap was there, so there's nothing to wait for")
+    eq(addon.State:Get("death.killer"), "")
+    eq(addon.State:Get("death.killerKind"), "")
+    eq(addon.State:Get("death.killerDamage"), 0)
 end)
 
 test("the death fact's recap retries stop when no module uses it any more", function()

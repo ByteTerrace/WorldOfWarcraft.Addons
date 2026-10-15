@@ -100,7 +100,6 @@ function ByteTerrace.NewInput(addon)
     return setmetatable({
         m_addon = addon,
         m_declared = {},     -- { map, source, command } until compile
-        m_compiled = false,
         m_maps = {},         -- [map] = { [key] = command id }
         m_owners = {},       -- [map] = the module whose commands it binds, or false for the addon's
         m_activeMaps = {},   -- the active maps' names, in order
@@ -116,20 +115,17 @@ end
 ---@param source string e.g. "gamepad.south"
 ---@param command string the command's full name, e.g. "Meter.toggle"
 function Input:CheckDeclaration(map, source, command)
-    if self.m_compiled then
-        error(self.m_addon.Name .. ": binding for " .. tostring(source) .. " declared after compile", 2)
-    end
     if type(map) ~= "string" or map == "" or type(source) ~= "string" or type(command) ~= "string" then
         error(self.m_addon.Name .. ": a binding needs a map, source and command name", 2)
     end
 end
 
---- Binds a source to a command in a map, before compile.
+--- Binds a source to a command in a map, before compile. AddOn:Module checks each binding with
+--- CheckDeclaration first.
 ---@param map string
 ---@param source string
 ---@param command string
 function Input:Bind(map, source, command)
-    self:CheckDeclaration(map, source, command)
     self.m_declared[#self.m_declared + 1] = { map = map, source = source, command = command }
 end
 
@@ -161,7 +157,6 @@ function Input:Compile()
     end
     Refuse(self.m_addon.Name .. " input", problems)
     self.m_declared = nil
-    self.m_compiled = true
 end
 
 -- A button press: a bound button runs its command; any other does nothing. A cancel its own

@@ -4,7 +4,7 @@
 // timeout counts from when the worker finishes its setup (Lua VM, snapshot, harness, test file),
 // which has its own, generous limit (SETUP_MS), so load on the machine can't fail a quick test.
 //
-//   node tools/tlk.mjs test [filters... | test files...] [--timeout <seconds>] [--dir <folder>]
+//   node tools/tlk.mjs test [filters... | test files...] [--timeout <seconds>] [--dir <folder>] [--coverage]
 //
 // Test file paths (tests/krew.test.lua) run exactly those files, and one that doesn't exist
 // fails the run. Otherwise each filter is a substring of "<file> > <test name>"; the tests
@@ -17,16 +17,23 @@
 // a harness it created saw errors it didn't declare with h:ExpectErrors(count | patterns...).
 // pending(reason) ends a test that can't decide anything yet (a probe with no observed result):
 // it prints "PEND <file> > <name>: <reason>", counts as pending, and doesn't fail the run.
+//
+// --coverage also reports which statements of the addons' files the Lua tests that ran reached
+// (tools/lib/coverage.mjs says what counts): the total, then each file with statements none of
+// them reached, and those statements' lines. It's a report, not a gate: the run's status is the
+// tests'. The line hook slows the Lua tests several times over.
 
 import { availableParallelism } from "node:os";
 import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
-import { repoRoot } from "../lib/repo.mjs";
+import { coverageReport, mergeHits } from "../lib/coverage.mjs";
+import { findAddons, repoRoot } from "../lib/repo.mjs";
 
 export const options = {
     timeout: { type: "string", default: "30" }, // seconds per test file
     dir: { type: "string" },                    // test folder (default tests/); the runner's own tests use a fixture
+    coverage: { type: "boolean" },              // report the addon statements the tests reached
 };
 
 const WORKER = new URL("../lib/test-worker.mjs", import.meta.url);
@@ -77,7 +84,7 @@ export async function run(values, positionals) {
     }
     const files = present.filter((f) => only.size === 0 || only.has(f)).sort();
     const jobs = [...(only.size === 0 ? [{ kind: "fakes", label: FAKES_JOB, filter }] : []), ...files.map((file) => ({
-        kind: file.endsWith(".mjs") ? "mjs" : "lua", label: file, file: join(dir, file), filter,
+        kind: file.endsWith(".mjs") ? "mjs" : "lua", label: file, file: join(dir, file), filter, coverage: values.coverage === true,
     }))];
 
     const outcomes = new Array(jobs.length);
@@ -118,6 +125,19 @@ export async function run(values, positionals) {
         console.log(`No test matches "${filter ? filters.join("\" or \"") : [...only].join(" ")}".`);
         return 1;
     }
+    if (values.coverage) printCoverage(outcomes.map((outcome) => outcome.coverage ?? ""));
     console.log(`${passed} passed, ${failed} failed${pending ? `, ${pending} pending` : ""}`);
     return failed ? 1 : 0;
+}
+
+const percent = (covered, total) => `${total ? ((covered / total) * 100).toFixed(1) : "100.0"}%`;
+
+function printCoverage(texts) {
+    const files = coverageReport(mergeHits(texts), findAddons());
+    const total = files.reduce((sum, file) => sum + file.total, 0);
+    const covered = files.reduce((sum, file) => sum + file.covered, 0);
+    console.log(`coverage: ${covered} of ${total} statements (${percent(covered, total)})`);
+    for (const file of files.filter((f) => f.missed.length > 0)) {
+        console.log(`  ${file.file} ${percent(file.covered, file.total)} (${file.total - file.covered} missed): ${file.missed.join(", ")}`);
+    }
 }

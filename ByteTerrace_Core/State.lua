@@ -407,7 +407,6 @@ function ByteTerrace.NewState(addon)
         Counts = { publishes = 0, watchers = 0 },
         m_addon = addon,
         m_declared = {},
-        m_compiled = false,
         m_batchDepth = 0,
         m_touchedList = {},    -- ids first touched this round, in order
         m_spareList = {},      -- the other half of the double buffer
@@ -424,26 +423,11 @@ function ByteTerrace.NewState(addon)
     }, State)
 end
 
---- Checks whether a row can be declared without changing state. Module declarations preflight
---- every row before committing any of them.
----@param name string "<Module>.<row>"
-function State:CheckDeclaration(name)
-    if type(name) ~= "string" or name == "" then
-        error(self.m_addon.Name .. ": state row needs a name", 2)
-    end
-    if self.m_compiled then
-        error(self.m_addon.Name .. ": state row " .. name .. " declared after compile", 2)
-    end
-    if self.m_declared[name] then
-        error(self.m_addon.Name .. ": duplicate state row " .. name, 2)
-    end
-end
-
---- Declares a row before compile. The spec is copied.
+--- Declares a row before compile. The spec is copied. AddOn.lua checks names before declaring:
+--- each is "<Module>.<row>", unique, and declared before compile.
 ---@param name string "<Module>.<row>"
 ---@param spec table see the file header
 function State:Declare(name, spec)
-    self:CheckDeclaration(name)
     local own = {}
     for key, value in pairs(spec) do
         own[key] = value
@@ -487,9 +471,7 @@ function State:Compile(stores, modules)
         for key, value in pairs(store) do
             local id = ids[key]
             local claimed = modules[ModuleOf(key) or ""]
-            if not claimed and (not id or specs[id].records) then
-                unclaimed[#unclaimed + 1] = tostring(key)
-            elseif not claimed and not specs[id].persist then
+            if not claimed then -- every declared row's module is claimed, so no row names this key
                 unclaimed[#unclaimed + 1] = tostring(key)
             elseif id and specs[id].records then
                 if specs[id].scope ~= scope or type(value) ~= "table" then
@@ -517,7 +499,6 @@ function State:Compile(stores, modules)
     self.Ids, self.Specs, self.Values = ids, specs, values
     self.m_names, self.m_versions = names, versions
     self.m_declared = nil
-    self.m_compiled = true
     return dropped, unclaimed
 end
 
@@ -649,12 +630,10 @@ function State:Watch(rows, fn, skipInitial)
     return watcher
 end
 
---- Stops a watcher or rule; it doesn't run again, even later in a publish in progress.
+--- Stops a watcher or rule; it doesn't run again, even later in a publish in progress. Stopping
+--- one twice finds nothing to remove the second time.
 ---@param watcher table from Watch or Rule
 function State:Unwatch(watcher)
-    if not watcher.active then
-        return
-    end
     watcher.active = false
     for _, id in ipairs(watcher.ids) do
         RemoveFrom(self.m_watchersByRow[id], watcher)

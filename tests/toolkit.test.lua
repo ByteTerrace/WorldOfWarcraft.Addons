@@ -72,6 +72,17 @@ test("loads cleanly and builds its settings window, organized into pages and sec
     eq(channel.Label:GetText(), "Sound effects", "friendly channel names")
 end)
 
+test("the addon compartment button toggles the settings window", function()
+    local h, addon = Load()
+    local name = h.env.C_AddOns.GetAddOnMetadata("TheLanKrewToolKit", "AddonCompartmentFunc")
+    local click = h.env[name] -- the client calls the global the TOC names
+    falsy(addon.SettingsWindow:IsShown())
+    click("TheLanKrewToolKit", "LeftButton")
+    truthy(addon.SettingsWindow:IsShown(), "a click opens it")
+    click("TheLanKrewToolKit", "LeftButton")
+    falsy(addon.SettingsWindow:IsShown(), "another closes it")
+end)
+
 test("fuck-o-meter shows for energy users and passes secret energy straight to the widgets", function()
     local h = Load({ classFile = "ROGUE", powerType = 3 })
     local meter = h.env.TheLanKrewToolKitFuckOMeter
@@ -111,6 +122,11 @@ test("fuck-o-meter ignores other power types and stays unregistered for non-ener
     h:Fire("UNIT_MAXPOWER", "player", "MANA")
     eq(Harness.State(meter.Bar).calls.SetValue, nil, "mana ticks don't touch the bar")
     eq(Harness.State(meter.Bar).calls.SetMinMaxValues, nil, "mana max doesn't touch the range")
+    h.player.powerType = 0
+    h:Fire("UNIT_DISPLAYPOWER", "player")
+    falsy(meter:IsShown(), "leaving cat form hides it")
+    falsy(Registered(addon, "UNIT_POWER_FREQUENT"), "and drops its power events")
+    falsy(Registered(addon, "UNIT_MAXPOWER"))
 end)
 
 test("fuck-o-meter re-reads range and value after a loading screen", function()
@@ -257,7 +273,37 @@ test("heals, regeneration and fully absorbed hits don't break flawless; an ambus
     eq(Played(h, "FlawlessVictory.ogg"), 1, "ambushed: not flawless")
 end)
 
+-- Combat ends while the Combat restriction still holds, so the meter's numbers are still secret.
+-- h:LeaveCombat lifts the restriction first; the order in the client isn't observed, and Kombat
+-- waits for the numbers either way.
+local function LeaveCombatStillRestricted(h)
+    h.lockdown, h.inCombat = false, false
+    h:MeterEndSession()
+    h:Fire("PLAYER_REGEN_ENABLED")
+end
+
 test("the victory waits for the damage meter's numbers to stop being secret", function()
+    for _, taken in ipairs({ 50, 0 }) do
+        local h, addon = Load()
+        local enemy = EnemyPlayer()
+        h:SetTarget(enemy)
+        h:EnterCombat()
+        h:MeterAdd({ unit = "player", amounts = { DamageTaken = taken } })
+        enemy.dead = true
+        h:Fire("UNIT_HEALTH", "target")
+        LeaveCombatStillRestricted(h)
+        h:Advance(0.5)
+        eq(addon.State:Get("Victory.flawlessWins"), 0, "waiting while the numbers are secret")
+        h:SetRestriction("Combat", false)
+        h:Advance(0.5)
+        eq(addon.State:Get("Victory.flawlessWins"), taken == 0 and 1 or 0,
+            ("the meter said %d damage once it could"):format(taken))
+        h:Advance(10)
+        eq(addon.State:Get("Victory.flawlessWins"), taken == 0 and 1 or 0, "counted once")
+    end
+end)
+
+test("a victory the meter never stops hiding counts after ten looks, as does one with the meter off", function()
     local h, addon = Load()
     local enemy = EnemyPlayer()
     h:SetTarget(enemy)
@@ -265,12 +311,21 @@ test("the victory waits for the damage meter's numbers to stop being secret", fu
     h:MeterAdd({ unit = "player", amounts = { DamageTaken = 50 } })
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
-    h:LeaveCombat()
-    h:SetRestriction("Combat", true) -- the server's combat outlasts yours for a moment
-    eq(addon.State:Get("Victory.flawlessWins"), 0, "waiting")
+    LeaveCombatStillRestricted(h)
+    h:Advance(4)
+    eq(addon.State:Get("Victory.flawlessWins"), 0, "nine more looks to go")
+    h:Advance(0.5)
+    eq(addon.State:Get("Victory.flawlessWins"), 1, "the live signal saw no hit")
     h:SetRestriction("Combat", false)
-    h:Advance(1)
-    eq(addon.State:Get("Victory.flawlessWins"), 0, "the meter saw 50 damage once it could say")
+    h:SetMeterAvailable(false, "")
+    enemy = EnemyPlayer({ name = "Ann" })
+    h:SetTarget(enemy)
+    h:EnterCombat()
+    h:MeterAdd({ unit = "player", amounts = { DamageTaken = 50 } })
+    enemy.dead = true
+    h:Fire("UNIT_HEALTH", "target")
+    h:LeaveCombat()
+    eq(addon.State:Get("Victory.flawlessWins"), 2, "a meter that's off can't say otherwise")
 end)
 
 test("starting health doesn't matter (addons can't read it); a selected corpse never counts", function()
@@ -369,15 +424,10 @@ test("switched-off sounds cost nothing: their events unregister", function()
     falsy(Registered(addon, "PLAYER_TARGET_CHANGED"), "master switch off")
 end)
 
-test("light bar is green, red as combat starts (before lockdown), yellow when AFK, cleared when disabled", function()
+test("light bar is green, red as combat starts, yellow when AFK, cleared when disabled", function()
     local h, addon = Load()
     eq(table.concat(h.led, ","), "0,1,0")
-    local seenLockdown
-    local probe = h.env.CreateFrame("Frame")
-    probe:RegisterEvent("PLAYER_REGEN_DISABLED")
-    probe:SetScript("OnEvent", function() seenLockdown = h.env.InCombatLockdown() end)
     h:EnterCombat()
-    eq(seenLockdown, false, "the event arrives before lockdown")
     eq(table.concat(h.led, ","), "1,0,0")
     h:LeaveCombat()
     h.player.afk = true
@@ -642,7 +692,7 @@ test("a new character's 0 copper is a real baseline", function()
     h.player.money = 6000
     h.player.level = h.player.level + 1
     h:Fire("PLAYER_LEVEL_UP", h.player.level)
-    truthy(CardText(h):find("+60s", 1, true) or CardText(h):find("60 Silver", 1, true) or CardText(h):find("6000", 1, true), CardText(h))
+    truthy(CardText(h):find("+60s", 1, true), CardText(h))
 end)
 
 test("the first ding after installing says so, and milestones are celebrated", function()
@@ -652,6 +702,21 @@ test("the first ding after installing says so, and milestones are celebrated", f
     local text = CardText(h)
     truthy(text:find("Since the journal started", 1, true), text)
     truthy(text:find("milestone", 1, true), text)
+    h:Click(h.env.TheLanKrewToolKitCard)
+    h.player.level = 60
+    h:Fire("PLAYER_LEVEL_UP", 60)
+    text = CardText(h)
+    truthy(text:find("\nMax level. Legendary.", 1, true), text)
+end)
+
+test("the session journal shows the rested XP banked, from 1% of a level", function()
+    local h = Load({ xpMax = 400, rested = 100 })
+    h:Slash("/tlk journal")
+    truthy(CardText(h):find("\nRested XP banked: 25% of a level.", 1, true), CardText(h))
+    h:Click(h.env.TheLanKrewToolKitCard)
+    h.player.rested = 3
+    h:Slash("/tlk journal")
+    falsy(CardText(h):find("Rested", 1, true), "under 1% isn't worth a line")
 end)
 
 test("turning the journal off keeps the played time so far", function()

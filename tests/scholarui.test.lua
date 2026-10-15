@@ -23,6 +23,26 @@ local function Showing(h)
     return overlay ~= nil and overlay:IsShown()
 end
 
+-- The puzzle the screen shows: watched.puzzle is always the latest. Call before it first shows.
+local function Watch(h)
+    local watched, view = {}, h.ns.ScholarView
+    local show = view.Show
+    view.Show = function(puzzle, info)
+        watched.puzzle = puzzle
+        return show(puzzle, info)
+    end
+    return watched
+end
+
+-- An answer other than the right one and those in except.
+local function WrongAnswer(puzzle, except)
+    for i = 1, 4 do
+        if i ~= puzzle.answer and i ~= except then
+            return i
+        end
+    end
+end
+
 test("off by default: nothing ever appears", function()
     local h = Load()
     h:Advance(3 * 3600)
@@ -52,6 +72,27 @@ test("the right answer earns a star, closes the riddle and resets the timer", fu
     eq(addon.State:Get("Scholar.stars"), 1)
     eq(addon.State:Get("Scholar.pending"), false)
     eq(addon.State:Get("Scholar.elapsed"), 0)
+end)
+
+test("a star that reaches a new rank shows a card once the celebration ends", function()
+    local function Card(h)
+        local card = rawget(h.env, "TheLanKrewToolKitCard")
+        return card ~= nil and card:IsShown() and Reveal(Harness.State(card.Title).text) or nil
+    end
+    local h = LoadKid({ ["Scholar.pending"] = true, ["Scholar.stars"] = 9 })
+    for key = 1, 4 do
+        h:Key(tostring(key), true)
+    end
+    eq(Card(h), nil, "not over the celebration")
+    h:Advance(2)
+    eq(Card(h), "New rank: Journeyman!")
+    local later = LoadKid({ ["Scholar.pending"] = true, ["Scholar.stars"] = 10 })
+    for key = 1, 4 do
+        later:Key(tostring(key), true)
+    end
+    later:Advance(2)
+    eq(later.ns.Addon.State:Get("Scholar.stars"), 11)
+    eq(Card(later), nil, "a star within a rank shows none")
 end)
 
 test("turning the challenge off right after a right answer still finishes the riddle", function()
@@ -101,6 +142,8 @@ test("a riddle that comes back after a fight keeps its wrong answers and its Ski
     h:Key(tostring(wrong), true)
     eq(addon.State:Get("Scholar.level"), 2, "and it can't be picked again: one miss doesn't make riddles easier")
     truthy(frame.Skip:IsShown(), "gentle mode still offers Skip")
+    h:Key(tostring(WrongAnswer(puzzle, wrong)), true)
+    eq(addon.State:Get("Scholar.level"), 1, "a second miss does")
 end)
 
 test("relogging doesn't skip a riddle", function()
@@ -115,9 +158,33 @@ test("the gate mode offers no skip; gentle mode does after one try", function()
     local h = LoadKid({ ["Scholar.pending"] = true })
     h:Key("ESCAPE", true)
     truthy(Showing(h), "gate: escape does nothing")
-    local h2 = LoadKid({ ["Scholar.pending"] = true, ["Scholar.mode"] = "gentle" })
+    local h2, addon = LoadKid({ ["Scholar.mode"] = "gentle" })
+    local watched = Watch(h2)
+    h2:Slash("/tlk puzzle")
     h2:Key("ESCAPE", true)
     truthy(Showing(h2), "no skip before a try")
+    h2:Key(tostring(WrongAnswer(watched.puzzle)), true)
+    h2:Key("ESCAPE", true)
+    falsy(Showing(h2), "skipped after a try")
+    eq(addon.State:Get("Scholar.stars"), 0, "a skip earns no star")
+    eq(addon.State:Get("Scholar.pending"), false, "and isn't due again")
+end)
+
+test("the mouse answers and skips too", function()
+    local h, addon = LoadKid({ ["Scholar.mode"] = "gentle" })
+    local watched = Watch(h)
+    h:Slash("/tlk puzzle")
+    local frame = Overlay(h)
+    local wrong = WrongAnswer(watched.puzzle)
+    truthy(h:Click(frame.Buttons[wrong]))
+    eq(frame.Buttons[wrong].State, "wrong")
+    truthy(h:Click(frame.Skip), "Skip shows after a try")
+    falsy(Showing(h), "a click on Skip skips")
+    h:Slash("/tlk puzzle")
+    h:Click(frame.Buttons[watched.puzzle.answer])
+    eq(addon.State:Get("Scholar.stars"), 1, "a click on the right answer earns the star")
+    h:Advance(2)
+    falsy(Showing(h))
 end)
 
 test("the controller answers with face buttons", function()
@@ -198,6 +265,27 @@ test("while locked, a new PIN can't replace the parent's", function()
     eq(addon.State:Get("Scholar.locked"), false)
 end)
 
+test("lock and unlock say what's wrong, and a bare lock locks again with the parent's PIN", function()
+    local h, addon = LoadKid()
+    local function Said(line)
+        h:Slash(line)
+        return h.printed[#h.printed]
+    end
+    truthy(Said("/tlk unlock 2468"):find("aren't locked", 1, true), "no PIN yet")
+    truthy(Said("/tlk lock"):find("Usage: /tlk lock <pin>", 1, true), "no PIN to lock with")
+    truthy(Said("/tlk lock 12"):find("Usage: /tlk lock <pin> (4 to 8 digits)", 1, true))
+    eq(addon.State:Get("Scholar.locked"), false, "a bad PIN locks nothing")
+    h:Slash("/tlk lock 2468")
+    truthy(Said("/tlk unlock"):find("Usage: /tlk unlock <pin>", 1, true))
+    eq(addon.State:Get("Scholar.locked"), true)
+    h:Slash("/tlk unlock 2468")
+    eq(addon.State:Get("Scholar.locked"), false)
+    truthy(Said("/tlk lock"):find("Scholar settings locked.", 1, true))
+    eq(addon.State:Get("Scholar.locked"), true, "locked again")
+    h:Slash("/tlk unlock 2468")
+    eq(addon.State:Get("Scholar.locked"), false, "with the same PIN")
+end)
+
 test("three wrong PINs make unlocking wait a minute, even across a /reload", function()
     local h, addon = LoadKid()
     h:Slash("/tlk lock 2468")
@@ -266,7 +354,11 @@ test("with every subject off, no riddle comes due and the timer holds", function
     falsy(Showing(h))
     eq(addon.State:Get("Scholar.elapsed"), 0, "no time piles up")
     eq(addon.State:Get("Scholar.pending"), false)
+    h:Slash("/tlk puzzle")
+    falsy(Showing(h), "nothing to ask")
+    eq(addon.State:Get("Scholar.pending"), false, "so nothing is left due")
     addon.State:Set("Scholar.math", true)
+    falsy(Showing(h), "switching a subject on asks nothing yet")
     h:Advance(31 * 60)
     truthy(Showing(h), "a riddle comes after an interval of play with a subject on")
 end)
@@ -412,6 +504,29 @@ test("a wrong answer shakes", function()
     truthy(frame.Buttons[2].Shake:IsPlaying())
 end)
 
+test("an answer glows under the mouse, a missed one doesn't, and so do the footer's buttons", function()
+    local h, view, frame = Screen()
+    local function Border(widget)
+        local color = Harness.State(widget).borderColor
+        return ("%.2f,%.2f,%.2f"):format(color[1], color[2], color[3])
+    end
+    local gold, edge = "1.00,0.82,0.00", "0.45,0.36,0.17"
+    local button = frame.Buttons[1]
+    truthy(h:Hover(button, true))
+    eq(button.State, "hover")
+    eq(Border(button), gold)
+    h:Hover(button, false)
+    eq(button.State, "normal")
+    eq(Border(button), edge)
+    truthy(h:Hover(frame.Hint, true))
+    eq(Border(frame.Hint), gold)
+    h:Hover(frame.Hint, false)
+    eq(Border(frame.Hint), edge)
+    view.Wrong(2, Shares.hint, false)
+    h:Hover(frame.Buttons[2], true)
+    eq(frame.Buttons[2].State, "wrong", "a missed answer stays marked")
+end)
+
 test("the hint button shows the hint in the footer's place", function()
     local h, view, frame = Screen()
     falsy(frame.Feedback:IsShown())
@@ -489,11 +604,15 @@ end)
 
 test("Read aloud speaks the riddle and its choices with the player's voice settings", function()
     local h, addon = LoadKid({ ["Scholar.pending"] = true })
+    h.ttsVoices[2] = { voiceID = 3, name = "Other Voice" }
+    h.tts.voices[h.env.Enum.TtsVoiceType.Standard] = 3
+    h.tts.rate, h.tts.volume = 2, 70
     local frame = Overlay(h)
     h:Click(frame.Speak)
     local spoken = h.spoken[#h.spoken]
     truthy(spoken, "something was spoken")
     truthy(spoken.text:find(" Is it ", 1, true), spoken.text)
+    eq(spoken.voiceID .. " " .. spoken.rate .. " " .. spoken.volume, "3 2 70", "the player's voice, rate and volume")
 end)
 
 test("the hint button costs nothing: the streak survives", function()
@@ -606,6 +725,14 @@ test("an unscramble shows its letters as tiles, not in the question text", funct
     falsy(Text(frame.Story):find("Clue:", 1, true))
     view.Wrong(1, "Clue: Lots and lots of trees.", false)
     falsy(Text(frame.Feedback.Text):find("Clue:", 1, true), "no \"Hint: Clue:\"")
+    view.Show({ subject = "math", kind = "math.count", title = "Count Them",
+        prompt = "Count the stars:\n* * * *\nHow many stars are there?", picture = { kind = "count", n = 4, row = "* * * *" },
+        choices = { "4", "5", "3", "6" }, answer = 1, hint = "", explanation = "" },
+        { stars = 1, rank = "Apprentice", keys = { "1", "2", "3", "4" } })
+    truthy(frame.Pictures:IsVisible(), "the next riddle has a picture")
+    for _, tile in ipairs(frame.Pictures.Tiles) do
+        falsy(tile:IsVisible(), "and none of the last riddle's tiles")
+    end
 end)
 
 test("a counting riddle draws its items instead of a row of symbols", function()

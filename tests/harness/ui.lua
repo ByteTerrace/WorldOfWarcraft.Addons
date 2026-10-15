@@ -1,6 +1,6 @@
 -- Blizzard UI the fake client models for addons that extend it: right-click and context menus
--- (Menu, MenuUtil), class colors (RAID_CLASS_COLORS, C_ClassColor, C_ColorUtil) and the unit
--- tooltip (GameTooltip, TooltipDataProcessor). See wow.lua for the rest.
+-- (Menu, MenuUtil), class colors (RAID_CLASS_COLORS) and the unit tooltip (GameTooltip,
+-- TooltipDataProcessor). See wow.lua for the rest.
 --
 -- Menus (Blizzard_Menu: Menu.lua, MenuUtil.lua, MenuTemplates.lua):
 --   * Menu.ModifyMenu(tag, callback) registers callback(owner, rootDescription, contextData) and
@@ -16,7 +16,8 @@
 --     first element with that text, depth first, like a mouse click (MenuInputContext.MouseButton,
 --     "LeftButton"): a disabled element does nothing and returns false; otherwise the responder
 --     runs as responder(data, { context, buttonName }, menuProxy) and Click returns true and the
---     response (the responder's, else the element's default: MenuResponse.Refresh for a checkbox).
+--     response (the responder's, else the element's default: MenuResponse.Refresh, 2, for a
+--     checkbox). The MenuResponse global isn't faked: no addon names it.
 --     menu:Find(text) returns the element description; menu:Texts() lists the texts in order.
 --     Clicking text no element has is an error.
 --   * h:OpenTargetMenu() opens the target frame's menu: TargetFrame_OpenMenu's choice of which
@@ -33,7 +34,7 @@
 --     securecallfunction), then, if the generator tagged it (SetTag), the Menu.ModifyMenu callbacks
 --     for that tag run. Opening closes any open context menu. A description with no elements
 --     opens nothing and returns nil (MenuManagerMixin:GenerateMenuInternal); otherwise it plays
---     SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON (in h.soundKits) and returns the menu's proxy, whose
+--     SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON (856, in h.soundKits) and returns the menu's proxy, whose
 --     methods the harness doesn't model. h:OpenContextMenu() returns the open context menu (an
 --     error when none is open), a menu like h:OpenMenu's; clicking an element whose response is
 --     nil, Close or CloseAll closes it (MenuManagerMixin's response handling), Refresh and Open
@@ -46,24 +47,17 @@
 --   CanSelect, SetIsSelected / IsSelected, AddInitializer, SetTooltip, SetOnEnter / SetOnLeave,
 --   EnumerateElementDescriptions, HasElements and Pick. Any other method is an error.
 --
--- Class colors (Blizzard_SharedXML/ClassColors.lua, Blizzard_SharedXMLBase/Color.lua):
---   * RAID_CLASS_COLORS holds C_ClassColor.GetClassColor(class) for each class the client has (the
---     dump lists the nine Classic classes), each with colorStr = GenerateHexColor(); any other key
---     reads nil, like the plain table it is.
+-- Class colors (Blizzard_SharedXML/ClassColors.lua):
+--   * RAID_CLASS_COLORS holds a color for each class the client has (the dump lists the nine
+--     Classic classes): r, g, b and colorStr ("ffrrggbb", [G] lower case), which is all the addons
+--     read; ColorMixin's methods aren't modeled. Any other key reads nil, like the plain table it is.
 --   * [G] The values are the ChrClasses colors warcraft.wiki.gg lists (Class colors), converted
 --     byte / 255; the Forever client's values weren't read in game (/dump RAID_CLASS_COLORS).
---   * A color carries ColorMixin's methods: GetRGB, GetRGBA, GetRGBAsBytes, GetRGBAAsBytes, SetRGB,
---     SetRGBA, IsRGBEqualTo, IsEqualTo, GenerateHexColor, GenerateHexColorNoAlpha,
---     GenerateHexColorMarkup and WrapTextInColorCode (GetHSL is an error: not modeled). The hex
---     and wrapping methods call C_ColorUtil like Color.lua: GenerateTextColorCode gives "aarrggbb"
---     in lower case ([G] the case), WrapTextInColor gives "|c" .. code .. text .. "|r". Both take
---     secrets (AllowedWhenTainted): a secret text gives a secret string.
---   * C_ClassColor.GetClassColor(className) returns a new color, or nothing for a class the client
---     doesn't have (MayReturnNothing). [G] The tintColor argument isn't modeled (an error).
 --
 -- Tooltips (Blizzard_SharedXMLGame/Tooltip, Blizzard_GameTooltip):
 --   * TooltipDataProcessor.AddTooltipPostCall(tooltipType, fn) records fn (a nil type is ignored,
---     like InternalAddCall). TooltipDataProcessor.AllTypes ("ALL") calls run before the type's own.
+--     like InternalAddCall). Calls for TooltipDataProcessor.AllTypes ("ALL") run before the type's
+--     own; the AllTypes member itself isn't faked, since no addon names it.
 --   * h:ShowUnitTooltip(token) is what hovering a unit does: GameTooltip is anchored to UIParent,
 --     then GameTooltip:SetUnit(token) builds the unit's TooltipData, adds its lines, runs the post
 --     calls with (GameTooltip, data) (an error is reported and the rest still run) and shows the
@@ -73,7 +67,8 @@
 --     [G] guid is secret when UnitGUID(token) would be and leftText when UnitName(token) would be;
 --     only the name line is modeled.
 --   * GameTooltip:GetUnit() is TooltipUtil.GetDisplayedUnit: for a unit tooltip it returns
---     UnitName(unit), unit, guid with unit = UnitTokenFromGUID(guid), so for an NPC all three are
+--     UnitName(unit), unit, guid with unit = UnitTokenFromGUID(guid) (Blizzard's Lua calls it, so it
+--     follows that API's snapshot entry, though it isn't a global fake), so for an NPC all three are
 --     secret and for a player all three are plain (the token may differ from the one shown, see
 --     units.lua). Other tooltips return nothing.
 --   * GameTooltip's lines: Harness.State(GameTooltip).lines is a list of texts (a double line's is
@@ -89,6 +84,7 @@ local Snapshot = __snapshot
 local Enums = Snapshot.enums
 local MenuInputContext = { None = 1, MouseButton = 2, MouseWheel = 3 }   -- MenuConstants.lua
 local MenuResponse = { Open = 1, Refresh = 2, Close = 3, CloseAll = 4 }   -- MenuConstants.lua
+local CheckboxSound = 856 -- SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 
 -- A description's harness side: its kind and child elements (the private description).
 local Private = setmetatable({}, { __mode = "k" })
@@ -330,19 +326,22 @@ local function CreateContextMenu(h, ownerRegion, generator, ...)
         return responded, response
     end
     h.contextMenu = menu
-    h.env.PlaySound(h.env.SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+    h.env.PlaySound(CheckboxSound)
     return setmetatable({}, MenuProxyMeta)
 end
 
--- TargetFrame_OpenMenu's which (Blizzard_UnitFrame/Mainline/TargetFrame.lua), for the target.
+-- TargetFrame_OpenMenu's which (Blizzard_UnitFrame/Mainline/TargetFrame.lua), for the target. Its
+-- UnitInRaid holds for a raid's members, and UnitInParty, asked next, for any other group's.
 function Harness:TargetMenuWhich()
     local target = self.target
     assert(target, "OpenTargetMenu: no target")
     if target == self.player then return "SELF" end
     if target.isPlayer then
-        local env = self.env
-        if env.UnitInRaid("target") then return "RAID_PLAYER" end
-        if env.UnitInParty("target") then return "PARTY" end
+        for _, member in ipairs(self.group.members) do
+            if member == target then
+                return self:GroupIsRaid() and "RAID_PLAYER" or "PARTY"
+            end
+        end
         local enemy = target.isEnemy
         if enemy == nil then enemy = target.canAttack end
         return enemy and "ENEMY_PLAYER" or "PLAYER"
@@ -376,64 +375,15 @@ local ClassColorBytes = {
     DRUID = { 255, 124, 10 },
 }
 
-local function Round(value) return math.floor(value + 0.5) end
-
--- C_ColorUtil.GenerateTextColorCode: "aarrggbb".
-local function TextColorCode(color)
-    return ("%.2x%.2x%.2x%.2x"):format(Round((color.a or 1) * 255), Round(color.r * 255), Round(color.g * 255),
-        Round(color.b * 255))
-end
-
--- A ColorMixin color (see the header); its hex and wrapping methods go through the env's C_ColorUtil.
-local function MixinColor(h, r, g, b, a)
-    local color = {}
-    function color:SetRGBA(nr, ng, nb, na) self.r, self.g, self.b, self.a = nr, ng, nb, na or 1 end
-    function color:SetRGB(nr, ng, nb) self:SetRGBA(nr, ng, nb, nil) end
-    function color:GetRGB() return self.r, self.g, self.b end
-    function color:GetRGBA() return self.r, self.g, self.b, self.a end
-    function color:GetRGBAsBytes() return Round(self.r * 255), Round(self.g * 255), Round(self.b * 255) end
-    function color:GetRGBAAsBytes()
-        return Round(self.r * 255), Round(self.g * 255), Round(self.b * 255), Round((self.a or 1) * 255)
-    end
-    function color:IsRGBEqualTo(other) return self.r == other.r and self.g == other.g and self.b == other.b end
-    function color:IsEqualTo(other) return self:IsRGBEqualTo(other) and self.a == other.a end
-    function color:GenerateHexColor() return h.env.C_ColorUtil.GenerateTextColorCode(self) end
-    function color:GenerateHexColorNoAlpha() return ("%.2X%.2X%.2X"):format(self:GetRGBAsBytes()) end
-    function color:GenerateHexColorMarkup() return "|c" .. self:GenerateHexColor() end
-    function color:WrapTextInColorCode(text) return h.env.C_ColorUtil.WrapTextInColor(text, self) end
-    function color:GetHSL() error("the harness doesn't model ColorMixin:GetHSL", 2) end
-    color:SetRGBA(r, g, b, a)
-    return color
-end
-
-local function ClassColor(h, className)
-    local bytes = ClassColorBytes[className]
-    if bytes then
-        return MixinColor(h, bytes[1] / 255, bytes[2] / 255, bytes[3] / 255)
-    end
-end
-
-local function ColorFakes(h)
+local function ColorFakes()
     local classColors = {}
-    for className in pairs(ClassColorBytes) do
-        local color = ClassColor(h, className)
-        color.colorStr = TextColorCode(color)
-        classColors[className] = color
+    for className, bytes in pairs(ClassColorBytes) do
+        classColors[className] = {
+            r = bytes[1] / 255, g = bytes[2] / 255, b = bytes[3] / 255,
+            colorStr = ("ff%.2x%.2x%.2x"):format(bytes[1], bytes[2], bytes[3]),
+        }
     end
-    return {
-        RAID_CLASS_COLORS = classColors,
-        C_ClassColor = {
-            GetClassColor = function(className, tintColor)
-                assert(tintColor == nil, "C_ClassColor.GetClassColor: the harness doesn't model tintColor")
-                return ClassColor(h, Reveal(className))
-            end,
-        },
-        C_ColorUtil = {
-            GenerateTextColorCode = function(color) return TextColorCode(color) end,
-            WrapTextInColor = function(text, color) return "|c" .. TextColorCode(color) .. Reveal(text) .. "|r" end,
-            WrapTextInColorCode = function(text, code) return "|c" .. Reveal(code) .. Reveal(text) .. "|r" end,
-        },
-    }
+    return { RAID_CLASS_COLORS = classColors }
 end
 
 local TooltipTypes = Enums.TooltipDataType
@@ -499,10 +449,10 @@ function TooltipBehaviors.GetUnit(s)
     if not data or data.type ~= TooltipTypes.Unit then
         return
     end
-    local env = s.harness.env
+    local h = s.harness
     local guid = data.guid
-    local unit = guid and env.UnitTokenFromGUID(guid)
-    local name = unit and env.UnitName(unit)
+    local unit = guid and h.tokenFromGUID(guid)
+    local name = unit and h.env.UnitName(unit)
     return name, unit, guid
 end
 -- TooltipDataHandlerMixin:ProcessInfo for C_TooltipInfo.GetUnit's data.
@@ -540,7 +490,6 @@ end
 
 local function TooltipFakes(h)
     return {
-        AllTypes = AllTypes,
         AddTooltipPostCall = function(tooltipType, fn)
             if tooltipType == nil then return end
             h.tooltipPostCalls[tooltipType] = h.tooltipPostCalls[tooltipType] or {}
@@ -554,6 +503,8 @@ end
 function Harness:InterfaceFakes(uiParent)
     self.menuCallbacks, self.generatedMenus = {}, {}
     self.tooltipPostCalls, self.tooltipSerial = {}, 0
+    -- TooltipUtil.GetDisplayedUnit's UnitTokenFromGUID (GameTooltip:GetUnit).
+    self.tokenFromGUID = self:WrapFunction("UnitTokenFromGUID", function(guid) return self:UnitTokenForGUID(guid) end)
     self.namePlateFrames = {}
     local tooltip = self:CreateWidget("GameTooltip", "GameTooltip", uiParent)
     local s = Harness.State(tooltip)
@@ -565,11 +516,10 @@ function Harness:InterfaceFakes(uiParent)
         Menu = MenuFakes(self),
         MenuUtil = { CreateContextMenu = function(...) return CreateContextMenu(h, ...) end },
         MenuInputContext = MenuInputContext,
-        MenuResponse = MenuResponse,
         TooltipDataProcessor = TooltipFakes(self),
         GameTooltip = tooltip,
     }
-    for name, value in pairs(ColorFakes(self)) do
+    for name, value in pairs(ColorFakes()) do
         fakes[name] = value
     end
     return fakes

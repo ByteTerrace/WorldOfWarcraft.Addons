@@ -89,22 +89,16 @@ local function ObjectiveFields(questID, values)
     return values
 end
 
+-- GetQuestID and the quest events' IDs are plain numbers (the snapshot flags none of them; probes
+-- quest.offerIdentity and quest.turnInIdentity).
 local function OnOffer()
-    local id = GetQuestID()
-    if issecretvalue(id) or type(id) ~= "number" or id <= 0 then
-        Offer = nil
-        return
-    end
     Offer = {
-        id = id, title = Plain(GetTitleText(), MaxLine), text = Plain(GetQuestText(), MaxText),
+        id = GetQuestID(), title = Plain(GetTitleText(), MaxLine), text = Plain(GetQuestText(), MaxText),
         goal = Plain(GetObjectiveText(), MaxLine), giver = NameOf("questnpc"),
     }
 end
 
 local function OnAccepted(questID)
-    if issecretvalue(questID) or type(questID) ~= "number" then
-        return
-    end
     local offer = Offer and Offer.id == questID and Offer or nil
     Offer = nil
     local place, zone = Place()
@@ -115,7 +109,7 @@ local function OnAccepted(questID)
         -- An area trigger's quest: no dialog showed it, so it's what the quest log shows.
         local index = C_QuestLog.GetLogIndexForQuestID(questID)
         local text, goal = "", ""
-        if not issecretvalue(index) and type(index) == "number" then
+        if index then
             text, goal = GetQuestLogQuestText(index)
         end
         values.title = Plain(C_QuestLog.GetTitleForQuestID(questID), MaxLine)
@@ -128,19 +122,11 @@ local function OnAccepted(questID)
 end
 
 local function OnTurnInPanel()
-    local id = GetQuestID()
-    if issecretvalue(id) or type(id) ~= "number" or id <= 0 then
-        TurnIn = nil
-        return
-    end
-    TurnIn = { id = id, title = Plain(GetTitleText(), MaxLine), ender = NameOf("questnpc"),
+    TurnIn = { id = GetQuestID(), title = Plain(GetTitleText(), MaxLine), ender = NameOf("questnpc"),
         reward = Plain(GetRewardText(), MaxText) }
 end
 
 local function OnTurnedIn(questID)
-    if issecretvalue(questID) or type(questID) ~= "number" then
-        return
-    end
     local turnIn = TurnIn and TurnIn.id == questID and TurnIn or nil
     TurnIn = nil
     local quests, key = QuestBookModule.Records.quests, tostring(questID)

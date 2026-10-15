@@ -133,9 +133,6 @@ end
 --- Removes a handler, effective immediately; removing one twice does nothing.
 ---@param handle table from On
 function Events:Off(handle)
-    if handle.dead then
-        return
-    end
     handle.dead = true
     Rebuild(self, handle.event)
 end

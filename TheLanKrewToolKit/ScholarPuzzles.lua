@@ -250,10 +250,10 @@ local function Clamp(n, lo, hi, default)
     return (n and n == n) and max(lo, min(hi, floor(n))) or default
 end
 
---- Generates a puzzle. A personalized puzzle that runs over a length limit is rebuilt without the
---- context. Bad options (no random, an unknown subject) raise an error; grade and level are read
---- as numbers and clamped. A quest puzzle ignores grade and level, and is nil when no question
---- fits the quest.
+--- Generates a puzzle. Every math and reading puzzle fits the length limits, with any context
+--- SafeContext admits. Bad options (no random, an unknown subject) raise an error; grade and level
+--- are read as numbers and clamped. A quest puzzle ignores grade and level, and is nil when no
+--- question fits the quest.
 ---@param options table subject ("math" | "reading" | "quest"), grade (0..6), level (1..3, easiest
 --- first), random (function(m, n) returning an integer from m to n), an optional context { name,
 --- class, level, zone, copper } of plain values, and for "quest" the quest (a QuestBook record)
@@ -265,37 +265,19 @@ local function Generate(options)
     if type(options) ~= "table" or type(options.random) ~= "function" then
         error("ScholarPuzzles.Generate: options.random must be a function", 2)
     end
-    if not ScholarWords then
-        error("ScholarPuzzles.Generate: ScholarWords.lua must load before ScholarPuzzles.lua (see the TOC)", 2)
-    end
     local state = {
         roll = options.random, subject = options.subject,
         grade = Clamp(options.grade, 0, 6, 0), level = Clamp(options.level, 1, 3, 1),
         context = SafeContext(options.context),
     }
     if options.subject == "quest" then
-        local AskQuest = ns.Puzzles.Kit.AskQuest
-        if not AskQuest then
-            error("ScholarPuzzles.Generate: ScholarQuests.lua must load after ScholarPuzzles.lua (see the TOC)", 2)
-        end
-        return AskQuest(state, options.quest, options.known)
+        return ns.Puzzles.Kit.AskQuest(state, options.quest, options.known)
     end
     local kinds = ScholarWords.kinds[options.subject]
     if not kinds then
         error("ScholarPuzzles.Generate: unknown subject " .. tostring(options.subject), 2)
     end
-    local kind = Pick(state, kinds[state.grade])
-    local generator = Generators[kind]
-    if not generator then
-        error("ScholarPuzzles.Generate: no generator for " .. kind
-            .. " (ScholarMath.lua and ScholarReading.lua load after ScholarPuzzles.lua; see the TOC)", 2)
-    end
-    local puzzle = generator(state)
-    if not Fits(puzzle) then
-        state.context = {}
-        puzzle = generator(state)
-    end
-    return puzzle
+    return Generators[Pick(state, kinds[state.grade])](state)
 end
 
 local Kit = {

@@ -120,12 +120,10 @@ local function DropQueue(self)
     wipe(self.m_queue)
 end
 
+-- Sends the queue's first message, or waits for the interval. The queue holds a message whenever
+-- this runs: Send pumps after queueing, and emptying the queue cancels the pending pump.
 local function Pump(self)
     self.m_timer = nil
-    local message = self.m_queue[1]
-    if not message then
-        return
-    end
     local channel = Channel()
     if not channel or C_ChatInfo.InChatMessagingLockdown() then
         DropQueue(self)
@@ -136,7 +134,7 @@ local function Pump(self)
         self.m_timer = self.m_module:After(wait, self.m_pump)
         return
     end
-    local result = C_ChatInfo.SendAddonMessage(self.m_prefix, message, channel)
+    local result = C_ChatInfo.SendAddonMessage(self.m_prefix, self.m_queue[1], channel)
     self.m_lastSent = GetTime()
     local results = Enum.SendAddonMessageResult
     if result ~= results.AddonMessageThrottle and result ~= results.ChannelThrottle then
@@ -328,12 +326,10 @@ function Comms:Listen(kind, fn)
     return handle
 end
 
---- Removes a listener immediately, including from a delivery already in progress.
+--- Removes a listener immediately, including from a delivery already in progress. Removing one
+--- twice finds nothing to remove the second time.
 ---@param handle table from Listen
 function Comms:Unlisten(handle)
-    if handle.dead then
-        return
-    end
     handle.dead = true
     local list, copy = self.m_listeners[handle.kind], {}
     for i = 1, #(list or {}) do

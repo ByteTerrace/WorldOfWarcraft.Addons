@@ -1,5 +1,5 @@
 {
-  "build": "1.60.1 (70009)",
+  "build": "1.60.1 (70374)",
   "probes": {
     "bags.firstItem": {
       "result": {
@@ -58,7 +58,8 @@
           "totalAmount": "number"
         }
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "damageMeter.available": {
       "result": { "failureReason": "", "isAvailable": true },
@@ -72,7 +73,8 @@
         "maxAmount": { "secret": true, "type": "number" },
         "totalAmount": { "secret": true, "type": "number" }
       },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "damageMeter.death": {
       "result": {
@@ -82,7 +84,8 @@
         "hasRecapID": true,
         "localPlayer": true
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "damageMeter.enemySource": {
       "result": {
@@ -96,7 +99,8 @@
         "sourceDisplayType": 0,
         "sourceGUID": "nil"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "damageMeter.playerDamageTaken": {
       "result": {
@@ -117,7 +121,8 @@
         },
         "totalAmount": "number"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "damageMeter.sessions": {
       "result": {
@@ -127,7 +132,8 @@
         "oldestFirst": true,
         "sessionID": "number"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "damageMeter.typesIdle": {
       "result": {
@@ -148,7 +154,8 @@
           "totalAmount": "number"
         }
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "deathRecap.events": {
       "result": {
@@ -181,11 +188,13 @@
         "sourceName": "text"
       },
       "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)",
       "version": 2
     },
     "deathRecap.latest": {
       "result": { "hasLatest": true, "latest": "table", "sameAsMeter": true },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "deathRecap.spellFields": {
       "result": {
@@ -195,11 +204,13 @@
         "spellName": "string",
         "spellSchool": "number"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "deathRecap.swingFields": {
       "result": { "avoidable": "nil", "deadly": "nil", "spellId": "nil", "spellName": "nil", "spellSchool": "nil" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "faction.player": {
       "result": { "group": "string", "isAllianceOrHorde": true, "localized": "string", "localizedIsGlobalString": true },
@@ -217,11 +228,13 @@
         "labelStyle": "text",
         "state": "table"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "gamePad.settings": {
       "result": { "enabled": "boolean", "freelook": "boolean" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "globalStrings.honor": {
       "result": {
@@ -237,7 +250,8 @@
         "targetDied": true,
         "unitDied": { "unit": "Creature,Player" }
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "map.player": {
       "result": {
@@ -262,19 +276,23 @@
         "stackCount": "number",
         "texture": "number"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "namePlate.enemyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "namePlate.friendlyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "names.chatSenders": {
       "result": { "CHAT_MSG_CHANNEL": "Aa Aa" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "names.otherPlayer": {
       "result": {
@@ -283,7 +301,8 @@
         "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "names.player": {
       "result": {
@@ -303,11 +322,13 @@
     },
     "power.comboPoints": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "power.comboPointsInCombat": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "power.npcTarget": {
       "result": {
@@ -316,7 +337,8 @@
         "powerType": "number",
         "token": "string"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "power.npcTargetInCombat": {
       "result": {
@@ -325,7 +347,8 @@
         "powerType": "number",
         "token": "string"
       },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "power.player": {
       "result": {
@@ -343,22 +366,31 @@
         "powerType": "number",
         "token": "string"
       },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "quest.offer": {
       "result": { "objectiveText": "text", "questText": "text", "title": "text" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "quest.offerIdentity": {
       "result": { "hasQuestID": true, "npcName": "string", "questID": "number", "questNpcName": "string" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "quest.turnIn": {
       "result": { "rewardText": "text", "title": "text" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "quest.turnInIdentity": {
       "result": { "hasQuestID": true, "questID": "number", "questNpcName": "string" },
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
+    },
+    "questLog.countForm": {
+      "result": { "forms": "leading,none" },
       "context": { "combat": false, "restrictions": "none" }
     },
     "questLog.entry": {
@@ -376,12 +408,12 @@
     },
     "questLog.objectives": {
       "result": {
-        "fields": "finished,numFulfilled,numRequired,objectiveType,text,type",
+        "fields": "finished,numFulfilled,numRequired,text,type",
         "finished": "boolean",
         "hasObjectives": true,
         "numFulfilled": "number",
         "numRequired": "number",
-        "objectiveType": "nil,number",
+        "objectiveType": "nil",
         "text": "text",
         "type": "text",
         "types": "item,log"
@@ -476,7 +508,8 @@
         "serviceTypes": "unavailable",
         "trainerType": "number"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "tts.voices": {
       "result": {
@@ -490,11 +523,13 @@
     },
     "unitClassification.npcTarget": {
       "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "unitClassification.npcTargetInCombat": {
       "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "unitCombat.seen": {
       "result": {
@@ -514,19 +549,23 @@
           "WOUND": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" }
         }
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "unitHealth.enemyPlayer": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "unitHealth.npcTarget": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "unitHealth.npcTargetInCombat": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "unitHealth.player": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": "number" },
@@ -534,7 +573,8 @@
     },
     "unitHealth.playerInCombat": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": "number" },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "unitHealthPercent.player": {
       "result": {
@@ -552,7 +592,8 @@
         "percent": { "secret": true, "type": "number" },
         "percentUnpredicted": { "secret": true, "type": "number" }
       },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "unitIdentity.enemyPlayer": {
       "result": {
@@ -562,7 +603,8 @@
         "guid": "string",
         "name": "string"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "unitIdentity.npcTarget": {
       "result": {
@@ -573,7 +615,8 @@
         "name": "string",
         "realm": "nil"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "unitIdentity.npcTargetInCombat": {
       "result": {
@@ -584,7 +627,8 @@
         "name": "string",
         "realm": "nil"
       },
-      "context": { "combat": true, "restrictions": "Combat" }
+      "context": { "combat": true, "restrictions": "Combat" },
+      "build": "1.60.1 (70009)"
     },
     "unitIdentity.partyMember": {
       "result": {
@@ -594,7 +638,8 @@
         "guid": "string",
         "name": "string"
       },
-      "context": { "combat": false, "restrictions": "none" }
+      "context": { "combat": false, "restrictions": "none" },
+      "build": "1.60.1 (70009)"
     },
     "xp.player": {
       "result": { "exhaustion": "number or nil", "xp": "number", "xpMax": "number" },

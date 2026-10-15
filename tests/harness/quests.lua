@@ -26,8 +26,9 @@
 --               GetQuestID answers 0 and the texts "". [G] The accept and turn-in event orders.
 --   Log         [P] GetNumQuestLogEntries answers the shown entries (zone headers included) and the
 --               quests; GetInfo answers the questLog.entry fields; GetQuestObjectives answers
---               { text, type, finished, numFulfilled, numRequired, objectiveType } with no
---               objectiveType for a "log" objective (questLog.objectives); GetQuestLogQuestText(index)
+--               { text, type, finished, numFulfilled, numRequired }, without the docs' Nilable
+--               objectiveType: 1.60.1 (70374) sent none, for an item objective or a log one
+--               (questLog.objectives; 70009 had sent it for an item objective); GetQuestLogQuestText(index)
 --               answers the description and the objective summary, and GetTitleForQuestID a title
 --               (questLog.text). [G] One header per header name, in first-seen order; a header's
 --               entry carries the same fields with questID 0. [G] An objective's text puts its
@@ -109,14 +110,10 @@ end
 local function Objectives(quest)
     local list = {}
     for i, objective in ipairs(quest.objectives) do
-        local entry = {
+        list[i] = {
             text = ("0/%d %s"):format(objective.required, objective.text), type = objective.type,
             finished = false, numFulfilled = 0, numRequired = objective.required,
         }
-        if objective.type ~= "log" then
-            entry.objectiveType = 0
-        end
-        list[i] = entry
     end
     return list
 end

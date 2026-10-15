@@ -25,11 +25,11 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadSnapshot, withHarness } from "../lib/harness.mjs";
 import {
-    ENCODE_JSON, PROBES_PATH, buildNumber, buildOf, isCurrent, mergeResults, readDefinitions, readProbes, readRecords, serializeProbes,
+    ENCODE_JSON, PROBES_PATH, buildNumber, isCurrent, mergeResults, readDefinitions, readProbes, readRecords, serializeProbes,
     stableJson,
 } from "../lib/probes.mjs";
 import { repoRoot } from "../lib/repo.mjs";
-import { DEFAULT_WOW_ROOT, findForeverInstall } from "../lib/wow.mjs";
+import { DEFAULT_WOW_ROOT, buildOf, findForeverInstall } from "../lib/wow.mjs";
 
 export const options = {
     import: { type: "boolean", default: false },

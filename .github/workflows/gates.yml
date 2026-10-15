@@ -1,0 +1,23 @@
+# The gates every change must pass: tlk check and tlk test, on Windows like the development
+# machines. No game client is installed here, so check compares each TOC's ## Interface with the
+# one the API snapshot's build implies. Actions are pinned to full commit SHAs.
+name: gates
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: npm ci
+      - run: node tools/tlk.mjs check
+      - run: node tools/tlk.mjs test

@@ -24,7 +24,7 @@ Controller work: see [docs/ControllerSupport.md](docs/ControllerSupport.md).
 Requires Node.js 22+. Every operation is a verb on one CLI:
 
 ```powershell
-npm install                        # once
+npm ci                             # once, and after package-lock.json changes (tlk says when)
 node tools/tlk.mjs check           # static gates
 node tools/tlk.mjs test            # behavioral tests in real Lua 5.1 (filters or test files narrow it)
 node tools/tlk.mjs test --coverage # the same, then which addon statements the Lua tests reached
@@ -35,6 +35,10 @@ node tools/tlk.mjs package         # check and test, then zip the committed addo
 `package` ships every addon without `## X-DevOnly` (DevTools has it) as committed at HEAD, so it refuses uncommitted changes in a shipped folder and a shipped addon whose dependency stays behind, and players' own sounds, which git ignores, never ship. The zip is named after the addon nothing else depends on, with its `## Version`, and extracts straight into `Interface\AddOns`. Its players' guide is [TheLanKrewToolKit/README.txt](TheLanKrewToolKit/README.txt).
 
 `deploy --addon <name>` includes the full dependency chain regardless of directory order. `deploy --unlink --addon <name>` removes only the explicitly selected addon's link.
+
+`deploy` treats a link to the same addon in another worktree of this repository as its own: it repoints the link to this checkout and says from where to where, and `--unlink` removes it. A dangling link to the same addon inside or beside a worktree (one since removed) counts too.
+
+`.github/workflows/gates.yml` runs `npm ci`, `check` and `test` on Windows for every push and pull request, with the Node version in `.node-version`.
 
 The addons run straight from this repo. The loop:
 
@@ -54,7 +58,7 @@ Turn on Lua error popups in game once: `/console scriptErrors 1`.
 | Rule | What it enforces |
 | --- | --- |
 | PARSE | Every file parses as Lua 5.1. |
-| TOC | Every addon folder has a `_Camelot.toc`. The TOC lists exactly the files present, each once, dependencies (`Dependencies`, `RequiredDeps`, `Dep*`) exist, and `## Interface` matches the installed client (the check says when it's skipped). |
+| TOC | Every addon folder has a `_Camelot.toc`. The TOC lists exactly the files present, each once, dependencies (`Dependencies`, `RequiredDeps`, `Dep*`) exist, and `## Interface` matches the installed client or, with none installed, the interface the API snapshot's build implies (1.60.1 is 16001); check prints which it used, or that it skipped. |
 | GLOBAL | Every global read exists in the client dump or a dependency, including reads through `_G.X`, `getfenv().X` and `getglobal("X")`. Every write is declared: SavedVariables, SavedVariablesPerCharacter, `AddonCompartmentFunc`, `SLASH_*`, or `## X-Globals`, whether written as `X =`, through `_G`, `rawset`, `setglobal` or `getfenv()`. A write with a dynamic key, `getfenv` with a level other than 0 or 1, `setfenv` and `loadstring` need `-- global: <why>`. It also flags assignments into client tables and frame names that collide with client globals. |
 | MEMBER | Full member chains (`Enum.PowerType.Energy`, `C_Spell["X"]`, through local aliases) exist in the snapshot, and so does a client table's method called with `:` (`C_GamePad:X()`). |
 | EVENT | Every event name passed to an event method is real, whether a literal or a file-level constant, and none registered (`On`, `RegisterEvent`, `RegisterUnitEvent`) is restricted to Blizzard's code (`HasRestrictions`, such as the combat log events). |
@@ -69,7 +73,7 @@ NAMING, COMMENT, LENGTH and STYLE also cover the tests' Lua (`tests/*.test.lua` 
 
 What `check` can't see: dynamic reads (`_G[name]`, `getglobal(name)`), values that cross files or functions (a Secure frame or a secret handed to another file, an event name passed to a wrapper), secrets reaching state through a callee, and handlers that aren't function literals. Its guard analysis is per function and doesn't follow loops or `goto`.
 
-`test` runs `tests/*.test.lua` in real Lua 5.1 (WebAssembly) against a fake Forever client (`tests/harness`). Each file runs in its own worker with a timeout that starts after the worker's setup. The fake is strict:
+`test` runs `tests/*.test.lua` in real Lua 5.1 (WebAssembly) against a fake Forever client (`tests/harness`). Each file runs in its own worker with a timeout that starts after the worker's setup. Files start longest first, by their last whole run's time (kept in `node_modules/.cache`). The fake is strict:
 
 - **Secret values** are opaque and throw on comparison, arithmetic, length, indexing, `tonumber` and `print`. As in the client, concatenation, `tostring` and `format` (including `("%d"):format(x)`) accept them and return secret strings; a precision on `%s` is refused. Lua can't catch what the client refuses of a boolean test (a secret boolean), `== plainValue`, a secret compared with itself, or a secret table key; the SECRET rule covers those.
 - **When values are secret** follows each flag's predicate under a restriction model: combat, encounter, challenge mode, PvP match, restricted map and chat lockdown. Some predicates follow Blizzard's documented text, others are conservative fallbacks where the docs are silent (`SecretReturns`, anchoring, threat, unknown flags); `tests/harness/secrets.lua` lists which. Some flags depend on the unit (player-controlled, in your group). A unit the test hasn't set (`h:SetUnit` for pet, focus, party, mouseover and nameplates) doesn't exist, so it isn't secret.
@@ -94,13 +98,13 @@ What `check` can't see: dynamic reads (`_G[name]`, `getglobal(name)`), values th
 - **Randomness** is the harness's own seeded generator (`h:SeedRandom(n)`), behind both `random` and `math.random`, so tests are repeatable.
 - **Sizes are stand-ins:** 7 px per character and 14 px per line, so layout arithmetic runs.
 
-`test --coverage` lists, per addon file, the statements no Lua test reached, by line. It counts per function, so a nested function's lines don't count for the code around it, but it sees lines, not statements: statements that share a line share its hit, so `if not ready then return end` counts its return whenever its test ran. It's a report, not a gate, and the line hook makes the run several times slower.
+`test --coverage` lists, per addon file, the statements no Lua test reached, by line. It instruments each addon file as it loads (a hit counter per statement, conditions wrapped so they keep their value, every line number and chunk name kept), so statements that share a line are told apart: `if not ready then return end` counts its return only when it returned. A nested function's statements count for it alone. It's a report, not a gate, and costs about as much as a plain run.
 
 What `test` can't show: the real client's rendering, layout, taint propagation, hardware-event rules and per-spell secrecy exceptions. Its formatting fakes (`GetMoneyString`, `SecondsToTime`) aren't Blizzard's exact output. Verify those in game.
 
 `tests/*.test.mjs` test the tooling itself:
 - the check gate runs over fixtures with one violation per rule, and one for each allowed construct;
-- they also cover api-sync, the probes verb, the test runner and deploy's argument and link handling.
+- they also cover api-sync, the probes verb, the test runner (its job order too), coverage, the CLI's dependency check, and deploy's argument, link and worktree handling.
 
 ### API snapshot
 

@@ -5,10 +5,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createLua } from "./lua.mjs";
-import { PROBES_PATH, buildOf, luaLiteral, readProbes } from "./probes.mjs";
+import { PROBES_PATH, luaLiteral, readProbes } from "./probes.mjs";
 import { findAddons, readForbidden, repoRoot, splitList } from "./repo.mjs";
+import { buildOf } from "./wow.mjs";
 
-const HARNESS_FILES = [
+// The harness files (tests/harness), in the order they run; every file there is one of them.
+export const HARNESS_FILES = [
     "wow.lua", "secrets.lua", "widgets.lua", "input.lua", "group.lua", "units.lua", "world.lua", "ui.lua", "meter.lua",
     "speech.lua", "quests.lua", "env.lua", "probes.lua",
 ];

@@ -6,12 +6,19 @@
 //   --addon <name> limits it to those addons and the addons they depend on (linking the toolkit
 //   links ByteTerrace_Core too); an unknown name is an error. The AddOns folder must exist.
 //
-//   --unlink removes only links that point at this repo's addon folders, and reports every link
-//   it leaves alone (pointing elsewhere, or at a path that differs only in case).
+//   A link to the same addon in another worktree of this repository (`git worktree list`) is this
+//   repo's own too: deploy repoints it to this checkout and says from where to where. So is a
+//   dangling link to the same addon in a folder inside or beside a worktree: a worktree since
+//   removed (git no longer lists it).
+//
+//   --unlink removes only links that point at this repo's addon folders, in this checkout or any
+//   of its worktrees (dangling ones included), and reports every link it leaves alone (pointing
+//   elsewhere, or at a path that differs only in case).
 
+import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, readlinkSync, rmdirSync, symlinkSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { findAddons } from "../lib/repo.mjs";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { findAddons, repoRoot } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, findForeverInstall } from "../lib/wow.mjs";
 import { runChecks } from "./check.mjs";
 import { run as runTests } from "./test.mjs";
@@ -42,6 +49,47 @@ export function compareTargets(target, expected, platform = process.platform) {
     if (a === b) return "same";
     if (a.toLowerCase() === b.toLowerCase()) return platform === "win32" ? "case" : "other";
     return "other";
+}
+
+// The worktree folders `git worktree list --porcelain` names (bare repositories left out), as
+// absolute paths.
+export function parseWorktrees(porcelain) {
+    const roots = [];
+    for (const record of porcelain.split(/\n\s*\n/)) {
+        const lines = record.split("\n").map((line) => line.trim());
+        const path = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
+        if (path && !lines.includes("bare")) roots.push(resolve(path));
+    }
+    return roots;
+}
+
+// This repository's worktrees, this checkout among them; just this checkout without git.
+function repoWorktrees() {
+    try {
+        return parseWorktrees(execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: repoRoot, encoding: "utf8" }));
+    } catch {
+        return [repoRoot];
+    }
+}
+
+// What a link's target is to this checkout: compareTargets' "same", "case" or "other", or
+// "worktree" (with worktree, its root) when it's the same addon's folder in another worktree. A
+// dangling link (its target gone) to the same addon in a folder inside or beside a worktree was
+// a worktree since removed: { kind: "worktree", worktree, removed: true }.
+export function classifyLink(target, expected, worktrees, { platform = process.platform, dangling = false } = {}) {
+    const match = compareTargets(target, expected, platform);
+    if (match !== "other") return { kind: match };
+    const name = basename(expected);
+    const worktree = worktrees.find((root) => compareTargets(target, join(root, name), platform) === "same");
+    if (worktree) return { kind: "worktree", worktree };
+    const root = dirname(resolve(target));
+    const inside = (folder, parent) => {
+        const path = relative(parent, folder);
+        return path !== "" && !path.startsWith("..") && !isAbsolute(path);
+    };
+    const former = dangling && basename(resolve(target)) === name && worktrees.some((tree) =>
+        inside(root, tree) || compareTargets(dirname(root), dirname(tree), platform) === "same");
+    return former ? { kind: "worktree", worktree: root, removed: true } : { kind: "other" };
 }
 
 function linkTarget(path) {
@@ -96,15 +144,23 @@ export async function run(values) {
     }
 
     let failed = false;
+    const worktrees = repoWorktrees();
     for (const addon of addons) {
         const destination = join(addOnsDir, addon.name);
         const { exists, target } = linkTarget(destination);
-        const match = target ? compareTargets(target, addon.dir) : null;
+        const isDangling = Boolean(target) && !existsSync(target);
+        const link = target ? classifyLink(target, addon.dir, worktrees, { dangling: isDangling }) : null;
+        const match = link?.kind ?? null;
+        const dangling = isDangling ? " (dangling)" : "";
+        const where = link?.removed ? `a removed worktree, ${link.worktree}` : `worktree ${link?.worktree}`;
 
         if (values.unlink) {
             if (match === "same") {
                 rmdirSync(destination); // removes the junction only, never the repo files
                 console.log(`Unlinked ${addon.name}`);
+            } else if (match === "worktree") {
+                rmdirSync(destination);
+                console.log(`Unlinked ${addon.name}: linked to ${target}${dangling}, in ${where}`);
             } else if (match === "case") {
                 console.log(`Skipped  ${addon.name}: links to ${target}, which differs from ${addon.dir} only in case; remove it manually`);
             } else if (match === "other") {
@@ -114,6 +170,10 @@ export async function run(values) {
             }
         } else if (match === "same") {
             console.log(`OK      ${addon.name} (already linked)`);
+        } else if (match === "worktree") {
+            rmdirSync(destination);
+            symlinkSync(addon.dir, destination, "junction");
+            console.log(`Relinked ${addon.name}: ${destination} from ${target}${dangling} (${where}) to ${addon.dir}`);
         } else if (exists) {
             const why = target ? `links to ${target}` : "is a real folder";
             console.error(`Refusing to overwrite ${destination} (${why}); remove it manually first.`);

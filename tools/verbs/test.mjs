@@ -1,6 +1,7 @@
 // Behavioral tests: tests/*.test.lua run in real Lua 5.1 against the fake client in
 // tests/harness, and tests/*.test.mjs test the tooling itself. Each test file runs in its own
-// worker thread (and Lua VM) with a timeout, so a hang fails that file instead of the run. The
+// worker thread (and Lua VM) with a timeout, so a hang fails that file instead of the run; files
+// start longest first, by how long each took last time (orderJobs). The
 // timeout counts from when the worker finishes its setup (Lua VM, snapshot, harness, test file),
 // which has its own, generous limit (SETUP_MS), so load on the machine can't fail a quick test.
 //
@@ -21,14 +22,14 @@
 // --coverage also reports which statements of the addons' files the Lua tests that ran reached
 // (tools/lib/coverage.mjs says what counts): the total, then each file with statements none of
 // them reached, and those statements' lines. It's a report, not a gate: the run's status is the
-// tests'. The line hook slows the Lua tests several times over.
+// tests'. It instruments the addons' files as they load, which slows the Lua tests a little.
 
 import { availableParallelism } from "node:os";
-import { readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
 import { coverageReport, mergeHits } from "../lib/coverage.mjs";
-import { findAddons, repoRoot } from "../lib/repo.mjs";
+import { findAddons, repoRoot, toPosix } from "../lib/repo.mjs";
 
 export const options = {
     timeout: { type: "string", default: "30" }, // seconds per test file
@@ -62,6 +63,48 @@ function runJob(job, timeoutMs) {
     });
 }
 
+// How long each job took the last time it ran whole, { [jobKey]: ms }, in npm's cache folder
+// (node_modules/.cache, never committed): the runner starts the longest first.
+const DURATIONS = join(repoRoot, "node_modules", ".cache", "tlk", "test-durations.json");
+
+const jobKey = (job) => (job.file ? toPosix(relative(repoRoot, job.file)) : job.label);
+
+function readDurations() {
+    try {
+        return JSON.parse(readFileSync(DURATIONS, "utf8"));
+    } catch {
+        return {};
+    }
+}
+
+// Merges into the file through a rename, so runs finishing together (the runner's own tests
+// start runs of their own) never leave it half written. Ordering is all it's for: a failed
+// write is ignored.
+function writeDurations(update) {
+    try {
+        mkdirSync(dirname(DURATIONS), { recursive: true });
+        const temporary = `${DURATIONS}.${process.pid}`;
+        writeFileSync(temporary, JSON.stringify({ ...readDurations(), ...update }, null, 1));
+        renameSync(temporary, DURATIONS);
+    } catch {
+        // The next run orders by size instead.
+    }
+}
+
+// The order to start jobs in ([{ duration, size }] -> indexes): those never timed first, largest
+// file first (a new test file is likely the one being worked on, and its cost is unknown), then
+// the rest longest first, so the slowest file doesn't start last and hold up the run. File size
+// alone predicts badly: a small .test.mjs that runs the CLI outlasts most Lua files.
+export function orderJobs(estimates) {
+    const unknown = (e) => e.duration === undefined;
+    return estimates.map((_, i) => i).sort((a, b) => {
+        const x = estimates[a];
+        const y = estimates[b];
+        if (unknown(x) !== unknown(y)) return unknown(x) ? -1 : 1;
+        return unknown(x) ? y.size - x.size : y.duration - x.duration;
+    });
+}
+
 // A test name as printed: quoted when it holds control characters, so the output stays one line.
 const display = (name) => (/[\x00-\x1f]/.test(name) ? JSON.stringify(name) : name);
 
@@ -88,14 +131,22 @@ export async function run(values, positionals) {
     }))];
 
     const outcomes = new Array(jobs.length);
+    const known = readDurations();
+    const keys = jobs.map(jobKey);
+    const order = orderJobs(jobs.map((job, i) => ({ duration: known[keys[i]], size: job.file ? statSync(job.file).size : 0 })));
+    const elapsed = {};
     let next = 0;
     const lanes = Array.from({ length: Math.min(jobs.length, Math.max(1, availableParallelism() - 1)) }, async () => {
-        while (next < jobs.length) {
-            const index = next++;
+        while (next < order.length) {
+            const index = order[next++];
+            const start = performance.now();
             outcomes[index] = await runJob(jobs[index], timeoutMs);
+            elapsed[keys[index]] = Math.round(performance.now() - start);
         }
     });
     await Promise.all(lanes);
+    // A filtered run times part of each file, so only whole files are recorded.
+    if (!filter) writeDurations(elapsed);
 
     let passed = 0;
     let failed = 0;

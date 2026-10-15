@@ -7,8 +7,13 @@
 //   node tools/tlk.mjs package [--addon <name>]... [--no-test]            the zip players install, in dist/
 //   node tools/tlk.mjs api-sync [--docs <Blizzard_APIDocumentationGenerated dir>] [--globals <dump>]
 //   node tools/tlk.mjs probes [--import [<SavedVariables file>]] [--check] [--wow-root <path>] [--flavor <_folder_>]
+//
+// Before any verb loads, node_modules must match package-lock.json; when it doesn't, tlk says to
+// run `npm ci` and exits 2.
 
 import { parseArgs } from "node:util";
+import { staleDependencies } from "./lib/dependencies.mjs";
+import { repoRoot } from "./lib/repo.mjs";
 
 const verbs = {
     "api-sync": () => import("./verbs/api-sync.mjs"),
@@ -23,6 +28,12 @@ const [verb, ...rest] = process.argv.slice(2);
 const load = verbs[verb];
 if (!load) {
     console.error(`usage: tlk <${Object.keys(verbs).join("|")}> [options]`);
+    process.exit(2);
+}
+
+const stale = staleDependencies(repoRoot);
+if (stale.length) {
+    console.error(`node_modules doesn't match package-lock.json (${stale.join("; ")}).\nRun \`npm ci\` in ${repoRoot}, then try again.`);
     process.exit(2);
 }
 

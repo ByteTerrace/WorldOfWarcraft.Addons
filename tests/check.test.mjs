@@ -1,22 +1,14 @@
-// The tooling's own tests. The check gate runs over fixture addons (tests/fixtures/check): BadAddon
-// has one violation per marked line, GoodAddon exercises every allowed construct, LegacyAddon has
-// no _Camelot TOC, and FrameworkAddon (built on a stub ByteTerrace_Core) reaches past the framework. The findings must be exactly EXPECTED, so a rule that stops firing (or starts
-// misfiring) fails. api-sync, the test runner, deploy's link handling, package's plan and the probes verb are
-// tested here too.
+// The check gate's own tests. It runs over fixture addons (tests/fixtures/check): BadAddon has one
+// violation per marked line, GoodAddon exercises every allowed construct, LegacyAddon has no
+// _Camelot TOC, and FrameworkAddon (built on a stub ByteTerrace_Core) reaches past the framework.
+// The findings must be exactly EXPECTED, so a rule that stops firing (or starts misfiring) fails.
 
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { coverageReport, mergeHits } from "../tools/lib/coverage.mjs";
-import { repoRoot } from "../tools/lib/repo.mjs";
+import { FIXTURES, assert, assertSame, captureLog, withTemp } from "../tools/lib/test-support.mjs";
+import { buildOf, interfaceOf } from "../tools/lib/wow.mjs";
 import { loadApi, runChecks } from "../tools/verbs/check.mjs";
-import { MIN_DOC_FUNCTIONS, MIN_GLOBALS, readDocs, readGlobals, serialize } from "../tools/verbs/api-sync.mjs";
-import { compareTargets, normalizeTarget, selectAddons } from "../tools/verbs/deploy.mjs";
-import { planPackage } from "../tools/verbs/package.mjs";
-import { PROBES_PATH, luaLiteral, readRecords, serializeProbes } from "../tools/lib/probes.mjs";
 
-const FIXTURES = join(repoRoot, "tests", "fixtures");
 const SECRET_CALL = "check issecretvalue on each result before any use or annotate \"-- secret: <why>\"";
 const SECRET_VALUE = "and is passed as a value, so its results skip the call-site check; annotate \"-- secret: <why>\"";
 const SECRET_PAYLOAD = "check issecretvalue before comparing, computing or branching on it, or annotate \"-- secret: <why>\"";
@@ -159,39 +151,8 @@ const EXPECTED = [
     `${FW}:17: FRAMEWORK Settings.RegisterCanvasLayoutCategory belongs to the framework; use declared rows: the framework generates the settings panel`,
 ];
 
-function assertSame(actual, expected) {
-    const missing = expected.filter((f) => !actual.includes(f));
-    const unexpected = actual.filter((f) => !expected.includes(f));
-    if (missing.length || unexpected.length) {
-        throw new Error(`missing: ${JSON.stringify(missing)} unexpected: ${JSON.stringify(unexpected)}`);
-    }
-}
-
-function assert(condition, message) {
-    if (!condition) throw new Error(message);
-}
-
-async function withTemp(fn) {
-    const dir = mkdtempSync(join(tmpdir(), "tlk-test-"));
-    try {
-        return await fn(dir);
-    } finally {
-        rmSync(dir, { recursive: true, force: true });
-    }
-}
-
-// A minimal DevTools dump with `count` function globals plus a nested Enum table.
-function writeDump(path, count, skipped = "") {
-    const rows = [];
-    for (let i = 0; i < count; i++) rows.push(`["Global${i}"] = { ["type"] = "function" },`);
-    rows.push(`["Enum"] = { ["type"] = "table", ["members"] = { "PowerType" }, ["tables"] = { ["PowerType"] = { "Energy", "Mana" } } },`);
-    rows.push(`["SlashCmdList"] = { ["type"] = "table", ["members"] = { "BYTETERRACEDEVTOOLS", "HELP" } },`);
-    writeFileSync(path, `ByteTerraceDevToolsDB = { ["build"] = { ["build"] = "1", ["version"] = "1.60.1" }, ${skipped}["globals"] = {\n${rows.join("\n")}\n} }\n`);
-}
-
-function tlk(args) {
-    return spawnSync(process.execPath, [join(repoRoot, "tools", "tlk.mjs"), ...args], { encoding: "utf8", cwd: repoRoot });
-}
+const NO_INSTALL = join(FIXTURES, "no-such-install");
+const interfaceFindings = (findings) => findings.filter((f) => f.includes("## Interface"));
 
 export const tests = [
     {
@@ -201,19 +162,39 @@ export const tests = [
         },
     },
     {
-        name: "check skips the interface check, and says so, when no client is found",
+        name: "a game version maps to its TOC interface number",
         run: async () => {
-            const lines = [];
-            const log = console.log;
-            console.log = (line) => lines.push(String(line));
-            try {
-                const findings = await runChecks({ root: join(FIXTURES, "check"), wowRoot: join(FIXTURES, "no-such-install") });
-                assert(!findings.some((f) => f.includes("## Interface")), "no interface finding without a client");
-            } finally {
-                console.log = log;
-            }
-            assert(lines.includes("Interface check skipped (no client found)"), `printed: ${lines.slice(0, 3).join(" | ")}`);
+            assert(interfaceOf("1.60.1 (70374)") === 16001, `1.60.1: ${interfaceOf("1.60.1 (70374)")}`);
+            assert(interfaceOf("1.15.7") === 11507 && interfaceOf("2.5.12") === 20512, "Classic numbering");
+            assert(interfaceOf("no version") === null, "no version, no number");
         },
+    },
+    {
+        // CI has no client: the committed snapshot's build stands in for it, and check says so.
+        name: "check compares ## Interface with the API snapshot's build when no client is found, and says which it used",
+        run: async () => {
+            const build = loadApi().build;
+            assert(build === buildOf(build) && build !== null, `the committed snapshot names its build: ${build}`);
+            const { result, lines } = await captureLog(() => runChecks({ root: join(FIXTURES, "check"), wowRoot: NO_INSTALL }));
+            const expected = interfaceOf(build);
+            assertSame(interfaceFindings(result), [`BadAddon/BadAddon_Camelot.toc:1: TOC ## Interface 11507 but the API snapshot's client is ${expected}`]);
+            const said = `Interface check against ${expected} (no client found; the API snapshot's build ${build})`;
+            assert(lines.includes(said), `printed: ${lines.slice(0, 3).join(" | ")}`);
+        },
+    },
+    {
+        name: "check follows the snapshot's build, and skips the interface check (saying so) when it names none",
+        run: async () => withTemp(async (dir) => {
+            const docsOnly = JSON.parse(readFileSync(join(FIXTURES, "api", "nodump.json"), "utf8"));
+            const later = join(dir, "later.json");
+            writeFileSync(later, JSON.stringify({ ...docsOnly, source: { globals: "ByteTerrace_DevTools dump, client 1.61.2 (80000)" } }));
+            const run = await captureLog(() => runChecks({ root: join(FIXTURES, "check"), wowRoot: NO_INSTALL, apiPath: later }));
+            assert(interfaceFindings(run.result).length === 4, `every fixture TOC says 16001 or 11507, not 16102: ${interfaceFindings(run.result).join(" | ")}`);
+            assert(run.lines.includes("Interface check against 16102 (no client found; the API snapshot's build 1.61.2 (80000))"), run.lines[0]);
+            const none = await captureLog(() => runChecks({ root: join(FIXTURES, "check"), wowRoot: NO_INSTALL, apiPath: join(FIXTURES, "api", "nodump.json") }));
+            assert(interfaceFindings(none.result).length === 0, "no build, no interface finding");
+            assert(none.lines.includes("Interface check skipped (no client found and no build in the API snapshot)"), none.lines[0]);
+        }),
     },
     {
         name: "snapshot truth: with a dump only dumped names are known; without one the docs are the fallback",
@@ -225,392 +206,6 @@ export const tests = [
             const docsOnly = loadApi(join(FIXTURES, "api", "nodump.json"));
             assert(!docsOnly.hasDump && docsOnly.globals.has("UnitHealth") && docsOnly.members.get("C_Spell").has("GetSpellName"), "docs fallback");
             assert(docsOnly.members.get("Enum.PowerType").has("Energy"), "documented enumerations");
-        },
-    },
-    {
-        name: "api-sync refuses a partial dump and one without type fields",
-        run: async () => {
-            let message = "";
-            await readGlobals(join(FIXTURES, "api", "tiny-dump.lua")).catch((error) => { message = error.message; });
-            assert(message.includes(`well over ${MIN_GLOBALS}`), `tiny dump: ${message}`);
-            message = "";
-            await readGlobals(join(FIXTURES, "api", "untyped-dump.lua")).catch((error) => { message = error.message; });
-            assert(message.includes("has no type field"), `untyped dump: ${message}`);
-            const result = tlk(["api-sync", "--globals", join(FIXTURES, "api", "tiny-dump.lua"), "--out", join(tmpdir(), "tlk-never-written.json")]);
-            assert(result.status === 1, `api-sync exits non-zero on a partial dump (got ${result.status})`);
-        },
-    },
-    {
-        name: "api-sync refuses docs that can't be the full documentation, rather than empty the rules",
-        run: async () => withTemp(async (dir) => {
-            let message = "";
-            await readDocs(dir).catch((error) => { message = error.message; });
-            assert(message.includes(`well over ${MIN_DOC_FUNCTIONS}`), `an empty folder: ${message}`);
-            const result = tlk(["api-sync", "--docs", dir, "--out", join(dir, "never-written.json")]);
-            assert(result.status === 1 && result.stderr.includes("refusing partial docs"), `${result.status} ${result.stderr}`);
-        }),
-    },
-    {
-        // Nilable = true and a Default both mean the position may be nil; the rest may not.
-        name: "api-sync records which argument and payload positions may be nil",
-        run: async () => withTemp(async (dir) => {
-            const filler = Array.from({ length: MIN_DOC_FUNCTIONS }, (_, i) => `{ Name = "F${i}", Type = "Function" },`).join("\n");
-            writeFileSync(join(dir, "TestDocumentation.lua"), `APIDocumentation:AddDocumentationTable({
-                Name = "Test", Type = "System", Namespace = "C_Test",
-                Functions = {
-                    { Name = "Speak", Type = "Function", Arguments = {
-                        { Name = "voiceID", Type = "number", Nilable = false },
-                        { Name = "text", Type = "cstring", Nilable = true },
-                        { Name = "overlap", Type = "bool", Nilable = false, Default = false },
-                    } },
-                    ${filler}
-                },
-                Events = {
-                    { Name = "Said", Type = "Event", LiteralName = "TEST_SAID", Payload = {
-                        { Name = "text", Type = "cstring", Nilable = false },
-                        { Name = "guid", Type = "WOWGUID", Nilable = true },
-                    } },
-                },
-            })`);
-            const docs = await readDocs(dir);
-            const speak = docs.functions["C_Test.Speak"];
-            assert(JSON.stringify(speak.Arguments) === '["number","cstring","bool"]', JSON.stringify(speak));
-            assert(JSON.stringify(speak.ArgumentsNilable) === "[2,3]", JSON.stringify(speak));
-            assert(JSON.stringify(docs.events.TEST_SAID.PayloadNilable) === "[2]", JSON.stringify(docs.events.TEST_SAID));
-            assert(!("ArgumentsNilable" in docs.functions["C_Test.F0"]), "no arguments, no list");
-        }),
-    },
-    {
-        name: "api-sync warns when the dump left out names another addon set",
-        run: async () => withTemp(async (dir) => {
-            const dump = join(dir, "dump.lua");
-            writeDump(dump, MIN_GLOBALS, `["skipped"] = { ["SomeOtherAddon"] = 12, ["ByteTerrace_Core"] = 3 }, `);
-            const { skipped } = await readGlobals(dump);
-            assert(skipped.SomeOtherAddon === 12 && skipped.ByteTerrace_Core === 3, JSON.stringify(skipped));
-            const result = tlk(["api-sync", "--globals", dump, "--out", join(dir, "forever.json")]);
-            assert(result.status === 0 && result.stderr.includes("other addons set (SomeOtherAddon: 12)"), result.stderr);
-            assert(!result.stderr.includes("ByteTerrace_Core:"), "this repository's own are expected");
-        }),
-    },
-    {
-        name: "api-sync reads nested members and writes one entry per line",
-        run: async () => withTemp(async (dir) => {
-            const dump = join(dir, "dump.lua");
-            writeDump(dump, MIN_GLOBALS);
-            const { globals, members } = await readGlobals(dump);
-            assert(globals.Enum === "table" && members["Enum.PowerType"].join(",") === "Energy,Mana", "Enum.PowerType members");
-            const text = serialize({ source: {}, functions: { A: { secret: ["SecretReturns"] }, B: {} }, events: {}, methods: { Api: { M: {} } },
-                enums: {}, globals: { A: "function" }, members: { Enum: ["PowerType"] } });
-            assert(text.includes('\n  "A": {"secret":["SecretReturns"]},\n  "B": {}\n'), "functions one per line");
-            assert(text.includes('\n   "M": {}\n'), "methods one per line");
-            JSON.parse(text);
-        }),
-    },
-    {
-        // The timeout counts from the end of a worker's setup, so a loaded machine can't time out
-        // the quick file; the hanging one never finishes, however long the timeout.
-        name: "the test runner fails on an unmatched filter and times out a hanging file without stopping the rest",
-        run: async () => {
-            const none = tlk(["test", "--dir", join(FIXTURES, "runner"), "no test is named this"]);
-            assert(none.status === 1 && none.stdout.includes("No test matches"), `unmatched filter: ${none.status} ${none.stdout}`);
-            const hang = tlk(["test", "--dir", join(FIXTURES, "runner"), "--timeout", "1"]);
-            assert(hang.status === 1, `hang exits non-zero (got ${hang.status})`);
-            assert(/FAIL hang\.test\.lua: timed out after 1s/.test(hang.stdout), hang.stdout);
-            assert(/\b3 passed, 1 failed/.test(hang.stdout), hang.stdout);
-            const typo = tlk(["test", "tests/facts.test.lua", "tests/nope.test.lua"]);
-            assert(typo.status === 1 && typo.stdout.includes("No test file named nope.test.lua"), `a missing file fails: ${typo.stdout}`);
-            const either = tlk(["test", "--dir", join(FIXTURES, "runner"), "no such test", "passes"]);
-            assert(either.status === 0 && /\b1 passed, 0 failed/.test(either.stdout), `any filter matching counts: ${either.stdout}`);
-            const timeout = tlk(["test", "--timeout", "abc"]);
-            assert(timeout.status === 2 && timeout.stderr.includes("--timeout must be a positive number"), `${timeout.status} ${timeout.stderr}`);
-        },
-    },
-    {
-        name: "the test runner keeps test names with newlines, tabs and backslashes intact",
-        run: async () => {
-            const run = tlk(["test", "--dir", join(FIXTURES, "runner-names")]);
-            assert(/\b4 passed, 1 failed/.test(run.stdout), run.stdout);
-            assert(run.stdout.includes('FAIL names.test.lua > "tab\\tin name"'), run.stdout);
-            assert(/line one\n {5}line two/.test(run.stdout), run.stdout);
-            const filtered = tlk(["test", "--dir", join(FIXTURES, "runner-names"), "with\nnewline"]);
-            assert(filtered.status === 0 && /\b1 passed, 0 failed/.test(filtered.stdout), filtered.stdout);
-            const slash = tlk(["test", "--dir", join(FIXTURES, "runner-names"), "back\\slash"]);
-            assert(slash.status === 0 && /\b1 passed, 0 failed/.test(slash.stdout), slash.stdout);
-        },
-    },
-    {
-        name: "deploy refuses an unknown addon name",
-        run: async () => {
-            const result = tlk(["deploy", "--addon", "NoSuchAddon", "--flavor", "_none_", "--wow-root", join(FIXTURES, "no-such-install")]);
-            assert(result.status === 1 && result.stderr.includes("Unknown addon(s): NoSuchAddon"), `${result.status} ${result.stderr}`);
-        },
-    },
-    {
-        name: "deploy selects transitive dependencies regardless of directory order, but unlink stays exact",
-        run() {
-            const all = [
-                { name: "Foundation", dependencies: [] },
-                { name: "Shared", dependencies: ["Foundation"] },
-                { name: "Toolkit", dependencies: ["Shared"] },
-                { name: "Unrelated", dependencies: [] },
-            ];
-            const names = (addons) => addons.map((addon) => addon.name).sort().join(",");
-            assert(names(selectAddons(all, ["Toolkit"])) === "Foundation,Shared,Toolkit", "the full dependency chain");
-            assert(names(selectAddons(all, ["Toolkit"], false)) === "Toolkit", "unlink doesn't remove shared dependencies");
-            all[0].dependencies.push("Toolkit");
-            assert(names(selectAddons(all, ["Toolkit"])) === "Foundation,Shared,Toolkit", "cycles terminate");
-        },
-    },
-    {
-        name: "package ships the committed, non-dev addons, named after the one nothing depends on",
-        run() {
-            const addon = (name, dependencies = [], metadata = {}) =>
-                ({ name, dependencies, files: ["Main.lua"], metadata: { Version: "1.2.0", ...metadata } });
-            const all = [addon("Core"), addon("Kit", ["Core"]), addon("Dev", [], { "X-DevOnly": "true" })];
-            const tracked = ["Core/Core_Camelot.toc", "Core/Main.lua", "Kit/Kit_Camelot.toc", "Kit/Main.lua", "Dev/Dev_Camelot.toc", "Dev/Main.lua"];
-            const names = (plan) => plan.addons.map((a) => a.name).sort().join(",");
-            const plan = planPackage(all, undefined, tracked, []);
-            assert(plan.errors.length === 0, plan.errors.join("; "));
-            assert(names(plan) === "Core,Kit" && plan.name === "Kit" && plan.version === "1.2.0", `${names(plan)} ${plan.name} ${plan.version}`);
-            assert(names(planPackage(all, ["Kit"], tracked, [])) === "Core,Kit", "--addon brings its dependencies");
-            const errors = (names, tracked, dirty) => planPackage(all, names, tracked, dirty).errors.join(" | ");
-            assert(errors(["Dev"], tracked, []).includes("Dev is ## X-DevOnly"), "a dev-only addon never ships");
-            assert(errors(["Nope"], tracked, []).includes("Unknown addon(s): Nope"), "unknown names");
-            assert(errors(undefined, tracked.filter((f) => f !== "Kit/Main.lua"), []).includes("Kit/Main.lua is listed in the TOC but not committed"), "uncommitted TOC file");
-            assert(errors(undefined, tracked, ["Core/Main.lua"]).includes("Core/Main.lua has uncommitted changes"), "dirty shipped folder");
-            assert(errors(undefined, tracked, ["Dev/Main.lua"]) === "", "a dirty dev folder doesn't matter");
-            const withDev = [addon("Lib", [], { "X-DevOnly": "" }), addon("App", ["Lib"])];
-            const devErrors = planPackage(withDev, undefined, ["Lib/Lib_Camelot.toc", "Lib/Main.lua", "App/App_Camelot.toc", "App/Main.lua"], []).errors.join(" | ");
-            assert(devErrors.includes("App depends on Lib, which the package leaves out"), `a bare X-DevOnly still keeps Lib out, and App can't ship without it: ${devErrors}`);
-            all.push(addon("Other"));
-            assert(errors(undefined, tracked.concat("Other/Other_Camelot.toc", "Other/Main.lua"), []).includes("one addon nothing else in it depends on"), "two tops can't name it");
-        },
-    },
-    {
-        name: "deploy normalizes link targets before comparing them",
-        run: async () => {
-            const link = join(repoRoot, "links", "Addon");
-            assert(normalizeTarget("\\\\?\\" + join(repoRoot, "Addon") + "\\", link) === join(repoRoot, "Addon"), "\\\\?\\ prefix and trailing separator");
-            assert(normalizeTarget(join("..", "Addon"), link) === join(repoRoot, "Addon"), "relative to the link's folder");
-            assert(compareTargets(join(repoRoot, "Addon"), join(repoRoot, "Addon") + "/") === "same", "trailing separator");
-            assert(compareTargets(join(repoRoot, "addon"), join(repoRoot, "Addon"), "win32") === "case", "case-only difference on Windows");
-            assert(compareTargets(join(repoRoot, "addon"), join(repoRoot, "Addon"), "linux") === "other", "case matters elsewhere");
-            assert(compareTargets(join(repoRoot, "Other"), join(repoRoot, "Addon")) === "other", "elsewhere");
-        },
-    },
-    {
-        name: "the committed snapshot is current with its own serializer",
-        run: async () => {
-            const path = join(repoRoot, "tools", "api", "forever.json");
-            const text = readFileSync(path, "utf8");
-            assert(serialize(JSON.parse(text)) === text, "tools/api/forever.json isn't in api-sync's format; re-run api-sync");
-        },
-    },
-    {
-        // A nested function's lines count for it, not for the code around it; `local b` compiles to
-        // nothing, so it's no statement; an if counts by its condition.
-        name: "coverage counts each statement in the function that holds it",
-        run: async () => {
-            const dir = mkdtempSync(join(tmpdir(), "tlk-coverage-"));
-            try {
-                writeFileSync(join(dir, "File.lua"), [
-                    "local a = 1", "local b", "local function f(x)", "    if x then", "        return 1", "    end",
-                    "    return 2", "end", "local t = { g = function() return 3 end }", "f(a)", "",
-                ].join("\n"));
-                const ran = ["@Fixture/File.lua\t0\t1,8,9,10", "@Fixture/File.lua\t3\t4,7"];
-                const [file] = coverageReport(mergeHits(ran), [{ name: "Fixture", dir, files: ["File.lua"] }]);
-                assert(file.file === "Fixture/File.lua" && file.total === 8, `statements: ${JSON.stringify(file)}`);
-                assert(file.covered === 6 && file.missed.join(" ") === "5 9", `return 1 and g's body missed: ${JSON.stringify(file)}`);
-                const none = coverageReport(new Map(), [{ name: "Fixture", dir, files: ["File.lua"] }])[0];
-                assert(none.covered === 0 && none.missed.join(" ") === "1-10", `a run of misses: ${JSON.stringify(none)}`);
-            } finally {
-                rmSync(dir, { recursive: true, force: true });
-            }
-        },
-    },
-    {
-        name: "the test runner's --coverage reports the statements the tests reached",
-        run: async () => {
-            const run = tlk(["test", "--dir", join(FIXTURES, "runner-coverage"), "--coverage"]);
-            assert(run.status === 0 && /\b3 passed, 0 failed/.test(run.stdout), run.stdout);
-            assert(/^coverage: \d+ of \d+ statements \(\d+\.\d%\)$/m.test(run.stdout), run.stdout);
-            // Loading ran Core's top levels but not its functions; nothing ran Krew.
-            assert(/^ {2}ByteTerrace_Core\/State\.lua (?!0\.0%)\d+\.\d% \(\d+ missed\): /m.test(run.stdout), run.stdout);
-            assert(/^ {2}TheLanKrewToolKit\/Krew\.lua 0\.0% /m.test(run.stdout), run.stdout);
-            const plain = tlk(["test", "--dir", join(FIXTURES, "runner-coverage")]);
-            assert(!plain.stdout.includes("coverage:"), plain.stdout);
-        },
-    },
-    {
-        name: "the test runner reports pending tests without failing the run",
-        run: async () => {
-            const run = tlk(["test", "--dir", join(FIXTURES, "runner-pending")]);
-            assert(run.status === 0, `pending doesn't fail (got ${run.status}): ${run.stdout}`);
-            assert(run.stdout.includes("PEND pending.test.lua > waits: no observation yet"), run.stdout);
-            // The fixture's passing test and the runner's two fakes checks.
-            assert(/\b3 passed, 0 failed, 1 pending/.test(run.stdout), run.stdout);
-        },
-    },
-    {
-        name: "probes --import reads the client's SavedVariables layout into the pretty snapshot",
-        run: async () => withTemp(async (dir) => {
-            const out = join(dir, "probes.json");
-            const run = tlk(["probes", "--import", join(FIXTURES, "probes", "client-format.lua"), "--out", out]);
-            assert(run.status === 0, `import exits 0 (got ${run.status}): ${run.stdout}${run.stderr}`);
-            assert(run.stdout.includes("2 new, 0 changed, 0 unchanged"), run.stdout);
-            const text = readFileSync(out, "utf8");
-            const expected = [
-                "{",
-                '  "build": "1.60.1 (70009)",',
-                '  "probes": {',
-                '    "chatTypeInfo.raidWarning": {',
-                '      "result": { "b": 0, "g": 72, "hasMetatable": true, "r": 255, "sticky": 0 },',
-                '      "context": { "combat": false, "restrictions": "none" }',
-                "    },",
-                '    "damageMeter.available": {',
-                '      "result": { "failureReason": "", "isAvailable": true },',
-                '      "context": { "combat": false, "restrictions": "none" }',
-                "    }",
-                "  }",
-                "}",
-                "",
-            ].join("\n");
-            assert(text === expected, `snapshot:\n${text}`);
-            const again = tlk(["probes", "--import", join(FIXTURES, "probes", "client-format.lua"), "--out", out]);
-            assert(again.stdout.includes("0 new, 0 changed, 2 unchanged") && readFileSync(out, "utf8") === expected, again.stdout);
-        }),
-    },
-    {
-        name: "probes --import merges an accumulating probe's record into the saved one, never shrinking it",
-        run: async () => withTemp(async (dir) => {
-            const out = join(dir, "probes.json");
-            const context = { combat: false, restrictions: "none" };
-            writeFileSync(out, serializeProbes({ build: "1.60.1 (70009)", probes: {
-                "names.chatSenders": { context, result: { CHAT_MSG_SAY: "Aa,Aa Aa" } },
-            } }));
-            const saved = join(dir, "senders.lua");
-            writeFileSync(saved, [
-                "ByteTerraceDevToolsDB = { probes = {",
-                '    ["names.chatSenders"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },',
-                '        result = { CHAT_MSG_SAY = "Aa", CHAT_MSG_CHANNEL = { secret = true, type = "string" } } },',
-                "} }",
-            ].join("\n"));
-            const run = tlk(["probes", "--import", saved, "--out", out]);
-            assert(run.status === 0, `${run.stdout}${run.stderr}`);
-            const result = JSON.parse(readFileSync(out, "utf8")).probes["names.chatSenders"].result;
-            assert(result.CHAT_MSG_SAY === "Aa,Aa Aa", `what earlier sessions saw stays: ${JSON.stringify(result)}`);
-            assert(result.CHAT_MSG_CHANNEL?.secret === true, `and the new session's adds: ${JSON.stringify(result)}`);
-        }),
-    },
-    {
-        name: "probes --import refuses broken records, drops unknown probes and keeps strings intact",
-        run: async () => withTemp(async (dir) => {
-            const out = join(dir, "probes.json");
-            const context = { combat: false, restrictions: "none" };
-            writeFileSync(out, serializeProbes({ build: "1.60.1 (69000)", probes: {
-                "no.longerDefined": { build: "1.60.1 (69000)", context, result: {} },
-                "classColors": { build: "1.60.1 (69000)", context, result: { classes: "MAGE" } },
-            } }));
-            const saved = join(dir, "edge-cases.lua");
-            writeFileSync(saved, [
-                "ByteTerraceDevToolsDB = { probes = {",
-                '    ["unknown.probe"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = {} },',
-                '    ["tts.voices"] = { build = "1.60.1 (70009)", result = {} },',
-                '    ["damageMeter.available"] = {',
-                '        build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" },',
-                '        result = { failureReason = "tab\\there \\"quoted\\" \\\\ back", isAvailable = false },',
-                "    },",
-                "} }",
-            ].join("\n"));
-            const run = tlk(["probes", "--import", saved, "--out", out]);
-            assert(run.status === 0, `import exits 0 (got ${run.status}): ${run.stdout}${run.stderr}`);
-            assert(run.stdout.includes("Skipped unknown.probe") && run.stdout.includes("Dropped no.longerDefined"), run.stdout);
-            assert(run.stderr.includes("Refused tts.voices: the record has no context"), run.stderr);
-            assert(run.stderr.includes("records come from 1.60.1 (69000), 1.60.1 (70009)"), run.stderr);
-            const text = readFileSync(out, "utf8");
-            assert(serializeProbes(JSON.parse(text)) === text, "the snapshot is in its serializer's format");
-            const snapshot = JSON.parse(text);
-            assert(Object.keys(snapshot.probes).join(",") === "classColors,damageMeter.available", Object.keys(snapshot.probes).join(","));
-            assert(snapshot.build === "1.60.1 (70009)", "the file's build is the newest record's");
-            assert(snapshot.probes.classColors.build === "1.60.1 (69000)", "an older record names its own build");
-            assert(snapshot.probes["damageMeter.available"].build === undefined, "a record of the file's build doesn't repeat it");
-            assert(snapshot.probes["damageMeter.available"].result.failureReason === "tab\there \"quoted\" \\ back", text);
-            const api = join(dir, "api.json");
-            writeFileSync(api, JSON.stringify({ source: { globals: "ByteTerrace_DevTools dump, client 1.60.1 (70009)" } }));
-            const check = tlk(["probes", "--check", "--out", out, "--api", api]);
-            assert(check.status === 1 && check.stderr.includes("classColors: recorded on 1.60.1 (69000), the API snapshot is 1.60.1 (70009)"),
-                `${check.status} ${check.stderr}`);
-            const records = await readRecords(saved);
-            assert(records["tts.voices"].build === "1.60.1 (70009)", "readRecords returns every record as saved");
-            const literal = luaLiteral({ b: "x\ty", a: { c: true, d: 1.5 } });
-            assert(literal === '{["a"]={["c"]=true,["d"]=1.5},["b"]="x\\009y"}', literal);
-            // An escape is always three digits, so a digit after it can't join it.
-            for (const [text, expected] of [["line\n2", '"line\\0102"'], ['say "5"', '"say \\0345\\034"'], ["a\\9", '"a\\0929"']]) {
-                assert(luaLiteral(text) === expected, `${JSON.stringify(text)}: ${luaLiteral(text)}`);
-            }
-        }),
-    },
-    {
-        name: "probes --import skips and drops records made by another version of their probe",
-        run: async () => withTemp(async (dir) => {
-            const out = join(dir, "probes.json");
-            const context = { combat: false, restrictions: "none" };
-            const recap = { hasRecapEvents: true };
-            // deathRecap.events is version 2: a record without a version is version 1's.
-            writeFileSync(out, serializeProbes({ build: "1.60.1 (70009)", probes: {
-                "deathRecap.events": { context, result: recap },
-            } }));
-            const saved = join(dir, "versions.lua");
-            writeFileSync(saved, [
-                "ByteTerraceDevToolsDB = { probes = {",
-                '    ["deathRecap.events"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = {} },',
-                "} }",
-            ].join("\n"));
-            const api = join(dir, "api.json");
-            writeFileSync(api, JSON.stringify({ source: { globals: "ByteTerrace_DevTools dump, client 1.60.1 (70009)" } }));
-            const check = tlk(["probes", "--check", "--out", out, "--api", api]);
-            assert(check.status === 1 && check.stderr.includes("deathRecap.events: made by version 1, the probe is version 2"),
-                `${check.status} ${check.stderr}`);
-            const run = tlk(["probes", "--import", saved, "--out", out]);
-            assert(run.status === 0, `import exits 0 (got ${run.status}): ${run.stdout}${run.stderr}`);
-            assert(run.stdout.includes("Skipped deathRecap.events: the record was made by version 1 of the probe, which is now version 2"), run.stdout);
-            assert(run.stdout.includes("Dropped deathRecap.events"), run.stdout);
-            assert(!("deathRecap.events" in JSON.parse(readFileSync(out, "utf8")).probes), "the old version's record is gone");
-            writeFileSync(saved, [
-                "ByteTerraceDevToolsDB = { probes = {",
-                '    ["deathRecap.events"] = { build = "1.60.1 (70009)", version = 2, context = { combat = false, restrictions = "none" }, result = {} },',
-                "} }",
-            ].join("\n"));
-            const current = tlk(["probes", "--import", saved, "--out", out]);
-            assert(current.stdout.includes("1 new"), current.stdout);
-            const text = readFileSync(out, "utf8");
-            assert(JSON.parse(text).probes["deathRecap.events"].version === 2 && serializeProbes(JSON.parse(text)) === text, text);
-        }),
-    },
-    {
-        name: "probes reports each probe's client and harness answers and their status",
-        run: async () => withTemp(async (dir) => {
-            const out = join(dir, "probes.json");
-            const context = { combat: false, restrictions: "none" };
-            writeFileSync(out, serializeProbes({ build: "1.60.1 (70009)", probes: {
-                "chatTypeInfo.raidWarning": { context, result: { b: 0, g: 72, hasMetatable: true, r: 255, sticky: 0 } },
-                "damageMeter.available": { context, result: { failureReason: "disabled", isAvailable: false } },
-            } }));
-            const run = tlk(["probes", "--out", out]);
-            assert(run.status === 1, `a mismatch exits 1 (got ${run.status}): ${run.stdout}${run.stderr}`);
-            assert(/chatTypeInfo\.raidWarning +anywhere +match\n {4}both +\{b=0 g=72 hasMetatable=true r=255 sticky=0\}/.test(run.stdout), run.stdout);
-            assert(/damageMeter\.available +anywhere +mismatch\n {4}client +\{failureReason=disabled isAvailable=false\}.*\n {4}harness +\{failureReason="" isAvailable=true\}/.test(run.stdout), run.stdout);
-            assert(/quest\.offer +quest offer open +pending/.test(run.stdout), run.stdout);
-            assert(/bags\.firstItem +item in backpack +harness can't set up/.test(run.stdout), run.stdout);
-            const [, pending, total] = /To do in game: (\d+) of (\d+) probes need a result\./.exec(run.stdout) ?? [];
-            assert(Number(total) - Number(pending) === 2, run.stdout);
-        }),
-    },
-    {
-        name: "the committed probe snapshot is current with its own serializer",
-        run: async () => {
-            const text = readFileSync(PROBES_PATH, "utf8");
-            assert(serializeProbes(JSON.parse(text)) === text, "tools/api/probes.json isn't in the probes verb's format; re-run tlk probes --import");
         },
     },
 ];

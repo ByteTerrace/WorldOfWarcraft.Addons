@@ -217,8 +217,5 @@ export function mergeResults(a, b) {
 // a record without a version is version 1's.
 export const isCurrent = (definition, record) => Boolean(record) && (record.version ?? 1) === definition.version;
 
-// The build a source string or record names, "1.60.1 (70009)", or null.
-export const buildOf = (text) => /\d+\.\d+\.\d+ \(\d+\)/.exec(text ?? "")?.[0] ?? null;
-
 // Orders builds by their build number.
 export const buildNumber = (build) => Number(/\((\d+)\)/.exec(build ?? "")?.[1] ?? 0);

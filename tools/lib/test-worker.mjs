@@ -4,8 +4,9 @@
 // pending(reason), and err holds the reason. Jobs:
 //   { kind: "lua", file, filter, coverage }
 //                                   a tests/*.test.lua file in a fresh Lua 5.1 VM with the harness;
-//                                   with coverage, the message also carries coverage: the lines its
-//                                   tests ran in the addons' files (see tools/lib/coverage.mjs)
+//                                   with coverage, the addons' files load instrumented and the
+//                                   message also carries coverage: the statements its tests ran
+//                                   in them (see tools/lib/coverage.mjs)
 //   { kind: "mjs", file, filter }   a tests/*.test.mjs module exporting tests = [{ name, run }]
 //   { kind: "fakes", filter }       every harness fake names a global (or member) the client dump has,
 //                                   and every fake function is one an addon calls
@@ -15,6 +16,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
+import { COVERAGE_LUA, createCoverage } from "./coverage.mjs";
 import { loadSnapshot, withHarness } from "./harness.mjs";
 import { parse, stringValue, walk } from "./lua-scope.mjs";
 import { findAddons, readForbidden } from "./repo.mjs";
@@ -47,42 +49,10 @@ const PRELUDE = `
         for i, t in ipairs(tests) do names[i] = escape(t.name) end
         return table.concat(names, "\\n")
     end
-    -- With __coverageOn, a line hook records the lines run in chunks named "@<path>" (the addons'
-    -- files): hits[source][linedefined][line]. A hook belongs to one coroutine; the tests run on this one.
-    local hits = {}
-    local getinfo, byte = debug.getinfo, string.byte
-    local function Hook(_, line)
-        local info = getinfo(2, "S")
-        local source = info.source
-        if byte(source, 1) == 64 then
-            local owners = hits[source]
-            if not owners then
-                owners = {}
-                hits[source] = owners
-            end
-            local lines = owners[info.linedefined]
-            if not lines then
-                lines = {}
-                owners[info.linedefined] = lines
-            end
-            lines[line] = true
-        end
-    end
-    -- The hits, one "<source>\\t<linedefined>\\t<line>,<line>..." line per function that ran.
-    function __coverage()
-        local out = {}
-        for source, owners in pairs(hits) do
-            for owner, lines in pairs(owners) do
-                local list = {}
-                for line in pairs(lines) do list[#list + 1] = line end
-                out[#out + 1] = source .. "\\t" .. owner .. "\\t" .. table.concat(list, ",")
-            end
-        end
-        return table.concat(out, "\\n")
-    end
-    -- Status per test: 1 passed, 0 failed, 2 pending.
+    -- Status per test: 1 passed, 0 failed, 2 pending. With __coverageOn, the addons' files the
+    -- tests load are instrumented (COVERAGE_LUA, tools/lib/coverage.mjs).
     function __run(selected)
-        if __coverageOn then debug.sethook(Hook, "l") end
+        if __coverageOn then __coverageStart() end
         local lines = {}
         for _, t in ipairs(tests) do
             if selected[t.name] then
@@ -105,7 +75,7 @@ const PRELUDE = `
                 lines[#lines + 1] = status .. "\\t" .. escape(t.name) .. "\\t" .. detail
             end
         end
-        debug.sethook()
+        if __coverageOn then __coverageStop() end
         return table.concat(lines, "\\n")
     end
 `;
@@ -123,8 +93,13 @@ const ready = () => parentPort.postMessage({ ready: true });
 async function runLua(job, snapshot) {
     const label = basename(job.file);
     let coverage = "";
+    const counter = job.coverage ? createCoverage() : null;
     const results = await withHarness(snapshot, async (lua) => {
         await lua.doString(PRELUDE);
+        if (counter) {
+            lua.ctx.__instrument = (source, chunkName) => counter.instrument(source, chunkName);
+            await lua.doString(COVERAGE_LUA);
+        }
         await lua.doString(readFileSync(job.file, "utf8"));
         const names = ((await lua.doString("return __names()")) ?? "").split("\n").filter(Boolean).map(unescape);
         const selected = names.filter((name) => matches(job.filter, label, name));
@@ -133,7 +108,7 @@ async function runLua(job, snapshot) {
         lua.ctx.__selected = Object.fromEntries(selected.map((name) => [name, true]));
         lua.ctx.__coverageOn = job.coverage === true;
         const encoded = await lua.doString("return __run(__selected)");
-        if (job.coverage) coverage = (await lua.doString("return __coverage()")) ?? "";
+        if (counter) coverage = counter.hitsText(await lua.doString("return __coverageHits()"));
         return encoded ? encoded.split("\n").map((line) => {
             const [status, name, err] = line.split("\t");
             return { ok: status !== "0", pending: status === "2", name: unescape(name), err: unescape(err ?? "") };

@@ -5,7 +5,9 @@
 //   PARSE     every .lua parses as Lua 5.1.
 //   TOC       the TOC lists every .lua in the addon folder, once, and only files that exist; every
 //             dependency (## Dependencies, ## RequiredDeps, ## Dep*) is an addon here; ## Interface
-//             (a comma-separated list) includes the installed Forever client's; a top-level folder
+//             (a comma-separated list) includes the installed Forever client's, or without an
+//             install the one the API snapshot's build implies (1.60.1 is 16001), and check
+//             says which it used; a top-level folder
 //             with a .toc but no <Name>_Camelot.toc is reported (the client won't load it).
 //   GLOBAL    a global read names something the client dump or a loaded addon defines (also via
 //             _G.X, getfenv().X and getglobal("X")). A global write is declared: SavedVariables,
@@ -78,7 +80,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { checkLua } from "../lib/check-lua.mjs";
 import { findAddons, findMisnamedAddons, readForbidden, repoRoot, splitList, toPosix } from "../lib/repo.mjs";
-import { DEFAULT_WOW_ROOT, findForeverInstall } from "../lib/wow.mjs";
+import { DEFAULT_WOW_ROOT, buildOf, findForeverInstall, interfaceOf } from "../lib/wow.mjs";
 
 export const options = {
     quiet: { type: "boolean", default: false },
@@ -153,6 +155,7 @@ export function loadApi(path = join(repoRoot, "tools", "api", "forever.json")) {
     }
     for (const name of Object.keys(readForbidden())) forbiddenFunctions.set(name, "in-game evidence in tools/api/forbidden.json");
     return {
+        build: buildOf(snapshot.source?.globals),
         hasDump, globals, members, functions: snapshot.functions, events: new Set(Object.keys(snapshot.events)),
         eventEntries: snapshot.events, methodSecrets, aspectSetters, protectedMethods, restrictedMethods, protectedFunctions,
         forbiddenFunctions,
@@ -170,9 +173,23 @@ function checkStyle(text, file, report) {
     if (lines > MAX_LINES) report(file, MAX_LINES, "LENGTH", `${lines} lines exceeds ${MAX_LINES}`);
 }
 
+// The interface every TOC's ## Interface must include, and what it came from: the installed
+// client's (wowRoot), else the one the API snapshot's build implies (so the check runs where no
+// client is, as in CI), else none. { interface, source, label } or { interface: null, source }.
+export function expectedInterface(wowRoot, api) {
+    try {
+        const install = findForeverInstall(wowRoot);
+        return { interface: install.interface, source: `the installed client ${install.version}`, label: "the installed client" };
+    } catch {
+        const value = api.build ? interfaceOf(api.build) : null;
+        if (value === null) return { interface: null, source: "no client found and no build in the API snapshot" };
+        return { interface: value, source: `no client found; the API snapshot's build ${api.build}`, label: "the API snapshot's client" };
+    }
+}
+
 // Returns the findings (empty when every gate passes). root and clientInterface exist for the
 // gate's own tests, which run it over fixture addons; wowRoot is the install to read the client
-// interface from (deploy passes its --wow-root).
+// interface from (deploy passes its --wow-root), and apiPath the API snapshot.
 export async function runChecks({ quiet = false, root = repoRoot, clientInterface, wowRoot = DEFAULT_WOW_ROOT, apiPath } = {}) {
     const findings = [];
     const report = (file, line, rule, message) => findings.push(`${toPosix(relative(root, file))}:${line}: ${rule} ${message}`);
@@ -180,14 +197,14 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
     const addons = findAddons(root);
     const byName = new Map(addons.map((addon) => [addon.name, addon]));
 
-    if (clientInterface === undefined) {
-        try {
-            clientInterface = findForeverInstall(wowRoot).interface;
-        } catch {
-            clientInterface = null;
-        }
+    const expected = clientInterface === undefined
+        ? expectedInterface(wowRoot, api)
+        : { interface: clientInterface, source: "given", label: "the installed client" };
+    if (!quiet) {
+        console.log(expected.interface === null
+            ? `Interface check skipped (${expected.source})`
+            : `Interface check against ${expected.interface} (${expected.source})`);
     }
-    if (clientInterface === null && !quiet) console.log("Interface check skipped (no client found)");
 
     for (const name of findMisnamedAddons(root)) {
         const toc = readdirSync(join(root, name)).find((f) => f.toLowerCase().endsWith(".toc"));
@@ -206,8 +223,8 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
         const { dir, tocPath, metadata, files, dependencies } = addon;
         checkStyle(readFileSync(tocPath, "utf8"), tocPath, report);
         const interfaces = splitList(metadata.Interface).map(Number);
-        if (clientInterface && !interfaces.includes(clientInterface)) {
-            report(tocPath, 1, "TOC", `## Interface ${metadata.Interface} but the installed client is ${clientInterface}`);
+        if (expected.interface !== null && !interfaces.includes(expected.interface)) {
+            report(tocPath, 1, "TOC", `## Interface ${metadata.Interface} but ${expected.label} is ${expected.interface}`);
         }
         for (const dependency of dependencies) {
             if (!byName.has(dependency)) report(tocPath, 1, "TOC", `dependency ${dependency} is not an addon in this repository`);

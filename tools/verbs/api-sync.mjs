@@ -33,7 +33,7 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { findAddons, repoRoot } from "../lib/repo.mjs";
 import { createLua } from "../lib/lua.mjs";
-import { buildOf } from "../lib/probes.mjs";
+import { buildOf } from "../lib/wow.mjs";
 
 export const options = {
     docs: { type: "string" },

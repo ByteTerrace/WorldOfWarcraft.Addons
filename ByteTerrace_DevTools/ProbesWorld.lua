@@ -9,6 +9,7 @@ local addonName, ns = ...
 -- Every texture the addons draw (TheLanKrewToolKit's views, cards and ScholarPictures' ItemIcons),
 -- for textures.used; keep it in step with those files. MissingTexture names no file, so its
 -- answer shows what a missing file looks like.
+local MissingTexture = "Interface\\ByteTerrace\\NoSuchTexture"
 local TexturePaths = {
     "Interface\\Buttons\\WHITE8X8",
     "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -44,15 +45,14 @@ local TexturePaths = {
     "Interface\\Icons\\INV_Mushroom_11",
     "Interface\\Icons\\INV_Misc_Gear_01",
 }
-local MissingTexture = "Interface\\ByteTerrace\\NoSuchTexture"
 
 -- The labelStyle values ByteTerrace_Core/Input.lua has labels for (its Labels table).
-local KnownLabelStyles = { Letters = true, Shapes = true, Reverse = true }
+local KnownLabelStyles = { Letters = true, Reverse = true, Shapes = true }
 
 local Probes = ns.Probes
-local Marker, Value, Shape, Text = Probes.Marker, Probes.Value, Probes.Shape, Probes.Text
 local Byte, Fields, Joined = Probes.Byte, Probes.Fields, Probes.Joined
 local FirstBagItem = Probes.FirstBagItem
+local Marker, Shape, Text, Value = Probes.Marker, Probes.Shape, Probes.Text, Probes.Value
 
 -- textures.used's frame (made on its first run) and its texture per path.
 local TextureFrame
@@ -62,8 +62,10 @@ local Textures = {}
 -- came before it.
 local function FirstQuest()
     local sawHeader = false
+
     for i = 1, C_QuestLog.GetNumQuestLogEntries() do
         local info = C_QuestLog.GetInfo(i)
+
         if info and info.isHeader then
             sawHeader = true
         elseif info then
@@ -78,9 +80,10 @@ end
 local function QuestIdentity()
     local questID = GetQuestID()
     local questNpc = UnitName("questnpc") -- secret: recorded by Shape as a marker
+
     return {
         questID = Shape(questID), questNpcName = Shape(questNpc),
-        hasQuestID = not issecretvalue(questID) and type(questID) == "number" and questID > 0,
+        hasQuestID = (not issecretvalue(questID) and (type(questID) == "number") and (questID > 0)),
     }
 end
 
@@ -92,13 +95,14 @@ local function Sign(value)
     elseif type(value) ~= "number" then
         return type(value)
     end
-    return value > 0 and "positive" or value < 0 and "negative" or "zero"
+    return (((value > 0) and "positive") or ((value < 0) and "negative") or "zero")
 end
 
 -- What SetTexture answers for a path on a hidden texture of its own, and what the texture reports
 -- afterwards.
 local function TextureAnswer(path)
     local texture = Textures[path]
+
     if not texture then
         if not TextureFrame then
             TextureFrame = CreateFrame("Frame")
@@ -109,9 +113,10 @@ local function TextureAnswer(path)
     end
     local set = texture:SetTexture(path)
     local fileID = texture:GetTextureFileID()
+
     return {
         set = Value(set), fileID = Shape(fileID),
-        hasFileID = not issecretvalue(fileID) and type(fileID) == "number" and fileID ~= 0,
+        hasFileID = (not issecretvalue(fileID) and (type(fileID) == "number") and (fileID ~= 0)),
         filePath = Text(texture:GetTextureFilePath()),
     }
 end
@@ -122,9 +127,10 @@ Probes.Define({
         needs = {},
         run = function()
             local info = ChatTypeInfo.RAID_WARNING
+
             return {
                 r = Byte(info.r), g = Byte(info.g), b = Byte(info.b), sticky = Value(info.sticky),
-                hasMetatable = getmetatable(ChatTypeInfo) ~= nil,
+                hasMetatable = (getmetatable(ChatTypeInfo) ~= nil),
             }
         end,
     },
@@ -133,8 +139,8 @@ Probes.Define({
         needs = { "enUS" },
         run = function()
             return {
-                COMBATLOG_HONORGAIN = COMBATLOG_HONORGAIN, COMBATLOG_HONORGAIN_NO_RANK = COMBATLOG_HONORGAIN_NO_RANK,
-                COMBATLOG_HONORAWARD = COMBATLOG_HONORAWARD,
+                COMBATLOG_HONORAWARD = COMBATLOG_HONORAWARD, COMBATLOG_HONORGAIN = COMBATLOG_HONORGAIN,
+                COMBATLOG_HONORGAIN_NO_RANK = COMBATLOG_HONORGAIN_NO_RANK,
             }
         end,
     },
@@ -143,6 +149,7 @@ Probes.Define({
         needs = {},
         run = function()
             local classes, colorStr = {}, {}
+
             for className, color in pairs(RAID_CLASS_COLORS) do
                 classes[#classes + 1] = className
                 colorStr[className] = Value(color.colorStr)
@@ -152,12 +159,12 @@ Probes.Define({
         end,
     },
     {
+        harness = "the harness has no font objects (ScholarView names them only as templates)",
         name = "fonts.scholar",
         needs = {},
-        harness = "the harness has no font objects (ScholarView names them only as templates)",
         run = function()
             local function ObjectType(font)
-                return type(font) == "table" and font:GetObjectType() or type(font)
+                return (((type(font) == "table") and font:GetObjectType()) or type(font))
             end
             return { Game18Font = ObjectType(Game18Font), Game24Font = ObjectType(Game24Font), Game30Font = ObjectType(Game30Font) }
         end,
@@ -168,9 +175,10 @@ Probes.Define({
         -- Both names are plain strings once the player can type (neither API has secret flags).
         run = function()
             local normalized, realm = GetNormalizedRealmName(), GetRealmName()
+
             return {
-                normalized = Shape(normalized), realm = Shape(realm), hasSpaceOrHyphen = normalized:find("[%s%-]") ~= nil,
-                isRealmWithoutSpacesOrHyphens = normalized == (realm:gsub("[%s%-]", "")),
+                normalized = Shape(normalized), realm = Shape(realm), hasSpaceOrHyphen = (normalized:find("[%s%-]") ~= nil),
+                isRealmWithoutSpacesOrHyphens = (normalized == (realm:gsub("[%s%-]", ""))),
             }
         end,
     },
@@ -179,10 +187,11 @@ Probes.Define({
         needs = {},
         run = function()
             local group, localized = UnitFactionGroup("player")
-            local known = group == "Alliance" or group == "Horde"
+            local known = ((group == "Alliance") or (group == "Horde"))
+
             return {
                 group = Shape(group), localized = Shape(localized), isAllianceOrHorde = known,
-                localizedIsGlobalString = known and localized == (group == "Alliance" and FACTION_ALLIANCE or FACTION_HORDE),
+                localizedIsGlobalString = (known and (localized == (((group == "Alliance") and FACTION_ALLIANCE) or FACTION_HORDE))),
             }
         end,
     },
@@ -191,6 +200,7 @@ Probes.Define({
         needs = { "guild" },
         run = function()
             local guildName, rankName, rankIndex, realm = GetGuildInfo("player")
+
             return { guildName = Shape(guildName), rankName = Shape(rankName), rankIndex = Shape(rankIndex), realm = Shape(realm) }
         end,
     },
@@ -199,13 +209,15 @@ Probes.Define({
         needs = { "openWorld" },
         run = function()
             local mapID = C_Map.GetBestMapForUnit("player")
-            local position = mapID and C_Map.GetPlayerMapPosition(mapID, "player")
+            local position = (mapID and C_Map.GetPlayerMapPosition(mapID, "player"))
             local result = { mapID = Shape(mapID), position = Shape(position), instanceType = Value(select(2, IsInInstance())) }
+
             if type(position) == "table" then
-                result.hasGetXY = type(position.GetXY) == "function"
+                result.hasGetXY = (type(position.GetXY) == "function")
                 if result.hasGetXY then
                     local x, y = position:GetXY()
-                    result.inUnitSquare = type(x) == "number" and type(y) == "number" and x >= 0 and x <= 1 and y >= 0 and y <= 1
+
+                    result.inUnitSquare = ((type(x) == "number") and (type(y) == "number") and (x >= 0) and (x <= 1) and (y >= 0) and (y <= 1))
                 end
             end
             return result
@@ -237,10 +249,11 @@ Probes.Define({
         needs = {},
         run = function()
             local voices = C_VoiceChat.GetTtsVoices()
-            local first = type(voices) == "table" and voices[1] or nil
+            local first = (((type(voices) == "table") and voices[1]) or nil)
+
             return {
-                voices = Shape(voices), hasVoices = first ~= nil, fields = first and Fields(first) or nil,
-                voiceID = first and Shape(first.voiceID) or nil, voiceName = first and Shape(first.name) or nil,
+                voices = Shape(voices), hasVoices = (first ~= nil), fields = ((first and Fields(first)) or nil),
+                voiceID = ((first and Shape(first.voiceID)) or nil), voiceName = ((first and Shape(first.name)) or nil),
             }
         end,
     },
@@ -249,8 +262,9 @@ Probes.Define({
         needs = {},
         run = function()
             local exhaustion = GetXPExhaustion()
-            local exhaustionShape = issecretvalue(exhaustion) and Marker(exhaustion)
-                or ((exhaustion == nil or type(exhaustion) == "number") and "number or nil" or type(exhaustion))
+            local exhaustionShape = ((issecretvalue(exhaustion) and Marker(exhaustion))
+                or ((((exhaustion == nil) or (type(exhaustion) == "number")) and "number or nil") or type(exhaustion)))
+
             return { xp = Shape(UnitXP("player")), xpMax = Shape(UnitXPMax("player")), exhaustion = exhaustionShape }
         end,
     },
@@ -272,6 +286,7 @@ Probes.Define({
         harness = "the harness doesn't know which files the client has",
         run = function()
             local known = C_UIFileAsset.IsKnownFile
+
             return {
                 addonLua = Value(known("Interface\\AddOns\\ByteTerrace_DevTools\\DevTools.lua")),
                 addonToc = Value(known("Interface\\AddOns\\ByteTerrace_DevTools\\ByteTerrace_DevTools_Camelot.toc")),
@@ -281,11 +296,12 @@ Probes.Define({
         end,
     },
     {
+        harness = "the harness doesn't know which texture files the client has",
         name = "textures.used",
         needs = {},
-        harness = "the harness doesn't know which texture files the client has",
         run = function()
             local result = { [MissingTexture] = TextureAnswer(MissingTexture) }
+
             for _, path in ipairs(TexturePaths) do
                 result[path] = TextureAnswer(path)
             end
@@ -312,6 +328,7 @@ Probes.Define({
         run = function()
             local result = QuestIdentity()
             local npc = UnitName("npc") -- secret: recorded by Shape as a marker
+
             result.npcName = Shape(npc)
             return result
         end,
@@ -327,7 +344,8 @@ Probes.Define({
         run = function()
             local numShownEntries, numQuests = C_QuestLog.GetNumQuestLogEntries()
             local info, _, sawHeader = FirstQuest()
-            local quest = info or {}
+            local quest = (info or {})
+
             return {
                 numShownEntries = Shape(numShownEntries), numQuests = Shape(numQuests), hasHeader = sawHeader,
                 info = Fields(info), isHeader = Shape(quest.isHeader), questID = Shape(quest.questID),
@@ -336,17 +354,19 @@ Probes.Define({
         end,
     },
     {
+        accumulates = true,
         name = "questLog.objectives",
         needs = { "questLog" },
-        accumulates = true,
         run = function()
             local first, types = nil, {}
+
             for i = 1, C_QuestLog.GetNumQuestLogEntries() do
                 local info = C_QuestLog.GetInfo(i)
+
                 if info and not info.isHeader then
                     for _, objective in ipairs(C_QuestLog.GetQuestObjectives(info.questID) or {}) do
-                        first = first or objective
-                        if not issecretvalue(objective.type) and type(objective.type) == "string" then
+                        first = (first or objective)
+                        if not issecretvalue(objective.type) and (type(objective.type) == "string") then
                             types[objective.type] = true
                         end
                     end
@@ -370,13 +390,16 @@ Probes.Define({
         accumulates = true,
         run = function()
             local forms = {}
+
             for i = 1, C_QuestLog.GetNumQuestLogEntries() do
                 local info = C_QuestLog.GetInfo(i)
+
                 if info and not info.isHeader then
                     for _, objective in ipairs(C_QuestLog.GetQuestObjectives(info.questID) or {}) do
                         local text = objective.text
-                        if not issecretvalue(text) and type(text) == "string" then
-                            forms[text:find("^%d+/%d+ ") and "leading" or text:find(": %d+/%d+$") and "trailing"
+
+                        if not issecretvalue(text) and (type(text) == "string") then
+                            forms[(text:find("^%d+/%d+ ") and "leading") or (text:find(": %d+/%d+$") and "trailing")
                                 or "none"] = true
                         end
                     end
@@ -390,11 +413,13 @@ Probes.Define({
         needs = { "questLog" },
         run = function()
             local info, index = FirstQuest()
+
             if not info then
                 return { quest = "none" }
             end
             -- The log index form, as QuestMapFrame calls it: it doesn't touch the selected quest.
             local description, objectives = GetQuestLogQuestText(index)
+
             return {
                 description = Text(description), objectives = Text(objectives),
                 titleForQuestID = Text(C_QuestLog.GetTitleForQuestID(info.questID)),
@@ -412,7 +437,8 @@ Probes.Define({
                 fields = Fields(info), itemID = Shape(itemID), stackCount = Shape(info.stackCount),
                 hyperlink = Text(info.hyperlink), itemName = Text(info.itemName), iconFileID = Shape(info.iconFileID),
             }
-            if issecretvalue(itemID) or type(itemID) ~= "number" then
+
+            if issecretvalue(itemID) or (type(itemID) ~= "number") then
                 return result
             end
             result.maxStackSize = Shape(C_Item.GetItemMaxStackSizeByID(itemID))
@@ -427,7 +453,8 @@ Probes.Define({
         needs = { "merchant" },
         run = function()
             local info = C_MerchantFrame.GetItemInfo(1)
-            local item = type(info) == "table" and info or {}
+            local item = (((type(info) == "table") and info) or {})
+
             return {
                 numItems = Shape(GetMerchantNumItems()), info = Shape(info), fields = Fields(info), name = Text(item.name),
                 price = Shape(item.price), stackCount = Shape(item.stackCount), numAvailable = Shape(item.numAvailable),
@@ -445,21 +472,25 @@ Probes.Define({
         run = function()
             local count = GetNumTrainerServices()
             local serviceTypes, available = {}, nil
-            if not issecretvalue(count) and type(count) == "number" then
+
+            if not issecretvalue(count) and (type(count) == "number") then
                 for i = 1, count do
                     local _, serviceType = GetTrainerServiceInfo(i)
-                    if not issecretvalue(serviceType) and type(serviceType) == "string" then
+
+                    if not issecretvalue(serviceType) and (type(serviceType) == "string") then
                         serviceTypes[serviceType] = true
-                        available = available or (serviceType == "available" and i or nil)
+                        available = (available or (((serviceType == "available") and i) or nil))
                     end
                 end
             end
             local result = { count = Shape(count), serviceTypes = Joined(serviceTypes),
                 greeting = Text(GetTrainerGreetingText()), isTradeskill = Shape(IsTradeskillTrainer()),
-                trainerType = Shape(C_Trainer.GetTrainerType()), hasAvailable = available ~= nil }
+                trainerType = Shape(C_Trainer.GetTrainerType()), hasAvailable = (available ~= nil) }
+
             if available then
                 local name, _, texture, reqLevel, subText, category = GetTrainerServiceInfo(available)
                 local moneyCost, isProfession = GetTrainerServiceCost(available)
+
                 result.name, result.texture, result.reqLevel = Text(name), Shape(texture), Shape(reqLevel)
                 result.subText, result.category = Text(subText), Shape(category)
                 result.moneyCost, result.isProfession = Shape(moneyCost), Shape(isProfession)
@@ -474,18 +505,19 @@ Probes.Define({
         run = function()
             local deviceID = C_GamePad.GetActiveDeviceID()
             local state = C_GamePad.GetDeviceMappedState(deviceID)
-            local style = type(state) == "table" and state.labelStyle or nil
-            local known = not issecretvalue(style) and type(style) == "string" and KnownLabelStyles[style] == true
+            local style = (((type(state) == "table") and state.labelStyle) or nil)
+            local known = (not issecretvalue(style) and (type(style) == "string") and (KnownLabelStyles[style] == true))
+
             return {
                 deviceID = Shape(deviceID), state = Shape(state), fields = Fields(state), labelStyle = Text(style),
-                isKnownLabelStyle = known, unknownLabelStyle = not known and Value(style) or nil,
+                isKnownLabelStyle = known, unknownLabelStyle = ((not known and Value(style)) or nil),
             }
         end,
     },
     {
+        harness = "the harness doesn't fake IsGamePadFreelookEnabled or C_GamePad.IsEnabled",
         name = "gamePad.settings",
         needs = { "controller" },
-        harness = "the harness doesn't fake IsGamePadFreelookEnabled or C_GamePad.IsEnabled",
         run = function()
             return { freelook = Shape(IsGamePadFreelookEnabled()), enabled = Shape(C_GamePad.IsEnabled()) }
         end,

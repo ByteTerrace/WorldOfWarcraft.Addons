@@ -17,7 +17,7 @@ ByteTerrace World of Warcraft addons for **WoW: Forever** (TOC `_Camelot.toc`, M
 6. **Supergreen.** Nothing has shipped. Rename, reshape and delete freely, and update every caller in the same change. No compat shims or migration code. The one exception is data safety: the state loader resets invalid saved values but never deletes keys it doesn't recognize, because a module that failed to load must not lose its settings.
 7. **Automation is CLI verbs.** Add a verb to `tools/tlk.mjs`; never add a loose script. Pin dependency versions.
 8. **Docs state current behavior in the present tense.** No dates, build numbers or commit SHAs in docs; evidence belongs in commit messages. Update every doc, comment and test that describes a change, in the same change.
-9. **Puck's conventions, in Lua.** Naming, layout and comments follow [the conventions](docs/Conventions.md): PascalCase constants, functions and public members, camelCase locals, `m_` private fields, a contract header per file, `---` doc comments on public API, and no banner, debt or history comments. `check`'s NAMING and COMMENT rules enforce the mechanical part.
+9. **Puck's conventions, in Lua.** Naming, layout and comments follow [the conventions](docs/Conventions.md): PascalCase constants, functions and public members, camelCase locals, `m_` private fields, a contract header per file, `---` doc comments on public API, and no banner, debt or history comments. `check`'s NAMING, COMMENT and FORMAT rules enforce the mechanical part; `node tools/tlk.mjs format` writes the formatting.
 10. **LF everywhere** (`.gitattributes`, `.editorconfig`). Never investigate or work around line endings.
 
 ## Reporting

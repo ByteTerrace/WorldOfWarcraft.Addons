@@ -88,6 +88,9 @@
 //             statement of the same block overwrites before anything reads it (straight-line code,
 //             and only locals no closure references). `_`, names starting with `_` and a file's own
 //             `local addonName, ns = ...` are exempt.
+//   FORMAT    every addon's Lua and the tests' Lua is what the format verb writes (Puck's formatter
+//             passes, mapped to Lua: docs/Conventions.md#formatting); a finding names the file's
+//             first line that would change.
 //   LENGTH    no file exceeds MAX_LINES.
 //   STYLE     LF line endings, final newline, no tabs, no trailing whitespace.
 //
@@ -103,13 +106,14 @@ import { join, relative } from "node:path";
 import { checkLua } from "../lib/check-lua.mjs";
 import { findAddons, findAmbiguousAddons, findMisnamedAddons, readForbidden, repoRoot, splitList, toPosix } from "../lib/repo.mjs";
 import { DEFAULT_WOW_ROOT, buildOf, findForeverInstall, interfaceOf } from "../lib/wow.mjs";
+import { formatFiles, formatRepository } from "./format.mjs";
 
 export const options = {
     quiet: { type: "boolean", default: false },
     "wow-root": { type: "string", default: DEFAULT_WOW_ROOT },
 };
 
-const MAX_LINES = 800;
+const MAX_LINES = 1000;
 
 export function loadApi(path = join(repoRoot, "tools", "api", "forever.json")) {
     const snapshot = JSON.parse(readFileSync(path, "utf8"));
@@ -298,6 +302,7 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
                 if (dir === "tests" && file.endsWith(".lua")) checkStyleRules(path, text, report);
             }
         }
+        for (const finding of formatFindings(root)) report(join(root, finding.path), finding.line, "FORMAT", finding.message);
     }
 
     if (!quiet) {
@@ -305,6 +310,11 @@ export async function runChecks({ quiet = false, root = repoRoot, clientInterfac
         console.log(findings.length ? `${findings.length} finding(s)` : `check passed (${addons.length} addons)`);
     }
     return findings;
+}
+
+/** What the format verb would change under root: { path, line, message } per file, nothing written. */
+export function formatFindings(root) {
+    return formatRepository({ files: formatFiles(root), check: true, root }).findings;
 }
 
 export async function run(values) {

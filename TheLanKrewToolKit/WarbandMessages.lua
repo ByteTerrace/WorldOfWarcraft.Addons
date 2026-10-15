@@ -17,41 +17,43 @@ local addonName, ns = ...
 --   Warband.DisableMessages()   forgets the pending sync when Warband stops
 
 local MaxIntel = 999          -- the largest gathering accepted from a message
-local SyncCount = 3           -- your own marks (and wars) shared with Krew members who join
-local SyncAge = 7 * 24 * 3600 -- seconds: older marks and wars aren't shared with one who joins
-local SyncDelay = 2           -- seconds that gather a burst of hellos into one sync
 local MaxMessage = ByteTerrace.Comms.MaxMessage
+local SyncAge = ((7 * 24) * 3600) -- seconds: older marks and wars aren't shared with one who joins
+local SyncCount = 3           -- your own marks (and wars) shared with Krew members who join
+local SyncDelay = 2           -- seconds that gather a burst of hellos into one sync
 
+local concat, sort = table.concat, table.sort
 local GetServerTime, SOUNDKIT = GetServerTime, SOUNDKIT
 local ipairs, min = ipairs, math.min
-local concat, sort = table.concat, table.sort
 
-local Warband = ns.Warband
-local MyKey, GuildName, ValidKey, ValidGuildKey = Warband.MyKey, Warband.GuildName, Warband.ValidKey, Warband.ValidGuildKey
-local CleanFaction, InfoFields, InfoFrom = Warband.CleanFaction, Warband.InfoFields, Warband.InfoFrom
-local Where, SetWaypoint = Warband.Where, Warband.SetWaypoint
-local Status, Score, Known, Describe = Warband.Status, Warband.Score, Warband.Known, Warband.Describe
-local Remember, CountDeath, SetKind = Warband.Remember, Warband.CountDeath, Warband.SetKind
-local Avenge, HeardSighting, FreshGathering = Warband.Avenge, Warband.HeardSighting, Warband.FreshGathering
-local CleanText, CleanCount = ns.KrewFields.CleanText, ns.KrewFields.CleanCount
 local Addon = ns.Addon
-local Krew, ShowCard, Alert = ns.Krew, ns.Cards.Show, ns.Cards.Alert
-local WarbandModule, Ledger, Wars = Warband.Module, Warband.Ledger, Warband.Wars
+local Alert, Krew, ShowCard = ns.Cards.Alert, ns.Krew, ns.Cards.Show
+local CleanCount, CleanText = ns.KrewFields.CleanCount, ns.KrewFields.CleanText
+local Warband = ns.Warband
+local Avenge, FreshGathering, HeardSighting = Warband.Avenge, Warband.FreshGathering, Warband.HeardSighting
+local CleanFaction, InfoFields, InfoFrom = Warband.CleanFaction, Warband.InfoFields, Warband.InfoFrom
+local CountDeath, Remember, SetKind = Warband.CountDeath, Warband.Remember, Warband.SetKind
+local Describe, Known, Score, Status = Warband.Describe, Warband.Known, Warband.Score, Warband.Status
+local GuildName, MyKey, ValidGuildKey, ValidKey = Warband.GuildName, Warband.MyKey, Warband.ValidGuildKey, Warband.ValidKey
+local Ledger, WarbandModule, Wars = Warband.Ledger, Warband.Module, Warband.Wars
+local SetWaypoint, Where = Warband.SetWaypoint, Warband.Where
 
 local SyncTimer -- pending timer that answers a burst of hellos with one sync
 
 -- Sends entries as kind's messages, as many entries to a message as fit in MaxMessage bytes.
 local function SendPacked(kind, entries)
-    local room = MaxMessage - #kind - 1 -- "KIND:"
+    local room = ((MaxMessage - #kind) - 1) -- "KIND:"
     local fields, left = {}, room
+
     for _, entry in ipairs(entries) do
-        local size = #fields > 0 and #entry + 1 or #entry -- a tab before every entry but the first
+        local size = (((#fields > 0) and (#entry + 1)) or #entry) -- a tab before every entry but the first
+
         if size > left then
             Krew:Send(kind, fields)
             fields, left, size = {}, room, #entry
         end
         fields[#fields + 1] = entry
-        left = left - size
+        left = (left - size)
     end
     if #fields > 0 then
         Krew:Send(kind, fields)
@@ -63,28 +65,32 @@ end
 local function Sync()
     SyncTimer = nil
     local me, now = MyKey(), GetServerTime()
+
     local function Recent(collection, predicate)
         local found = {}
+
         for _, key in ipairs(collection:Keys()) do
-            if collection:Field(key, "by") == me and now - collection:Field(key, "since") <= SyncAge
+            if (collection:Field(key, "by") == me) and ((now - collection:Field(key, "since")) <= SyncAge)
                 and (not predicate or predicate(key)) then
                 found[#found + 1] = key
             end
         end
         sort(found, function(a, b)
-            return collection:Field(a, "since") > collection:Field(b, "since")
+            return (collection:Field(a, "since") > collection:Field(b, "since"))
         end)
         return found
     end
     local marks = Recent(Ledger, function(key)
-        return Ledger:Field(key, "kind") == "mark"
+        return (Ledger:Field(key, "kind") == "mark")
     end)
     local entries = {}
+
     for i = 1, min(SyncCount, #marks) do
         entries[i] = concat(InfoFields(Known(marks[i])), ";")
     end
     SendPacked("MARKS", entries)
     local declared = Recent(Wars)
+
     for i = SyncCount + 1, #declared do
         declared[i] = nil
     end
@@ -94,43 +100,48 @@ end
 -- A mark from the Krew: fields are key, class, level and faction (InfoFrom).
 local function HeardMark(sender, fields)
     local info = InfoFrom(fields)
+
     if not info then
         return
     end
-    local known = Status(info.key) == "mark"
+    local known = (Status(info.key) == "mark")
+
     Remember(info.key, info)
     if known or not SetKind(info.key, "mark", sender) then
         return -- a mark synced again when someone joins, or a full ledger
     end
     ShowCard({ icon = "Interface\\Icons\\Ability_Hunter_MarkedForDeath", sound = SOUNDKIT.RAID_WARNING,
-        title = "Marked for death", body = sender .. " marked " .. Describe(info.key) .. ". Hunt them down." })
+        title = "Marked for death", body = (sender .. " marked " .. Describe(info.key) .. ". Hunt them down.") })
 end
 
 -- A war the Krew declared on a guild key.
 local function HeardWar(sender, field)
-    local guild = ValidGuildKey(field) and field
+    local guild = (ValidGuildKey(field) and field)
+
     if not guild or Wars:Has(guild) then
         return
     end
     Wars:Set(guild, { by = sender, since = GetServerTime() })
     ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
-        title = "War!", body = sender .. " declared war on <" .. GuildName(guild) .. ">. Every member is an enemy of the Krew." })
+        title = "War!", body = (sender .. " declared war on <" .. GuildName(guild) .. ">. Every member is an enemy of the Krew.") })
 end
 
 --- Owns the Warband message subscriptions. Called by OnEnable.
 function Warband.EnableMessages()
     WarbandModule:Listen(Krew, "GRUDGE", function(sender, fields)
         local info = InfoFrom(fields)
+
         if not info then
             return
         end
         local key = info.key
+
         Remember(key, info)
         SetKind(key, "grudge")
         if fields[5] == "1" then
             CountDeath(key)
             ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_Rampage", sound = SOUNDKIT.RAID_WARNING,
-                title = key .. " killed " .. sender .. "!", body = "The Krew remembers. " .. Score(key) })
+                title = (key .. " killed " .. sender .. "!"), body = ("The Krew remembers. " .. Score(key)) })
         end
     end)
 
@@ -139,6 +150,7 @@ function Warband.EnableMessages()
     WarbandModule:Listen(Krew, "MARKS", function(sender, fields)
         for i = 1, #fields do
             local key, class, level, faction = fields[i]:match("^([^;]*);([^;]*);([^;]*);([^;]*)$")
+
             if key then
                 HeardMark(sender, { key, class, level, faction })
             end
@@ -146,22 +158,25 @@ function Warband.EnableMessages()
     end)
 
     WarbandModule:Listen(Krew, "UNMARK", function(_, fields)
-        local key = ValidKey(fields[1]) and fields[1]
-        if key and Status(key) == "mark" then
+        local key = (ValidKey(fields[1]) and fields[1])
+
+        if key and (Status(key) == "mark") then
             Ledger:Set(key, { kind = "grudge" })
         end
     end)
 
     WarbandModule:Listen(Krew, "GLORY", function(sender, fields)
         local info = InfoFrom(fields)
+
         if not info then
             return
         end
-        local known = Status(info.key) == "glory"
+        local known = (Status(info.key) == "glory")
+
         Remember(info.key, info)
         if SetKind(info.key, "glory", sender) and not known then
             ShowCard({ icon = "Interface\\Icons\\Achievement_PVP_H_01", sound = SOUNDKIT.LFG_REWARDS,
-                title = "A champion of the Krew", body = sender .. " granted glory to " .. Describe(info.key) .. ". Aid them when you see them." })
+                title = "A champion of the Krew", body = (sender .. " granted glory to " .. Describe(info.key) .. ". Aid them when you see them.") })
         end
     end)
 
@@ -176,15 +191,17 @@ function Warband.EnableMessages()
     end)
 
     WarbandModule:Listen(Krew, "PEACE", function(_, fields)
-        local guild = ValidGuildKey(fields[1]) and fields[1]
+        local guild = (ValidGuildKey(fields[1]) and fields[1])
+
         if guild then
             Wars:Remove(guild)
         end
     end)
 
     WarbandModule:Listen(Krew, "SIGHT", function(sender, fields)
-        local key = ValidKey(fields[1]) and fields[1]
-        local status = key and Status(key)
+        local key = (ValidKey(fields[1]) and fields[1])
+        local status = (key and Status(key))
+
         if not status then
             return
         end
@@ -193,6 +210,7 @@ function Warband.EnableMessages()
             return
         end
         local where = Where(CleanText(fields[2]), CleanText(fields[3]))
+
         if status == "glory" then
             Alert(sender .. ": champion " .. key .. " needs aid at " .. where .. "!", SOUNDKIT.READY_CHECK)
         else
@@ -201,7 +219,8 @@ function Warband.EnableMessages()
     end)
 
     WarbandModule:Listen(Krew, "KILL", function(sender, fields)
-        local key = ValidKey(fields[1]) and fields[1]
+        local key = (ValidKey(fields[1]) and fields[1])
+
         if key then
             Avenge(key, sender)
         end
@@ -209,6 +228,7 @@ function Warband.EnableMessages()
 
     WarbandModule:Listen(Krew, "RALLY", function(sender, fields)
         local where = Where(CleanText(fields[4]), CleanText(fields[5]))
+
         Alert("|cffff2020RALLY!|r " .. sender .. " needs the Krew at " .. where .. "!", SOUNDKIT.READY_CHECK)
         if WarbandModule:Get("rallyWaypoint") and SetWaypoint(fields[1], fields[2], fields[3]) then
             Addon:Print("Waypoint set to " .. sender .. "'s rally.")
@@ -219,17 +239,20 @@ function Warband.EnableMessages()
     -- you don't report it again (Warband.FreshGathering).
     WarbandModule:Listen(Krew, "INTEL", function(sender, fields)
         local count = CleanCount(fields[1], MaxIntel)
+
         if not count then
             return
         end
         local zone, subZone = CleanText(fields[6]), CleanText(fields[7])
+
         if not FreshGathering(zone, subZone) then
             return
         end
         local faction, mapID, x, y = CleanFaction(fields[2]), fields[3], fields[4], fields[5]
+
         ShowCard({ icon = "Interface\\Icons\\Ability_Hunter_SniperShot", sound = SOUNDKIT.RAID_WARNING,
             title = "Enemy gathering",
-            body = sender .. " sees " .. count .. " " .. (faction ~= "" and faction or "enemy") .. " players at " .. Where(zone, subZone) .. ". Click for a waypoint.",
+            body = (sender .. " sees " .. count .. " " .. (((faction ~= "") and faction) or "enemy") .. " players at " .. Where(zone, subZone) .. ". Click for a waypoint."),
             onClick = WarbandModule:Callback(SetWaypoint, mapID, x, y) })
     end)
 

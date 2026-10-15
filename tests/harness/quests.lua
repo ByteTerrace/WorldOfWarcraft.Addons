@@ -81,15 +81,16 @@ end
 
 -- A quest spec with its stand-ins filled in, as a fresh table.
 local function FillQuest(spec)
-    QuestSerial = QuestSerial + 1
+    QuestSerial = (QuestSerial + 1)
     local quest = {
-        id = spec.id or 1000 + QuestSerial, title = spec.title or ("Quest " .. QuestSerial),
-        text = spec.text or "Help us, hero.", goal = spec.goal or "Do what is asked.",
-        header = spec.header or "Elwynn Forest", level = spec.level or 5, objectives = {},
+        goal = (spec.goal or "Do what is asked."), header = (spec.header or "Elwynn Forest"),
+        id = (spec.id or (1000 + QuestSerial)), level = (spec.level or 5), objectives = {},
+        text = (spec.text or "Help us, hero."), title = (spec.title or ("Quest " .. QuestSerial)),
     }
+
     for i, objective in ipairs(spec.objectives or {}) do
-        quest.objectives[i] = { text = objective.text, required = objective.required or 1, type = objective.type or "item",
-            uncached = objective.uncached == true }
+        quest.objectives[i] = { required = (objective.required or 1), text = objective.text,
+            type = (objective.type or "item"), uncached = (objective.uncached == true) }
     end
     return quest
 end
@@ -97,12 +98,14 @@ end
 -- The log's entries as the client lists them: each header, then its quests.
 local function Entries(h)
     local entries, headers, order = {}, {}, {}
+
     for _, quest in ipairs(h.questLog) do
         if not headers[quest.header] then
             headers[quest.header] = {}
             order[#order + 1] = quest.header
         end
         local list = headers[quest.header]
+
         list[#list + 1] = quest
     end
     for _, header in ipairs(order) do
@@ -124,6 +127,7 @@ end
 
 local function Info(entry, index)
     local info = {}
+
     for key, value in pairs(QuestInfoFields) do
         info[key] = value
     end
@@ -142,17 +146,20 @@ local ObjectiveFormats = { monster = "QUEST_MONSTERS_KILLED", object = "QUEST_OB
 -- format with its positional conversions ("%2$d/%3$d %1$s") filled from the arguments.
 local function FormatPositional(format, ...)
     local args, position = { ... }, 0
+
     return (format:gsub("%%(%d*)%$?([sd])", function(index)
-        position = position + 1
+        position = (position + 1)
         return tostring(args[tonumber(index) or position])
     end))
 end
 
 local function Objectives(h, quest)
     local list = {}
+
     for i, objective in ipairs(quest.objectives) do
         local format = rawget(h.env, ObjectiveFormats[objective.type] or "QUEST_ITEMS_NEEDED")
-        local name = objective.uncached and "" or objective.text -- an unloaded name is empty
+        local name = ((objective.uncached and "") or objective.text) -- an unloaded name is empty
+
         list[i] = {
             text = FormatPositional(format, name, 0, objective.required), type = objective.type,
             finished = false, numFulfilled = 0, numRequired = objective.required,
@@ -163,6 +170,7 @@ end
 
 local function SetPanel(h, panel)
     local env = h.env
+
     h:SetWidgetShown(rawget(env, "QuestFrame"), panel ~= nil)
     h:SetWidgetShown(rawget(env, "QuestFrameDetailPanel"), panel == "detail")
     h:SetWidgetShown(rawget(env, "QuestFrameRewardPanel"), panel == "reward")
@@ -170,7 +178,8 @@ end
 
 local function OpenDialog(h, dialog, giver)
     h.questDialog = dialog
-    local unit = Harness.FillUnit(type(giver) == "table" and giver or { name = giver or "Marshal Dughan", level = 30 })
+    local unit = Harness.FillUnit(((type(giver) == "table") and giver) or { level = 30, name = (giver or "Marshal Dughan") })
+
     h.units.questnpc, h.units.npc = unit, unit
     SetPanel(h, dialog.panel)
 end
@@ -200,7 +209,8 @@ end
 --- Accepts the open offer: the quest joins the log and the dialog closes.
 function Harness:AcceptQuest()
     local dialog = self.questDialog
-    assert(dialog and dialog.panel == "detail", "AcceptQuest: no quest offer is open")
+
+    assert(dialog and (dialog.panel == "detail"), "AcceptQuest: no quest offer is open")
     AddToLog(self, dialog.quest)
     CloseDialog(self)
 end
@@ -208,6 +218,7 @@ end
 --- An area trigger's quest: into the log with no dialog, so its text is only in the quest log.
 function Harness:AutoAcceptQuest(spec)
     local quest = FillQuest(spec)
+
     AddToLog(self, quest)
     return quest.id
 end
@@ -216,15 +227,18 @@ end
 function Harness:OpenTurnIn(questID, ender, reward)
     assert(not self.questDialog, "OpenTurnIn: a quest dialog is already open")
     local quest = assert(LogQuest(self, questID), "OpenTurnIn: quest " .. tostring(questID) .. " isn't in the log")
-    OpenDialog(self, { panel = "reward", quest = quest, reward = reward or "Well done." }, ender)
+
+    OpenDialog(self, { panel = "reward", quest = quest, reward = (reward or "Well done.") }, ender)
     self:Fire("QUEST_COMPLETE")
 end
 
 --- Completes the quest whose reward panel is open: it leaves the log and the dialog closes.
 function Harness:CompleteQuest(xp, money)
     local dialog = self.questDialog
-    assert(dialog and dialog.panel == "reward", "CompleteQuest: no reward panel is open")
+
+    assert(dialog and (dialog.panel == "reward"), "CompleteQuest: no reward panel is open")
     local id = dialog.quest.id
+
     for i, quest in ipairs(self.questLog) do
         if quest.id == id then
             table.remove(self.questLog, i)
@@ -240,7 +254,7 @@ end
 --- Opens an NPC's gossip window; npc is a unit table or a name (the "npc" unit while it's open).
 function Harness:OpenGossip(npc)
     assert(not self.gossip, "OpenGossip: a gossip window is already open")
-    self.gossip = Harness.FillUnit(type(npc) == "table" and npc or { name = npc or "Innkeeper Farley", level = 30 })
+    self.gossip = Harness.FillUnit(((type(npc) == "table") and npc) or { level = 30, name = (npc or "Innkeeper Farley") })
     self.units.npc = self.gossip
     self:Fire("GOSSIP_SHOW", nil)
 end
@@ -256,6 +270,7 @@ end
 -- An Enum.PlayerInteractionType value by name.
 local function InteractionType(name)
     local value = __snapshot.enums.PlayerInteractionType[name]
+
     assert(value, "unknown Enum.PlayerInteractionType " .. tostring(name))
     return value
 end
@@ -263,6 +278,7 @@ end
 --- Opens a window the interaction manager shows, by its Enum.PlayerInteractionType name.
 function Harness:OpenInteraction(name)
     local value = InteractionType(name)
+
     assert(not self.interactions[value], "OpenInteraction: " .. name .. " is already open")
     self.interactions[value] = true
     self:Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", value)
@@ -271,6 +287,7 @@ end
 --- Closes a window the interaction manager showed; the flight master's map also fires TAXIMAP_CLOSED.
 function Harness:CloseInteraction(name)
     local value = InteractionType(name)
+
     assert(self.interactions[value], "CloseInteraction: " .. name .. " isn't open")
     self.interactions[value] = nil
     self:Fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", value)
@@ -293,71 +310,83 @@ end
 -- The quest fakes, merged into the env (env.lua) before it wraps them.
 function Harness:QuestFakes(uiParent)
     local h = self
+
     local function Dialog(panel)
         local dialog = h.questDialog
-        return dialog and (not panel or dialog.panel == panel) and dialog or nil
+
+        return ((dialog and (not panel or (dialog.panel == panel)) and dialog) or nil)
     end
     local fakes = {
-        GetQuestID = function()
-            local dialog = Dialog()
-            return dialog and dialog.quest.id or 0
-        end,
-        GetTitleText = function()
-            local dialog = Dialog()
-            return dialog and dialog.quest.title or ""
-        end,
-        GetQuestText = function()
-            local dialog = Dialog("detail")
-            return dialog and dialog.quest.text or ""
-        end,
-        GetObjectiveText = function()
-            local dialog = Dialog("detail")
-            return dialog and dialog.quest.goal or ""
-        end,
-        GetRewardText = function()
-            local dialog = Dialog("reward")
-            return dialog and dialog.reward or ""
-        end,
-        GetQuestLogQuestText = function(index)
-            local entry = Entries(h)[index]
-            if not (entry and entry.quest) then
-                return "", ""
-            end
-            return entry.quest.text, entry.quest.goal
-        end,
         C_QuestLog = {
-            GetNumQuestLogEntries = function()
-                return #Entries(h), #h.questLog
-            end,
             GetInfo = function(index)
                 local entry = Entries(h)[index]
-                return entry and Info(entry, index) or nil
-            end,
-            GetQuestObjectives = function(questID)
-                local quest = LogQuest(h, questID)
-                return quest and Objectives(h, quest) or {}
-            end,
-            GetTitleForQuestID = function(questID)
-                return h.questTitles[questID]
+
+                return ((entry and Info(entry, index)) or nil)
             end,
             GetLogIndexForQuestID = function(questID)
                 for index, entry in ipairs(Entries(h)) do
-                    if entry.quest and entry.quest.id == questID then
+                    if entry.quest and (entry.quest.id == questID) then
                         return index
                     end
                 end
                 return nil
             end,
+            GetNumQuestLogEntries = function()
+                return #Entries(h), #h.questLog
+            end,
+            GetQuestObjectives = function(questID)
+                local quest = LogQuest(h, questID)
+
+                return ((quest and Objectives(h, quest)) or {})
+            end,
             GetSelectedQuest = function()
                 return 0
             end,
+            GetTitleForQuestID = function(questID)
+                return h.questTitles[questID]
+            end,
         },
+        GetObjectiveText = function()
+            local dialog = Dialog("detail")
+
+            return ((dialog and dialog.quest.goal) or "")
+        end,
+        GetQuestID = function()
+            local dialog = Dialog()
+
+            return ((dialog and dialog.quest.id) or 0)
+        end,
+        GetQuestLogQuestText = function(index)
+            local entry = Entries(h)[index]
+
+            if not (entry and entry.quest) then
+                return "", ""
+            end
+            return entry.quest.text, entry.quest.goal
+        end,
+        GetQuestText = function()
+            local dialog = Dialog("detail")
+
+            return ((dialog and dialog.quest.text) or "")
+        end,
+        GetRewardText = function()
+            local dialog = Dialog("reward")
+
+            return ((dialog and dialog.reward) or "")
+        end,
+        GetTitleText = function()
+            local dialog = Dialog()
+
+            return ((dialog and dialog.quest.title) or "")
+        end,
     }
     local frame = h:CreateWidget("Frame", "QuestFrame", uiParent)
+
     Harness.State(frame).shown = false
     fakes.QuestFrame = frame
     for _, name in ipairs({ "QuestFrameDetailPanel", "QuestFrameRewardPanel" }) do
         local panel = h:CreateWidget("Frame", name, frame)
+
         Harness.State(panel).shown = false
         fakes[name] = panel
     end

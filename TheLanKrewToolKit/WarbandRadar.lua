@@ -17,36 +17,37 @@ local addonName, ns = ...
 -- NEARBY message is "NEARBY:" then entries "First Last;CLASS;level", as many as fit in Comms'
 -- MaxMessage bytes; the rest wait for the next one.
 
-local NearbySeconds = 120
-local ShareInterval = 10
-local MaxRows = 10
-local RowHeight = 18
-local Width = 240
 local MaxMessage = ByteTerrace.Comms.MaxMessage
-local Room = MaxMessage - #"NEARBY:" -- bytes of entries and their tab separators per message
+local MaxRows = 10
+local NearbySeconds = 120
 local Points = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
+local Room = (MaxMessage - #"NEARBY:") -- bytes of entries and their tab separators per message
+local RowHeight = 18
+local ShareInterval = 10
+local Width = 240
 
 local CreateFrame, GetTime = CreateFrame, GetTime
-local MenuUtil, RAID_CLASS_COLORS = MenuUtil, RAID_CLASS_COLORS
 local floor = math.floor
+local MenuUtil, RAID_CLASS_COLORS = MenuUtil, RAID_CLASS_COLORS
 local sort, wipe = table.sort, wipe
 
 local Addon = ns.Addon
 local Krew = ns.Krew
 local Warband = ns.Warband
 
+local FlushTimer, Window, Ticker
+local List = {}    -- scratch: the entries a redraw shows, in order
 local Nearby = {} -- [key] = { key, class, level, faction, guild, time, by, status }
 local Pending = {} -- [key] = true for your own sightings not yet shared
-local List = {}    -- scratch: the entries a redraw shows, in order
-local FlushTimer, Window, Ticker
 local Radar
 
 local Render
 
 local function Note(info, by)
     local entry = Nearby[info.key]
+
     if not entry then
-        entry = { key = info.key, class = "", level = 0, faction = "", guild = "" }
+        entry = { class = "", faction = "", guild = "", key = info.key, level = 0 }
         Nearby[info.key] = entry
         if not by then
             Pending[info.key] = true
@@ -80,17 +81,20 @@ local function Flush()
         return
     end
     local fields, room = {}, Room
+
     for key in pairs(Pending) do
         local entry = Nearby[key]
+
         if not entry then
             Pending[key] = nil -- gone from the list: nothing to share
         else
-            local text = key .. ";" .. entry.class .. ";" .. entry.level
-            local size = #fields > 0 and #text + 1 or #text
+            local text = (key .. ";" .. entry.class .. ";" .. entry.level)
+            local size = (((#fields > 0) and (#text + 1)) or #text)
+
             if size > room then
                 break -- the rest wait for the next message
             end
-            room = room - size
+            room = (room - size)
             fields[#fields + 1] = text
             Pending[key] = nil
         end
@@ -112,25 +116,27 @@ end
 
 -- Standing first (marks, then grudges ...), then the most recently seen, then by name.
 local function ByStanding(a, b)
-    local rankA, rankB = Warband.Order[a.status] or 9, Warband.Order[b.status] or 9
+    local rankA, rankB = (Warband.Order[a.status] or 9), (Warband.Order[b.status] or 9)
+
     if rankA ~= rankB then
-        return rankA < rankB
+        return (rankA < rankB)
     end
     if a.time ~= b.time then
-        return a.time > b.time
+        return (a.time > b.time)
     end
-    return a.key < b.key
+    return (a.key < b.key)
 end
 
 -- "60 - 5s - Mom Doe": level, how long ago, and who saw them.
 local function Detail(entry, now)
     local seconds = floor(now - entry.time)
-    local detail = seconds < 60 and (seconds .. "s") or (floor(seconds / 60) .. "m")
+    local detail = (((seconds < 60) and (seconds .. "s")) or (floor(seconds / 60) .. "m"))
+
     if entry.level > 0 then
-        detail = entry.level .. " - " .. detail
+        detail = (entry.level .. " - " .. detail)
     end
     if entry.by then
-        detail = detail .. " - " .. entry.by
+        detail = (detail .. " - " .. entry.by)
     end
     return detail
 end
@@ -147,6 +153,7 @@ local function SavePosition()
     Window:StopMovingOrSizing()
     -- secret: the window's anchors and texts are only ever set from plain values
     local point, _, relativePoint, x, y = Window:GetPoint(1)
+
     Addon:Batch(function()
         Radar:Set("point", point)
         Radar:Set("relativePoint", relativePoint)
@@ -157,6 +164,7 @@ end
 
 local function CreateWindow()
     local frame = CreateFrame("Frame", addonName .. "Radar", UIParent, "BackdropTemplate")
+
     frame:SetSize(Width, 26)
     frame:SetPoint(Radar:Get("point"), UIParent, Radar:Get("relativePoint"), Radar:Get("x"), Radar:Get("y"))
     frame:SetFrameStrata("MEDIUM")
@@ -167,7 +175,7 @@ local function CreateWindow()
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", SavePosition)
     frame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        edgeSize = 12, insets = { bottom = 3, left = 3, right = 3, top = 3 } })
     frame:SetBackdropColor(0.05, 0.02, 0.02, 0.85)
     frame:SetBackdropBorderColor(0.7, 0.1, 0.1)
     frame:Hide()
@@ -178,8 +186,9 @@ local function CreateWindow()
     frame.Rows = {}
     for i = 1, MaxRows do
         local row = CreateFrame("Button", nil, frame)
+
         row:SetSize(Width - 12, RowHeight)
-        row:SetPoint("TOPLEFT", 6, -6 - i * RowHeight)
+        row:SetPoint("TOPLEFT", 6, -6 - (i * RowHeight))
         row:RegisterForClicks("RightButtonUp")
         row:SetScript("OnClick", OpenMenu)
         row.Icon = row:CreateTexture(nil, "ARTWORK")
@@ -208,18 +217,21 @@ local function Draw(row, entry, now)
     if row.m_class ~= entry.class then
         row.m_class = entry.class
         local color = RAID_CLASS_COLORS[entry.class]
+
         if color then
             row.Name:SetTextColor(color.r, color.g, color.b)
         else
             row.Name:SetTextColor(1, 1, 1)
         end
     end
-    local status = entry.status or ""
+    local status = (entry.status or "")
+
     if row.m_status ~= status then
         row.m_status = status
-        row.Icon:SetTexture(entry.status and Warband.Icons[entry.status] or nil)
+        row.Icon:SetTexture((entry.status and Warband.Icons[entry.status]) or nil)
     end
     local detail = Detail(entry, now)
+
     if row.m_detail ~= detail then
         row.m_detail = detail
         row.Detail:SetText(detail)
@@ -235,9 +247,10 @@ end
 -- is left. The window shows exactly while the tick runs.
 function Render()
     local now, list = GetTime(), List
+
     wipe(list)
     for key, entry in pairs(Nearby) do
-        if now - entry.time > NearbySeconds then
+        if (now - entry.time) > NearbySeconds then
             Nearby[key] = nil
         else
             entry.status = Warband.Status(key, entry.guild)
@@ -253,14 +266,16 @@ function Render()
         return
     end
     sort(list, ByStanding)
-    Window = Window or CreateWindow()
+    Window = (Window or CreateWindow())
     if Window.m_total ~= #list then
         Window.m_total = #list
         Window.Title:SetText("Nearby enemies (" .. #list .. ")")
     end
-    local count = #list < MaxRows and #list or MaxRows
-    for i = 1, (Window.m_count or 0) > count and Window.m_count or count do -- rows in use, and rows to clear
+    local count = (((#list < MaxRows) and #list) or MaxRows)
+
+    for i = 1, (((Window.m_count or 0) > count) and Window.m_count) or count do -- rows in use, and rows to clear
         local row = Window.Rows[i]
+
         if i <= count then
             Draw(row, list[i], now)
         elseif row.m_entry then
@@ -268,7 +283,7 @@ function Render()
         end
     end
     if Window.m_count ~= count then
-        Window:SetHeight(12 + (count + 1) * RowHeight)
+        Window:SetHeight(12 + ((count + 1) * RowHeight))
         Window.m_count = count
     end
     if not Ticker then
@@ -280,6 +295,7 @@ end
 local function OnMessage(sender, fields)
     for i = 1, #fields do
         local key, class, level = fields[i]:match("^([^;]+);([^;]*);([^;]*)$")
+
         if key and Warband.ValidKey(key) then
             Note({ key = key, class = Warband.CleanClass(class), level = Warband.CleanLevel(level), faction = "", guild = "" }, sender)
         end
@@ -287,22 +303,9 @@ local function OnMessage(sender, fields)
 end
 
 Radar = Addon:Module("Radar", {
-    label = "Nearby enemies window",
-    page = "Warband",
-    description = "A list of enemy players you and your Krew have seen in the last two minutes, with their standing. Right-click a name for the Krew's choices; drag the window to move it.",
     active = { reads = { "Warband.enabled" }, when = function(state) return state:Get("Warband.enabled") end },
-    state = {
-        { name = "share", kind = "boolean", default = true, label = "Share nearby enemies with the Krew",
-            description = "Send the enemies you see to your group (batched, at most every " .. ShareInterval .. " seconds)." },
-        { name = "point", kind = "string", default = "RIGHT", values = Points },
-        { name = "relativePoint", kind = "string", default = "RIGHT", values = Points },
-        { name = "x", kind = "number", default = -60, min = -10000, max = 10000 },
-        { name = "y", kind = "number", default = 120, min = -10000, max = 10000 },
-    },
-    OnEnable = function(module)
-        module:Listen(Krew, "NEARBY", OnMessage)
-        Warband.OnNearby = OnNearby
-    end,
+    description = "A list of enemy players you and your Krew have seen in the last two minutes, with their standing. Right-click a name for the Krew's choices; drag the window to move it.",
+    label = "Nearby enemies window",
     OnDisable = function()
         Warband.OnNearby = nil
         wipe(Nearby)
@@ -313,4 +316,18 @@ Radar = Addon:Module("Radar", {
             Window:Hide()
         end
     end,
+    OnEnable = function(module)
+        module:Listen(Krew, "NEARBY", OnMessage)
+        Warband.OnNearby = OnNearby
+    end,
+    page = "Warband",
+    state = {
+        { default = true,
+            description = ("Send the enemies you see to your group (batched, at most every " .. ShareInterval .. " seconds)."),
+            kind = "boolean", label = "Share nearby enemies with the Krew", name = "share" },
+        { default = "RIGHT", kind = "string", name = "point", values = Points },
+        { default = "RIGHT", kind = "string", name = "relativePoint", values = Points },
+        { default = -60, kind = "number", max = 10000, min = -10000, name = "x" },
+        { default = 120, kind = "number", max = 10000, min = -10000, name = "y" },
+    },
 })

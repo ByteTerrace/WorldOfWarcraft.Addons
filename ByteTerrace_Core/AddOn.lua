@@ -46,10 +46,11 @@
 local NamePattern = "^%a[%w_]*$"
 
 local ByteTerrace = ByteTerrace
-local Report, SafeCall, TimedCall = ByteTerrace.Report, ByteTerrace.SafeCall, ByteTerrace.TimedCall
 local ipairs, pairs, print, tonumber, tostring, type = ipairs, pairs, print, tonumber, tostring, type
+local Report, SafeCall, TimedCall = ByteTerrace.Report, ByteTerrace.SafeCall, ByteTerrace.TimedCall
 
 local AddOn = {}
+
 AddOn.__index = AddOn
 ByteTerrace.AddOn = AddOn
 
@@ -59,17 +60,19 @@ ByteTerrace.AddOn = AddOn
 -- SlashCmdList into hash_SlashCmdList (keyed by the uppercased alias) once any is typed.
 local function TakenBy(alias)
     local wanted = alias:lower()
+
     if hash_SlashCmdList[alias:upper()] then
         return "a command already in use"
     end
     for key in pairs(SlashCmdList) do
         local i = 1
         local registered = _G["SLASH_" .. key .. i] -- global: the client's slash registration
+
         while type(registered) == "string" do
             if registered:lower() == wanted then
-                return "SLASH_" .. key .. i
+                return ("SLASH_" .. key .. i)
             end
-            i = i + 1
+            i = (i + 1)
             registered = _G["SLASH_" .. key .. i] -- global: the client's slash registration
         end
     end
@@ -80,9 +83,10 @@ end
 local function ParseValue(kind, text)
     if kind == "boolean" then
         local lower = text:lower()
-        if lower == "on" or lower == "true" or lower == "1" then
+
+        if (lower == "on") or (lower == "true") or (lower == "1") then
             return true
-        elseif lower == "off" or lower == "false" or lower == "0" then
+        elseif (lower == "off") or (lower == "false") or (lower == "0") then
             return false
         end
         return nil
@@ -97,13 +101,13 @@ end
 ---@param options table { name, savedVariable, savedVariablePerCharacter?, title?, version?, slash?, facts? }
 ---@return table addon
 function ByteTerrace.NewAddOn(options)
-    if type(options.name) ~= "string" or type(options.savedVariable) ~= "string" then
+    if (type(options.name) ~= "string") or (type(options.savedVariable) ~= "string") then
         error("NewAddOn needs a name and a savedVariable (the TOC's ## SavedVariables)", 2)
     end
     local addon = setmetatable({
         Name = options.name,
-        Title = options.title or C_AddOns.GetAddOnMetadata(options.name, "Title") or options.name,
-        Version = options.version or C_AddOns.GetAddOnMetadata(options.name, "Version"),
+        Title = (options.title or C_AddOns.GetAddOnMetadata(options.name, "Title") or options.name),
+        Version = (options.version or C_AddOns.GetAddOnMetadata(options.name, "Version")),
         Slash = options.slash,
         Modules = {},
         Started = false,
@@ -115,7 +119,8 @@ function ByteTerrace.NewAddOn(options)
         m_collections = {},
         m_sealed = false, -- true once Start begins: nothing declares after it
     }, AddOn)
-    addon.m_prefix = "|cff33ccff" .. addon.Title .. "|r:"
+
+    addon.m_prefix = ("|cff33ccff" .. addon.Title .. "|r:")
     addon.State = ByteTerrace.NewState(addon)
     addon.Events = ByteTerrace.NewEvents(addon)
     addon.Commands = ByteTerrace.NewCommands(addon)
@@ -123,6 +128,7 @@ function ByteTerrace.NewAddOn(options)
 
     for _, fact in ipairs(options.facts or {}) do
         local spec = ByteTerrace.Facts[fact]
+
         if not spec then
             error(addon.Name .. ": unknown fact " .. tostring(fact), 2)
         end
@@ -131,6 +137,7 @@ function ByteTerrace.NewAddOn(options)
     addon:DefineBuiltinCommands()
 
     local loaded
+
     loaded = addon.Events:On("ADDON_LOADED", function(name)
         if name == addon.Name then
             addon.Events:Off(loaded)
@@ -152,34 +159,37 @@ function AddOn:Module(name, spec)
     if self.Modules[name] then
         error(self.Name .. ": duplicate module " .. name, 2)
     end
-    if type(name) ~= "string" or not name:find(NamePattern) then
+    if (type(name) ~= "string") or not name:find(NamePattern) then
         error(self.Name .. ": module name '" .. tostring(name) .. "' must be an identifier", 2)
     end
-    if name == "addon" or (ByteTerrace.Facts[name] and ByteTerrace.Facts[name] ~= spec) then
+    if (name == "addon") or (ByteTerrace.Facts[name] and (ByteTerrace.Facts[name] ~= spec)) then
         error(self.Name .. ": module name '" .. name .. "' is reserved", 2)
     end
     local active = spec.active
-    if active ~= nil and (type(active) ~= "table" or type(active.reads) ~= "table" or type(active.when) ~= "function") then
+
+    if (active ~= nil) and ((type(active) ~= "table") or (type(active.reads) ~= "table") or (type(active.when) ~= "function")) then
         error(self.Name .. ": module " .. name .. ": active must be { reads = { rows... }, when = function(state) }", 2)
     end
     for _, key in ipairs({ "page", "section" }) do
-        if spec[key] ~= nil and type(spec[key]) ~= "string" then
+        if (spec[key] ~= nil) and (type(spec[key]) ~= "string") then
             error(self.Name .. ": module " .. name .. ": " .. key .. " must be a string", 2)
         end
     end
-    if spec.uses ~= nil and type(spec.uses) ~= "table" then
+    if (spec.uses ~= nil) and (type(spec.uses) ~= "table") then
         error(self.Name .. ": module " .. name .. ": uses must be a list of module names", 2)
     end
-    if spec.demand and (spec.toggle ~= false or active ~= nil) then
+    if spec.demand and ((spec.toggle ~= false) or (active ~= nil)) then
         error(self.Name .. ": module " .. name .. ": a demand module has toggle = false and no active rule", 2)
     end
     local module = ByteTerrace.NewModule(self, name, spec)
     local rows, commands, collections, rowNames, commandNames = {}, {}, {}, {}, {}
+
     local function AddRow(rowName, row)
-        if type(rowName) ~= "string" or not rowName:find(NamePattern) then
+        if (type(rowName) ~= "string") or not rowName:find(NamePattern) then
             error(self.Name .. ": row name '" .. tostring(rowName) .. "' in module " .. name .. " must be an identifier", 2)
         end
-        local full = name .. "." .. rowName
+        local full = (name .. "." .. rowName)
+
         if rowNames[full] then
             error(self.Name .. ": duplicate state row " .. full, 2)
         end
@@ -188,36 +198,39 @@ function AddOn:Module(name, spec)
     end
     if spec.toggle ~= false then
         AddRow("enabled", {
-            kind = "boolean", default = spec.default ~= false, label = spec.label, description = spec.description,
-            scope = spec.scope, lockedBy = spec.lockedBy,
+            default = (spec.default ~= false), description = spec.description, kind = "boolean", label = spec.label,
+            lockedBy = spec.lockedBy, scope = spec.scope,
         })
     end
     for _, row in ipairs(spec.state or {}) do
         AddRow(row.name, row)
     end
     for _, collection in ipairs(spec.records or {}) do
-        if type(collection.name) ~= "string" or not collection.name:find(NamePattern) then
+        if (type(collection.name) ~= "string") or not collection.name:find(NamePattern) then
             local message = "%s: records name '%s' in module %s must be an identifier"
+
             error(message:format(self.Name, tostring(collection.name), name), 2)
         end
         local records = ByteTerrace.NewRecords(self, name .. "." .. collection.name, collection)
+
         module.Records[collection.name] = records
         collections[#collections + 1] = records
-        AddRow(collection.name, { kind = "number", default = 0, persist = false, records = true, scope = collection.scope })
+        AddRow(collection.name, { default = 0, kind = "number", persist = false, records = true, scope = collection.scope })
     end
     for _, command in ipairs(spec.commands or {}) do
         -- Commands owns the activation check, so validation still sees the actual callback.
-        if type(command.name) ~= "string" or not command.name:find(NamePattern) then
+        if (type(command.name) ~= "string") or not command.name:find(NamePattern) then
             error(self.Name .. ": command name in module " .. name .. " must be an identifier", 2)
         end
-        local full = name .. "." .. command.name
+        local full = (name .. "." .. command.name)
+
         if commandNames[full] then
             error(self.Name .. ": duplicate command " .. full, 2)
         end
         commandNames[full] = true
         commands[#commands + 1] = {
-            name = full, label = command.label, run = command.run,
-            slash = command.slash, held = command.held, module = module, always = command.always,
+            always = command.always, held = command.held, label = command.label, module = module, name = full,
+            run = command.run, slash = command.slash,
         }
     end
     if spec.comms ~= nil then
@@ -252,10 +265,13 @@ end
 ---@return table usesOf [module] = array of its dependencies
 function AddOn:ResolveUses()
     local problems, usesOf = {}, {}
+
     for _, module in ipairs(self.m_moduleOrder) do
         local list = {}
+
         for _, name in ipairs(module.Spec.uses or {}) do
             local dependency = self.Modules[name]
+
             if not dependency then
                 problems[#problems + 1] = ("%s uses unknown module %s"):format(module.Name, tostring(name))
             elseif not dependency.Spec.demand then
@@ -267,12 +283,13 @@ function AddOn:ResolveUses()
         usesOf[module] = list
     end
     local visiting, done = {}, {}
+
     local function Visit(module)
         if done[module] then
             return
         end
         if visiting[module] then
-            problems[#problems + 1] = module.Name .. " is part of a uses cycle"
+            problems[#problems + 1] = (module.Name .. " is part of a uses cycle")
             return
         end
         visiting[module] = true
@@ -294,13 +311,16 @@ end
 function AddOn:Start()
     self.m_sealed = true
     local usesOf = self:ResolveUses()
+
     self.State:Declare("addon.debug", {
-        kind = "boolean", default = false, label = "Debug output", description = "Print diagnostic messages to chat.",
+        default = false, description = "Print diagnostic messages to chat.", kind = "boolean", label = "Debug output",
         section = "Advanced",
     })
     local stores = {}
+
     for scope, variable in pairs({ account = self.m_savedVariable, character = self.m_savedVariablePerCharacter }) do
         local store = _G[variable] -- global: the TOC's SavedVariables, restored before ADDON_LOADED
+
         if type(store) ~= "table" then
             store = {}
             _G[variable] = store -- global: declared in the TOC
@@ -308,6 +328,7 @@ function AddOn:Start()
         stores[scope] = store
     end
     local declared = { addon = true }
+
     for name in pairs(self.Modules) do
         declared[name] = true
     end
@@ -315,14 +336,17 @@ function AddOn:Start()
     self.Commands:Compile()
     self.Input:Compile()
     local dropped, unclaimed = self.State:Compile(stores, declared)
+
     for _, records in ipairs(self.m_collections) do
         local droppedRecords, resetFields = records:Load(stores)
-        if droppedRecords + resetFields > 0 then
+
+        if (droppedRecords + resetFields) > 0 then
             dropped[#dropped + 1] = ("%s (%d records, %d fields)"):format(records.Name, droppedRecords, resetFields)
         end
     end
     self.m_debugId = self.State:Id("addon.debug")
     local pages = ByteTerrace.SettingsPages(self)
+
     self.SettingsWindow = ByteTerrace.NewSettingsWindow(self, pages)
     self.SettingsWindow:Register()
     self:RegisterSlash()
@@ -350,17 +374,20 @@ function AddOn:RegisterSlash()
         return
     end
     local key = self.Name:upper():gsub("[^%w]", "")
+
     if SlashCmdList[key] then
         Report(self.Name .. ": slash command key " .. key .. " is already registered; slash commands are off")
         return
     end
     local index = 0
+
     for _, alias in ipairs(self.Slash) do
         local owner = TakenBy(alias)
+
         if owner then
             Report(self.Name .. ": " .. alias .. " is already taken by " .. owner .. "; skipping it")
         else
-            index = index + 1
+            index = (index + 1)
             _G["SLASH_" .. key .. index] = alias -- global: WoW's slash command registration
         end
     end
@@ -377,8 +404,10 @@ end
 ---@return boolean ok false when fn errored (the error reaches the error handler)
 function AddOn:Batch(fn, ...)
     local state = self.State
+
     state:BeginBatch()
     local ok = SafeCall(fn, ...)
+
     state:EndBatch()
     return ok
 end
@@ -391,8 +420,10 @@ end
 ---@return boolean ok false when fn errored (the error reaches the error handler)
 function AddOn:Run(work, fn, ...)
     local state = self.State
+
     state:BeginBatch()
     local ok
+
     if self.Profiling then
         ok = TimedCall(work, fn, ...)
     else
@@ -425,7 +456,8 @@ end
 function AddOn:SetFromText(arg)
     local name, text = (arg or ""):match("^(%S+)%s+(.+)$")
     local state = self.State
-    local id = name and state.Ids[name]
+    local id = (name and state.Ids[name])
+
     if not id or not state.Specs[id].persist or not state.Specs[id].label then
         self:Print("Usage: " .. self.Slash[1] .. " set <setting> <value>. Settings: " .. self:SettingNames())
         return
@@ -435,7 +467,8 @@ function AddOn:SetFromText(arg)
         return
     end
     local value = ParseValue(state.Specs[id].kind, text)
-    local ok = value ~= nil and ByteTerrace.State.Admits(state.Specs[id], value)
+    local ok = ((value ~= nil) and ByteTerrace.State.Admits(state.Specs[id], value))
+
     if not ok then
         self:Print(("%s can't be set to '%s'."):format(name, text))
         return
@@ -448,8 +481,9 @@ end
 ---@param arg string?
 function AddOn:ToggleFromText(arg)
     local state = self.State
-    local id = arg and state.Ids[arg]
-    if not id or state.Specs[id].kind ~= "boolean" or not state.Specs[id].persist or not state.Specs[id].label then
+    local id = (arg and state.Ids[arg])
+
+    if not id or (state.Specs[id].kind ~= "boolean") or not state.Specs[id].persist or not state.Specs[id].label then
         self:Print("Usage: " .. self.Slash[1] .. " toggle <setting>. Settings: " .. self:SettingNames("boolean"))
         return
     end
@@ -466,9 +500,11 @@ end
 ---@return string
 function AddOn:SettingNames(kind)
     local names, state = {}, self.State
+
     for _, name in ipairs(state.Order) do
         local spec = state.Specs[state.Ids[name]]
-        if spec.persist and spec.label and (not kind or spec.kind == kind) then
+
+        if spec.persist and spec.label and (not kind or (spec.kind == kind)) then
             names[#names + 1] = name
         end
     end
@@ -478,29 +514,28 @@ end
 --- Declares the built-in commands: bare slash, help, version, debug, set and toggle.
 function AddOn:DefineBuiltinCommands()
     local commands = self.Commands
+
     commands:Define({
-        name = "addon.settings", slash = "", label = "Show or hide settings",
-        run = function() self:ToggleSettings() end,
+        label = "Show or hide settings", name = "addon.settings", run = function() self:ToggleSettings() end,
+        slash = "",
     })
     commands:Define({
-        name = "addon.help", slash = "help", label = "List commands",
-        run = function() commands:PrintHelp() end,
+        label = "List commands", name = "addon.help", run = function() commands:PrintHelp() end, slash = "help",
     })
     commands:Define({
-        name = "addon.version", slash = "version", label = "Show version",
-        run = function() self:Print("Version", self.Version) end,
+        label = "Show version", name = "addon.version", run = function() self:Print("Version", self.Version) end,
+        slash = "version",
     })
     commands:Define({
-        name = "addon.debug", slash = "debug",
         label = "Toggle debug output, or inspect: debug status | events | work | rows | trace | cpu | profile | reset",
-        run = function(arg) self:DebugCommand(arg) end,
+        name = "addon.debug", run = function(arg) self:DebugCommand(arg) end, slash = "debug",
     })
     commands:Define({
-        name = "addon.set", slash = "set", label = "Set a setting: set <setting> <value>",
-        run = function(arg) self:SetFromText(arg) end,
+        label = "Set a setting: set <setting> <value>", name = "addon.set",
+        run = function(arg) self:SetFromText(arg) end, slash = "set",
     })
     commands:Define({
-        name = "addon.toggle", slash = "toggle", label = "Toggle a setting: toggle <setting>",
-        run = function(arg) self:ToggleFromText(arg) end,
+        label = "Toggle a setting: toggle <setting>", name = "addon.toggle",
+        run = function(arg) self:ToggleFromText(arg) end, slash = "toggle",
     })
 end

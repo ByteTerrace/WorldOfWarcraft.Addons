@@ -44,23 +44,24 @@
 -- after MaxPublishRounds is reported, never looped forever. Persisted rows store only values
 -- that differ from the default, so a changed default applies.
 
-local MaxPublishRounds = 8
 local Kinds = { boolean = true, number = true, string = true }
+local MaxPublishRounds = 8
 
 local ByteTerrace = ByteTerrace
-local Report, Refuse = ByteTerrace.Report, ByteTerrace.Refuse
-local SafeCall, SortedKeys, TimedCall = ByteTerrace.SafeCall, ByteTerrace.SortedKeys, ByteTerrace.TimedCall
-local issecretvalue = issecretvalue
-local ipairs, pairs, tostring, type = ipairs, pairs, tostring, type
 local concat, remove, sort = table.concat, table.remove, table.sort
 local floor, huge = math.floor, math.huge
+local ipairs, pairs, tostring, type = ipairs, pairs, tostring, type
+local issecretvalue = issecretvalue
+local Refuse, Report = ByteTerrace.Refuse, ByteTerrace.Report
+local SafeCall, SortedKeys, TimedCall = ByteTerrace.SafeCall, ByteTerrace.SortedKeys, ByteTerrace.TimedCall
 
 local State = {}
+
 State.__index = State
 ByteTerrace.State = State
 
 local function IsWhole(x)
-    return x - floor(x + 0.5) < 1e-9 and floor(x + 0.5) - x < 1e-9
+    return (((x - floor(x + 0.5)) < 1e-9) and ((floor(x + 0.5) - x) < 1e-9))
 end
 
 local function Admits(spec, value)
@@ -68,22 +69,22 @@ local function Admits(spec, value)
         return false, "cannot hold a secret value"
     end
     if type(value) ~= spec.kind then
-        return false, "expects " .. spec.kind .. ", got " .. type(value)
+        return false, ("expects " .. spec.kind .. ", got " .. type(value))
     end
-    if spec.kind == "number" and (value ~= value or value == huge or value == -huge) then
-        return false, "expects a finite number, got " .. tostring(value)
+    if (spec.kind == "number") and ((value ~= value) or (value == huge) or (value == -huge)) then
+        return false, ("expects a finite number, got " .. tostring(value))
     end
     if spec.valueSet and not spec.valueSet[value] then
-        return false, "expects one of " .. concat(spec.values, ", ") .. ", got " .. tostring(value)
+        return false, ("expects one of " .. concat(spec.values, ", ") .. ", got " .. tostring(value))
     end
-    if spec.min and value < spec.min then
-        return false, "expects at least " .. spec.min .. ", got " .. value
+    if spec.min and (value < spec.min) then
+        return false, ("expects at least " .. spec.min .. ", got " .. value)
     end
-    if spec.max and value > spec.max then
-        return false, "expects at most " .. spec.max .. ", got " .. value
+    if spec.max and (value > spec.max) then
+        return false, ("expects at most " .. spec.max .. ", got " .. value)
     end
     if spec.step and not IsWhole((value - (spec.min or 0)) / spec.step) then
-        return false, "expects a multiple of " .. spec.step .. ", got " .. value
+        return false, ("expects a multiple of " .. spec.step .. ", got " .. value)
     end
     return true
 end
@@ -92,40 +93,42 @@ end
 -- (valueSet, persist, scope).
 local function Validate(name, spec, problems)
     local function AddProblem(message)
-        problems[#problems + 1] = name .. ": " .. message
+        problems[#problems + 1] = (name .. ": " .. message)
     end
     if not Kinds[spec.kind] then
         AddProblem("unknown kind " .. tostring(spec.kind))
         return
     end
-    if spec.values and spec.kind ~= "string" then
+    if spec.values and (spec.kind ~= "string") then
         AddProblem("values only apply to string rows")
     end
     local validBounds = true
-    if (spec.min or spec.max or spec.step) and spec.kind ~= "number" then
+
+    if (spec.min or spec.max or spec.step) and (spec.kind ~= "number") then
         AddProblem("min / max / step only apply to number rows")
         validBounds = false
     end
     for _, key in ipairs({ "min", "max", "step" }) do
         local value = spec[key]
+
         if value ~= nil then
-            if issecretvalue(value) or type(value) ~= "number" or value ~= value or value == huge or value == -huge then
+            if issecretvalue(value) or (type(value) ~= "number") or (value ~= value) or (value == huge) or (value == -huge) then
                 AddProblem(key .. " must be a finite number")
                 validBounds = false
-            elseif key == "step" and value <= 0 then
+            elseif (key == "step") and (value <= 0) then
                 AddProblem("step must be positive")
                 validBounds = false
             end
         end
     end
-    if validBounds and spec.min and spec.max and spec.min > spec.max then
+    if validBounds and spec.min and spec.max and (spec.min > spec.max) then
         AddProblem("min must not exceed max")
         validBounds = false
     end
     if spec.values then
         spec.valueSet = {}
         for _, value in ipairs(spec.values) do
-            if type(value) ~= "string" or issecretvalue(value) then
+            if (type(value) ~= "string") or issecretvalue(value) then
                 AddProblem("values must be strings")
             else
                 spec.valueSet[value] = true
@@ -133,11 +136,11 @@ local function Validate(name, spec, problems)
         end
     end
     if spec.valueLabels ~= nil then
-        if type(spec.valueLabels) ~= "table" or not spec.valueSet then
+        if (type(spec.valueLabels) ~= "table") or not spec.valueSet then
             AddProblem("valueLabels needs values, and labels them by value")
         else
             for value, text in pairs(spec.valueLabels) do
-                if not spec.valueSet[value] or type(text) ~= "string" then
+                if not spec.valueSet[value] or (type(text) ~= "string") then
                     AddProblem("valueLabels must label values with text: " .. tostring(value))
                 end
             end
@@ -146,30 +149,33 @@ local function Validate(name, spec, problems)
     if spec.persist == nil then
         spec.persist = true
     end
-    spec.scope = spec.scope or "account"
-    if spec.scope ~= "account" and spec.scope ~= "character" then
+    spec.scope = (spec.scope or "account")
+    if (spec.scope ~= "account") and (spec.scope ~= "character") then
         AddProblem("unknown scope " .. tostring(spec.scope))
     end
     if validBounds then
         local ok, why = Admits(spec, spec.default)
+
         if not ok then
             AddProblem("default " .. why)
         end
     end
-    if spec.lockedBy ~= nil and type(spec.lockedBy) ~= "string" then
+    if (spec.lockedBy ~= nil) and (type(spec.lockedBy) ~= "string") then
         AddProblem("lockedBy must be a row name")
     end
-    if spec.lockedBy ~= nil and not spec.persist then
+    if (spec.lockedBy ~= nil) and not spec.persist then
         AddProblem("lockedBy only applies to persisted rows (a stopping module resets its runtime rows)")
     end
-    if spec.section ~= nil and type(spec.section) ~= "string" then
+    if (spec.section ~= nil) and (type(spec.section) ~= "string") then
         AddProblem("section must be a string")
     end
     if spec.label and spec.persist then
-        local control = spec.kind == "boolean" or (spec.kind == "string" and spec.values)
-            or (spec.kind == "number" and spec.min and spec.max)
+        local control = ((spec.kind == "boolean") or ((spec.kind == "string") and spec.values)
+            or ((spec.kind == "number") and spec.min and spec.max))
+
         if not control then
-            local needs = spec.kind == "string" and "values" or "min and max"
+            local needs = (((spec.kind == "string") and "values") or "min and max")
+
             AddProblem(("a labeled %s row needs %s for its settings control"):format(spec.kind, needs))
         end
     end
@@ -177,18 +183,20 @@ end
 
 -- "Module.row" -> "Module".
 local function ModuleOf(name)
-    return type(name) == "string" and name:match("^([^.]+)%.") or nil
+    return (((type(name) == "string") and name:match("^([^.]+)%.")) or nil)
 end
 
 -- A watcher is due for row id if the row's value differs from that watcher's baseline. A baseline
 -- answers only the round that settles its row: after that, the round's original is what's news.
 local function Due(watcher, id, value)
     local baseline = watcher.baseline
+
     if baseline then
         local base = baseline[id]
+
         if base ~= nil then
             baseline[id] = nil
-            return base ~= value
+            return (base ~= value)
         end
     end
     return true
@@ -202,40 +210,47 @@ local function Settle(self, list, stamp)
     local values, original, isTouched = self.Values, self.m_original, self.m_isTouched
     local versions, watchersByRow = self.m_versions, self.m_watchersByRow
     local scheduled, count, traced = self.m_scheduled, 0, self.m_traced
-    local baselines = #self.m_baselined > 0
+    local baselines = (#self.m_baselined > 0)
+
     for i = 1, #list do
         local id = list[i]
+
         list[i] = nil
         isTouched[id] = nil
         local value = values[id]
+
         if value ~= original[id] then
-            versions[id] = versions[id] + 1
+            versions[id] = (versions[id] + 1)
             if traced and traced[id] then
                 SafeCall(self.m_traceFn, self.m_names[id], original[id], value)
             end
             local watchers = watchersByRow[id]
+
             if watchers then
                 for j = 1, #watchers do
                     local watcher = watchers[j]
-                    if watcher.stamp ~= stamp and Due(watcher, id, value) then
+
+                    if (watcher.stamp ~= stamp) and Due(watcher, id, value) then
                         watcher.stamp = stamp
                         watcher.baseline = nil -- running, it reads every row as it stands
-                        count = count + 1
+                        count = (count + 1)
                         scheduled[count] = watcher
                     end
                 end
             end
         elseif baselines and watchersByRow[id] then
             local watchers = watchersByRow[id]
+
             for j = 1, #watchers do
                 local watcher = watchers[j]
-                local base = watcher.baseline and watcher.baseline[id]
+                local base = (watcher.baseline and watcher.baseline[id])
+
                 if base ~= nil then
                     watcher.baseline[id] = nil
-                    if base ~= value and watcher.stamp ~= stamp then
+                    if (base ~= value) and (watcher.stamp ~= stamp) then
                         watcher.stamp = stamp
                         watcher.baseline = nil
-                        count = count + 1
+                        count = (count + 1)
                         scheduled[count] = watcher
                     end
                 end
@@ -250,7 +265,8 @@ end
 -- the same for its rounds.
 local function RunWatcher(self, watcher)
     local work = watcher.work
-    work.changes = work.changes + 1
+
+    work.changes = (work.changes + 1)
     if self.m_addon.Profiling then
         TimedCall(work, watcher.fn, self)
     else
@@ -262,9 +278,11 @@ end
 -- verdict, from the state as it stands. A rule one of them registers waits for the next pass.
 local function TakeVerdicts(self)
     local deferred = self.m_deferred
+
     self.m_deferred, self.m_spareDeferred = self.m_spareDeferred, deferred
     for i = 1, #deferred do
         local watcher = deferred[i]
+
         deferred[i] = nil
         if watcher.active then
             RunWatcher(self, watcher)
@@ -275,22 +293,25 @@ end
 -- Insertion sort by registration sequence: the scheduled list is short.
 local function SortScheduled(scheduled, count)
     for i = 2, count do
-        local watcher, j = scheduled[i], i - 1
-        while j >= 1 and scheduled[j].seq > watcher.seq do
+        local watcher, j = scheduled[i], (i - 1)
+
+        while (j >= 1) and (scheduled[j].seq > watcher.seq) do
             scheduled[j + 1] = scheduled[j]
-            j = j - 1
+            j = (j - 1)
         end
         scheduled[j + 1] = watcher
     end
 end
 
 local function Publish(self)
-    self.m_batchDepth = self.m_batchDepth + 1
-    self.m_publishing = self.m_publishing + 1
+    self.m_batchDepth = (self.m_batchDepth + 1)
+    self.m_publishing = (self.m_publishing + 1)
     local counts = self.Counts
-    counts.publishes = counts.publishes + 1
+
+    counts.publishes = (counts.publishes + 1)
 
     local scheduled = self.m_scheduled
+
     for _ = 1, MaxPublishRounds do
         -- Rules registered during the batch (or by a watcher last round) take their first verdict
         -- before this round's changes are delivered.
@@ -301,21 +322,26 @@ local function Publish(self)
             TakeVerdicts(self)
         end
         local list = self.m_touchedList
+
         if #list == 0 then
             break
         end
         self.m_touchedList, self.m_spareList = self.m_spareList, list
-        self.m_stamp = self.m_stamp + 1
+        self.m_stamp = (self.m_stamp + 1)
         local count = Settle(self, list, self.m_stamp)
+
         SortScheduled(scheduled, count)
-        counts.watchers = counts.watchers + count
+        counts.watchers = (counts.watchers + count)
         local profiling = self.m_addon.Profiling
+
         for i = 1, count do
             local watcher = scheduled[i]
+
             scheduled[i] = nil
             if watcher.active then
                 local work = watcher.work
-                work.changes = work.changes + 1
+
+                work.changes = (work.changes + 1)
                 if profiling then
                     TimedCall(work, watcher.fn, self)
                 else
@@ -330,15 +356,18 @@ local function Publish(self)
         TakeVerdicts(self)
     end
     local unsettled = self.m_touchedList
+
     if #unsettled > 0 then
         -- Out of rounds. The leftover writes still count (versions move); only a batch that would
         -- run watchers yet again is a real loop, and it is reported rather than run.
         local names = {}
+
         for i = 1, #unsettled do
             names[i] = self.m_names[unsettled[i]]
         end
-        self.m_stamp = self.m_stamp + 1
+        self.m_stamp = (self.m_stamp + 1)
         local count = Settle(self, unsettled, self.m_stamp)
+
         for i = 1, count do
             scheduled[i] = nil
         end
@@ -349,6 +378,7 @@ local function Publish(self)
     end
 
     local deferred = self.m_deferred
+
     if #deferred > 0 then
         for i = #deferred, 1, -1 do
             self:Unwatch(deferred[i])
@@ -358,27 +388,30 @@ local function Publish(self)
             :format(self.m_addon.Name, MaxPublishRounds))
     end
     local baselined = self.m_baselined
+
     for i = 1, #baselined do
         baselined[i].baseline = nil
         baselined[i] = nil
     end
-    self.m_publishing = self.m_publishing - 1
-    self.m_batchDepth = self.m_batchDepth - 1
+    self.m_publishing = (self.m_publishing - 1)
+    self.m_batchDepth = (self.m_batchDepth - 1)
 end
 
 -- Registers a watcher. Inside a batch, rows the batch already touched get this watcher's own
 -- baseline (their current value), so it never reacts to writes made before it registered.
 local function Register(self, ids, fn, work)
-    self.m_seq = self.m_seq + 1
-    local watcher = { ids = ids, fn = fn, work = work or self.m_addon.Work, active = true, stamp = 0, seq = self.m_seq }
+    self.m_seq = (self.m_seq + 1)
+    local watcher = { active = true, fn = fn, ids = ids, seq = self.m_seq, stamp = 0, work = (work or self.m_addon.Work) }
+
     for _, id in ipairs(ids) do
         local watchers = self.m_watchersByRow[id]
+
         if not watchers then
             watchers = {}
             self.m_watchersByRow[id] = watchers
         end
         watchers[#watchers + 1] = watcher
-        if self.m_batchDepth > 0 and self.m_isTouched[id] then
+        if (self.m_batchDepth > 0) and self.m_isTouched[id] then
             if not watcher.baseline then
                 watcher.baseline = {}
                 self.m_baselined[#self.m_baselined + 1] = watcher
@@ -391,8 +424,9 @@ end
 
 local function ResolveIds(self, rows)
     local ids = {}
+
     for i, row in ipairs(rows) do
-        ids[i] = type(row) == "number" and row or self:Id(row)
+        ids[i] = (((type(row) == "number") and row) or self:Id(row))
     end
     return ids
 end
@@ -455,6 +489,7 @@ end
 ---@param spec table see the file header
 function State:Declare(name, spec)
     local own = {}
+
     for key, value in pairs(spec) do
         own[key] = value
     end
@@ -471,21 +506,26 @@ function State:Compile(stores, modules)
     local problems = {}
     local names = SortedKeys(self.m_declared)
     local ids, specs, values, versions = {}, {}, {}, {}
+
     for id, name in ipairs(names) do
         local spec = self.m_declared[name]
+
         ids[name], specs[id], versions[id] = id, spec, 0
         Validate(name, spec, problems)
         if (spec.persist or spec.records) and not stores[spec.scope] then
-            local variable = spec.scope == "character" and "savedVariablePerCharacter" or "savedVariable"
+            local variable = (((spec.scope == "character") and "savedVariablePerCharacter") or "savedVariable")
+
             problems[#problems + 1] = ("%s: scope %s needs the addon's %s"):format(name, spec.scope, variable)
         end
     end
     for id, name in ipairs(names) do
         local lockedBy = specs[id].lockedBy
+
         if lockedBy then
             local lockId = ids[lockedBy]
-            if not lockId or specs[lockId].kind ~= "boolean" then
-                problems[#problems + 1] = name .. ": lockedBy " .. tostring(lockedBy) .. " must name a boolean row"
+
+            if not lockId or (specs[lockId].kind ~= "boolean") then
+                problems[#problems + 1] = (name .. ": lockedBy " .. tostring(lockedBy) .. " must name a boolean row")
             end
             specs[id].lockId = lockId
         end
@@ -493,18 +533,20 @@ function State:Compile(stores, modules)
     Refuse(self.m_addon.Name .. " state", problems)
 
     local dropped, unclaimed = {}, {}
+
     for scope, store in pairs(stores) do
         for key, value in pairs(store) do
             local id = ids[key]
             local claimed = modules[ModuleOf(key) or ""]
+
             if not claimed then -- every declared row's module is claimed, so no row names this key
                 unclaimed[#unclaimed + 1] = tostring(key)
             elseif id and specs[id].records then
-                if specs[id].scope ~= scope or type(value) ~= "table" then
+                if (specs[id].scope ~= scope) or (type(value) ~= "table") then
                     store[key] = nil
                     dropped[#dropped + 1] = tostring(key)
                 end
-            elseif not id or not specs[id].persist or specs[id].scope ~= scope or not Admits(specs[id], value) then
+            elseif not id or not specs[id].persist or (specs[id].scope ~= scope) or not Admits(specs[id], value) then
                 store[key] = nil
                 dropped[#dropped + 1] = tostring(key)
             end
@@ -514,8 +556,10 @@ function State:Compile(stores, modules)
     sort(unclaimed)
     for id, name in ipairs(names) do
         local spec = specs[id]
-        spec.store = spec.persist and stores[spec.scope] or nil
-        local value = spec.store and spec.store[name]
+
+        spec.store = ((spec.persist and stores[spec.scope]) or nil)
+        local value = (spec.store and spec.store[name])
+
         if value == nil then
             value = spec.default
         end
@@ -533,6 +577,7 @@ end
 ---@return integer
 function State:Id(name)
     local id = self.Ids[name]
+
     if not id then
         error(self.m_addon.Name .. ": unknown state row " .. tostring(name), 3)
     end
@@ -559,15 +604,16 @@ end
 ---@param ref integer|string
 ---@return boolean
 function State:IsLocked(ref)
-    local spec = self.Specs[type(ref) == "number" and ref or self:Id(ref)]
-    return spec.lockId ~= nil and self.Values[spec.lockId] == true
+    local spec = self.Specs[((type(ref) == "number") and ref) or self:Id(ref)]
+
+    return ((spec.lockId ~= nil) and (self.Values[spec.lockId] == true))
 end
 
 --- How many published changes a row has had since load.
 ---@param ref integer|string
 ---@return integer
 function State:Version(ref)
-    return self.m_versions[type(ref) == "number" and ref or self:Id(ref)]
+    return self.m_versions[((type(ref) == "number") and ref) or self:Id(ref)]
 end
 
 --- Writes a row, validating the value first; outside a batch it publishes at once. Writing the
@@ -575,16 +621,19 @@ end
 ---@param ref integer|string
 ---@param level integer? the error level for a caller that wraps Set (Module:Set passes 2)
 function State:Set(ref, value, level)
-    local id = type(ref) == "number" and ref or self:Id(ref)
-    level = (level or 1) + 1
+    local id = (((type(ref) == "number") and ref) or self:Id(ref))
+
+    level = ((level or 1) + 1)
     if issecretvalue(value) then
         error(self.m_addon.Name .. ": state row " .. tostring(self.m_names[id]) .. " cannot hold a secret value", level)
     end
     local current = self.Values[id]
-    if current == value and current ~= nil then
+
+    if (current == value) and (current ~= nil) then
         return -- already validated
     end
     local spec = self.Specs[id]
+
     if not spec then
         error(self.m_addon.Name .. ": unknown state row id " .. tostring(id), level)
     end
@@ -592,6 +641,7 @@ function State:Set(ref, value, level)
         error(self.m_addon.Name .. ": state row " .. self.m_names[id] .. " is locked", level)
     end
     local ok, why = Admits(spec, value)
+
     if not ok then
         error(self.m_addon.Name .. ": state row " .. self.m_names[id] .. " " .. why, level)
     end
@@ -602,6 +652,7 @@ function State:Set(ref, value, level)
     end
     self.Values[id] = value
     local store = spec.store
+
     if store then
         if value == spec.default then
             store[self.m_names[id]] = nil
@@ -618,7 +669,8 @@ end
 ---@param ref integer|string
 ---@param level integer? as for Set
 function State:Toggle(ref, level)
-    local id = type(ref) == "number" and ref or self:Id(ref)
+    local id = (((type(ref) == "number") and ref) or self:Id(ref))
+
     if self.Specs[id].kind ~= "boolean" then
         error(self.m_addon.Name .. ": state row " .. self.m_names[id] .. " is not boolean", (level or 1) + 1)
     end
@@ -627,7 +679,7 @@ end
 
 --- Opens a batch; batches nest, and the outermost EndBatch publishes.
 function State:BeginBatch()
-    self.m_batchDepth = self.m_batchDepth + 1
+    self.m_batchDepth = (self.m_batchDepth + 1)
 end
 
 --- Closes a batch. An EndBatch without a BeginBatch is an error, including one a watcher calls
@@ -636,8 +688,8 @@ function State:EndBatch()
     if self.m_batchDepth <= self.m_publishing then
         error(self.m_addon.Name .. ": EndBatch without BeginBatch", 2)
     end
-    self.m_batchDepth = self.m_batchDepth - 1
-    if self.m_batchDepth == 0 and (#self.m_touchedList > 0 or #self.m_deferred > 0) then
+    self.m_batchDepth = (self.m_batchDepth - 1)
+    if (self.m_batchDepth == 0) and ((#self.m_touchedList > 0) or (#self.m_deferred > 0)) then
         Publish(self)
     end
 end
@@ -651,6 +703,7 @@ end
 ---@return table watcher for Unwatch
 function State:Watch(rows, fn, skipInitial, work)
     local watcher = Register(self, ResolveIds(self, rows), fn, work)
+
     if not skipInitial then
         RunWatcher(self, watcher)
     end
@@ -677,6 +730,7 @@ function State:Trace(ids, fn)
         return
     end
     local traced = {}
+
     for _, id in ipairs(ids) do
         traced[id] = true
     end
@@ -687,11 +741,12 @@ end
 ---@return integer
 function State:WatcherCount()
     local seen, count = {}, 0
+
     for _, watchers in pairs(self.m_watchersByRow) do
         for _, watcher in ipairs(watchers) do
             if not seen[watcher] then
                 seen[watcher] = true
-                count = count + 1
+                count = (count + 1)
             end
         end
     end
@@ -707,7 +762,8 @@ function State:Rule(spec)
     local verdict
     local when, changed, initial = spec.when, spec.changed, spec.initial
     local watcher = Register(self, ResolveIds(self, spec.reads), function(state)
-        local now = when(state) and true or false
+        local now = ((when(state) and true) or false)
+
         if verdict == nil then
             verdict = now
             if initial then
@@ -718,6 +774,7 @@ function State:Rule(spec)
             changed(now, state)
         end
     end, spec.work)
+
     if self.m_batchDepth > 0 then
         self.m_deferred[#self.m_deferred + 1] = watcher
     else

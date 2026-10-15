@@ -40,17 +40,17 @@ local addonName, ns = ...
 
 local Limit = 30
 local MaxLine = 120     -- characters kept of a title, name, place, goal or objective
-local MaxObjectives = 3
 local MaxNameReads = 20 -- QUEST_LOG_UPDATEs an unnamed quest's objectives are read on before the book gives up
+local MaxObjectives = 3
 
 local C_QuestLog, GetQuestID, GetQuestLogQuestText = C_QuestLog, GetQuestID, GetQuestLogQuestText
+local concat = table.concat
 local GetObjectiveText, GetQuestText, GetRewardText, GetTitleText = GetObjectiveText, GetQuestText, GetRewardText, GetTitleText
 local GetRealZoneText, GetServerTime, GetSubZoneText, UnitName = GetRealZoneText, GetServerTime, GetSubZoneText, UnitName
-local QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, QUEST_OBJECTS_FOUND = QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, QUEST_OBJECTS_FOUND
-local issecretvalue, ipairs, tostring, type = issecretvalue, ipairs, tostring, type
 local gmatch, gsub, match, sub = string.gmatch, string.gsub, string.match, string.sub
-local concat = table.concat
+local ipairs, issecretvalue, tostring, type = ipairs, issecretvalue, tostring, type
 local next, pairs, tonumber, wipe = next, pairs, tonumber, wipe
+local QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, QUEST_OBJECTS_FOUND = QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, QUEST_OBJECTS_FOUND
 
 -- A format's literal text as a pattern: punctuation escaped, and any run of spaces optional, since
 -- an unloaded name leaves its spaces at the trimmed ends ("0/5 " reads "0/5").
@@ -62,9 +62,10 @@ end
 -- counts match digits and the name is its one capture.
 local function CountPattern(format)
     local parts, position = { "^" }, 1
+
     for start, conversion, finish in gmatch(format, "()%%%d*%$?([sd])()") do
         parts[#parts + 1] = Literal(sub(format, position, start - 1))
-        parts[#parts + 1] = conversion == "s" and "(.-)" or "%d+"
+        parts[#parts + 1] = (((conversion == "s") and "(.-)") or "%d+")
         position = finish
     end
     parts[#parts + 1] = Literal(sub(format, position))
@@ -75,18 +76,18 @@ end
 local KillPattern, ObjectPattern, ItemPattern = CountPattern(QUEST_MONSTERS_KILLED), CountPattern(QUEST_OBJECTS_FOUND),
     CountPattern(QUEST_ITEMS_NEEDED)
 -- The forms an objective's text is read with, by its log type: its own form first.
+local AnyCountPatterns = { ItemPattern, ObjectPattern, KillPattern }
 local CountPatterns = {
     monster = { KillPattern, ItemPattern, ObjectPattern },
     object = { ObjectPattern, ItemPattern, KillPattern },
 }
-local AnyCountPatterns = { ItemPattern, ObjectPattern, KillPattern }
 
 local Addon = ns.Addon
 
-local QuestBookModule
-local Offer  -- what the open offer showed: { id, title, text, goal, giver }
-local TurnIn -- what the open reward panel showed: { id, title, ender, reward }
 local LookAgain = false -- the first QUEST_LOG_UPDATE since the start records the log again
+local Offer  -- what the open offer showed: { id, title, text, goal, giver }
+local QuestBookModule
+local TurnIn -- what the open reward panel showed: { id, title, ender, reward }
 -- The keys of quests whose objectives wait for their names (ObjectiveFields' unnamed), each with
 -- the reads it has left.
 local Unnamed = {}
@@ -96,19 +97,20 @@ local Unnamed = {}
 -- breaks removed and trimmed. With length (a one-line field), it's cut to length characters, at
 -- the last whole sentence (else word) that fits; a quest's text is kept whole, as the log shows it.
 local function Plain(text, length)
-    if issecretvalue(text) or type(text) ~= "string" then
+    if issecretvalue(text) or (type(text) ~= "string") then
         return ""
     end
     text = gsub(gsub(gsub(text, "|T.-|t", ""), "|H.-|h(.-)|h", "%1"), "|n", "\n")
     text = gsub(gsub(gsub(text, "|c%x%x%x%x%x%x%x%x", ""), "|r", ""), "|", "")
     text = gsub(gsub(text, "\r", ""), "[%z\1-\9\11-\31]", "")
     text = gsub(gsub(text, "^%s+", ""), "%s+$", "")
-    if not length or #text <= length then
+    if not length or (#text <= length) then
         return text
     end
     -- Too long: it ends at the last whole sentence that fits, else the last whole word.
     local cut = sub(text, 1, length + 1)
-    return cut:match("^(.*[%.!%?])%s") or cut:match("^(.*%S)%s") or sub(text, 1, length)
+
+    return (cut:match("^(.*[%.!%?])%s") or cut:match("^(.*%S)%s") or sub(text, 1, length))
 end
 
 -- What an objective names (its item, creature or task), from the log's text in the client's own
@@ -117,6 +119,7 @@ local function ObjectiveName(text, kind)
     text = Plain(text, MaxLine)
     for _, pattern in ipairs(CountPatterns[kind] or AnyCountPatterns) do
         local name = match(text, pattern)
+
         if name then
             return (gsub(gsub(name, "^%s+", ""), "%s+$", ""))
         end
@@ -127,7 +130,8 @@ end
 -- A unit's name, or "" while it's secret or missing.
 local function NameOf(unit)
     local name = UnitName(unit)
-    if issecretvalue(name) or type(name) ~= "string" then
+
+    if issecretvalue(name) or (type(name) ~= "string") then
         return ""
     end
     return Plain(name, MaxLine)
@@ -136,22 +140,26 @@ end
 -- Where you are: the subzone, else the zone; and the zone.
 local function Place()
     local subZone, zone = Plain(GetSubZoneText(), MaxLine), Plain(GetRealZoneText(), MaxLine)
-    return subZone ~= "" and subZone or zone, zone
+
+    return (((subZone ~= "") and subZone) or zone), zone
 end
 
 -- The quest log's objectives for questID, as record fields (objective1, required1, type1, ...):
 -- the named ones, the rest of the slots cleared, and unnamed when one still lacks its name.
 local function ObjectiveFields(questID, values)
     local count, unnamed = 0, false
+
     for _, objective in ipairs(C_QuestLog.GetQuestObjectives(questID) or {}) do
         local required, kind = objective.numRequired, objective.type
-        kind = not issecretvalue(kind) and type(kind) == "string" and kind or ""
-        if not issecretvalue(required) and type(required) == "number" and required >= 1 and required % 1 == 0 then
+
+        kind = ((not issecretvalue(kind) and (type(kind) == "string") and kind) or "")
+        if not issecretvalue(required) and (type(required) == "number") and (required >= 1) and ((required % 1) == 0) then
             local name = ObjectiveName(objective.text, kind)
+
             if name == "" then
                 unnamed = true
             elseif count < MaxObjectives then
-                count = count + 1
+                count = (count + 1)
                 values["objective" .. count], values["required" .. count], values["type" .. count] = name, required, kind
             end
         end
@@ -166,6 +174,7 @@ end
 -- Records a quest with its objectives, and remembers it waits for names when one lacks its own.
 local function Record(questID, values)
     local key = tostring(questID)
+
     QuestBookModule.Records.quests:Set(key, ObjectiveFields(questID, values))
     if values.unnamed then
         Unnamed[key] = MaxNameReads
@@ -175,13 +184,16 @@ end
 -- Records the quests in the log the book doesn't hold yet (see the header).
 local function RecordLog()
     local quests = QuestBookModule.Records.quests
+
     for index = 1, C_QuestLog.GetNumQuestLogEntries() do
         local info = C_QuestLog.GetInfo(index)
-        local questID = info and not info.isHeader and not info.isHidden and info.questID
-        if type(questID) == "number" and not issecretvalue(questID) and questID > 0 and not quests:Has(tostring(questID)) then
+        local questID = (info and not info.isHeader and not info.isHidden and info.questID)
+
+        if (type(questID) == "number") and not issecretvalue(questID) and (questID > 0) and not quests:Has(tostring(questID)) then
             local text, goal = GetQuestLogQuestText(index)
             local values = { title = Plain(info.title, MaxLine), text = Plain(text), goal = Plain(goal, MaxLine),
                 seen = GetServerTime(), fresh = false }
+
             if values.title ~= "" then
                 Record(questID, values)
             end
@@ -200,15 +212,18 @@ local function OnLogUpdate()
         return
     end
     local quests = QuestBookModule.Records.quests
+
     for key, reads in pairs(Unnamed) do
         local questID = tonumber(key)
+
         if quests:Has(key) and C_QuestLog.GetLogIndexForQuestID(questID) then
             local values = ObjectiveFields(questID, {})
-            if values.unnamed and reads <= 1 then
+
+            if values.unnamed and (reads <= 1) then
                 values.unnamed = false -- the names never came: the named objectives are all it has
             end
             quests:Set(key, values)
-            Unnamed[key] = values.unnamed and reads - 1 or nil
+            Unnamed[key] = ((values.unnamed and (reads - 1)) or nil)
         else
             Unnamed[key] = nil -- turned in or abandoned: its log entry, and the names, are gone
         end
@@ -225,16 +240,19 @@ local function OnOffer()
 end
 
 local function OnAccepted(questID)
-    local offer = Offer and Offer.id == questID and Offer or nil
+    local offer = ((Offer and (Offer.id == questID) and Offer) or nil)
+
     Offer = nil
     local place, zone = Place()
     local values = { place = place, zone = zone, seen = GetServerTime(), fresh = true, turnedIn = false }
+
     if offer then
         values.title, values.text, values.goal, values.giver = offer.title, offer.text, offer.goal, offer.giver
     else
         -- An area trigger's quest: no dialog showed it, so it's what the quest log shows.
         local index = C_QuestLog.GetLogIndexForQuestID(questID)
         local text, goal = "", ""
+
         if index then
             text, goal = GetQuestLogQuestText(index)
         end
@@ -253,17 +271,19 @@ local function OnTurnInPanel()
 end
 
 local function OnTurnedIn(questID)
-    local turnIn = TurnIn and TurnIn.id == questID and TurnIn or nil
+    local turnIn = ((TurnIn and (TurnIn.id == questID) and TurnIn) or nil)
+
     TurnIn = nil
     local quests, key = QuestBookModule.Records.quests, tostring(questID)
     local endPlace, endZone = Place()
     local values = { turnedIn = true, endPlace = endPlace, endZone = endZone, seen = GetServerTime(), fresh = true }
+
     if turnIn then
         values.ender, values.reward = turnIn.ender, turnIn.reward
     end
     if not quests:Has(key) then
         -- Accepted before the book was open: the reward panel named it.
-        values.title = turnIn and turnIn.title or ""
+        values.title = ((turnIn and turnIn.title) or "")
         if values.title == "" then
             return
         end
@@ -277,21 +297,24 @@ end
 local function Order()
     local quests = QuestBookModule.Records.quests
     local keys = quests:Keys()
+
     table.sort(keys, function(a, b)
         local freshA, freshB = quests:Field(a, "fresh"), quests:Field(b, "fresh")
+
         if freshA ~= freshB then
             return freshA
         end
         local byA, byB
+
         if freshA then
             byA, byB = -quests:Field(a, "seen"), -quests:Field(b, "seen")
         else
             byA, byB = quests:Field(a, "askedAt"), quests:Field(b, "askedAt")
         end
         if byA ~= byB then
-            return byA < byB
+            return (byA < byB)
         end
-        return a < b
+        return (a < b)
     end)
     return keys
 end
@@ -302,8 +325,9 @@ end
 ---@param kind string? the riddle's kind ("quest.count"), or nil when none was asked
 local function Asked(key, kind)
     local quests = QuestBookModule.Records.quests
+
     if quests:Has(key) then
-        quests:Set(key, { fresh = false, askedAt = GetServerTime(), askedKind = kind or "" })
+        quests:Set(key, { fresh = false, askedAt = GetServerTime(), askedKind = (kind or "") })
     end
 end
 
@@ -311,48 +335,53 @@ end
 ---@return table[]
 local function All()
     local quests, list = QuestBookModule.Records.quests, {}
+
     for _, key in ipairs(quests:Keys()) do
         local record = quests:Get(key)
+
         record.key = key
         list[#list + 1] = record
     end
     table.sort(list, function(a, b)
         if a.seen ~= b.seen then
-            return a.seen > b.seen
+            return (a.seen > b.seen)
         end
-        return a.key < b.key
+        return (a.key < b.key)
     end)
     return list
 end
 
 local Fields = {
-    { name = "title", kind = "string", default = "" },
-    { name = "giver", kind = "string", default = "" },
-    { name = "place", kind = "string", default = "" },
-    { name = "zone", kind = "string", default = "" },
-    { name = "text", kind = "string", default = "" },
-    { name = "goal", kind = "string", default = "" },
-    { name = "turnedIn", kind = "boolean", default = false },
-    { name = "ender", kind = "string", default = "" },
-    { name = "endPlace", kind = "string", default = "" },
-    { name = "endZone", kind = "string", default = "" },
-    { name = "reward", kind = "string", default = "" },
-    { name = "seen", kind = "number", default = 0, min = 0 },
-    { name = "fresh", kind = "boolean", default = false },
-    { name = "askedAt", kind = "number", default = 0, min = 0 },
-    { name = "askedKind", kind = "string", default = "" },
+    { default = "", kind = "string", name = "title" },
+    { default = "", kind = "string", name = "giver" },
+    { default = "", kind = "string", name = "place" },
+    { default = "", kind = "string", name = "zone" },
+    { default = "", kind = "string", name = "text" },
+    { default = "", kind = "string", name = "goal" },
+    { default = false, kind = "boolean", name = "turnedIn" },
+    { default = "", kind = "string", name = "ender" },
+    { default = "", kind = "string", name = "endPlace" },
+    { default = "", kind = "string", name = "endZone" },
+    { default = "", kind = "string", name = "reward" },
+    { default = 0, kind = "number", min = 0, name = "seen" },
+    { default = false, kind = "boolean", name = "fresh" },
+    { default = 0, kind = "number", min = 0, name = "askedAt" },
+    { default = "", kind = "string", name = "askedKind" },
 }
+
 for i = 1, MaxObjectives do
-    Fields[#Fields + 1] = { name = "objective" .. i, kind = "string", default = "" }
-    Fields[#Fields + 1] = { name = "required" .. i, kind = "number", default = 0, min = 0, step = 1 }
-    Fields[#Fields + 1] = { name = "type" .. i, kind = "string", default = "" }
+    Fields[#Fields + 1] = { default = "", kind = "string", name = ("objective" .. i) }
+    Fields[#Fields + 1] = { default = 0, kind = "number", min = 0, name = ("required" .. i), step = 1 }
+    Fields[#Fields + 1] = { default = "", kind = "string", name = ("type" .. i) }
 end
-Fields[#Fields + 1] = { name = "unnamed", kind = "boolean", default = false }
+Fields[#Fields + 1] = { default = false, kind = "boolean", name = "unnamed" }
 
 QuestBookModule = Addon:Module("QuestBook", {
-    toggle = false,
     demand = true,
-    records = { { name = "quests", fields = Fields, limit = Limit, evict = "seen", scope = "character" } },
+    OnDisable = function()
+        Offer, TurnIn, LookAgain = nil, nil, false
+        wipe(Unnamed)
+    end,
     OnEnable = function(module)
         module:On("QUEST_DETAIL", OnOffer)
         module:On("QUEST_ACCEPTED", OnAccepted)
@@ -360,6 +389,7 @@ QuestBookModule = Addon:Module("QuestBook", {
         module:On("QUEST_TURNED_IN", OnTurnedIn)
         module:On("QUEST_LOG_UPDATE", OnLogUpdate)
         local quests = module.Records.quests
+
         for _, key in ipairs(quests:Keys()) do
             if quests:Field(key, "unnamed") then
                 Unnamed[key] = MaxNameReads
@@ -368,10 +398,8 @@ QuestBookModule = Addon:Module("QuestBook", {
         RecordLog()
         LookAgain = true
     end,
-    OnDisable = function()
-        Offer, TurnIn, LookAgain = nil, nil, false
-        wipe(Unnamed)
-    end,
+    records = { { evict = "seen", fields = Fields, limit = Limit, name = "quests", scope = "character" } },
+    toggle = false,
 })
 
-ns.QuestBook = { Order = Order, Asked = Asked, All = All, MaxObjectives = MaxObjectives }
+ns.QuestBook = { All = All, Asked = Asked, MaxObjectives = MaxObjectives, Order = Order }

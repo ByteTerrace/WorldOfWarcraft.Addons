@@ -2,7 +2,8 @@
 -- menus and the unit tooltip.
 
 local function EnemyPlayer(fields)
-    local unit = { name = "Bob", isPlayer = true, canAttack = true, classFile = "ROGUE", level = 60, faction = "Alliance" }
+    local unit = { canAttack = true, classFile = "ROGUE", faction = "Alliance", isPlayer = true, level = 60, name = "Bob" }
+
     for key, value in pairs(fields or {}) do unit[key] = value end
     return unit
 end
@@ -11,6 +12,7 @@ test("Menu.ModifyMenu callbacks run for their tag with owner, root and contextDa
     local h = Harness.New({ realm = "Home" })
     local env = h.env
     local got = {}
+
     env.Menu.ModifyMenu("MENU_UNIT_ENEMY_PLAYER", function(owner, root, contextData)
         got.owner, got.contextData = owner, contextData
         eq(root:GetTag(), "MENU_UNIT_ENEMY_PLAYER")
@@ -23,12 +25,14 @@ test("Menu.ModifyMenu callbacks run for their tag with owner, root and contextDa
     env.Menu.ModifyMenu("MENU_UNIT_SELF", function() got.self = true end)
     h:SetTarget(EnemyPlayer({ realm = "Away", surname = "Stone" }))
     local menu = h:OpenMenu("MENU_UNIT_ENEMY_PLAYER", { unit = "target" })
+
     falsy(got.self, "other tags don't run")
     eq(got.contextData.which, "ENEMY_PLAYER")
     eq(got.contextData.name, "Bob")
     eq(got.contextData.surname, "Stone", "Forever: UnitNameUnmodified's surname, never the realm")
     eq(table.concat(menu:Texts(), ","), "Warband,Mark for death")
     local picked, response = menu:Click("Mark for death")
+
     truthy(picked)
     eq(response, nil)
     eq(got.data, "payload")
@@ -39,36 +43,43 @@ test("Menu.ModifyMenu callbacks run for their tag with owner, root and contextDa
 end)
 
 -- MenuConstants.lua's MenuResponse: no addon names the global, so the harness doesn't fake it.
-local MenuResponse = { Refresh = 2, CloseAll = 4 }
+local MenuResponse = { CloseAll = 4, Refresh = 2 }
 
 test("a disabled element does nothing; a checkbox answers Refresh; submenus nest", function()
     local h = Harness.New()
     local env = h.env
     local clicks, checked = 0, false
+
     env.Menu.ModifyMenu("MENU_UNIT_TARGET", function(_, root)
-        local off = root:CreateButton("Off", function() clicks = clicks + 1 end)
+        local off = root:CreateButton("Off", function() clicks = (clicks + 1) end)
+
         off:SetEnabled(function() return false end)
         root:CreateCheckbox("Track", function() return checked end, function() checked = not checked end)
         local sub = root:CreateButton("Marks")
-        sub:CreateButton("Skull", function() clicks = clicks + 10; return MenuResponse.CloseAll end)
+
+        sub:CreateButton("Skull", function() clicks = (clicks + 10); return MenuResponse.CloseAll end)
     end)
     h:SetTarget({ name = "Hogger" })
     local menu = h:OpenMenu("MENU_UNIT_TARGET", { unit = "target" })
+
     falsy(menu:Click("Off"))
     eq(clicks, 0)
     local _, response = menu:Click("Track")
+
     truthy(checked)
     eq(response, MenuResponse.Refresh)
     truthy(menu:Find("Track"):IsSelected())
     falsy(menu:Click("Marks"), "a submenu root has no responder")
     truthy(menu:Find("Marks"):HasElements())
     local _, closeAll = menu:Click("Skull")
+
     eq(clicks, 10)
     eq(closeAll, MenuResponse.CloseAll, "the responder's response wins")
 end)
 
 test("queued titles appear only before a later element; unknown description methods are errors", function()
     local h = Harness.New()
+
     h.env.Menu.ModifyMenu("MENU_UNIT_SELF", function(_, root)
         root:QueueTitle("Queued")
         root:CreateButton("After", function() end)
@@ -78,18 +89,21 @@ test("queued titles appear only before a later element; unknown description meth
     end)
     h:ExpectErrors("menu description method CreateFooBar")
     local menu = h:OpenMenu("MENU_UNIT_SELF", { unit = "player" })
+
     eq(table.concat(menu:Texts(), ","), "Queued,After")
 end)
 
 test("a callback registered after a menu opened runs at once against it; Unregister stops it", function()
     local h = Harness.New()
     local env = h.env
+
     h:OpenMenu("MENU_UNIT_SELF", { unit = "player" })
     local runs = 0
     local handle = env.Menu.ModifyMenu("MENU_UNIT_SELF", function(_, _, contextData)
-        runs = runs + 1
+        runs = (runs + 1)
         eq(contextData.which, "SELF")
     end)
+
     eq(runs, 1, "the last generated menu")
     h:OpenMenu("MENU_UNIT_SELF", { unit = "player" })
     eq(runs, 2)
@@ -101,6 +115,7 @@ end)
 test("a failing callback is reported and the others still run", function()
     local h = Harness.New()
     local ran = false
+
     h.env.Menu.ModifyMenu("MENU_UNIT_SELF", function() error("boom") end)
     h.env.Menu.ModifyMenu("MENU_UNIT_SELF", function() ran = true end)
     h:ExpectErrors("boom")
@@ -111,9 +126,10 @@ end)
 test("the target frame's menu tag follows TargetFrame_OpenMenu", function()
     local h = Harness.New()
     local tags = {}
+
     for _, which in ipairs({ "ENEMY_PLAYER", "PLAYER", "PARTY", "TARGET", "SELF" }) do
         h.env.Menu.ModifyMenu("MENU_UNIT_" .. which, function(_, _, contextData)
-            tags[#tags + 1] = which .. (contextData.fromTargetFrame and "+frame" or "")
+            tags[#tags + 1] = (which .. ((contextData.fromTargetFrame and "+frame") or ""))
         end)
     end
     h:SetTarget(EnemyPlayer())
@@ -134,6 +150,7 @@ test("a unit tooltip runs post calls (all types first) with GameTooltip and the 
     local h = Harness.New()
     local env = h.env
     local order = {}
+
     env.TooltipDataProcessor.AddTooltipPostCall(env.Enum.TooltipDataType.Unit, function(tooltip, data)
         order[#order + 1] = "unit"
         eq(tooltip, env.GameTooltip)
@@ -147,10 +164,12 @@ test("a unit tooltip runs post calls (all types first) with GameTooltip and the 
     env.TooltipDataProcessor.AddTooltipPostCall(env.Enum.TooltipDataType.Item, function() order[#order + 1] = "item" end)
     local plate = h:AddNamePlate(EnemyPlayer())
     local data = h:ShowUnitTooltip(plate)
+
     eq(table.concat(order, ","), "all,unit")
     truthy(env.GameTooltip:IsShown())
     eq(env.GameTooltip:NumLines(), 3)
     local state = Harness.State(env.GameTooltip)
+
     eq(table.concat(state.lines, "|"), "Bob|Grudge|Kills\t3")
     eq(state.lineInfo[3].right, "3")
     eq(data.guid, env.UnitGUID(plate))
@@ -162,11 +181,14 @@ end)
 test("GameTooltip:GetUnit: plain for a player, all secret for an NPC, nothing without a unit tooltip", function()
     local h = Harness.New()
     local env = h.env
+
     eq(select("#", env.GameTooltip:GetUnit()), 0)
     local enemy = EnemyPlayer()
+
     h:SetMouseover(enemy)
     h:ShowUnitTooltip("mouseover")
     local name, unit, guid = env.GameTooltip:GetUnit()
+
     eq(name, "Bob")
     eq(unit, "mouseover")
     falsy(env.issecretvalue(guid))
@@ -174,9 +196,11 @@ test("GameTooltip:GetUnit: plain for a player, all secret for an NPC, nothing wi
     eq(select(2, env.GameTooltip:GetUnit()), "target", "UnitTokenFromGUID's first token for the unit")
     h:SetMouseover({ name = "Hogger" })
     local calm = h:ShowUnitTooltip("mouseover")
+
     falsy(env.issecretvalue(calm.lines[1].leftText), "an NPC's name line is plain with no restriction")
     h:SetRestriction("Encounter", true)
     local data = h:ShowUnitTooltip("mouseover")
+
     truthy(env.issecretvalue(data.guid), "an NPC's tooltip GUID")
     truthy(env.issecretvalue(data.lines[1].leftText))
     name, unit, guid = env.GameTooltip:GetUnit()
@@ -189,6 +213,7 @@ end)
 test("a post call's error is reported and the tooltip still shows; no unit hides it", function()
     local h = Harness.New()
     local env = h.env
+
     env.TooltipDataProcessor.AddTooltipPostCall(env.Enum.TooltipDataType.Unit, function() error("tip boom") end)
     env.TooltipDataProcessor.AddTooltipPostCall(nil, function() error("never") end)
     h:ExpectErrors("tip boom")
@@ -201,6 +226,7 @@ end)
 test("GameTooltip's own lines: SetOwner clears, SetText replaces, AddLine refuses secrets", function()
     local h = Harness.New()
     local tooltip = h.env.GameTooltip
+
     tooltip:SetOwner(h.env.UIParent, "ANCHOR_CURSOR")
     tooltip:SetText("Title")
     tooltip:AddLine("Body", 1, 1, 1, true)
@@ -217,6 +243,7 @@ end)
 
 test("menus and tooltip post calls belong to the UI session: a reload drops them", function()
     local h = Harness.New()
+
     Harness.DefineAddOn("UiProbe", { sources = { [[
         Menu.ModifyMenu("MENU_UNIT_SELF", function(_, root) root:CreateButton("Probe", function() end) end)
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tip) tip:AddLine("probe") end)
@@ -236,17 +263,20 @@ test("MenuUtil.CreateContextMenu runs the generator, opens a menu to click, and 
     local proxy = env.MenuUtil.CreateContextMenu(row, function(owner, root, extra)
         got.owner, got.extra = owner, extra
         root:CreateTitle("Bob")
-        root:CreateButton("Mark for death", function() clicked = clicked + 1 end)
+        root:CreateButton("Mark for death", function() clicked = (clicked + 1) end)
         root:CreateCheckbox("Track", function() return got.track end, function() got.track = not got.track end)
     end, "extra")
+
     truthy(proxy, "an opened menu returns its proxy")
     throws(function() return proxy:Close() end, "doesn't model the menu's Close")
     eq(got.owner, row)
     eq(got.extra, "extra")
     eq(h.soundKits[#h.soundKits].kit, 856, "SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON")
     local menu = h:OpenContextMenu()
+
     eq(table.concat(menu:Texts(), ","), "Bob,Mark for death,Track", "no Blizzard title")
     local _, response = menu:Click("Track")
+
     eq(response, MenuResponse.Refresh)
     eq(h:OpenContextMenu(), menu, "a Refresh keeps it open")
     menu:Click("Mark for death")
@@ -257,14 +287,17 @@ end)
 test("an empty context menu opens nothing; a tagged one runs Menu.ModifyMenu; a nil owner is UIParent", function()
     local h = Harness.New()
     local env = h.env
+
     env.MenuUtil.CreateContextMenu(nil, function(_, root) root:CreateButton("First", function() end) end)
     local sounds = #h.soundKits
     local owner
+
     eq(env.MenuUtil.CreateContextMenu(nil, function(o) owner = o end), nil)
     eq(owner, env.UIParent)
     eq(#h.soundKits, sounds, "no sound for a menu that didn't open")
     throws(function() h:OpenContextMenu() end, "no context menu is open", "opening closes the one before")
     local modified
+
     env.Menu.ModifyMenu("MENU_HARNESS_ROW", function(_, root, contextData)
         modified = contextData
         root:CreateButton("Added", function() end)
@@ -284,6 +317,7 @@ test("RAID_CLASS_COLORS holds the client's classes: r, g, b and colorStr", funct
     local h = Harness.New()
     local env = h.env
     local warrior = env.RAID_CLASS_COLORS.WARRIOR
+
     eq(warrior.colorStr, "ffc69b6d")
     eq(warrior.r, 198 / 255)
     eq(warrior.g, 155 / 255)
@@ -291,6 +325,7 @@ test("RAID_CLASS_COLORS holds the client's classes: r, g, b and colorStr", funct
     eq(env.RAID_CLASS_COLORS.SHAMAN.colorStr, "ff0070dd")
     eq(env.RAID_CLASS_COLORS.DEATHKNIGHT, nil, "a class the client doesn't have")
     local count = 0
-    for _ in pairs(env.RAID_CLASS_COLORS) do count = count + 1 end
+
+    for _ in pairs(env.RAID_CLASS_COLORS) do count = (count + 1) end
     eq(count, 9)
 end)

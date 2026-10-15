@@ -40,15 +40,16 @@ local addonName, ns = ...
 -- probes (probe name -> record, what `tlk probes` reads). Each command replaces only its own part.
 
 local Nested = { Enum = true }
-local Probes = ns.Probes
 local Prefix = "ByteTerrace DevTools: "
+local Probes = ns.Probes
 
 -- [addon name] = tainted keys skipped, for the dump in progress.
 local Skipped
 
 local function Skip(taintedBy)
-    local owner = taintedBy or "?"
-    Skipped[owner] = (Skipped[owner] or 0) + 1
+    local owner = (taintedBy or "?")
+
+    Skipped[owner] = ((Skipped[owner] or 0) + 1)
 end
 
 -- Secure string keys of a table, sorted. A table whose keys can't be read securely (a forbidden
@@ -59,6 +60,7 @@ local function SecureKeys(tbl)
         for key in pairs(tbl) do
             if type(key) == "string" then
                 local secure, taintedBy = issecurevariable(tbl, key)
+
                 if secure then
                     keys[#keys + 1] = key
                 else
@@ -67,6 +69,7 @@ local function SecureKeys(tbl)
             end
         end
     end)
+
     if not ok then
         return {}
     end
@@ -78,15 +81,17 @@ local function DescribeTable(name, value)
     if value == _G then
         return { type = "table" } -- its members are the dump itself
     end
-    if type(rawget(value, 0)) == "userdata" and type(value.GetObjectType) == "function" then
+    if (type(rawget(value, 0)) == "userdata") and (type(value.GetObjectType) == "function") then
         return { type = "frame" }
     end
     local members = SecureKeys(value)
-    local entry = { type = "table", members = members }
+    local entry = { members = members, type = "table" }
+
     if Nested[name] then
         entry.tables = {}
         for _, key in ipairs(members) do
             local nested = value[key]
+
             if type(nested) == "table" then
                 entry.tables[key] = SecureKeys(nested)
             end
@@ -96,7 +101,7 @@ local function DescribeTable(name, value)
 end
 
 local function Database()
-    ByteTerraceDevToolsDB = type(ByteTerraceDevToolsDB) == "table" and ByteTerraceDevToolsDB or {}
+    ByteTerraceDevToolsDB = (((type(ByteTerraceDevToolsDB) == "table") and ByteTerraceDevToolsDB) or {})
     return ByteTerraceDevToolsDB
 end
 
@@ -106,14 +111,17 @@ end
 
 local function Dump()
     local globals, count = {}, 0
+
     Skipped = {}
     for name, value in pairs(_G) do
         if type(name) == "string" then
             local secure, taintedBy = issecurevariable(name)
+
             if secure then
                 local kind = type(value)
-                globals[name] = kind == "table" and DescribeTable(name, value) or { type = kind }
-                count = count + 1
+
+                globals[name] = (((kind == "table") and DescribeTable(name, value)) or { type = kind })
+                count = (count + 1)
             else
                 Skip(taintedBy)
             end
@@ -121,7 +129,8 @@ local function Dump()
     end
     local version, build, _, interface = GetBuildInfo()
     local db = Database()
-    db.build = { version = version, build = build, interface = interface }
+
+    db.build = { build = build, interface = interface, version = version }
     db.globals = globals
     db.skipped = Skipped
     Say(("recorded %d client globals from %s (%s). /reload to write them."):format(count, version, build))
@@ -132,6 +141,7 @@ end
 local function PrintGroups(groups)
     for step, name in ipairs(Probes.Steps) do
         local texts = {}
+
         for text in pairs(groups[step] or {}) do
             texts[#texts + 1] = text
         end
@@ -148,14 +158,16 @@ end
 -- Files a probe under the play-session step that meets all its needs, and a text.
 local function AddToGroup(groups, probe, text)
     local step = Probes.Step(probe)
-    groups[step] = groups[step] or {}
-    groups[step][text] = groups[step][text] or {}
+
+    groups[step] = (groups[step] or {})
+    groups[step][text] = (groups[step][text] or {})
     table.insert(groups[step][text], probe.name)
 end
 
 -- A set of contexts as text, sorted and joined by "; " (a context's restrictions hold commas).
 local function ContextList(contexts)
     local list = {}
+
     for context in pairs(contexts) do
         list[#list + 1] = context
     end
@@ -165,38 +177,44 @@ end
 
 local function RunProbes()
     local db = Database()
-    db.probes = type(db.probes) == "table" and db.probes or {}
+
+    db.probes = (((type(db.probes) == "table") and db.probes) or {})
     local recorded, added, changed, confirmed, skipped, failed = 0, 0, 0, 0, {}, 0
     local build = Probes.Build()
+
     for _, probe in ipairs(Probes.List) do
         local met, unmet = Probes.Check(probe)
         local saved = db.probes[probe.name]
+
         if not met then
             -- Only probes still without a result for this build are left to do.
-            if not (Probes.IsCurrent(probe, saved) and saved.build == build) then
+            if not (Probes.IsCurrent(probe, saved) and (saved.build == build)) then
                 AddToGroup(skipped, probe, unmet)
             end
         else
             local record, problem = Probes.Record(probe)
+
             if not record then
-                failed = failed + 1
+                failed = (failed + 1)
                 Say(("probe %s failed: %s"):format(probe.name, problem))
             else
                 -- A changed answer is news; a new context alone (combat now, idle before) is only
                 -- counted, so it doesn't bury the answers that did change.
                 local kept, outcome, differences = Probes.Keep(probe, saved, record)
+
                 if outcome == "new" then
-                    added = added + 1
+                    added = (added + 1)
                 elseif outcome == "confirmed" then
-                    confirmed = confirmed + 1
+                    confirmed = (confirmed + 1)
                 elseif outcome == "changed" then
-                    changed = changed + 1
+                    changed = (changed + 1)
                     for _, difference in ipairs(differences) do
                         Say(("probe %s changed at result.%s: was %s, now %s"):format(probe.name, difference.path,
                             Probes.Show(difference.a), Probes.Show(difference.b)))
                     end
                     local dropped = {}
-                    for context in pairs(type(saved.contexts) == "table" and saved.contexts or {}) do
+
+                    for context in pairs(((type(saved.contexts) == "table") and saved.contexts) or {}) do
                         if not kept.contexts[context] then
                             dropped[context] = true
                         end
@@ -207,12 +225,12 @@ local function RunProbes()
                     end
                 end
                 db.probes[probe.name] = kept
-                recorded = recorded + 1
+                recorded = (recorded + 1)
             end
         end
     end
     Say(("recorded %d probes (%d new, %d changed, %d confirmed in a new context or build)%s. /reload to write them.")
-        :format(recorded, added, changed, confirmed, failed > 0 and (", " .. failed .. " failed") or ""))
+        :format(recorded, added, changed, confirmed, ((failed > 0) and (", " .. failed .. " failed")) or ""))
     if next(skipped) then
         print("  Skipped until their need is met, in play-session order; set it up and type /btdev probe again:")
         PrintGroups(skipped)
@@ -220,13 +238,15 @@ local function RunProbes()
 end
 
 local function ListProbes()
-    local probes = type(ByteTerraceDevToolsDB) == "table" and type(ByteTerraceDevToolsDB.probes) == "table"
-        and ByteTerraceDevToolsDB.probes or {}
+    local probes = (((type(ByteTerraceDevToolsDB) == "table") and (type(ByteTerraceDevToolsDB.probes) == "table")
+        and ByteTerraceDevToolsDB.probes) or {})
     local build, missing, count = Probes.Build(), {}, 0
+
     for _, probe in ipairs(Probes.List) do
         local record = probes[probe.name]
-        if not Probes.IsCurrent(probe, record) or record.build ~= build then
-            count = count + 1
+
+        if not Probes.IsCurrent(probe, record) or (record.build ~= build) then
+            count = (count + 1)
             AddToGroup(missing, probe, Probes.NeedsText(probe))
         end
     end
@@ -247,8 +267,10 @@ local function Help()
 end
 
 SLASH_BYTETERRACEDEVTOOLS1 = "/btdev"
+
 SlashCmdList.BYTETERRACEDEVTOOLS = function(input)
     local command = strtrim(input or ""):lower()
+
     if command == "dump" then
         Dump()
     elseif command == "probe" then
@@ -262,6 +284,7 @@ end
 
 -- UNIT_COMBAT for unitCombat.seen, from load; RegisterUnitEvent keeps it to the two units.
 local CombatListener = CreateFrame("Frame")
+
 CombatListener:RegisterUnitEvent("UNIT_COMBAT", "player", "target")
 CombatListener:SetScript("OnEvent", function(_, _, ...)
     Probes.NoteUnitCombat(...)
@@ -269,6 +292,7 @@ end)
 
 -- Chat events' senders for names.chatSenders, from load.
 local ChatListener = CreateFrame("Frame")
+
 for _, event in ipairs({ "CHAT_MSG_ADDON", "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_CHANNEL", "CHAT_MSG_PARTY",
     "CHAT_MSG_RAID", "CHAT_MSG_GUILD", "CHAT_MSG_WHISPER" }) do
     ChatListener:RegisterEvent(event)
@@ -276,10 +300,12 @@ end
 ChatListener:SetScript("OnEvent", function(_, event, ...)
     if event == "CHAT_MSG_ADDON" then
         local _, _, _, sender = ...
+
         Probes.NoteSender(event, sender)
         Probes.NoteAddonMessage(...)
     else
         local _, author = ...
+
         Probes.NoteSender(event, author)
         Probes.NoteDiscordInfo(event, (select(18, ...)))
     end
@@ -289,6 +315,7 @@ end)
 -- into and out of combat for combat.edges.
 Probes.SyncRestrictions()
 local RestrictionListener = CreateFrame("Frame")
+
 RestrictionListener:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
 RestrictionListener:RegisterEvent("PLAYER_REGEN_DISABLED")
 RestrictionListener:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -311,6 +338,7 @@ end)
 
 -- UNIT_AURA's unit token for units.secretTokenInAuraEvent; RegisterUnitEvent keeps it to two units.
 local AuraListener = CreateFrame("Frame")
+
 AuraListener:RegisterUnitEvent("UNIT_AURA", "player", "target")
 AuraListener:SetScript("OnEvent", function(_, _, unit)
     Probes.NoteAuraToken(unit)
@@ -318,6 +346,7 @@ end)
 
 -- Your deaths and the damage meter's updates after them, for damageMeter.afterDeath, from load.
 local MeterListener = CreateFrame("Frame")
+
 MeterListener:RegisterEvent("PLAYER_DEAD")
 MeterListener:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED")
 MeterListener:SetScript("OnEvent", function(_, event, meterType)
@@ -330,6 +359,7 @@ end)
 
 -- The kill events for kills.seen, from load.
 local KillListener = CreateFrame("Frame")
+
 KillListener:RegisterEvent("PARTY_KILL")
 KillListener:RegisterEvent("PLAYER_TARGET_DIED")
 KillListener:RegisterEvent("UNIT_DIED")
@@ -339,6 +369,7 @@ end)
 
 -- Boss encounters' starts and warnings for encounterWarning.seen, from load.
 local EncounterListener = CreateFrame("Frame")
+
 EncounterListener:RegisterEvent("ENCOUNTER_START")
 EncounterListener:RegisterEvent("ENCOUNTER_WARNING")
 EncounterListener:SetScript("OnEvent", function(_, event, info)

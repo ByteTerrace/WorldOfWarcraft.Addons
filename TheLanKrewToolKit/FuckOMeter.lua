@@ -12,8 +12,8 @@ local addonName, ns = ...
 -- The meter frame is the global TheLanKrewToolKitFuckOMeter: its name (Label) centered on the
 -- bar, and the energy in Bar and in Value at the bar's right end.
 
-local Energy = Enum.PowerType.Energy
 local Ease = Enum.StatusBarInterpolation.ExponentialEaseOut
+local Energy = Enum.PowerType.Energy
 local Height = 64
 local SideInset = 24
 
@@ -23,6 +23,7 @@ local Meter
 
 local function CreateMeter()
     local frame = CreateFrame("Frame", addonName .. "FuckOMeter", UIParent, "BackdropTemplate")
+
     frame:SetPoint("LEFT", UIParent, "LEFT", SideInset, 0)
     frame:SetPoint("RIGHT", UIParent, "RIGHT", -SideInset, 0)
     frame:SetHeight(Height)
@@ -31,26 +32,30 @@ local function CreateMeter()
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        insets = { bottom = 4, left = 4, right = 4, top = 4 },
     })
     frame:SetBackdropColor(0, 0, 0, 0.6)
     frame:Hide()
 
     local bar = CreateFrame("StatusBar", nil, frame)
+
     bar:SetPoint("TOPLEFT", 5, -5)
     bar:SetPoint("BOTTOMRIGHT", -5, 5)
     bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    local color = PowerBarColor and PowerBarColor.ENERGY or { r = 1, g = 1, b = 0 }
+    local color = ((PowerBarColor and PowerBarColor.ENERGY) or { b = 0, g = 1, r = 1 })
+
     bar:SetStatusBarColor(color.r, color.g, color.b)
     frame.Bar = bar
 
     local label = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+
     label:SetPoint("CENTER")
     label:SetText("FUCK-O-METER")
     label:SetTextColor(1, 1, 1)
     frame.Label = label
 
     local value = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+
     value:SetPoint("RIGHT", -16, 0)
     value:SetTextColor(1, 1, 1)
     frame.Value = value
@@ -60,34 +65,39 @@ end
 
 -- Power events carry the power token; other resources (a druid's mana) are ignored.
 local function UpdateRange(_, powerToken)
-    if powerToken == nil or powerToken == "ENERGY" then
+    if (powerToken == nil) or (powerToken == "ENERGY") then
         Meter.Bar:SetMinMaxValues(0, UnitPowerMax("player", Energy)) -- secret: widget sink
     end
 end
 
 local function UpdateValue(_, powerToken)
-    if powerToken == nil or powerToken == "ENERGY" then
+    if (powerToken == nil) or (powerToken == "ENERGY") then
         local current = UnitPower("player", Energy) -- secret: widget sink
+
         Meter.Bar:SetValue(current, Ease)
         Meter.Value:SetText(current)
     end
 end
 
 ns.Addon:Module("FuckOMeter", {
-    label = "Fuck-o-meter",
-    description = "Show an obnoxiously wide energy bar across the middle of the screen.",
     commands = {
         {
-            name = "toggle", slash = "fom", label = "Toggle the fuck-o-meter", always = true,
-            run = function() ns.Addon.State:Toggle("FuckOMeter.enabled") end,
+            always = true, label = "Toggle the fuck-o-meter", name = "toggle",
+            run = function() ns.Addon.State:Toggle("FuckOMeter.enabled") end, slash = "fom",
         },
     },
+    description = "Show an obnoxiously wide energy bar across the middle of the screen.",
+    label = "Fuck-o-meter",
+    OnDisable = function()
+        Meter:Hide()
+    end,
     OnEnable = function(module)
-        Meter = Meter or CreateMeter()
+        Meter = (Meter or CreateMeter())
         local powerHandles
 
         local function UpdateVisibility()
-            local visible = UnitPowerType("player") == Energy
+            local visible = (UnitPowerType("player") == Energy)
+
             if visible and not powerHandles then
                 powerHandles = {
                     module:On("UNIT_MAXPOWER", UpdateRange, "player"),
@@ -114,8 +124,5 @@ ns.Addon:Module("FuckOMeter", {
         end)
         module:On("UNIT_DISPLAYPOWER", UpdateVisibility, "player")
         UpdateVisibility()
-    end,
-    OnDisable = function()
-        Meter:Hide()
     end,
 })

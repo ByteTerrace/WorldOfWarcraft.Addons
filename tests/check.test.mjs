@@ -4,13 +4,13 @@
 // The findings must be exactly EXPECTED, so a rule that stops firing (or starts misfiring) fails.
 // tests/fixtures/toc holds one addon per Forever TOC suffix and one with both.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadAddons } from "../tools/lib/harness.mjs";
 import { findAddons } from "../tools/lib/repo.mjs";
 import { FIXTURES, assert, assertSame, captureLog, withTemp } from "../tools/lib/test-support.mjs";
 import { buildOf, interfaceOf } from "../tools/lib/wow.mjs";
-import { loadApi, runChecks } from "../tools/verbs/check.mjs";
+import { formatFindings, loadApi, runChecks } from "../tools/verbs/check.mjs";
 
 const SECRET_CALL = "check issecretvalue on each result before any use or annotate \"-- secret: <why>\"";
 const SECRET_VALUE = "and is passed as a value, so its results skip the call-site check; annotate \"-- secret: <why>\"";
@@ -269,5 +269,29 @@ export const tests = [
             assert(!docsOnly.hasDump && docsOnly.globals.has("UnitHealth") && docsOnly.members.get("C_Spell").has("GetSpellName"), "docs fallback");
             assert(docsOnly.members.get("Enum.PowerType").has("Energy"), "documented enumerations");
         },
+    },
+    {
+        name: "check holds a file to 1000 lines",
+        run: async () => withTemp(async (dir) => {
+            mkdirSync(join(dir, "LongAddon"));
+            writeFileSync(join(dir, "LongAddon", "LongAddon_Camelot.toc"), "## Interface: 16001\n## Title: Long Addon\n\nMain.lua\n");
+            const body = (count) => `local addonName, ns = ...\n${"print(addonName, ns)\n".repeat(count - 1)}`;
+            writeFileSync(join(dir, "LongAddon", "Main.lua"), body(1000));
+            assertSame(await runChecks({ quiet: true, root: dir, clientInterface: 16001 }), []);
+            writeFileSync(join(dir, "LongAddon", "Main.lua"), body(1001));
+            assertSame(await runChecks({ quiet: true, root: dir, clientInterface: 16001 }), ["LongAddon/Main.lua:1000: LENGTH 1001 lines exceeds 1000"]);
+        }),
+    },
+    {
+        // check runs FORMAT over the repository root only; formatFindings is what it reports.
+        name: "check's FORMAT names a file's first line the format verb would change, and leaves fixtures alone",
+        run: async () => withTemp(async (dir) => {
+            mkdirSync(join(dir, "tests", "fixtures"), { recursive: true });
+            writeFileSync(join(dir, "tests", "kept.test.lua"), "local a = 1\n\nprint(a)\n");
+            writeFileSync(join(dir, "tests", "loose.test.lua"), "local a = 1\nprint(a == 1)\n");
+            writeFileSync(join(dir, "tests", "fixtures", "bad.lua"), "local a = 1\nprint(a)\n");
+            const findings = formatFindings(dir).map((finding) => `${finding.path}:${finding.line}`);
+            assertSame(findings, ["tests/loose.test.lua:2"]);
+        }),
     },
 ];

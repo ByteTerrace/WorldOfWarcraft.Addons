@@ -19,15 +19,15 @@ local Constants, issecretvalue, UnitName = Constants, issecretvalue, UnitName
 local type = type
 
 local Separators = Constants.CharacterNameSeparatorConsts
-local Separator = Separators and Separators.CHARACTERNAME_SURNAME_SEPARATOR or " "
+local Separator = ((Separators and Separators.CHARACTERNAME_SURNAME_SEPARATOR) or " ")
 
 --- "First Last", or first alone when there's no surname (an NPC).
 ---@param first string
 ---@param surname string?
 ---@return string
 local function Full(first, surname)
-    if type(surname) == "string" and surname ~= "" then
-        return first .. Separator .. surname
+    if (type(surname) == "string") and (surname ~= "") then
+        return (first .. Separator .. surname)
     end
     return first
 end
@@ -37,7 +37,8 @@ end
 ---@return string?
 local function OfUnit(unit)
     local first, surname = UnitName(unit)
-    if issecretvalue(first) or issecretvalue(surname) or type(first) ~= "string" or first == "" then
+
+    if issecretvalue(first) or issecretvalue(surname) or (type(first) ~= "string") or (first == "") then
         return nil
     end
     return Full(first, surname)
@@ -53,7 +54,7 @@ end
 ---@param text string
 ---@return string
 local function Plain(text)
-    return text:match("^[^%-]+") or text
+    return (text:match("^[^%-]+") or text)
 end
 
-ByteTerrace.Names = { Full = Full, OfUnit = OfUnit, Mine = Mine, Plain = Plain }
+ByteTerrace.Names = { Full = Full, Mine = Mine, OfUnit = OfUnit, Plain = Plain }

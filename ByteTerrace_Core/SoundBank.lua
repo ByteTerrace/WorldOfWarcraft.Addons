@@ -26,38 +26,41 @@
 -- master names the boolean row that switches every sound, channel the string row naming the
 -- volume channel they play on (Master, SFX, Music, Ambience, Dialog).
 
-local MaxVariants = 5
-local FadeOutMilliseconds = 1000
 local Extensions = { ".ogg", ".mp3" }
+local FadeOutMilliseconds = 1000
+local MaxVariants = 5
 
 local ByteTerrace = ByteTerrace
 local C_UIFileAsset, GetTime, PlaySoundFile, StopSound = C_UIFileAsset, GetTime, PlaySoundFile, StopSound
+local concat = table.concat
 local ipairs, pairs, print, random, select = ipairs, pairs, print, math.random, select
 local tonumber, tostring, type = tonumber, tostring, type
-local concat = table.concat
 
 local SoundBank = {}
+
 SoundBank.__index = SoundBank
 
 local function FileName(sound, variant)
-    return variant == 1 and sound.file or (sound.file .. variant)
+    return (((variant == 1) and sound.file) or (sound.file .. variant))
 end
 
 -- A sound's files, read once: the client only sees files that existed at launch. files[variant] is
 -- the path the client knows for that variant (.ogg first) or false; present lists the known ones.
 local function Files(self, sound)
     local files = sound.files
+
     if files then
         return files, sound.present
     end
     files, sound.present = {}, {}
     for variant = 1, MaxVariants do
-        local name = self.m_folder .. FileName(sound, variant)
+        local name = (self.m_folder .. FileName(sound, variant))
+
         files[variant] = false
         for _, extension in ipairs(Extensions) do
             if C_UIFileAsset.IsKnownFile(name .. extension) then
-                files[variant] = name .. extension
-                sound.present[#sound.present + 1] = name .. extension
+                files[variant] = (name .. extension)
+                sound.present[#sound.present + 1] = (name .. extension)
                 break
             end
         end
@@ -69,15 +72,17 @@ end
 -- Plays one of a sound's present files at random. Returns whether it played, and its handle.
 local function PlayAny(self, sound)
     local _, present = Files(self, sound)
+
     if #present == 0 then
         return false
     end
     local willPlay, handle = PlaySoundFile(present[random(#present)], self.m_addon.State:Get(self.m_channel))
-    return willPlay and true or false, handle
+
+    return ((willPlay and true) or false), handle
 end
 
 local function Applies(state, sound)
-    return state:Get(sound.row) and (not sound.needs or state:Get(sound.needs)) and true or false
+    return ((state:Get(sound.row) and (not sound.needs or state:Get(sound.needs)) and true) or false)
 end
 
 --- Creates an addon's sound bank.
@@ -85,14 +90,14 @@ end
 ---@param options table { master, channel, folder? }: row names, and the media folder (default:
 ---                     the addon's Media folder)
 function ByteTerrace.NewSoundBank(addon, options)
-    if type(options.master) ~= "string" or type(options.channel) ~= "string" then
+    if (type(options.master) ~= "string") or (type(options.channel) ~= "string") then
         error("NewSoundBank needs the master and channel row names", 2)
     end
     return setmetatable({
         m_addon = addon,
         m_master = options.master,
         m_channel = options.channel,
-        m_folder = options.folder or ("Interface\\AddOns\\" .. addon.Name .. "\\Media\\"),
+        m_folder = (options.folder or ("Interface\\AddOns\\" .. addon.Name .. "\\Media\\")),
         m_catalog = {},    -- [key] = the sound's spec
         m_order = {},      -- keys in definition order, for Test
         m_byWord = {},     -- [word] = spec
@@ -108,6 +113,7 @@ function SoundBank:Define(key, spec)
         error(self.m_addon.Name .. ": sound " .. key .. " (" .. tostring(spec.word) .. ") is already defined", 2)
     end
     local own = { key = key }
+
     for field, value in pairs(spec) do
         own[field] = value
     end
@@ -125,20 +131,23 @@ end
 ---@return table row
 function SoundBank:Row(name, label, description, keys)
     local howTo
+
     if #keys == 1 then
         local sound = self.m_catalog[keys[1]]
-        local slash = self.m_addon.Slash and self.m_addon.Slash[1] or ""
+        local slash = ((self.m_addon.Slash and self.m_addon.Slash[1]) or "")
+
         howTo = ("Put %s.ogg or %s.mp3 in the addon's Media folder (%s2 to %s%d for variety), then restart the game. Test with %s sound %s.")
             :format(sound.file, sound.file, sound.file, sound.file, MaxVariants, slash, sound.word)
     else
         local files = {}
+
         for i, key in ipairs(keys) do
             files[i] = self.m_catalog[key].file
         end
         howTo = ("Files: %s (.ogg or .mp3; numbered copies add variety) in the addon's Media folder, then restart the game.")
             :format(concat(files, ", "))
     end
-    return { name = name, kind = "boolean", default = true, label = label, description = description .. " " .. howTo }
+    return { default = true, description = (description .. " " .. howTo), kind = "boolean", label = label, name = name }
 end
 
 --- Whether a sound would play now, cooldown aside: the master switch, its row and its needs row.
@@ -146,7 +155,8 @@ end
 ---@return boolean
 function SoundBank:IsOn(key)
     local state = self.m_addon.State
-    return state:Get(self.m_master) and Applies(state, self.m_catalog[key])
+
+    return (state:Get(self.m_master) and Applies(state, self.m_catalog[key]))
 end
 
 --- Plays a variant of a sound if it's on and off cooldown.
@@ -154,15 +164,18 @@ end
 ---@return integer? handle nil when nothing played
 function SoundBank:Play(key)
     local sound = self.m_catalog[key]
+
     if not self:IsOn(key) then
         return nil
     end
     local now = GetTime()
     local last = self.m_lastPlayed[key]
-    if sound.cooldown and last and now - last < sound.cooldown then
+
+    if sound.cooldown and last and ((now - last) < sound.cooldown) then
         return nil
     end
     local played, handle = PlayAny(self, sound)
+
     if played then
         self.m_lastPlayed[key] = now
         self.m_addon:Debug("Sound:", sound.label)
@@ -177,8 +190,10 @@ end
 function SoundBank:WhileOn(...)
     local master, sounds = self.m_master, {}
     local reads, seen = { master }, { [master] = true }
+
     for i = 1, select("#", ...) do
         local sound = self.m_catalog[(select(i, ...))]
+
         sounds[i] = sound
         for _, row in ipairs({ sound.row, sound.needs }) do
             if not seen[row] then
@@ -216,8 +231,9 @@ function SoundBank:Test(arg)
     local addon = self.m_addon
     local word, which = (arg or ""):match("^%s*(%S*)%s*(%d*)")
     local sound = self.m_byWord[word]
+
     if not sound then
-        addon:Print("Test a sound with " .. (addon.Slash and addon.Slash[1] or "") .. " sound <name> [variant]:")
+        addon:Print("Test a sound with " .. ((addon.Slash and addon.Slash[1]) or "") .. " sound <name> [variant]:")
         for _, key in ipairs(self.m_order) do
             print(("  %s - %s.ogg or .mp3"):format(self.m_catalog[key].word, self.m_catalog[key].file))
         end
@@ -227,15 +243,17 @@ function SoundBank:Test(arg)
     local files, present = Files(self, sound)
     local variant = tonumber(which)
     local played, known
-    if variant and variant >= 1 and variant <= MaxVariants then
+
+    if variant and (variant >= 1) and (variant <= MaxVariants) then
         known = files[variant]
-        played = known and PlaySoundFile(known, channel)
+        played = (known and PlaySoundFile(known, channel))
     else
         variant = nil
-        known = #present > 0
+        known = (#present > 0)
         played = PlayAny(self, sound)
     end
-    local file = variant and FileName(sound, variant) or sound.file
+    local file = ((variant and FileName(sound, variant)) or sound.file)
+
     if played then
         addon:Print("Playing", sound.label, "on the", channel, "channel.")
     elseif known then

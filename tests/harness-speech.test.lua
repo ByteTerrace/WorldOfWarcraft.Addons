@@ -5,6 +5,7 @@ test("combat audio alerts speak only when the player turned them on, and refuse 
     local h = Harness.New()
     local env = h.env
     local alerts, category = env.C_CombatAudioAlert, env.Enum.CombatAudioAlertCategory.General
+
     falsy(alerts.IsEnabled(), "off by default (CAAEnabled is 0)")
     eq(select("#", alerts.SpeakText("Incoming", category)), 0, "disabled: nothing spoken, nothing returned")
     eq(#h.spoken, 0)
@@ -22,6 +23,7 @@ test("combat audio alerts speak only when the player turned them on, and refuse 
     throws(function() alerts.SpeakText("x", 99) end, "unknown category")
     throws(function() alerts.SpeakText(Secret("Bob"), category) end, "secret argument #1 refused")
     local on = Harness.New({ combatAudioAlerts = true })
+
     truthy(on.env.C_CombatAudioAlert.IsEnabled())
 end)
 
@@ -30,12 +32,14 @@ test("text to speech speaks with the player's settings and takes a secret text",
     local env = h.env
     local voiceID = env.C_TTSSettings.GetVoiceOptionID(env.Enum.TtsVoiceType.Standard)
     local voices = env.C_VoiceChat.GetTtsVoices()
+
     eq(#voices, 1)
     eq(voices[1].voiceID, voiceID)
     eq(env.C_TTSSettings.GetSpeechRate(), 0)
     eq(env.C_TTSSettings.GetSpeechVolume(), 100)
     eq(select("#", env.C_VoiceChat.SpeakText(voiceID, "Bob is here", 0, 100)), 0, "returns nothing")
     local spoken = h.spoken[1]
+
     eq(spoken.api, "C_VoiceChat.SpeakText")
     eq(spoken.text, "Bob is here")
     eq(spoken.voiceID, voiceID)
@@ -45,6 +49,7 @@ test("text to speech speaks with the player's settings and takes a secret text",
     h:SetTarget({ name = "Hogger" })
     h:SetRestriction("Encounter", true)
     local name = env.UnitName("target")
+
     truthy(env.issecretvalue(name), "an NPC's name is secret in an encounter")
     env.C_VoiceChat.SpeakText(voiceID, name, 0, 100, true)
     truthy(IsSecret(h.spoken[2].text), "the secret text is spoken as is")

@@ -23,14 +23,33 @@ local InCombatLockdown, issecretvalue = InCombatLockdown, issecretvalue
 local UnitAffectingCombat, UnitIsAFK = UnitAffectingCombat, UnitIsAFK
 
 ByteTerrace.Facts = {
-    combat = {
-        toggle = false,
-        state = { { name = "active", kind = "boolean", default = false, persist = false } },
+    afk = {
         OnEnable = function(module)
             local active = module:Id("active")
             local state = module.Addon.State
+
             local function Update()
-                state:Set(active, (InCombatLockdown() or UnitAffectingCombat("player")) and true or false)
+                -- UnitIsAFK is secret during chat messaging lockdown; keep the last known value then.
+                local afk = UnitIsAFK("player")
+
+                if not issecretvalue(afk) then
+                    state:Set(active, (afk and true) or false)
+                end
+            end
+            module:On("PLAYER_ENTERING_WORLD", Update)
+            module:On("PLAYER_FLAGS_CHANGED", Update, "player")
+            Update()
+        end,
+        state = { { default = false, kind = "boolean", name = "active", persist = false } },
+        toggle = false,
+    },
+    combat = {
+        OnEnable = function(module)
+            local active = module:Id("active")
+            local state = module.Addon.State
+
+            local function Update()
+                state:Set(active, ((InCombatLockdown() or UnitAffectingCombat("player")) and true) or false)
             end
             module:On("PLAYER_ENTERING_WORLD", Update)
             module:On("PLAYER_REGEN_DISABLED", function()
@@ -41,23 +60,7 @@ ByteTerrace.Facts = {
             end)
             Update()
         end,
-    },
-    afk = {
+        state = { { default = false, kind = "boolean", name = "active", persist = false } },
         toggle = false,
-        state = { { name = "active", kind = "boolean", default = false, persist = false } },
-        OnEnable = function(module)
-            local active = module:Id("active")
-            local state = module.Addon.State
-            local function Update()
-                -- UnitIsAFK is secret during chat messaging lockdown; keep the last known value then.
-                local afk = UnitIsAFK("player")
-                if not issecretvalue(afk) then
-                    state:Set(active, afk and true or false)
-                end
-            end
-            module:On("PLAYER_ENTERING_WORLD", Update)
-            module:On("PLAYER_FLAGS_CHANGED", Update, "player")
-            Update()
-        end,
     },
 }

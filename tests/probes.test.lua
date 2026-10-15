@@ -17,21 +17,25 @@ local Definitions = Harness.New():LoadFiles("ByteTerrace_DevTools").Probes
 
 for _, definition in ipairs(Definitions.List) do
     local name = definition.name
+
     test("probe " .. name, function()
         local run = Harness.RunProbe(name)
         local Probes = run.Probes
+
         if run.gap then
-            pending(("the harness can't run it (%s)%s"):format(run.gap, run.observed and "; the client's record is unchecked" or ""))
+            pending(("the harness can't run it (%s)%s"):format(run.gap, (run.observed and "; the client's record is unchecked") or ""))
         end
         if run.problem then
             error(run.problem, 0)
         end
         if not run.observed then
-            local needs = #run.probe.needs > 0 and (" with " .. Probes.NeedsText(run.probe)) or ""
+            local needs = (((#run.probe.needs > 0) and (" with " .. Probes.NeedsText(run.probe))) or "")
+
             pending("no observed result (in game: /btdev probe" .. needs .. ")")
         end
         if #run.differences > 0 then
             local lines = { ("the harness answers differently than client %s did:"):format(run.observed.build) }
+
             for _, difference in ipairs(run.differences) do
                 lines[#lines + 1] = ("  in %s, %s: client %s, harness %s"):format(difference.context, difference.path,
                     Probes.Show(difference.a), Probes.Show(difference.b))
@@ -45,6 +49,7 @@ test("the harness replays a probe in every context the client confirmed its resu
     local result = Harness.RunProbe("chatTypeInfo.raidWarning", false).runs[1].record.result
     local run = Harness.RunProbe("chatTypeInfo.raidWarning",
         { build = Harness.BUILD, contexts = { ["idle/none"] = true, ["combat/Combat"] = true }, result = result })
+
     eq(#run.runs, 2, "one run per context")
     eq(run.runs[1].context, "combat/Combat", "contexts run sorted")
     eq(run.runs[1].h.inCombat, true, "an anywhere probe enters combat for a combat context")
@@ -57,6 +62,7 @@ test("a context the harness answers differently in is a difference, named by its
     local result = Harness.RunProbe("chat.lockdownIdle", false).runs[1].record.result
     local run = Harness.RunProbe("chat.lockdownIdle",
         { build = Harness.BUILD, contexts = { ["idle/none"] = true, ["combat/Combat"] = true }, result = result })
+
     eq(#run.differences, 1, "the idle context matches; the combat one can't, since the probe needs idle")
     eq(run.differences[1].context, "combat/Combat")
     eq(run.differences[1].path, "context")
@@ -65,8 +71,10 @@ end)
 
 test("every observed result belongs to the current version of a probe", function()
     local orphans = {}
+
     for name, record in pairs(Observed) do
         local probe = Definitions.ByName[name]
+
         if not probe or not Definitions.IsCurrent(probe, record) then
             orphans[#orphans + 1] = name
         end

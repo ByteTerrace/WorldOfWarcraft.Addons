@@ -1,6 +1,6 @@
 # Lua conventions
 
-ByteTerrace addons follow Puck's C# conventions, mapped to Lua. `node tools/tlk.mjs check` enforces what a parser can decide (the NAMING and COMMENT rules); the rest is review.
+ByteTerrace addons follow Puck's C# conventions, mapped to Lua. `node tools/tlk.mjs check` enforces what a parser can decide (the NAMING, COMMENT and FORMAT rules); the rest is review.
 
 ## Naming
 
@@ -45,7 +45,7 @@ A file reads top to bottom, like a C# type:
 5. **The public API** (what the file puts on `ns` or its object).
 6. **The module declaration** (`addon:Module(...)`) and its event wiring, last.
 
-Blank lines separate functions and groups; there are no banner dividers. Indentation is four spaces; lines stay under about 120 characters.
+Blank lines separate functions and groups; there are no banner dividers. Within a group, `format` alphabetizes. Indentation is four spaces.
 
 ## Comments
 
@@ -58,7 +58,25 @@ The rules are Puck's: a comment earns its place by stating what the code can't, 
 
 ## Formatting
 
+`node tools/tlk.mjs format` writes the one canonical form, and `check`'s FORMAT rule fails a file it would change. Its passes are Puck's `puck format` passes, mapped to Lua:
+
+| Pass | Rewrite |
+| --- | --- |
+| `paren-clarity` | Every binary and logical expression is parenthesized for explicit precedence: `local visible = (UnitPowerType("player") == Energy)`, `if (a == nil) or (a == "ENERGY") then`. It stays bare where something already delimits it: its own parentheses, an `if`, `elseif`, `while` or `until` condition, a call's arguments, an index's brackets and a numeric `for`'s bounds. An operand of the same `and`, `or` or `..` stays bare, so `a and b and c` is one flat group. Unary operators are left alone. |
+| `init-order` | A table constructor whose every field is `name = value` is sorted alphabetically by name, ignoring case (`commands`, `label`, `OnEnable`), when no value calls anything. A constructor with positional or `[key] =` fields, a duplicate key, or a comment between its fields stays as written. Across lines, fields that each had a line keep one, and packed fields are packed again up to 120 columns. |
+| `trailing-comma` | A multi-line table constructor's last field ends with a comma. |
+| `alias-order` | A file-level `local a, b = x, y` whose values call nothing is sorted by name, names and values together. |
+| `local-order` | A run of file-level `local` statements on consecutive lines (no comment line between, no values that call anything or hold a function) is sorted by name. A statement never moves past one whose value reads it, or past one that it read as a global before. A blank line, a comment line or a call ends the run, so blank lines are how a file keeps groups apart. |
+| `decl-spacing` | One blank line between a run of `local` statements and the statement after it, unless a comment leads that statement. |
+| `member-spacing` | One blank line between a file-level function and its neighbors, above the function's leading comment. |
+| `string-merge` | `"a" .. "b"` of two double-quoted literals on one line becomes one literal. |
+| `blank-lines` | No more than one blank line in a row, and none at the start of a file. |
+
+Like Puck's, the passes move nothing a comment could be attached to, the result must parse, and running them again changes nothing. `format --check` writes nothing; `--only <pass,...>` runs some of them.
+
+Review covers the rest:
+
 - One statement per line.
-- Parentheses only where they change meaning or break up mixed `and` / `or`.
 - Early returns over nested conditions.
 - Strings in double quotes. Long string building uses `("%s"):format(...)` or `table.concat`, not chains of `..` across lines.
+- Lines stay under about 120 characters.

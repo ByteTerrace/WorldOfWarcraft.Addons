@@ -5,11 +5,13 @@ local Prefix = "TLKKrew1"
 local function Load()
     local h = Harness.New()
     local ns = h:LoadAddon("TheLanKrewToolKit")
+
     return h, ns.Addon
 end
 
 local function Grouped()
     local h, addon = Load()
+
     h:JoinGroup("party", { "Mom" })
     h:Echo(false)
     h:Advance(2)
@@ -17,15 +19,16 @@ local function Grouped()
 end
 
 local function Enemy(name, extra)
-    local unit = { name = name or "Bob", isPlayer = true, playerControlled = true, canAttack = true, isEnemy = true,
-        classFile = "ROGUE", className = "Rogue", level = 60, faction = "Alliance" }
+    local unit = { canAttack = true, classFile = "ROGUE", className = "Rogue", faction = "Alliance", isEnemy = true,
+        isPlayer = true, level = 60, name = (name or "Bob"), playerControlled = true }
+
     for key, value in pairs(extra or {}) do unit[key] = value end
     return unit
 end
 
 -- A player's key: Forever's full name (every test player's surname is the harness default).
 local function Key(_, name)
-    return name .. " " .. Harness.DEFAULT_SURNAME
+    return (name .. " " .. Harness.DEFAULT_SURNAME)
 end
 
 local function Collection(addon, name)
@@ -34,8 +37,9 @@ end
 
 local function Sent(h, kind)
     local found = {}
+
     for _, message in ipairs(h.addonMessages) do
-        if message.prefix == Prefix and message.message:find("^" .. kind .. ":") then
+        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
             found[#found + 1] = message.message
         end
     end
@@ -48,6 +52,7 @@ end
 
 local function Notices(h)
     local texts = {}
+
     for _, notice in ipairs(h.raidNotices) do
         texts[#texts + 1] = notice.text
     end
@@ -56,17 +61,20 @@ end
 
 local function Card(h)
     local card = rawget(h.env, "TheLanKrewToolKitCard")
+
     if not (card and card:IsShown()) then
         return nil
     end
-    return Reveal(Harness.State(card.Title).text) .. "\n" .. Reveal(Harness.State(card.Body).text), card
+    return (Reveal(Harness.State(card.Title).text) .. "\n" .. Reveal(Harness.State(card.Body).text)), card
 end
 
 test("war on your target's guild makes every member an enemy of the Krew, and tells the Krew", function()
     local h, addon = Grouped()
+
     h:SetTarget(Enemy("Bob", { guild = "Knights of Light" }))
     h:Slash("/tlk war")
-    local guild = "Knights of Light-" .. h.env.GetNormalizedRealmName()
+    local guild = ("Knights of Light-" .. h.env.GetNormalizedRealmName())
+
     truthy(Collection(addon, "wars"):Has(guild))
     h:Advance(3)
     eq(Sent(h, "WAR")[1], "WAR:" .. guild)
@@ -77,6 +85,7 @@ end)
 
 test("a guild showing up in numbers alerts once, not once per member", function()
     local h = Grouped()
+
     h:Slash("/tlk war Knights of Light")
     for i = 1, 4 do
         h:AddNamePlate(Enemy("Knight" .. i, { guild = "Knights of Light" }))
@@ -86,6 +95,7 @@ end)
 
 test("making peace ends the war, for the Krew too", function()
     local h, addon = Grouped()
+
     h:Slash("/tlk war Knights of Light")
     h:Slash("/tlk peace knights of light")
     eq(Collection(addon, "wars"):Count(), 0)
@@ -95,6 +105,7 @@ end)
 
 test("a Krew war declaration arrives with a card; bad guild names are ignored", function()
     local h, addon = Grouped()
+
     Receive(h, "Mom", "WAR", "Knights of Light-Realm")
     truthy(Card(h):find("Mom Doe declared war on <Knights of Light>", 1, true), Card(h))
     Receive(h, "Mom", "WAR", "Bad|cffGuild-Realm")
@@ -104,10 +115,12 @@ end)
 
 test("kills and deaths against a guild at war are tallied", function()
     local h, addon = Grouped()
+
     h:Slash("/tlk war Knights of Light")
     h:AddNamePlate(Enemy("Cara", { guild = "Knights of Light" }))
     h:HonorKill(Key(h, "Cara"), "Private", 12)
-    local guild = "Knights of Light-" .. h.env.GetNormalizedRealmName()
+    local guild = ("Knights of Light-" .. h.env.GetNormalizedRealmName())
+
     eq(Collection(addon, "wars"):Field(guild, "kills"), 1)
     Receive(h, "Mom", "GRUDGE", Key(h, "Cara"), "ROGUE", "60", "Alliance", "1")
     eq(Collection(addon, "wars"):Field(guild, "deaths"), 1, "Cara killed Mom: the guild's tally too")
@@ -115,28 +128,34 @@ end)
 
 test("every enemy you meet gets a record: sightings, where, and the score", function()
     local h, addon = Load()
-    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Tarren Mill" })
+
+    h:SetLocation({ subZone = "Tarren Mill", zone = "Hillsbrad Foothills" })
     local plate = h:AddNamePlate(Enemy())
+
     h:RemoveNamePlate(plate)
     h:Advance(90)
     h:AddNamePlate(Enemy())
     local people, key = Collection(addon, "people"), Key(h, "Bob")
+
     eq(people:Field(key, "sightings"), 2, "once per minute at most")
     eq(people:Field(key, "zone"), "Hillsbrad Foothills")
     h:Slash("/tlk rival Bob Doe")
     local printed = table.concat(h.printed, "\n")
+
     truthy(printed:find("Krew 0 : 0 Bob Doe. Seen 2 times, last in Hillsbrad Foothills.", 1, true), printed)
 end)
 
 test("the first sighting of someone marked by name counts, with where, however soon it comes", function()
     local h, addon = Load()
-    h:SetLocation({ zone = "Hillsbrad Foothills", subZone = "Tarren Mill" })
+
+    h:SetLocation({ subZone = "Tarren Mill", zone = "Hillsbrad Foothills" })
     h:Slash("/tlk mark Bob Doe")
     h:Slash("/tlk glory Cara Doe")
     h:Advance(5)
     h:AddNamePlate(Enemy())
-    h:AddNamePlate(Enemy("Cara", { canAttack = false, isEnemy = false, faction = "Horde" }))
+    h:AddNamePlate(Enemy("Cara", { canAttack = false, faction = "Horde", isEnemy = false }))
     local people = Collection(addon, "people")
+
     eq(people:Field(Key(h, "Bob"), "sightings"), 1, "the mark made the record; the sighting still counts")
     eq(people:Field(Key(h, "Bob"), "zone"), "Hillsbrad Foothills")
     eq(people:Field(Key(h, "Cara"), "sightings"), 1, "a champion seen nearby too")
@@ -145,14 +164,17 @@ end)
 test("the tooltip shows the record of anyone the Krew has fought", function()
     local h = Load()
     local plate = h:AddNamePlate(Enemy())
+
     h:HonorKill(Key(h, "Bob"), "Private", 12)
     h:ShowUnitTooltip(plate)
     local lines = table.concat(Harness.State(h.env.GameTooltip).lines, "\n")
+
     truthy(lines:find("Krew 1 : 0 Bob Doe - seen 1 times", 1, true), lines)
 end)
 
 local function Badge(h, plate)
     local frame = h.env.C_NamePlate.GetNamePlateForUnit(plate)
+
     for _, child in ipairs({ frame:GetChildren() }) do
         if rawget(child, "Icon") then -- Blizzard's UnitFrame rides on the plate too
             return child
@@ -162,9 +184,11 @@ end
 
 test("a marked enemy's nameplate wears a skull; a mark lifted changes it; strangers wear nothing", function()
     local h = Load()
+
     h:Slash("/tlk mark Bob Doe")
     local plate = h:AddNamePlate(Enemy())
     local badge = Badge(h, plate)
+
     truthy(badge and badge:IsShown())
     truthy(Harness.State(badge.Icon).texture:find("RaidTargetingIcon_8", 1, true))
     h:Slash("/tlk unmark Bob Doe")
@@ -172,25 +196,31 @@ test("a marked enemy's nameplate wears a skull; a mark lifted changes it; strang
     h:Slash("/tlk forgive Bob Doe")
     falsy(badge:IsShown())
     local stranger = h:AddNamePlate(Enemy("Stranger"))
+
     eq(Badge(h, stranger), nil)
 end)
 
 test("a badge leaves with its nameplate and a recycled plate doesn't keep it", function()
     local h = Load()
+
     h:Slash("/tlk mark Bob Doe")
     local plate = h:AddNamePlate(Enemy())
     local badge = Badge(h, plate)
+
     h:RemoveNamePlate(plate)
     falsy(badge:IsVisible())
     local again = h:AddNamePlate(Enemy("Stranger"))
+
     eq(again, plate, "the same token and plate, recycled")
     falsy(badge:IsVisible(), "a stranger on the recycled plate wears no badge")
 end)
 
 test("a creature's nameplate costs the badges nothing", function()
     local h = Load()
+
     h.apiCalls = {}
-    local plate = h:AddNamePlate({ name = "Kobold", canAttack = true })
+    local plate = h:AddNamePlate({ canAttack = true, name = "Kobold" })
+
     h:RemoveNamePlate(plate)
     eq(h:CountApiCalls("C_NamePlate.GetNamePlateForUnit"), 0)
 end)
@@ -198,6 +228,7 @@ end)
 test("a ledger change repaints the badges on screen without reading anyone again", function()
     local h = Load()
     local plates = {}
+
     for i = 1, 10 do
         plates[i] = h:AddNamePlate(Enemy("Foe" .. i))
     end
@@ -206,24 +237,29 @@ test("a ledger change repaints the badges on screen without reading anyone again
     eq(h:CountApiCalls("UnitClass"), 0, "no plate is read again")
     eq(h:CountApiCalls("C_NamePlate.GetNamePlateForUnit"), 0)
     local badge = Badge(h, plates[3])
+
     truthy(badge and badge:IsShown(), "the marked one wears the skull")
     eq(Badge(h, plates[4]), nil, "the others wear nothing")
 end)
 
 test("badges switched off leave no badge and no events", function()
     local h, addon = Load()
+
     addon.State:Set("Badges.enabled", false)
     h:Slash("/tlk mark Bob Doe")
     local plate = h:AddNamePlate(Enemy())
+
     eq(Badge(h, plate), nil)
     falsy(addon.Events.Frame:IsEventRegistered("NAME_PLATE_UNIT_REMOVED"))
 end)
 
 test("badges switched off hide, and switched on again find the plates on screen", function()
     local h, addon = Load()
+
     h:Slash("/tlk mark Bob Doe")
     local plate = h:AddNamePlate(Enemy())
     local badge = Badge(h, plate)
+
     truthy(badge:IsShown())
     addon.State:Set("Badges.enabled", false)
     falsy(badge:IsShown(), "switched off")
@@ -239,9 +275,10 @@ end
 
 local function Rows(h)
     local names = {}
+
     for _, row in ipairs(Window(h).Rows) do
         if row:IsShown() then
-            names[#names + 1] = Reveal(Harness.State(row.Name).text) .. " | " .. Reveal(Harness.State(row.Detail).text)
+            names[#names + 1] = (Reveal(Harness.State(row.Name).text) .. " | " .. Reveal(Harness.State(row.Detail).text))
         end
     end
     return names
@@ -249,6 +286,7 @@ end
 
 test("enemies you see are listed, marked ones first, and the list empties after two minutes", function()
     local h, addon = Load()
+
     h:Slash("/tlk mark Cara Doe")
     h:AddNamePlate(Enemy("Bob"))
     truthy(Window(h):IsShown(), "the first sighting shows the window at once")
@@ -256,6 +294,7 @@ test("enemies you see are listed, marked ones first, and the list empties after 
     h:AddNamePlate(Enemy("Cara", { classFile = "MAGE", level = 58 }))
     h:Advance(1) -- the next tick draws her
     local rows = Rows(h)
+
     eq(rows[1], "Cara Doe | 58 - 1s")
     eq(rows[2], "Bob Doe | 60 - 2s")
     h:Advance(125)
@@ -271,29 +310,35 @@ test("an enemy who leaves the list before their turn to be shared isn't shared",
     -- Long names: three to a message, one message every ten seconds, so the last wait past the
     -- two minutes they stay listed.
     local total = 45
+
     for i = 1, total do
-        h:SetMouseover(Enemy(("B"):rep(53) .. string.char(64 + math.ceil(i / 26)) .. string.char(96 + (i - 1) % 26 + 1)))
+        h:SetMouseover(Enemy(("B"):rep(53) .. string.char(64 + math.ceil(i / 26)) .. string.char((96 + ((i - 1) % 26)) + 1)))
     end
     h:Advance(130)
     local shared = 0
+
     for _, message in ipairs(Sent(h, "NEARBY")) do
         local _, count = message:gsub(";ROGUE;60", "")
-        shared = shared + count
+
+        shared = (shared + count)
     end
-    truthy(shared > 0 and shared < total, shared)
+    truthy((shared > 0) and (shared < total), shared)
     falsy(Window(h):IsShown(), "everyone has left the list")
     local sent = #Sent(h, "NEARBY")
+
     h:Advance(60)
     eq(#Sent(h, "NEARBY"), sent, "the rest are dropped, not sent late")
 end)
 
 test("new enemies are shared with the Krew in one batch; Krew reports join the list", function()
     local h = Grouped()
+
     h:AddNamePlate(Enemy("Bob"))
     h:AddNamePlate(Enemy("Cara", { classFile = "MAGE" }))
     eq(#Sent(h, "NEARBY"), 0, "batched")
     h:Advance(11)
     local nearby = Sent(h, "NEARBY")
+
     eq(#nearby, 1)
     truthy(nearby[1]:find(Key(h, "Bob") .. ";ROGUE;60", 1, true), nearby[1])
     truthy(nearby[1]:find(Key(h, "Cara") .. ";MAGE;60", 1, true), nearby[1])
@@ -302,15 +347,18 @@ test("new enemies are shared with the Krew in one batch; Krew reports join the l
     Receive(h, "Mom", "NEARBY", "Dan Doe;WARRIOR;60", "bad|key;X;1")
     h:Advance(1)
     local rows = table.concat(Rows(h), "\n")
+
     truthy(rows:find("Dan Doe | 60 - 1s - Mom Doe", 1, true), rows)
     falsy(rows:find("bad", 1, true))
 end)
 
 test("right-click a row for the Krew's choices", function()
     local h, addon = Load()
+
     h:AddNamePlate(Enemy("Bob", { guild = "Knights of Light" }))
     h:Click(Window(h).Rows[1], "RightButton")
     local menu = h:OpenContextMenu()
+
     menu:Click("Mark for death")
     eq(Collection(addon, "ledger"):Field(Key(h, "Bob"), "kind"), "mark")
     h:Click(Window(h).Rows[1], "RightButton")
@@ -320,28 +368,35 @@ end)
 
 test("the window remembers where you drag it", function()
     local h, addon = Load()
+
     h:AddNamePlate(Enemy())
     h:Drag(Window(h), -100, 50)
     local x, y = addon.State:Get("Radar.x"), addon.State:Get("Radar.y")
+
     eq(x, -160)
     eq(y, 170)
     h:Relog(60)
     h:AddNamePlate(Enemy())
     local _, _, _, px, py = Window(h):GetPoint(1)
+
     eq(px, -160)
     eq(py, 170)
 end)
 
 test("a redraw touches only the rows in use", function()
     local h = Load()
+
     h:AddNamePlate(Enemy("Bob"))
     local unused = Window(h).Rows[3]
+
     local function Calls()
         local total = 0
-        for _, count in pairs(Harness.State(unused).calls) do total = total + count end
+
+        for _, count in pairs(Harness.State(unused).calls) do total = (total + count) end
         return total
     end
     local before = Calls()
+
     h:AddNamePlate(Enemy("Cara"))
     h:Advance(5) -- five redraws on the ticker
     eq(Calls(), before, "a row nobody uses isn't touched")
@@ -349,6 +404,7 @@ end)
 
 test("a typed guild in any case means the guild you've seen", function()
     local h, addon = Grouped()
+
     h:AddNamePlate(Enemy("Cara", { guild = "Knights of Light" }))
     h:Slash("/tlk war knights of light")
     truthy(Collection(addon, "wars"):Has("Knights of Light-" .. h.env.GetNormalizedRealmName()))
@@ -358,14 +414,17 @@ end)
 
 test("nearby enemies go out in messages that fit, however many there are", function()
     local h = Grouped()
+
     h:SetLocation({ zone = ("Z"):rep(60), subZone = ("S"):rep(60) })
     local names = {}
+
     for i = 1, 8 do
-        names[i] = ("Aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"):sub(1, 20 + i) .. string.char(96 + i)
+        names[i] = (("Aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"):sub(1, 20 + i) .. string.char(96 + i))
         h:AddNamePlate(Enemy(names[i]))
     end
     h:Advance(25)
     local nearby = table.concat(Sent(h, "NEARBY"), "\n")
+
     eq(#Sent(h, "NEARBY"), 2)
     for _, message in ipairs(Sent(h, "NEARBY")) do
         truthy(#message <= 255, #message)
@@ -379,13 +438,14 @@ end)
 local function RadarCalls(h)
     local window, total = Window(h), 0
     local widgets = { window, window.Title }
+
     for _, row in ipairs(window.Rows) do
         widgets[#widgets + 1], widgets[#widgets + 2] = row, row.Icon
         widgets[#widgets + 1], widgets[#widgets + 2] = row.Name, row.Detail
     end
     for _, widget in ipairs(widgets) do
         for _, count in pairs(Harness.State(widget).calls) do
-            total = total + count
+            total = (total + count)
         end
     end
     return total
@@ -393,11 +453,13 @@ end
 
 test("a sighting only notes the enemy; a tick sets only the texts that moved", function()
     local h = Load()
+
     h:AddNamePlate(Enemy("Bob"))
     h:Advance(1)
     h:AddNamePlate(Enemy("Cara"))
     h:Advance(1)
     local dan = Enemy("Dan")
+
     h:AddNamePlate(dan) -- the most recent, so seeing him again keeps the order
     h:Advance(1)
     h:ResetCalls()
@@ -411,6 +473,7 @@ end)
 test("full rivalry records make room a hundred strangers at a time, keeping ledger people", function()
     local h, addon = Load()
     local people = Collection(addon, "people")
+
     h:Slash("/tlk grudge Old Doe")
     for i = 1, 999 do
         people:Set("Foe" .. i .. " Doe", { seen = i })
@@ -418,8 +481,9 @@ test("full rivalry records make room a hundred strangers at a time, keeping ledg
     people:Set("Old Doe", { seen = 0 })
     eq(people:Count(), 1000)
     local keep, calls = people.Keep, 0
+
     people.Keep = function(key)
-        calls = calls + 1
+        calls = (calls + 1)
         return keep(key)
     end
     for i = 1, 10 do

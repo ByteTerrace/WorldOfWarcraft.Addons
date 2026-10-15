@@ -88,18 +88,18 @@ local AfterDeathSeconds = 5
 local Probes = {}
 
 -- The needs by key, and the probes in run order and by name, as the other probe files add them.
-local Needs, List, ByName = {}, {}, {}
+local ByName, List, Needs = {}, {}, {}
 
 -- The UNIT_COMBAT payloads seen since load (Probes.NoteUnitCombat): units[unit][action] holds a
 -- set per payload field (action, flagText, amount, schoolMask) of the shapes seen (a secret
 -- action keys "secret"); actions and flagTexts are the plain strings seen, as sets;
 -- amountInCombat is the last amount on you in combat: its type, or "secret".
-local UnitCombat = { units = { player = {}, target = {} }, actions = {}, flagTexts = {} }
+local UnitCombat = { actions = {}, flagTexts = {}, units = { player = {}, target = {} } }
 
 -- The kill events seen since load (Probes.NoteKill): sets of whose blow and what kind of unit,
 -- for PARTY_KILL (partyKill = { attacker, target, attackerKind }) and UNIT_DIED (unitDied =
 -- { unit }), each nil until its event fires; and whether PLAYER_TARGET_DIED fired.
-local Kills = { partyKill = nil, unitDied = nil, targetDied = false }
+local Kills = { partyKill = nil, targetDied = false, unitDied = nil }
 
 -- The set of sender name shapes per chat event since load (Probes.NoteSender).
 local Senders = {}
@@ -111,11 +111,11 @@ local AfterDeath = { diedAt = nil, types = {} }
 -- The addon restrictions in force as the client last said (Probes.NoteRestriction,
 -- SyncRestrictions): active is the set of Enum.AddOnRestrictionType names, text the same as
 -- Probes.Restrictions writes it, and seen every name active since load.
-local Restricted = { active = {}, text = "none", seen = {} }
+local Restricted = { active = {}, seen = {}, text = "none" }
 
 -- The steps of your latest entering and leaving of combat (Probes.NoteCombatEdge): enter and
 -- leave are lists of step strings, current the edge the last step belonged to.
-local CombatEdges = { enter = {}, leave = {}, current = nil }
+local CombatEdges = { current = nil, enter = {}, leave = {} }
 
 -- The most steps an edge keeps: entering and leaving take a few each.
 local MaxEdgeSteps = 8
@@ -132,7 +132,7 @@ local AddonMessages = {}
 
 -- Chat events' discordInfo (Probes.NoteDiscordInfo): the set of its shapes per event, and of each
 -- field's shapes when it's a table.
-local DiscordInfo = { shapes = {}, fields = {} }
+local DiscordInfo = { fields = {}, shapes = {} }
 
 --- The marker a secret is recorded as.
 local function Marker(value)
@@ -164,7 +164,7 @@ local function NameShape(value)
     elseif type(value) ~= "string" then
         return type(value)
     end
-    return value == "" and "empty" or (value:gsub("[%a\128-\255]+", "Aa"):gsub("%d+", "0"))
+    return (((value == "") and "empty") or (value:gsub("[%a\128-\255]+", "Aa"):gsub("%d+", "0")))
 end
 
 --- "text", "empty" or the type name for a text an API returns, or the marker for a secret.
@@ -174,7 +174,7 @@ local function Text(value)
     elseif type(value) ~= "string" then
         return type(value)
     end
-    return value == "" and "empty" or "text"
+    return (((value == "") and "empty") or "text")
 end
 
 --- A 0-1 color channel as a byte (0-255), or the marker for a secret.
@@ -184,15 +184,16 @@ local function Byte(channel)
     elseif type(channel) ~= "number" then
         return type(channel)
     end
-    return math.floor(channel * 255 + 0.5)
+    return math.floor((channel * 255) + 0.5)
 end
 
 --- A table's string keys, sorted and joined by commas; the Shape of anything else.
 local function Fields(tbl)
-    if issecretvalue(tbl) or type(tbl) ~= "table" then
+    if issecretvalue(tbl) or (type(tbl) ~= "table") then
         return Shape(tbl)
     end
     local keys = {}
+
     for key in pairs(tbl) do
         if type(key) == "string" then
             keys[#keys + 1] = key
@@ -205,6 +206,7 @@ end
 --- A table's string keys, each with its value's Shape.
 local function FieldShapes(tbl)
     local shapes = {}
+
     for key, value in pairs(tbl) do
         if type(key) == "string" then
             shapes[key] = Shape(value)
@@ -218,12 +220,12 @@ local function Same(a, b)
     if issecretvalue(a) or issecretvalue(b) then
         return "secret"
     end
-    return a == b
+    return (a == b)
 end
 
 --- A list's first entry, or nil for an empty, missing or secret list.
 local function First(list)
-    if issecretvalue(list) or type(list) ~= "table" then
+    if issecretvalue(list) or (type(list) ~= "table") then
         return nil
     end
     return list[1]
@@ -232,6 +234,7 @@ end
 --- A set's keys, sorted and joined by commas.
 local function Joined(set)
     local keys = {}
+
     for key in pairs(set) do
         keys[#keys + 1] = key
     end
@@ -241,7 +244,7 @@ end
 
 -- A value as an item of a string union: a secret's marker is "secret".
 local function Item(value)
-    if type(value) == "table" and value.secret == true then
+    if (type(value) == "table") and (value.secret == true) then
         return "secret"
     end
     return value
@@ -252,17 +255,20 @@ end
 -- lost), tables merge key by key, two booleans are true if either is, and otherwise b stands.
 local function Merge(a, b)
     local itemA, itemB = Item(a), Item(b)
-    if (type(a) == "string" or type(b) == "string") and type(itemA) == "string" and type(itemB) == "string" then
+
+    if ((type(a) == "string") or (type(b) == "string")) and (type(itemA) == "string") and (type(itemB) == "string") then
         if itemA == itemB then
             return itemB
         end
         local items = {}
+
         for item in (itemA .. "," .. itemB):gmatch("[^,]+") do
             items[item] = true
         end
         return Joined(items)
-    elseif type(a) == "table" and type(b) == "table" then
+    elseif (type(a) == "table") and (type(b) == "table") then
         local merged = {}
+
         for key, value in pairs(a) do
             merged[key] = value
         end
@@ -270,8 +276,8 @@ local function Merge(a, b)
             merged[key] = Merge(a[key], value)
         end
         return merged
-    elseif type(a) == "boolean" and type(b) == "boolean" then
-        return a or b
+    elseif (type(a) == "boolean") and (type(b) == "boolean") then
+        return (a or b)
     end
     return b
 end
@@ -280,20 +286,22 @@ end
 -- finite numbers and tables of them.
 local function Problem(value, path)
     local kind = type(value)
+
     if issecretvalue(value) then
-        return path .. " is a secret"
-    elseif kind == "string" or kind == "boolean" then
+        return (path .. " is a secret")
+    elseif (kind == "string") or (kind == "boolean") then
         return nil
     elseif kind == "number" then
-        return (value ~= value or value == math.huge or value == -math.huge) and (path .. " isn't finite") or nil
+        return ((((value ~= value) or (value == math.huge) or (value == -math.huge)) and (path .. " isn't finite")) or nil)
     elseif kind ~= "table" then
         return ("%s is a %s"):format(path, kind)
     end
     for key, item in pairs(value) do
         if type(key) ~= "string" then
-            return path .. " has a key that isn't a string"
+            return (path .. " has a key that isn't a string")
         end
         local problem = Problem(item, path .. "." .. key)
+
         if problem then
             return problem
         end
@@ -303,8 +311,10 @@ end
 
 local function SortedKeys(...)
     local seen, keys = {}, {}
+
     for i = 1, select("#", ...) do
         local tbl = select(i, ...)
+
         if type(tbl) == "table" then
             for key in pairs(tbl) do
                 if not seen[key] then
@@ -314,17 +324,17 @@ local function SortedKeys(...)
             end
         end
     end
-    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+    table.sort(keys, function(a, b) return (tostring(a) < tostring(b)) end)
     return keys
 end
 
 local function Differences(a, b, path, out)
-    if type(a) == "table" and type(b) == "table" then
+    if (type(a) == "table") and (type(b) == "table") then
         for _, key in ipairs(SortedKeys(a, b)) do
-            Differences(a[key], b[key], path == "" and key or (path .. "." .. key), out)
+            Differences(a[key], b[key], ((path == "") and key) or (path .. "." .. key), out)
         end
     elseif a ~= b then
-        out[#out + 1] = { path = path, a = a, b = b }
+        out[#out + 1] = { a = a, b = b, path = path }
     end
     return out
 end
@@ -381,7 +391,8 @@ function Probes.Define(probes)
             assert(Needs[key], ("probe %s: unknown need %s"):format(probe.name, key))
         end
         local version = probe.version
-        assert(version == nil or (type(version) == "number" and version >= 2 and version % 1 == 0),
+
+        assert((version == nil) or ((type(version) == "number") and (version >= 2) and ((version % 1) == 0)),
             ("probe %s: version must be a whole number from 2 (leave it out for 1)"):format(probe.name))
         List[#List + 1] = probe
         ByName[probe.name] = probe
@@ -392,25 +403,27 @@ end
 --- joined by commas.
 function Probes.Restrictions()
     local active = {}
+
     for name, value in pairs(Enum.AddOnRestrictionType) do
         if C_RestrictedActions.IsAddOnRestrictionActive(value) then
             active[#active + 1] = name
         end
     end
     table.sort(active)
-    return #active > 0 and table.concat(active, ",") or "none"
+    return (((#active > 0) and table.concat(active, ",")) or "none")
 end
 
 --- The client build as "<version> (<build>)".
 function Probes.Build()
     local version, build = GetBuildInfo()
+
     return ("%s (%s)"):format(version, build)
 end
 
 --- The situation a probe runs in: "combat" or "idle" for combat lockdown, a slash, and the active
 --- restrictions (Probes.Restrictions), as in "idle/none" or "combat/Combat".
 function Probes.Context()
-    return (InCombatLockdown() and "combat/" or "idle/") .. Probes.Restrictions()
+    return (((InCombatLockdown() and "combat/") or "idle/") .. Probes.Restrictions())
 end
 
 --- Whether the probe's needs are met right now.
@@ -420,6 +433,7 @@ function Probes.Check(probe)
     for _, key in ipairs(probe.needs) do
         local need = Needs[key]
         local ok, met = pcall(need.check)
+
         if not ok or not met then
             return false, need.text
         end
@@ -431,6 +445,7 @@ end
 --- or the first step for a probe that runs anywhere.
 function Probes.Step(probe)
     local step = 1
+
     for _, key in ipairs(probe.needs) do
         step = math.max(step, Needs[key].step)
     end
@@ -439,12 +454,13 @@ end
 
 -- A payload field's shape as a set item: "secret", or its Text ("text", "empty", a type name).
 local function Token(value)
-    return issecretvalue(value) and "secret" or Text(value)
+    return ((issecretvalue(value) and "secret") or Text(value))
 end
 
 -- Adds item to the set kept under key in sets, making the set the first time.
 local function Note(sets, key, item)
     local set = sets[key]
+
     if not set then
         set = {}
         sets[key] = set
@@ -457,24 +473,25 @@ end
 --- registers for, so unit is "player" or "target" (UNIT_COMBAT carries no secret flags).
 function Probes.NoteUnitCombat(unit, action, flagText, amount, schoolMask)
     local byAction = UnitCombat.units[unit]
-    local plainAction = not issecretvalue(action) and type(action) == "string" and action ~= ""
-    local key = plainAction and action or Token(action)
+    local plainAction = (not issecretvalue(action) and (type(action) == "string") and (action ~= ""))
+    local key = ((plainAction and action) or Token(action))
     local fields = byAction[key]
+
     if not fields then
         fields = {}
         byAction[key] = fields
     end
     Note(fields, "action", Token(action))
     Note(fields, "flagText", Token(flagText))
-    Note(fields, "amount", issecretvalue(amount) and "secret" or type(amount))
-    Note(fields, "schoolMask", issecretvalue(schoolMask) and "secret" or type(schoolMask))
-    if unit == "player" and InCombatLockdown() then
-        UnitCombat.amountInCombat = issecretvalue(amount) and "secret" or type(amount)
+    Note(fields, "amount", (issecretvalue(amount) and "secret") or type(amount))
+    Note(fields, "schoolMask", (issecretvalue(schoolMask) and "secret") or type(schoolMask))
+    if (unit == "player") and InCombatLockdown() then
+        UnitCombat.amountInCombat = ((issecretvalue(amount) and "secret") or type(amount))
     end
     if plainAction then
         UnitCombat.actions[action] = true
     end
-    if not issecretvalue(flagText) and type(flagText) == "string" and flagText ~= "" then
+    if not issecretvalue(flagText) and (type(flagText) == "string") and (flagText ~= "") then
         UnitCombat.flagTexts[flagText] = true
     end
 end
@@ -484,7 +501,7 @@ local function GUIDKind(guid)
     if issecretvalue(guid) then
         return "secret"
     end
-    return type(guid) == "string" and guid:match("^(%a+)%-") or Shape(guid)
+    return (((type(guid) == "string") and guid:match("^(%a+)%-")) or Shape(guid))
 end
 
 -- Whose a GUID is, as seen from you: "you", "pet", "other", or "secret".
@@ -493,10 +510,11 @@ local function Whose(guid)
         return "secret"
     end
     local me, pet = UnitGUID("player"), UnitGUID("pet")
-    if not issecretvalue(me) and guid == me then
+
+    if not issecretvalue(me) and (guid == me) then
         return "you"
     end
-    if not issecretvalue(pet) and pet ~= nil and guid == pet then
+    if not issecretvalue(pet) and (pet ~= nil) and (guid == pet) then
         return "pet"
     end
     return "other"
@@ -508,12 +526,13 @@ end
 function Probes.NoteKill(event, ...)
     if event == "PARTY_KILL" then
         local attacker, target = ...
-        Kills.partyKill = Kills.partyKill or {}
+
+        Kills.partyKill = (Kills.partyKill or {})
         Note(Kills.partyKill, "attacker", Whose(attacker))
         Note(Kills.partyKill, "target", GUIDKind(target))
         Note(Kills.partyKill, "attackerKind", GUIDKind(attacker))
     elseif event == "UNIT_DIED" then
-        Kills.unitDied = Kills.unitDied or {}
+        Kills.unitDied = (Kills.unitDied or {})
         Note(Kills.unitDied, "unit", GUIDKind((...)))
     elseif event == "PLAYER_TARGET_DIED" then
         Kills.targetDied = true
@@ -523,7 +542,7 @@ end
 --- Keeps a chat event's sender shape for names.chatSenders (DevTools.lua passes each one).
 ---@param event string
 function Probes.NoteSender(event, sender)
-    Note(Senders, event, issecretvalue(sender) and "secret" or NameShape(sender))
+    Note(Senders, event, (issecretvalue(sender) and "secret") or NameShape(sender))
 end
 
 --- Notes your death (DevTools.lua passes PLAYER_DEAD): the meter's updates count for a while.
@@ -535,10 +554,12 @@ end
 --- shortly after your death: its DamageMeterType's name, "secret", or "unknown".
 function Probes.NoteMeterUpdate(meterType)
     local diedAt = AfterDeath.diedAt
-    if not diedAt or GetTime() - diedAt > AfterDeathSeconds then
+
+    if not diedAt or ((GetTime() - diedAt) > AfterDeathSeconds) then
         return
     end
     local name = "secret"
+
     if not issecretvalue(meterType) then
         name = "unknown"
         for key, value in pairs(Enum.DamageMeterType) do
@@ -562,11 +583,12 @@ end
 
 local function RestrictedText()
     local names = {}
+
     for name in pairs(Restricted.active) do
         names[#names + 1] = name
     end
     table.sort(names)
-    return #names > 0 and table.concat(names, ",") or "none"
+    return (((#names > 0) and table.concat(names, ",")) or "none")
 end
 
 --- Follows an ADDON_RESTRICTION_STATE_CHANGED (DevTools.lua passes each): a restriction counts
@@ -574,11 +596,13 @@ end
 --- Probes.Restrictions for the listeners that key what they hear by it.
 function Probes.NoteRestriction(kind, state)
     local name = EnumName(Enum.AddOnRestrictionType, kind)
+
     if not name then
         return
     end
-    local active = state ~= Enum.AddOnRestrictionState.Inactive
-    Restricted.active[name] = active or nil
+    local active = (state ~= Enum.AddOnRestrictionState.Inactive)
+
+    Restricted.active[name] = (active or nil)
     if active then
         Restricted.seen[name] = true
     end
@@ -590,7 +614,8 @@ end
 function Probes.SyncRestrictions()
     for name, value in pairs(Enum.AddOnRestrictionType) do
         local active = C_RestrictedActions.IsAddOnRestrictionActive(value)
-        Restricted.active[name] = active or nil
+
+        Restricted.active[name] = (active or nil)
         if active then
             Restricted.seen[name] = true
         end
@@ -600,7 +625,7 @@ end
 
 -- A boolean an API answered, as text: "true", "false" or "secret".
 local function Flag(value)
-    return issecretvalue(value) and "secret" or tostring(value)
+    return ((issecretvalue(value) and "secret") or tostring(value))
 end
 
 --- Notes a step of entering or leaving combat for combat.edges (DevTools.lua passes
@@ -611,19 +636,22 @@ end
 --- one's starts that edge over.
 ---@param state number? the Combat restriction's Enum.AddOnRestrictionState
 function Probes.NoteCombatEdge(event, state)
-    local label, kind = event, event == "PLAYER_REGEN_DISABLED" and "enter" or "leave"
+    local label, kind = event, (((event == "PLAYER_REGEN_DISABLED") and "enter") or "leave")
+
     if event == "ADDON_RESTRICTION_STATE_CHANGED" then
-        label = "Combat " .. tostring(EnumName(Enum.AddOnRestrictionState, state))
-        kind = state == Enum.AddOnRestrictionState.Inactive and "leave" or "enter"
+        label = ("Combat " .. tostring(EnumName(Enum.AddOnRestrictionState, state)))
+        kind = (((state == Enum.AddOnRestrictionState.Inactive) and "leave") or "enter")
     end
     if CombatEdges.current ~= kind then
         CombatEdges[kind], CombatEdges.current = {}, kind
     end
     local steps = CombatEdges[kind]
+
     if #steps >= MaxEdgeSteps then
         return
     end
     local restricted = C_RestrictedActions.IsAddOnRestrictionActive(Enum.AddOnRestrictionType.Combat)
+
     steps[#steps + 1] = ("%s[lockdown=%s affecting=%s restricted=%s]"):format(label, Flag(InCombatLockdown()),
         Flag(UnitAffectingCombat("player")), Flag(restricted))
 end
@@ -632,8 +660,9 @@ end
 --- force (DevTools.lua passes the player's and the target's): "secret", or the plain token.
 function Probes.NoteAuraToken(unit)
     local shape = "secret"
+
     if not issecretvalue(unit) then
-        shape = (type(unit) == "string" and unit ~= "") and unit or Text(unit)
+        shape = ((((type(unit) == "string") and (unit ~= "")) and unit) or Text(unit))
     end
     Note(AuraTokens, Restricted.text, shape)
 end
@@ -642,6 +671,7 @@ end
 --- restrictions in force (DevTools.lua passes every one).
 function Probes.NoteAddonMessage(...)
     local fields = AddonMessages[Restricted.text]
+
     if not fields then
         fields = {}
         AddonMessages[Restricted.text] = fields
@@ -657,13 +687,14 @@ end
 ---@param event string
 function Probes.NoteDiscordInfo(event, info)
     Note(DiscordInfo.shapes, event, Token(info))
-    if issecretvalue(info) or type(info) ~= "table" then
+    if issecretvalue(info) or (type(info) ~= "table") then
         return
     end
     for key, value in pairs(info) do
         if type(key) == "string" then
             local shape = Token(value)
-            Note(DiscordInfo.fields, key, shape == "boolean" and tostring(value) or shape)
+
+            Note(DiscordInfo.fields, key, ((shape == "boolean") and tostring(value)) or shape)
         end
     end
 end
@@ -677,9 +708,11 @@ Probes.Note, Probes.Token, Probes.EnumName = Note, Token, EnumName
 ---@return table
 function Probes.JoinSets(sets)
     local out = {}
+
     for key, set in pairs(sets) do
         local _, first = next(set)
-        out[key] = type(first) == "table" and Probes.JoinSets(set) or Joined(set)
+
+        out[key] = (((type(first) == "table") and Probes.JoinSets(set)) or Joined(set))
     end
     return out
 end
@@ -687,19 +720,21 @@ end
 --- The needs' texts joined with " + ", or "nothing" for a probe that runs anywhere.
 function Probes.NeedsText(probe)
     local texts = {}
+
     for i, key in ipairs(probe.needs) do
         texts[i] = Needs[key].text
     end
-    return #texts > 0 and table.concat(texts, " + ") or "nothing"
+    return (((#texts > 0) and table.concat(texts, " + ")) or "nothing")
 end
 
 --- The needs' short labels joined with " + ", or "anywhere" for a probe that runs anywhere.
 function Probes.NeedsLabel(probe)
     local labels = {}
+
     for i, key in ipairs(probe.needs) do
         labels[i] = Needs[key].label
     end
-    return #labels > 0 and table.concat(labels, " + ") or "anywhere"
+    return (((#labels > 0) and table.concat(labels, " + ")) or "anywhere")
 end
 
 --- Why the harness can't run the probe, or nil when it can.
@@ -724,13 +759,13 @@ end
 
 --- The probe's version: probe.version, or 1.
 function Probes.Version(probe)
-    return probe.version or 1
+    return (probe.version or 1)
 end
 
 --- Whether a record was made by the probe's current version, so it answers the probe's question.
 ---@param record table? a record, or nil
 function Probes.IsCurrent(probe, record)
-    return type(record) == "table" and (record.version or 1) == Probes.Version(probe)
+    return ((type(record) == "table") and ((record.version or 1) == Probes.Version(probe)))
 end
 
 --- Runs the probe and returns its record, or nil and why it failed (an error or a result that
@@ -740,14 +775,17 @@ end
 function Probes.Record(probe)
     local context = Probes.Context()
     local ok, result = pcall(probe.run)
+
     if not ok then
         return nil, tostring(result)
     end
     local problem = Problem(result, "result")
+
     if problem then
         return nil, problem
     end
     local version = probe.version -- absent for version 1, like the records made before versions
+
     return { build = Probes.Build(), contexts = { [context] = true }, result = result, version = version }, nil
 end
 
@@ -763,18 +801,20 @@ function Probes.Keep(probe, previous, record)
     if not Probes.IsCurrent(probe, previous) then
         return record, "new", {}
     end
-    local sameBuild = previous.build == record.build
+    local sameBuild = (previous.build == record.build)
+
     if probe.accumulates and sameBuild then
         record.result = Merge(previous.result, record.result)
     end
     local differences = Differences(previous.result, record.result, "", {})
-    if sameBuild and (probe.accumulates or #differences == 0) then
+
+    if sameBuild and (probe.accumulates or (#differences == 0)) then
         record.contexts = Merge(previous.contexts, record.contexts)
     end
     if #differences > 0 then
         return record, "changed", differences
     end
-    return record, #Differences(previous, record, "", {}) > 0 and "confirmed" or "same", differences
+    return record, (((#Differences(previous, record, "", {}) > 0) and "confirmed") or "same"), differences
 end
 
 --- Where two records (or any values of the kind a record holds) differ: a list of
@@ -791,10 +831,11 @@ function Probes.Show(value)
         return tostring(value)
     end
     local parts = {}
+
     for _, key in ipairs(SortedKeys(value)) do
         parts[#parts + 1] = ("%s = %s"):format(tostring(key), Probes.Show(value[key]))
     end
-    return "{ " .. table.concat(parts, ", ") .. " }"
+    return ("{ " .. table.concat(parts, ", ") .. " }")
 end
 
 ns.Probes = Probes

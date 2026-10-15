@@ -31,9 +31,9 @@ local Categories = Snapshot.enums.CombatAudioAlertCategory
 
 function Harness:InitSpeech(player)
     self.spoken = {}
-    self.combatAudioAlerts = player.combatAudioAlerts == true
-    self.ttsVoices = { { voiceID = 0, name = "Harness Voice" } }
-    self.tts = { voices = { [0] = 0, [1] = 0 }, rate = 0, volume = 100 }
+    self.combatAudioAlerts = (player.combatAudioAlerts == true)
+    self.ttsVoices = { { name = "Harness Voice", voiceID = 0 } }
+    self.tts = { rate = 0, voices = { [0] = 0, [1] = 0 }, volume = 100 }
     self.utteranceSerial = 0
 end
 
@@ -47,6 +47,7 @@ end
 -- The speech fakes, merged into the env (env.lua) before it wraps them.
 function Harness:SpeechFakes()
     local h = self
+
     return {
         C_CombatAudioAlert = {
             IsEnabled = function() return h.combatAudioAlerts end,
@@ -56,16 +57,34 @@ function Harness:SpeechFakes()
                 if not h.combatAudioAlerts then
                     return
                 end
-                h.utteranceSerial = h.utteranceSerial + 1
+                h.utteranceSerial = (h.utteranceSerial + 1)
                 if allowOverlap == nil then allowOverlap = true end
                 h.spoken[#h.spoken + 1] = {
-                    api = "C_CombatAudioAlert.SpeakText", text = text, category = category,
-                    allowOverlap = allowOverlap and true or false, utteranceID = h.utteranceSerial,
+                    allowOverlap = ((allowOverlap and true) or false), api = "C_CombatAudioAlert.SpeakText",
+                    category = category, text = text, utteranceID = h.utteranceSerial,
                 }
                 return h.utteranceSerial
             end,
         },
+        C_TTSSettings = {
+            GetSpeechRate = function() return h.tts.rate end,
+            GetSpeechVolume = function() return h.tts.volume end,
+            GetVoiceOptionID = function(voiceType)
+                local id = h.tts.voices[voiceType]
+
+                assert(id, "C_TTSSettings.GetVoiceOptionID: unknown TtsVoiceType " .. tostring(voiceType))
+                return id
+            end,
+        },
         C_VoiceChat = {
+            GetTtsVoices = function()
+                local voices = {}
+
+                for i, voice in ipairs(h.ttsVoices) do
+                    voices[i] = { name = voice.name, voiceID = voice.voiceID }
+                end
+                return voices
+            end,
             SpeakText = function(voiceID, text, rate, volume, overlap)
                 for i, value in ipairs({ voiceID, rate, volume }) do
                     if IsSecret(value) then
@@ -75,30 +94,14 @@ function Harness:SpeechFakes()
                 if IsSecret(overlap) then
                     error("C_VoiceChat.SpeakText: argument 5 is NeverSecret", 3)
                 end
-                assert(type(voiceID) == "number" and type(rate) == "number" and type(volume) == "number",
+                assert((type(voiceID) == "number") and (type(rate) == "number") and (type(volume) == "number"),
                     "C_VoiceChat.SpeakText(voiceID, text, rate, volume [, overlap])")
                 assert(type(Reveal(text)) == "string", "C_VoiceChat.SpeakText: text must be a string")
                 h.spoken[#h.spoken + 1] = {
-                    api = "C_VoiceChat.SpeakText", voiceID = voiceID, text = text, rate = rate, volume = volume,
-                    overlap = overlap == true,
+                    api = "C_VoiceChat.SpeakText", overlap = (overlap == true), rate = rate, text = text,
+                    voiceID = voiceID, volume = volume,
                 }
             end,
-            GetTtsVoices = function()
-                local voices = {}
-                for i, voice in ipairs(h.ttsVoices) do
-                    voices[i] = { voiceID = voice.voiceID, name = voice.name }
-                end
-                return voices
-            end,
-        },
-        C_TTSSettings = {
-            GetVoiceOptionID = function(voiceType)
-                local id = h.tts.voices[voiceType]
-                assert(id, "C_TTSSettings.GetVoiceOptionID: unknown TtsVoiceType " .. tostring(voiceType))
-                return id
-            end,
-            GetSpeechRate = function() return h.tts.rate end,
-            GetSpeechVolume = function() return h.tts.volume end,
         },
     }
 end

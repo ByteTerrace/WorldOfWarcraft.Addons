@@ -15,14 +15,13 @@ local Snapshot = __snapshot
 
 -- [E] The client build the API snapshot was dumped from ("1.60.1 (70374)"), so the harness is the
 -- client its snapshot describes and probes record that build. [G] The build date, which nothing reads.
-Harness.BUILD = __build ~= "" and __build or "0.0.0 (0)"
+Harness.BUILD = (((__build ~= "") and __build) or "0.0.0 (0)")
 local BuildVersion, BuildNumber = Harness.BUILD:match("^(%S+) %((%d+)%)$")
 
 local function Color(r, g, b, a)
     return {
-        r = r, g = g, b = b, a = a or 1,
-        GetRGB = function(self) return self.r, self.g, self.b end,
-        GetRGBA = function(self) return self.r, self.g, self.b, self.a end,
+        a = (a or 1), b = b, g = g, GetRGB = function(self) return self.r, self.g, self.b end,
+        GetRGBA = function(self) return self.r, self.g, self.b, self.a end, r = r,
     }
 end
 
@@ -36,17 +35,17 @@ local PowerTokens = {
 
 -- UnitClass: className (enUS), classFile, classID.
 local Classes = {
-    WARRIOR = { "Warrior", 1 }, PALADIN = { "Paladin", 2 }, HUNTER = { "Hunter", 3 }, ROGUE = { "Rogue", 4 },
-    PRIEST = { "Priest", 5 }, DEATHKNIGHT = { "Death Knight", 6 }, SHAMAN = { "Shaman", 7 }, MAGE = { "Mage", 8 },
-    WARLOCK = { "Warlock", 9 }, MONK = { "Monk", 10 }, DRUID = { "Druid", 11 }, DEMONHUNTER = { "Demon Hunter", 12 },
-    EVOKER = { "Evoker", 13 },
+    DEATHKNIGHT = { "Death Knight", 6 }, DEMONHUNTER = { "Demon Hunter", 12 }, DRUID = { "Druid", 11 },
+    EVOKER = { "Evoker", 13 }, HUNTER = { "Hunter", 3 }, MAGE = { "Mage", 8 }, MONK = { "Monk", 10 },
+    PALADIN = { "Paladin", 2 }, PRIEST = { "Priest", 5 }, ROGUE = { "Rogue", 4 }, SHAMAN = { "Shaman", 7 },
+    WARLOCK = { "Warlock", 9 }, WARRIOR = { "Warrior", 1 },
 }
 
 -- A few real SOUNDKIT entries (Blizzard_SharedXML/Mainline/SoundKitConstants.lua). Reading any
 -- other key is an error: add it here, with its real value, when an addon needs it.
 local Soundkits = {
-    IG_SPELLBOOK_OPEN = 829, IG_QUEST_LOG_OPEN = 844, IG_QUEST_LIST_COMPLETE = 878, RAID_WARNING = 8959, READY_CHECK = 8960, LFG_REWARDS = 17316,
-    UI_EPICLOOT_TOAST = 31578,
+    IG_QUEST_LIST_COMPLETE = 878, IG_QUEST_LOG_OPEN = 844, IG_SPELLBOOK_OPEN = 829, LFG_REWARDS = 17316,
+    RAID_WARNING = 8959, READY_CHECK = 8960, UI_EPICLOOT_TOAST = 31578,
 }
 
 -- Lua libraries, limited to the members the client has (it removes some, e.g. string.dump).
@@ -67,6 +66,7 @@ end
 
 local function Library(name)
     local lib = {}
+
     for _, member in ipairs(Libraries[name]) do
         lib[member] = _G[name][member]
     end
@@ -74,28 +74,32 @@ local function Library(name)
 end
 
 local function Strtrim(s, chars)
-    local set = chars and ("[" .. chars:gsub("[%]%[%^%-%%]", "%%%0") .. "]") or "%s"
+    local set = ((chars and ("[" .. chars:gsub("[%]%[%^%-%%]", "%%%0") .. "]")) or "%s")
+
     return (s:gsub("^" .. set .. "+", ""):gsub(set .. "+$", ""))
 end
 
 -- Seconds since the epoch for a UTC date table (time{...} in the harness's UTC world).
 local function EpochFromDate(t)
     local year, month = t.year, t.month
-    if month <= 2 then year, month = year - 1, month + 12 end
+
+    if month <= 2 then year, month = (year - 1), (month + 12) end
     local era = math.floor(year / 400)
-    local yoe = year - era * 400
-    local doy = math.floor((153 * (month - 3) + 2) / 5) + t.day - 1
-    local doe = yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy
-    local days = era * 146097 + doe - 719468
-    return days * 86400 + (t.hour or 12) * 3600 + (t.min or 0) * 60 + (t.sec or 0)
+    local yoe = (year - (era * 400))
+    local doy = ((math.floor(((153 * (month - 3)) + 2) / 5) + t.day) - 1)
+    local doe = ((((yoe * 365) + math.floor(yoe / 4)) - math.floor(yoe / 100)) + doy)
+    local days = (((era * 146097) + doe) - 719468)
+
+    return ((((days * 86400) + ((t.hour or 12) * 3600)) + ((t.min or 0) * 60)) + (t.sec or 0))
 end
 
 local function MoneyString(money)
-    local gold, silver, copper = math.floor(money / 10000), math.floor(money / 100) % 100, money % 100
+    local gold, silver, copper = math.floor(money / 10000), (math.floor(money / 100) % 100), (money % 100)
     local parts = {}
-    if gold > 0 then parts[#parts + 1] = gold .. "g" end
-    if silver > 0 then parts[#parts + 1] = silver .. "s" end
-    if copper > 0 or #parts == 0 then parts[#parts + 1] = copper .. "c" end
+
+    if gold > 0 then parts[#parts + 1] = (gold .. "g") end
+    if silver > 0 then parts[#parts + 1] = (silver .. "s") end
+    if (copper > 0) or (#parts == 0) then parts[#parts + 1] = (copper .. "c") end
     return table.concat(parts, " ")
 end
 
@@ -105,16 +109,19 @@ local TimeUnits = {
 }
 
 local function SecondsToTime(seconds, noSeconds, notAbbreviated, maxCount)
-    maxCount = maxCount or 2
+    maxCount = (maxCount or 2)
     seconds = math.floor(seconds)
     local parts = {}
+
     for i, unit in ipairs(TimeUnits) do
-        local isSeconds = i == #TimeUnits
+        local isSeconds = (i == #TimeUnits)
         local count = math.floor(seconds / unit[1])
-        if count > 0 and #parts < maxCount and not (isSeconds and noSeconds) then
-            local label = notAbbreviated and (count == 1 and unit[3] or unit[4]) or unit[2]
-            parts[#parts + 1] = count .. " " .. label
-            seconds = seconds - count * unit[1]
+
+        if (count > 0) and (#parts < maxCount) and not (isSeconds and noSeconds) then
+            local label = ((notAbbreviated and (((count == 1) and unit[3]) or unit[4])) or unit[2])
+
+            parts[#parts + 1] = (count .. " " .. label)
+            seconds = (seconds - (count * unit[1]))
         end
     end
     return table.concat(parts, " ")
@@ -122,9 +129,11 @@ end
 
 function Harness:BuildEnvironment()
     local h = self
+
     local function Unit(token) return h:Unit(token) end
     local function Field(token, name, default)
         local unit = Unit(token)
+
         if unit == nil then
             return default
         end
@@ -132,14 +141,15 @@ function Harness:BuildEnvironment()
     end
     local function Handle(entry)
         local handle = {}
+
         function handle.Cancel() entry.cancelled = true end
-        function handle.IsCancelled() return entry.cancelled == true end
+        function handle.IsCancelled() return (entry.cancelled == true) end
         return handle
     end
     local function PlayKit(kit, channel)
         assert(type(kit) == "number", "PlaySound: soundKitID must be a number, got " .. type(kit))
-        h.handles = h.handles + 1
-        h.soundKits[#h.soundKits + 1] = { kit = kit, channel = channel or "SFX", handle = h.handles }
+        h.handles = (h.handles + 1)
+        h.soundKits[#h.soundKits + 1] = { channel = (channel or "SFX"), handle = h.handles, kit = kit }
         return true, h.handles
     end
 
@@ -152,6 +162,7 @@ function Harness:BuildEnvironment()
         -- WoW's xpcall passes extra arguments to the function (Lua 5.1's doesn't).
         xpcall = function(fn, handler, ...)
             local args, count = { ... }, select("#", ...)
+
             return xpcall(function() return fn(unpack(args, 1, count)) end, handler)
         end,
         type = function(value)
@@ -169,6 +180,7 @@ function Harness:BuildEnvironment()
         print = function(...)
             Refuse("print", ...)
             local parts = {}
+
             for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
             h.printed[#h.printed + 1] = table.concat(parts, " ")
         end,
@@ -182,11 +194,11 @@ function Harness:BuildEnvironment()
         -- exists. It runs with GetTime, plus h.workTime: the milliseconds a test says the work in
         -- the current frame has taken, since GetTime holds still within a frame and this clock
         -- doesn't. debugprofilestart, which resets it for every addon, isn't faked.
-        debugprofilestop = function() return h.time * 1000 + h.workTime end,
+        debugprofilestop = function() return ((h.time * 1000) + h.workTime) end,
         GetServerTime = function() return h.serverTime end,
-        time = function(t) return t and EpochFromDate(t) or h.serverTime end,
+        time = function(t) return ((t and EpochFromDate(t)) or h.serverTime) end,
         date = function(fmt, t)
-            fmt = fmt or "%c"
+            fmt = (fmt or "%c")
             if fmt:sub(1, 1) == "!" then fmt = fmt:sub(2) end
             return os.date("!" .. fmt, t or h.serverTime)
         end,
@@ -200,6 +212,7 @@ function Harness:BuildEnvironment()
         -- Frames.
         CreateFrame = function(widgetType, name, parent, template)
             local frame = h:CreateWidget(widgetType, name, parent, template)
+
             if name then
                 rawset(h.env, name, frame)
             end
@@ -219,21 +232,24 @@ function Harness:BuildEnvironment()
         UnitHealthMax = function(u) return Field(u, "maxHealth", 0) end,
         -- [D] UnitHealthMax() - UnitHealth() (its doc string). Predicted healing isn't modeled, so
         -- usePredicted changes nothing.
-        UnitHealthMissing = function(u) return Field(u, "maxHealth", 0) - Field(u, "health", 0) end,
+        UnitHealthMissing = function(u) return (Field(u, "maxHealth", 0) - Field(u, "health", 0)) end,
         -- [D] "percent of health remaining", scaled by an optional curve. [G] Without a curve it's the
         -- 0-1 fraction (the client's CurveConstants offer ScaleTo100), and 0 for a unit without max
         -- health. Curves aren't modeled: passing one is a harness error.
         UnitHealthPercent = function(u, _, curve)
             assert(curve == nil, "UnitHealthPercent: the harness doesn't model curves")
             local max = Field(u, "maxHealth", 0)
-            return max > 0 and Field(u, "health", 0) / max or 0
+
+            return (((max > 0) and (Field(u, "health", 0) / max)) or 0)
         end,
         UnitName = function(u)
             local unit = Unit(u)
+
             if unit then return unit.name, unit.surname end
         end,
         UnitNameUnmodified = function(u)
             local unit = Unit(u)
+
             if unit then return unit.name, unit.surname end
         end,
         -- [E] Forever's separator for "First Last" (names.player).
@@ -241,62 +257,72 @@ function Harness:BuildEnvironment()
         RegionalUniqueNamesEnabled = function() return true end,
         UnitFullName = function(u)
             local unit = Unit(u)
+
             if unit then return unit.name, unit.surname end
         end,
         -- Group membership (group.lua).
         IsInGroup = function(category) return h:InGroupCategory(category) end,
-        IsInRaid = function(category) return h:InGroupCategory(category) and h:GroupIsRaid() end,
+        IsInRaid = function(category) return (h:InGroupCategory(category) and h:GroupIsRaid()) end,
         GetNumGroupMembers = function(category)
-            return h:InGroupCategory(category) and #h.group.members + 1 or 0
+            return ((h:InGroupCategory(category) and (#h.group.members + 1)) or 0)
         end,
         -- A unit's classFile is its classFile field; className defaults to
         -- the class's enUS name.
         UnitClass = function(u)
             local unit = Unit(u)
-            local classFile = unit and unit.classFile
+            local classFile = (unit and unit.classFile)
             local class = Classes[classFile or ""]
-            if class then return unit.className or class[1], classFile, class[2] end
+
+            if class then return (unit.className or class[1]), classFile, class[2] end
         end,
         UnitLevel = function(u) return Field(u, "level", 0) end,
         GetPlayerInfoByGUID = function(guid)
             local unit = h.guidUnits[guid]
+
             if not unit or not unit.isPlayer or not unit.name then return end
-            local class, race = Classes[unit.classFile or ""], unit.race and Harness.RACES[unit.race]
-            local realm = (unit.realm == nil or unit.realm == h.player.realm) and "" or unit.realm
-            return class and (unit.className or class[1]), unit.classFile, race, unit.race, unit.sex or 2,
+            local class, race = Classes[unit.classFile or ""], (unit.race and Harness.RACES[unit.race])
+            local realm = ((((unit.realm == nil) or (unit.realm == h.player.realm)) and "") or unit.realm)
+
+            return (class and (unit.className or class[1])), unit.classFile, race, unit.race, (unit.sex or 2),
                 Harness.DisplayName(unit), realm
         end,
         UnitIsBossMob = function(u)
             local unit = Unit(u)
-            return unit ~= nil and unit.boss == true
+
+            return ((unit ~= nil) and (unit.boss == true))
         end,
         UnitClassification = function(u)
             local unit = Unit(u)
-            if unit then return unit.classification or "normal" end
+
+            if unit then return (unit.classification or "normal") end
         end,
-        UnitXP = function(u) return u == "player" and h.player.xp or 0 end,
-        UnitXPMax = function(u) return u == "player" and h.player.xpMax or 0 end,
-        GetXPExhaustion = function() return h.player.rested > 0 and h.player.rested or nil end,
+        UnitXP = function(u) return (((u == "player") and h.player.xp) or 0) end,
+        UnitXPMax = function(u) return (((u == "player") and h.player.xpMax) or 0) end,
+        GetXPExhaustion = function() return (((h.player.rested > 0) and h.player.rested) or nil) end,
         GetMaxPlayerLevel = function() return h.maxLevel end,
         IsResting = function() return h.player.resting end,
         GetMoney = function() return h.player.money end,
         UnitPowerType = function(u)
-            local powerType = Field(u, "powerType", 0) or 0 -- every unit has a primary power type
-            return powerType, PowerTokens[powerType] or "MANA"
+            local powerType = (Field(u, "powerType", 0) or 0) -- every unit has a primary power type
+
+            return powerType, (PowerTokens[powerType] or "MANA")
         end,
         UnitPower = function(u, powerType)
             local unit = Unit(u)
+
             if not unit then return 0 end
-            return (unit.power or {})[powerType or unit.powerType or 0] or 0 -- a unit without power has none
+            return ((unit.power or {})[powerType or unit.powerType or 0] or 0) -- a unit without power has none
         end,
         GetComboPoints = function(u, target)
-            local unit = u == "player" and Unit(target)
-            return unit and unit.comboPoints or 0
+            local unit = ((u == "player") and Unit(target))
+
+            return ((unit and unit.comboPoints) or 0)
         end,
         UnitPowerMax = function(u, powerType)
             local unit = Unit(u)
+
             if not unit then return 0 end
-            return (unit.powerMax or {})[powerType or unit.powerType or 0] or 0
+            return ((unit.powerMax or {})[powerType or unit.powerType or 0] or 0)
         end,
 
         -- Zones.
@@ -312,6 +338,7 @@ function Harness:BuildEnvironment()
             GetSpellName = function(id) return h.spellNames[id] end,
             IsSpellUsable = function(name)
                 local state = h.usable[name]
+
                 if not state then return false, false end
                 return state[1], state[2]
             end,
@@ -322,19 +349,15 @@ function Harness:BuildEnvironment()
             After = function(seconds, callback)
                 h:Schedule(seconds, callback)
             end,
-            NewTimer = function(seconds, callback)
-                local handle
-                local entry = h:Schedule(seconds, function() callback(handle) end)
-                handle = Handle(entry)
-                return handle
-            end,
             NewTicker = function(seconds, callback, iterations)
                 local state, handle = {}, nil
                 local remaining = iterations
+
                 local function Tick()
-                    if remaining then remaining = remaining - 1 end
-                    if not remaining or remaining > 0 then
+                    if remaining then remaining = (remaining - 1) end
+                    if not remaining or (remaining > 0) then
                         local nextEntry = h:Schedule(seconds, Tick)
+
                         state.current = nextEntry
                     end
                     callback(handle)
@@ -342,8 +365,15 @@ function Harness:BuildEnvironment()
                 state.current = h:Schedule(seconds, Tick)
                 handle = {
                     Cancel = function() state.cancelled = true; state.current.cancelled = true end,
-                    IsCancelled = function() return state.cancelled == true end,
+                    IsCancelled = function() return (state.cancelled == true) end,
                 }
+                return handle
+            end,
+            NewTimer = function(seconds, callback)
+                local handle
+                local entry = h:Schedule(seconds, function() callback(handle) end)
+
+                handle = Handle(entry)
                 return handle
             end,
         },
@@ -353,15 +383,15 @@ function Harness:BuildEnvironment()
             if not h.files[path] or h.mutedChannels[channel or "SFX"] then
                 return false, nil
             end
-            h.handles = h.handles + 1
-            h.sounds[#h.sounds + 1] = { path = path, channel = channel, handle = h.handles }
+            h.handles = (h.handles + 1)
+            h.sounds[#h.sounds + 1] = { channel = channel, handle = h.handles, path = path }
             return true, h.handles
         end,
-        C_UIFileAsset = { IsKnownFile = function(path) return h.files[path] == true end },
+        C_UIFileAsset = { IsKnownFile = function(path) return (h.files[path] == true) end },
         PlaySound = PlayKit,
         C_Sound = { PlaySound = PlayKit },
         StopSound = function(handle, fade)
-            h.stopped[#h.stopped + 1] = { handle = handle, fade = fade }
+            h.stopped[#h.stopped + 1] = { fade = fade, handle = handle }
         end,
         SOUNDKIT = setmetatable({}, {
             __index = function(_, key) error("SOUNDKIT." .. tostring(key) .. " isn't modeled by the harness", 2) end,
@@ -369,32 +399,33 @@ function Harness:BuildEnvironment()
 
         -- Controller.
         C_GamePad = {
-            SetLedColor = function(color) h.led = { color:GetRGB() } end,
             ClearLedColor = function() h.led = nil end,
-            SetVibration = function(kind, intensity) h.vibrations[#h.vibrations + 1] = { kind, intensity } end,
-            StopVibration = function() h.vibrationsStopped = h.vibrationsStopped + 1 end,
-            GetActiveDeviceID = function() return h.labelStyle and 1 or 0 end,
+            GetActiveDeviceID = function() return ((h.labelStyle and 1) or 0) end,
             GetDeviceMappedState = function(id) return h:GamePadMappedState(id) end,
+            SetLedColor = function(color) h.led = { color:GetRGB() } end,
+            SetVibration = function(kind, intensity) h.vibrations[#h.vibrations + 1] = { kind, intensity } end,
+            StopVibration = function() h.vibrationsStopped = (h.vibrationsStopped + 1) end,
         },
 
         -- Addon metadata.
         C_AddOns = {
             GetAddOnMetadata = function(name, key)
                 local addon = __addons[name]
-                return addon and addon.metadata[key]
+
+                return (addon and addon.metadata[key])
             end,
         },
 
         -- The addon profiler and memory (Blizzard_AddOnList reads them). Metrics come from
         -- h.profiler: numbers keyed by Enum.AddOnProfilerMetric value, 0 when unset.
         C_AddOnProfiler = {
+            GetAddOnMetric = function(name, metric) return ((h.profiler.addons[name] or {})[metric] or 0) end,
+            GetApplicationMetric = function(metric) return (h.profiler.application[metric] or 0) end,
+            GetOverallMetric = function(metric) return (h.profiler.overall[metric] or 0) end,
             IsEnabled = function() return h.profiler.enabled end,
-            GetAddOnMetric = function(name, metric) return (h.profiler.addons[name] or {})[metric] or 0 end,
-            GetApplicationMetric = function(metric) return h.profiler.application[metric] or 0 end,
-            GetOverallMetric = function(metric) return h.profiler.overall[metric] or 0 end,
         },
-        UpdateAddOnMemoryUsage = function() h.memoryUpdates = h.memoryUpdates + 1 end,
-        GetAddOnMemoryUsage = function(name) return h.profiler.memory[name] or 0 end,
+        UpdateAddOnMemoryUsage = function() h.memoryUpdates = (h.memoryUpdates + 1) end,
+        GetAddOnMemoryUsage = function(name) return (h.profiler.memory[name] or 0) end,
 
         -- Addon messages (group.lua); the rest of C_ChatInfo is merged in below.
         C_ChatInfo = h:AddonMessageFakes(),
@@ -404,14 +435,15 @@ function Harness:BuildEnvironment()
         C_RestrictedActions = {
             IsAddOnRestrictionActive = function(kind)
                 local name = Harness.RESTRICTIONS[(kind or -1) + 1]
-                return name ~= nil and h.restrictionDispatch == 0 and h.restrictions[name] == true
+
+                return ((name ~= nil) and (h.restrictionDispatch == 0) and (h.restrictions[name] == true))
             end,
         },
         C_SettingsUtil = {
             OpenSettingsPanel = function(categoryID) h.opened[#h.opened + 1] = categoryID end,
         },
 
-        PowerBarColor = { ENERGY = { r = 1, g = 1, b = 0 } },
+        PowerBarColor = { ENERGY = { b = 0, g = 1, r = 1 } },
         LE_PARTY_CATEGORY_INSTANCE = Harness.PARTY_CATEGORY.INSTANCE,
     }
     -- math.random and random are Lua's until h:SeedRandom (see wow.lua).
@@ -425,12 +457,14 @@ function Harness:BuildEnvironment()
     fakes.format = SecretFormat
     -- ("%d"):format(x) reaches format through the string metatable, not the env: route it too.
     local stringMethods = setmetatable({ format = SecretFormat }, { __index = string })
+
     getmetatable("").__index = stringMethods
 
     -- Enum, from the documented enumerations.
     fakes.Enum = {}
     for name, fields in pairs(Snapshot.enums) do
         local enum = {}
+
         for field, value in pairs(fields) do
             enum[field] = value
         end
@@ -456,6 +490,7 @@ function Harness:BuildEnvironment()
         h:UnitFakes(), h:WorldFakes(), h:InterfaceFakes(fakes.UIParent), h:MeterFakes(), h:SpeechFakes(),
         h:QuestFakes(fakes.UIParent),
     }
+
     for _, more in ipairs(sources) do
         for name, value in pairs(more) do
             assert(fakes[name] == nil, "BuildEnvironment: fake " .. name .. " is defined twice")
@@ -468,7 +503,7 @@ function Harness:BuildEnvironment()
     for name, value in pairs(fakes) do
         if type(value) == "function" then
             fakes[name] = h:WrapFunction(name, value)
-        elseif type(value) == "table" and name:match("^C_") then
+        elseif (type(value) == "table") and name:match("^C_") then
             for member, fn in pairs(value) do
                 value[member] = h:WrapFunction(name .. "." .. member, fn)
             end
@@ -497,18 +532,20 @@ end
 -- h.category (the RegisterAddOnCategory argument).
 function Harness:BuildSettings(env)
     local h = self
+
     return {
-        RegisterCanvasLayoutCategory = function(frame, name)
-            local id = #h.categories + 1
-            local category = { name = name, canvas = frame, GetID = function() return id end }
-            h.categories[id] = category
-            return category, { frame = frame }
+        OpenToCategory = function(categoryID, scrollToElementName)
+            env.C_SettingsUtil.OpenSettingsPanel(categoryID, scrollToElementName)
         end,
         RegisterAddOnCategory = function(category)
             h.category = category
         end,
-        OpenToCategory = function(categoryID, scrollToElementName)
-            env.C_SettingsUtil.OpenSettingsPanel(categoryID, scrollToElementName)
+        RegisterCanvasLayoutCategory = function(frame, name)
+            local id = (#h.categories + 1)
+            local category = { canvas = frame, GetID = function() return id end, name = name }
+
+            h.categories[id] = category
+            return category, { frame = frame }
         end,
     }
 end
@@ -517,14 +554,16 @@ end
 -- in the client dump. Tables whose members are data (Enum values, SOUNDKIT) list one level.
 function Harness.FakeNames()
     local h = Harness.New()
+
     Harness.created = {}
     local names = {}
+
     for name, value in pairs(h.env) do
         names[#names + 1] = name
-        if type(value) == "table" and name ~= "_G" and not Harness.State(value) then
+        if (type(value) == "table") and (name ~= "_G") and not Harness.State(value) then
             for member in pairs(value) do
                 if type(member) == "string" then
-                    names[#names + 1] = name .. "." .. member
+                    names[#names + 1] = (name .. "." .. member)
                 end
             end
         end
@@ -541,6 +580,7 @@ local LuaLibraries = { _G = true, math = true, string = true, table = true }
 -- methods aren't listed.
 function Harness.FakeFunctionNames()
     local h = Harness.New()
+
     Harness.created = {}
     local names, seen = {}, {}
     -- The functions in a plain table, nested tables included (each table once; widgets aside).
@@ -552,7 +592,7 @@ function Harness.FakeFunctionNames()
         for member, value in pairs(t) do
             if type(member) == "string" then
                 if type(value) == "function" then
-                    names[#names + 1] = path .. "." .. member
+                    names[#names + 1] = (path .. "." .. member)
                 elseif type(value) == "table" then
                     Walk(path .. "." .. member, value)
                 end
@@ -560,9 +600,9 @@ function Harness.FakeFunctionNames()
         end
     end
     for name, value in pairs(h.env) do
-        if type(value) == "function" and not Harness.LUA_FAKES[name] then
+        if (type(value) == "function") and not Harness.LUA_FAKES[name] then
             names[#names + 1] = name
-        elseif type(value) == "table" and not LuaLibraries[name] and name ~= "_G" then
+        elseif (type(value) == "table") and not LuaLibraries[name] and (name ~= "_G") then
             Walk(name, value)
         end
     end

@@ -16,19 +16,20 @@ local addonName, ns = ...
 -- a sanitized context. The Kit functions that only draw (Pick, Chance, Shuffle, WrongNumbers) read
 -- nothing but state.roll.
 
-local MaxPrompt, MaxChoice = 240, 40
 local Factions = { Alliance = true, Horde = true } -- UnitFactionGroup's factions a context may name
+local MaxChoice, MaxPrompt = 40, 240
 
+local error, ipairs, pairs, tonumber, tostring, type = error, ipairs, pairs, tonumber, tostring, type
+local find, gsub, lower, upper = string.find, string.gsub, string.lower, string.upper
 local floor, max, min = math.floor, math.max, math.min
 local insert = table.insert
-local find, gsub, lower, upper = string.find, string.gsub, string.lower, string.upper
-local error, ipairs, pairs, tonumber, tostring, type = error, ipairs, pairs, tonumber, tostring, type
 
 local ScholarWords = ns.ScholarWords
 
 local Grades = { { id = 0, label = "Kindergarten" } }
+
 for grade = 1, 6 do
-    Grades[grade + 1] = { id = grade, label = "Grade " .. grade }
+    Grades[grade + 1] = { id = grade, label = ("Grade " .. grade) }
 end
 
 local Generators = {}
@@ -40,17 +41,19 @@ end
 
 --- True one time in n.
 local function Chance(state, n)
-    return state.roll(1, n) == 1
+    return (state.roll(1, n) == 1)
 end
 
 --- A shuffled copy of list; list itself is left alone.
 local function Shuffle(state, list)
     local out = {}
+
     for i, value in ipairs(list) do
         out[i] = value
     end
     for i = #out, 2, -1 do
         local j = state.roll(1, i)
+
         out[i], out[j] = out[j], out[i]
     end
     return out
@@ -64,38 +67,39 @@ end
 --- Replaces each {key} in text with vars[key]; a key vars doesn't have stays as it is.
 local function Fill(text, vars)
     return (gsub(text, "{(%w+)}", function(key)
-        return vars[key] ~= nil and tostring(vars[key]) or nil
+        return (((vars[key] ~= nil) and tostring(vars[key])) or nil)
     end))
 end
 
 --- "1 apple" or "3 apples".
 ---@param item table { one, many }
 local function Count(n, item)
-    return n .. " " .. (n == 1 and item[1] or item[2])
+    return (n .. " " .. (((n == 1) and item[1]) or item[2]))
 end
 
 --- An amount of copper as it's spoken: "45 copper", "2 silver", "1 silver 5 copper".
 local function Coins(copper)
-    local silver, rest = floor(copper / 100), copper % 100
-    return silver == 0 and rest .. " copper" or silver .. " silver" .. (rest > 0 and " " .. rest .. " copper" or "")
+    local silver, rest = floor(copper / 100), (copper % 100)
+
+    return (((silver == 0) and (rest .. " copper")) or (silver .. " silver" .. (((rest > 0) and (" " .. rest .. " copper")) or "")))
 end
 
 --- Whether text contains word as a whole word, ignoring case.
 local function Mentions(text, word)
-    return find(lower(text), "%f[%w]" .. gsub(lower(word), "%p", "%%%0") .. "%f[%W]") ~= nil
+    return (find(lower(text), "%f[%w]" .. gsub(lower(word), "%p", "%%%0") .. "%f[%W]") ~= nil)
 end
 
 --- text, trimmed, when it's plain and at most maxLength long: no control characters, escape
 --- codes or template braces. Anything else is nil.
 local function Clean(text, maxLength)
-    text = type(text) == "string" and Trim(text) or ""
-    return text ~= "" and #text <= maxLength and not find(text, "[%c|{}\\]") and text or nil
+    text = (((type(text) == "string") and Trim(text)) or "")
+    return (((text ~= "") and (#text <= maxLength) and not find(text, "[%c|{}\\]") and text) or nil)
 end
 
 --- n as a number when it's a whole number from lo to hi (a numeric string counts), else nil.
 local function WholeNumber(n, lo, hi)
     n = tonumber(n)
-    return n and n == floor(n) and n >= lo and n <= hi and n or nil
+    return ((n and (n == floor(n)) and (n >= lo) and (n <= hi) and n) or nil)
 end
 
 -- Only the fields a generator uses, each dropped unless it's plain and in range.
@@ -103,40 +107,44 @@ local function SafeContext(context)
     if type(context) ~= "table" then
         return {}
     end
-    local class = type(context.class) == "string" and upper(context.class) or nil
+    local class = (((type(context.class) == "string") and upper(context.class)) or nil)
+
     return {
-        name = type(context.name) == "string" and Clean((gsub(context.name, "%-.*$", "")), 12) or nil,
+        name = (((type(context.name) == "string") and Clean((gsub(context.name, "%-.*$", "")), 12)) or nil),
         zone = Clean(context.zone, 24),
-        class = class and ScholarWords.classNouns[class] and class or nil,
+        class = ((class and ScholarWords.classNouns[class] and class) or nil),
         level = WholeNumber(context.level, 1, 100),
         copper = WholeNumber(context.copper, 0, 1e12),
-        faction = Factions[context.faction] and context.faction or nil,
-        locale = type(context.locale) == "string" and find(context.locale, "^%l%l%u%u$") and context.locale or nil,
+        faction = ((Factions[context.faction] and context.faction) or nil),
+        locale = (((type(context.locale) == "string") and find(context.locale, "^%l%l%u%u$") and context.locale) or nil),
     }
 end
 
 -- { first mention, later mentions }: sometimes the player ("Tessa the mage"), else a stock hero.
 local function Hero(state)
     local name = state.context.name
+
     if name and Chance(state, 2) then
-        local noun = state.context.class and ScholarWords.classNouns[state.context.class]
-        return { noun and (name .. " the " .. noun) or name, name }
+        local noun = (state.context.class and ScholarWords.classNouns[state.context.class])
+
+        return { ((noun and (name .. " the " .. noun)) or name), name }
     end
     return Pick(state, ScholarWords.heroes)
 end
 
 local function Place(state)
-    return state.context.zone and Chance(state, 3) and state.context.zone or Pick(state, ScholarWords.places)
+    return ((state.context.zone and Chance(state, 3) and state.context.zone) or Pick(state, ScholarWords.places))
 end
 
 local function Item(state)
     local items = ScholarWords.items
+
     if state.grade == 0 then
         return Pick(state, items.small)
     elseif state.context.class and Chance(state, 3) then
         return ScholarWords.classItems[state.context.class]
     end
-    return Pick(state, state.grade == 1 and items.small or items.adventure)
+    return Pick(state, ((state.grade == 1) and items.small) or items.adventure)
 end
 
 --- Word problem variables: a copy of vars plus {Hero} (first mention), {hero}, {place}, {item}
@@ -144,6 +152,7 @@ end
 local function Vars(state, vars)
     local hero, item = Hero(state), Item(state)
     local out = { Hero = hero[1], hero = hero[2], place = Place(state), item = item[1], items = item[2] }
+
     for key, value in pairs(vars) do
         out[key] = value
         if type(value) == "number" then
@@ -159,9 +168,11 @@ end
 ---@return integer answer correct's position, 1 to 4
 local function Arrange(state, correct, wrongs)
     local seen, pool = { [lower(Trim(correct))] = true }, {}
+
     for _, wrong in ipairs(wrongs) do
         local key = lower(Trim(wrong))
-        if key ~= "" and not seen[key] then
+
+        if (key ~= "") and not seen[key] then
             seen[key], pool[#pool + 1] = true, wrong
         end
     end
@@ -169,6 +180,7 @@ local function Arrange(state, correct, wrongs)
         error("ScholarPuzzles: too few distractors for " .. correct)
     end
     local answer, choices = state.roll(1, 4), Shuffle(state, pool)
+
     insert(choices, answer, correct)
     return { choices[1], choices[2], choices[3], choices[4] }, answer
 end
@@ -177,14 +189,14 @@ end
 -- and b are the riddle's two numbers; groups riddles put a groups of b.
 local Pictures = {
     ["math.add"] = function(vars, item)
-        return vars.a + vars.b <= 20 and { kind = "join", a = vars.a, b = vars.b, item = item } or nil
+        return ((((vars.a + vars.b) <= 20) and { a = vars.a, b = vars.b, item = item, kind = "join" }) or nil)
     end,
     ["math.subtract"] = function(vars, item)
-        return vars.a <= 20 and { kind = "take", a = vars.a, b = vars.b, item = item } or nil
+        return (((vars.a <= 20) and { a = vars.a, b = vars.b, item = item, kind = "take" }) or nil)
     end,
     ["math.groups"] = function(vars, item)
-        return vars.a * vars.b <= 30 and vars.a <= 6
-            and { kind = "groups", groups = vars.a, each = vars.b, item = item } or nil
+        return ((((vars.a * vars.b) <= 30) and (vars.a <= 6)
+            and { each = vars.b, groups = vars.a, item = item, kind = "groups" }) or nil)
     end,
 }
 
@@ -202,18 +214,20 @@ end
 local function Finish(state, kind, text, vars, correct, wrongs)
     local choices, answer = Arrange(state, correct, wrongs)
     local hint = Fill(text.hint, vars)
+
     if Mentions(hint, correct) then
         hint = ScholarWords.hintFallback
     end
     local title = Pick(state, ScholarWords.titles[kind])
     local prompt = Fill(text.prompt or Pick(state, text.prompts), vars)
+
     return {
         subject = state.subject, kind = kind, title = title, prompt = prompt, choices = choices, answer = answer,
-        hint = hint, explanation = Fill(text.explain, vars) .. " " .. Pick(state, ScholarWords.praise),
-        value = vars.report or vars.v, expression = text.expr and Fill(text.expr, vars), remainder = vars.r,
+        hint = hint, explanation = (Fill(text.explain, vars) .. " " .. Pick(state, ScholarWords.praise)),
+        value = (vars.report or vars.v), expression = (text.expr and Fill(text.expr, vars)), remainder = vars.r,
         terms = vars.terms,
-        picture = state.grade <= 3 and Pictures[kind] and type(vars.a) == "number" and type(vars.b) == "number"
-            and Pictures[kind](vars, Counted(prompt, vars)) or nil,
+        picture = (((state.grade <= 3) and Pictures[kind] and (type(vars.a) == "number") and (type(vars.b) == "number")
+            and Pictures[kind](vars, Counted(prompt, vars))) or nil),
     }
 end
 
@@ -221,11 +235,12 @@ end
 --- misses. lo defaults to 1 (0 when value is 0); hi to the larger of value * 2 and value + 10,
 --- and never less than lo + 6.
 local function WrongNumbers(state, value, candidates, lo, hi)
-    lo = lo or (value > 0 and 1 or 0)
+    lo = (lo or (((value > 0) and 1) or 0))
     hi = max(hi or max(value * 2, value + 10), lo + 6)
     local out, seen = {}, { [value] = true }
+
     local function Add(n)
-        if #out < 3 and n == floor(n) and n >= lo and n <= hi and not seen[n] then
+        if (#out < 3) and (n == floor(n)) and (n >= lo) and (n <= hi) and not seen[n] then
             seen[n] = true
             out[#out + 1] = n
         end
@@ -234,23 +249,25 @@ local function WrongNumbers(state, value, candidates, lo, hi)
         Add(n)
     end
     local step, down = 1, Chance(state, 2)
+
     while #out < 3 do
-        Add(down and value - step or value + step)
-        Add(down and value + step or value - step)
-        step = step + 1
+        Add((down and (value - step)) or (value + step))
+        Add((down and (value + step)) or (value - step))
+        step = (step + 1)
     end
     return out
 end
 
 local function Fits(puzzle)
     local choices = puzzle.choices
-    return #puzzle.prompt <= MaxPrompt and max(#choices[1], #choices[2], #choices[3], #choices[4]) <= MaxChoice
+
+    return ((#puzzle.prompt <= MaxPrompt) and (max(#choices[1], #choices[2], #choices[3], #choices[4]) <= MaxChoice))
 end
 
 -- n as a whole number clamped to lo..hi; default when it isn't a number (or is NaN).
 local function Clamp(n, lo, hi, default)
     n = tonumber(n)
-    return (n and n == n) and max(lo, min(hi, floor(n))) or default
+    return (((n and (n == n)) and max(lo, min(hi, floor(n)))) or default)
 end
 
 --- Generates a puzzle. Every math and reading puzzle fits the length limits, with any context
@@ -265,7 +282,7 @@ end
 --- hint, explanation }, plus value, expression, remainder and terms on math puzzles and book (the
 --- quest book's text) on quest puzzles
 local function Generate(options)
-    if type(options) ~= "table" or type(options.random) ~= "function" then
+    if (type(options) ~= "table") or (type(options.random) ~= "function") then
         error("ScholarPuzzles.Generate: options.random must be a function", 2)
     end
     local state = {
@@ -273,10 +290,12 @@ local function Generate(options)
         grade = Clamp(options.grade, 0, 6, 0), level = Clamp(options.level, 1, 3, 1),
         context = SafeContext(options.context),
     }
+
     if options.subject == "quest" then
         return ns.Puzzles.Kit.AskQuest(state, options.quest, options.known)
     end
     local kinds = ScholarWords.kinds[options.subject]
+
     if not kinds then
         error("ScholarPuzzles.Generate: unknown subject " .. tostring(options.subject), 2)
     end
@@ -284,7 +303,8 @@ local function Generate(options)
 end
 
 local Kit = {
-    Pick = Pick, Chance = Chance, Shuffle = Shuffle, Trim = Trim, Fill = Fill, Count = Count, Coins = Coins,
-    Vars = Vars, Finish = Finish, WrongNumbers = WrongNumbers, Fits = Fits, Words = ScholarWords, Generators = Generators,
+    Chance = Chance, Coins = Coins, Count = Count, Fill = Fill, Finish = Finish, Fits = Fits, Generators = Generators,
+    Pick = Pick, Shuffle = Shuffle, Trim = Trim, Vars = Vars, Words = ScholarWords, WrongNumbers = WrongNumbers,
 }
-ns.Puzzles = { Grades = Grades, Generate = Generate, Kit = Kit }
+
+ns.Puzzles = { Generate = Generate, Grades = Grades, Kit = Kit }

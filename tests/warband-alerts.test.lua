@@ -6,6 +6,7 @@ local Prefix = "TLKKrew1"
 local function Grouped()
     local h = Harness.New({ saved = {} })
     local ns = h:LoadAddon("TheLanKrewToolKit")
+
     h:JoinGroup("party", { "Mom" })
     h:Echo(false)
     h:Advance(2)
@@ -13,17 +14,19 @@ local function Grouped()
 end
 
 local function Enemy(name, extra)
-    local unit = { name = name, isPlayer = true, playerControlled = true, canAttack = true, isEnemy = true,
-        classFile = "ROGUE", className = "Rogue", level = 60, faction = "Alliance" }
+    local unit = { canAttack = true, classFile = "ROGUE", className = "Rogue", faction = "Alliance", isEnemy = true,
+        isPlayer = true, level = 60, name = name, playerControlled = true }
+
     for key, value in pairs(extra or {}) do unit[key] = value end
     return unit
 end
 
 local function Sent(h, kind)
     local count = 0
+
     for _, message in ipairs(h.addonMessages) do
-        if message.prefix == Prefix and message.message:find("^" .. kind .. ":") then
-            count = count + 1
+        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
+            count = (count + 1)
         end
     end
     return count
@@ -31,9 +34,10 @@ end
 
 local function Sounds(h, kit)
     local count = 0
+
     for _, sound in ipairs(h.soundKits) do
         if sound.kit == kit then
-            count = count + 1
+            count = (count + 1)
         end
     end
     return count
@@ -42,11 +46,13 @@ end
 test("five marked enemies at once: one alert now, one summary after, every name told", function()
     local h = Grouped()
     local names = { "Bob", "Cara", "Dan", "Eve", "Finn" }
+
     for _, name in ipairs(names) do
         h:Slash("/tlk mark " .. name .. " Doe")
     end
     h:Advance(6) -- the marks reach the Krew
     local sounds = Sounds(h, h.env.SOUNDKIT.RAID_WARNING)
+
     for _, name in ipairs(names) do
         h:AddNamePlate(Enemy(name))
     end
@@ -61,14 +67,16 @@ end)
 
 test("a summary lists marks, grudges, wars and champions in that order, with one sound", function()
     local h = Grouped()
+
     h:Slash("/tlk mark Bob Doe")
     h:Slash("/tlk glory Dan Doe")
     h:Slash("/tlk grudge Cara Doe")
     h:Slash("/tlk war Knights of Light")
     h:Slash("/tlk mark Finn Doe")
     local warnings, checks = Sounds(h, h.env.SOUNDKIT.RAID_WARNING), Sounds(h, h.env.SOUNDKIT.READY_CHECK)
+
     h:AddNamePlate(Enemy("Bob"))
-    h:AddNamePlate(Enemy("Dan", { inCombat = true, canAttack = false, isEnemy = false, faction = "Horde" }))
+    h:AddNamePlate(Enemy("Dan", { canAttack = false, faction = "Horde", inCombat = true, isEnemy = false }))
     h:AddNamePlate(Enemy("Eve", { guild = "Knights of Light" }))
     h:AddNamePlate(Enemy("Cara"))
     h:AddNamePlate(Enemy("Finn"))
@@ -82,6 +90,7 @@ end)
 
 test("a quiet moment ends the alert budget: the next sighting alerts at once", function()
     local h = Grouped()
+
     h:Slash("/tlk mark Bob Doe")
     h:Slash("/tlk grudge Cara Doe")
     h:Slash("/tlk grudge Dan Doe")
@@ -97,6 +106,7 @@ end)
 
 test("alerts switched off mid-brawl drop the held summary", function()
     local h, addon = Grouped()
+
     h:Slash("/tlk mark Bob Doe")
     h:Slash("/tlk mark Cara Doe")
     h:AddNamePlate(Enemy("Bob"))

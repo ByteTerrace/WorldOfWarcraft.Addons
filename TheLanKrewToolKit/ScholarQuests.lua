@@ -21,24 +21,24 @@ local addonName, ns = ...
 -- not the kind last asked about this quest (its askedKind; who gave it and which quest a giver gave
 -- are one kind) unless no other fits.
 
-local MaxTitle = 60
 local MaxLine = 40      -- the longest choice, as ScholarPuzzles allows
-local MinSentence, MaxSentence = 30, 140
-local MinWord, MaxWord = 5, 12
+local MaxSentence, MinSentence = 140, 30
+local MaxTitle = 60
+local MaxWord, MinWord = 12, 5
 -- The kinds about what a quest asked for, asked before who and where.
 local ContentKinds = { ["quest.count"] = true, ["quest.objective"] = true, ["quest.blank"] = true }
 -- Kinds that ask the same thing another way, by the kind they count as.
 local Families = { ["quest.title"] = "quest.giver" }
 
-local ipairs, pairs, select, tostring, type = ipairs, pairs, select, tostring, type
 local concat = table.concat
 local find, gmatch, gsub, lower = string.find, string.gmatch, string.gsub, string.lower
+local ipairs, pairs, select, tostring, type = ipairs, pairs, select, tostring, type
 
 local Kit = ns.Puzzles.Kit
-local Words = Kit.Words
 local Generators, Pick, Shuffle, Finish, WrongNumbers, Fits = Kit.Generators, Kit.Pick, Kit.Shuffle, Kit.Finish,
     Kit.WrongNumbers, Kit.Fits
 local MaxObjectives = ns.QuestBook.MaxObjectives
+local Words = Kit.Words
 
 -- A one-line text from a record: no control characters, escape or template characters, trimmed,
 -- at most length; "" otherwise.
@@ -47,7 +47,7 @@ local function Line(text, length)
         return ""
     end
     text = gsub(gsub(gsub(text, "[%c|{}\\]", " "), "%s+", " "), "^%s*(.-)%s*$", "%1")
-    return #text <= length and text or ""
+    return (((#text <= length) and text) or "")
 end
 
 -- A quest's text from a record: line breaks kept, nothing that could be an escape or template.
@@ -67,10 +67,11 @@ local ObjectiveVerbs = { { "item", "Bring" }, { "foe", "Defeat" }, { "task", "Do
 -- without the kind the book notes, isn't asked about.
 local function RecordObjective(record, i)
     local name, required, logType = Line(record["objective" .. i], MaxLine), record["required" .. i], record["type" .. i]
-    if not (name ~= "" and type(required) == "number" and required >= 1 and type(logType) == "string" and logType ~= "") then
+
+    if not ((name ~= "") and (type(required) == "number") and (required >= 1) and (type(logType) == "string") and (logType ~= "")) then
         return nil
     end
-    return { name = name, kind = ObjectiveKinds[logType] or "task", required = required }
+    return { kind = (ObjectiveKinds[logType] or "task"), name = name, required = required }
 end
 
 -- A record as the riddles read it: { title, giver, place, zone, ender, endPlace, endZone, turnedIn,
@@ -81,34 +82,37 @@ local function Clean(record)
         key = record.key, title = Line(record.title, MaxTitle), giver = Line(record.giver, MaxLine),
         place = Line(record.place, MaxLine), zone = Line(record.zone, MaxLine), ender = Line(record.ender, MaxLine),
         endPlace = Line(record.endPlace, MaxLine), endZone = Line(record.endZone, MaxLine),
-        turnedIn = record.turnedIn == true, askedKind = Line(record.askedKind, MaxLine),
+        turnedIn = (record.turnedIn == true), askedKind = Line(record.askedKind, MaxLine),
         goal = Line(record.goal, 200), text = Body(record.text), objectives = {},
     }
+
     for i = 1, MaxObjectives do
         quest.objectives[#quest.objectives + 1] = RecordObjective(record, i)
     end
-    return quest.title ~= "" and quest or nil
+    return (((quest.title ~= "") and quest) or nil)
 end
 
 -- What the quest book shows: the quest as the player saw it, every answer in it.
 local function Book(quest)
-    local lines = { "\"" .. quest.title .. "\"" }
-    if quest.giver ~= "" and quest.place ~= "" then
+    local lines = { ("\"" .. quest.title .. "\"") }
+
+    if (quest.giver ~= "") and (quest.place ~= "") then
         lines[#lines + 1] = ("From %s, in %s."):format(quest.giver, quest.place)
     elseif quest.giver ~= "" then
-        lines[#lines + 1] = "From " .. quest.giver .. "."
+        lines[#lines + 1] = ("From " .. quest.giver .. ".")
     elseif quest.place ~= "" then
-        lines[#lines + 1] = "Taken in " .. quest.place .. "."
+        lines[#lines + 1] = ("Taken in " .. quest.place .. ".")
     end
     for _, verb in ipairs(ObjectiveVerbs) do
         local parts = {}
+
         for _, objective in ipairs(quest.objectives) do
             if objective.kind == verb[1] then
-                parts[#parts + 1] = objective.required > 1 and (objective.name .. " (" .. objective.required .. ")") or objective.name
+                parts[#parts + 1] = (((objective.required > 1) and (objective.name .. " (" .. objective.required .. ")")) or objective.name)
             end
         end
         if #parts > 0 then
-            lines[#lines + 1] = verb[2] .. ": " .. concat(parts, "; ")
+            lines[#lines + 1] = (verb[2] .. ": " .. concat(parts, "; "))
         end
     end
     if quest.goal ~= "" then
@@ -118,10 +122,10 @@ local function Book(quest)
         lines[#lines + 1] = ""
         lines[#lines + 1] = quest.text
     end
-    if quest.turnedIn and (quest.ender ~= "" or quest.endPlace ~= "") then
+    if quest.turnedIn and ((quest.ender ~= "") or (quest.endPlace ~= "")) then
         lines[#lines + 1] = ""
-        lines[#lines + 1] = "Turned in" .. (quest.ender ~= "" and (" to " .. quest.ender) or "")
-            .. (quest.endPlace ~= "" and (" at " .. quest.endPlace) or "") .. "."
+        lines[#lines + 1] = ("Turned in" .. (((quest.ender ~= "") and (" to " .. quest.ender)) or "")
+            .. (((quest.endPlace ~= "") and (" at " .. quest.endPlace)) or "") .. ".")
     end
     return concat(lines, "\n")
 end
@@ -131,12 +135,14 @@ end
 -- also true) not excluded. Finish shuffles where they sit among the choices.
 local function Wrongs(state, answer, values, bank, excluded)
     local out, seen = {}, { [lower(answer)] = true }
+
     for key in pairs(excluded or {}) do
         seen[key] = true
     end
     local function Add(value)
         local key = lower(value)
-        if #out < 3 and value ~= "" and #value <= MaxLine and not seen[key] then
+
+        if (#out < 3) and (value ~= "") and (#value <= MaxLine) and not seen[key] then
             seen[key] = true
             out[#out + 1] = value
         end
@@ -153,8 +159,10 @@ end
 -- A set of the lowercase forms of the given values ("" left out).
 local function Lowered(...)
     local set = {}
+
     for i = 1, select("#", ...) do
         local value = select(i, ...)
+
         if value ~= "" then
             set[lower(value)] = true
         end
@@ -165,6 +173,7 @@ end
 -- Every value of the named fields across the other known quests.
 local function Gather(state, ...)
     local values = {}
+
     for _, other in ipairs(state.known) do
         if other.key ~= state.quest.key then
             for i = 1, select("#", ...) do
@@ -178,6 +187,7 @@ end
 -- The other known quests' objectives of a kind, by name.
 local function OtherObjectives(state, kind)
     local values = {}
+
     for _, other in ipairs(state.known) do
         if other.key ~= state.quest.key then
             for _, objective in ipairs(other.objectives) do
@@ -195,44 +205,50 @@ end
 local function BlankCandidate(state)
     local text = state.quest.text
     local pool = {}
+
     for word in gmatch(text, "%a+") do
-        if #word >= MinWord and not Words.stopWords[lower(word)] then
+        if (#word >= MinWord) and not Words.stopWords[lower(word)] then
             pool[#pool + 1] = word
         end
     end
     local sentences = {}
+
     for sentence in gmatch(gsub(text, "\n", " ") .. " ", "%s*([^%.!?]+[%.!?])") do
-        if #sentence >= MinSentence and #sentence <= MaxSentence and not find(sentence, "\"", 1, true) then
+        if (#sentence >= MinSentence) and (#sentence <= MaxSentence) and not find(sentence, "\"", 1, true) then
             sentences[#sentences + 1] = sentence
         end
     end
     for _, sentence in ipairs(Shuffle(state, sentences)) do
         local candidates, inSentence = {}, {}
+
         for word in gmatch(sentence, "%a+") do
             inSentence[lower(word)] = true
-            if #word >= MinWord and #word <= MaxWord and not Words.stopWords[lower(word)] then
+            if (#word >= MinWord) and (#word <= MaxWord) and not Words.stopWords[lower(word)] then
                 candidates[#candidates + 1] = word
             end
         end
         for _, word in ipairs(Shuffle(state, candidates)) do
-            local capital = find(word, "^%u") ~= nil
+            local capital = (find(word, "^%u") ~= nil)
             local _, uses = gsub(sentence, "%f[%a]" .. word .. "%f[%A]", "")
             -- Wrong answers come from the rest of the text: a word the sentence already has would
             -- read oddly in its own blank.
             local wrongs, seen = {}, {}
+
             for key in pairs(inSentence) do
                 seen[key] = true
             end
             for _, other in ipairs(Shuffle(state, pool)) do
                 local key = lower(other)
-                if not seen[key] and (find(other, "^%u") ~= nil) == capital and #other >= #word - 3 and #other <= #word + 3 then
+
+                if not seen[key] and ((find(other, "^%u") ~= nil) == capital) and (#other >= (#word - 3)) and (#other <= (#word + 3)) then
                     seen[key] = true
                     wrongs[#wrongs + 1] = other
                 end
             end
-            if #wrongs >= 3 and uses == 1 then -- a word used twice would show through its blank
+            if (#wrongs >= 3) and (uses == 1) then -- a word used twice would show through its blank
                 local blanked = gsub(sentence, "%f[%a]" .. word .. "%f[%A]", "___", 1)
-                return { sentence = blanked, filled = sentence, word = word, wrongs = wrongs }
+
+                return { filled = sentence, sentence = blanked, word = word, wrongs = wrongs }
             end
         end
     end
@@ -241,36 +257,41 @@ end
 
 -- ScholarWords' wrong answers for the player's faction (Alliance's when it's unknown).
 local function Bank(state)
-    return Words.questBanks[state.context.faction] or Words.questBanks.Alliance
+    return (Words.questBanks[state.context.faction] or Words.questBanks.Alliance)
 end
 
 Generators["quest.giver"] = function(state)
     local quest = state.quest
     local wrongs = Wrongs(state, quest.giver, Gather(state, "giver", "ender"), Bank(state).names)
-    return Finish(state, "quest.giver", Words.quest.giver, { title = quest.title, answer = quest.giver }, quest.giver, wrongs)
+
+    return Finish(state, "quest.giver", Words.quest.giver, { answer = quest.giver, title = quest.title }, quest.giver, wrongs)
 end
 
 Generators["quest.ender"] = function(state)
     local quest = state.quest
     local wrongs = Wrongs(state, quest.ender, Gather(state, "giver", "ender"), Bank(state).names)
-    return Finish(state, "quest.ender", Words.quest.ender, { title = quest.title, answer = quest.ender }, quest.ender, wrongs)
+
+    return Finish(state, "quest.ender", Words.quest.ender, { answer = quest.ender, title = quest.title }, quest.ender, wrongs)
 end
 
 Generators["quest.place"] = function(state)
     local quest = state.quest
     local wrongs = Wrongs(state, quest.place, Gather(state, "place", "endPlace"), Bank(state).places, Lowered(quest.zone))
-    return Finish(state, "quest.place", Words.quest.place, { title = quest.title, answer = quest.place }, quest.place, wrongs)
+
+    return Finish(state, "quest.place", Words.quest.place, { answer = quest.place, title = quest.title }, quest.place, wrongs)
 end
 
 Generators["quest.endPlace"] = function(state)
     local quest = state.quest
     local wrongs = Wrongs(state, quest.endPlace, Gather(state, "place", "endPlace"), Bank(state).places, Lowered(quest.endZone))
-    return Finish(state, "quest.endPlace", Words.quest.endPlace, { title = quest.title, answer = quest.endPlace },
+
+    return Finish(state, "quest.endPlace", Words.quest.endPlace, { answer = quest.endPlace, title = quest.title },
         quest.endPlace, wrongs)
 end
 
 Generators["quest.count"] = function(state)
     local counted = {}
+
     for _, objective in ipairs(state.quest.objectives) do
         if objective.required > 1 then
             counted[#counted + 1] = objective
@@ -279,31 +300,37 @@ Generators["quest.count"] = function(state)
     local objective = Pick(state, counted)
     local n = objective.required
     local wrongs = {}
-    for i, value in ipairs(WrongNumbers(state, n, { n - 1, n + 1, n + 2, n * 2 })) do
+
+    for i, value in ipairs(WrongNumbers(state, n, { (n - 1), (n + 1), (n + 2), (n * 2) })) do
         wrongs[i] = tostring(value)
     end
-    local vars = { title = state.quest.title, objective = objective.name, answer = n, v = n }
+    local vars = { answer = n, objective = objective.name, title = state.quest.title, v = n }
+
     return Finish(state, "quest.count", Words.quest.count[objective.kind], vars, tostring(n), wrongs)
 end
 
 -- What an objective asked for, by its kind: wrong answers are objectives of that kind too.
-local ObjectiveBanks = { item = "items", foe = "foes", task = "tasks" }
+local ObjectiveBanks = { foe = "foes", item = "items", task = "tasks" }
+
 Generators["quest.objective"] = function(state)
     local quest = state.quest
     local own = {}
+
     for _, objective in ipairs(quest.objectives) do
         own[lower(objective.name)] = true -- the quest's other objectives are right answers too
     end
     local objective = Pick(state, quest.objectives)
     local answer = objective.name
     local wrongs = Wrongs(state, answer, OtherObjectives(state, objective.kind), Bank(state)[ObjectiveBanks[objective.kind]], own)
-    return Finish(state, "quest.objective", Words.quest.objective[objective.kind], { title = quest.title, answer = answer },
+
+    return Finish(state, "quest.objective", Words.quest.objective[objective.kind], { answer = answer, title = quest.title },
         answer, wrongs)
 end
 
 Generators["quest.title"] = function(state)
     local quest = state.quest
     local others, theirs = {}, {}
+
     for _, other in ipairs(state.known) do
         if lower(other.giver) == lower(quest.giver) then
             theirs[lower(other.title)] = true -- the giver's other quests are right answers too
@@ -312,6 +339,7 @@ Generators["quest.title"] = function(state)
         end
     end
     local bank = {}
+
     for _, entry in ipairs(Bank(state).titles) do
         if lower(entry[2]) == lower(quest.giver) then
             theirs[lower(entry[1])] = true -- the giver really gives that one
@@ -320,52 +348,59 @@ Generators["quest.title"] = function(state)
         end
     end
     local wrongs = Wrongs(state, quest.title, others, bank, theirs)
-    return Finish(state, "quest.title", Words.quest.title, { giver = quest.giver, answer = quest.title }, quest.title, wrongs)
+
+    return Finish(state, "quest.title", Words.quest.title, { answer = quest.title, giver = quest.giver }, quest.title, wrongs)
 end
 
 Generators["quest.blank"] = function(state)
     local blank = state.blank
-    local vars = { title = state.quest.title, sentence = blank.sentence, filled = blank.filled }
+    local vars = { filled = blank.filled, sentence = blank.sentence, title = state.quest.title }
+
     return Finish(state, "quest.blank", Words.quest.blank, vars, blank.word, blank.wrongs)
 end
 
 -- The kinds whose answer the record holds.
 local function Kinds(state)
     local quest, kinds = state.quest, {}
+
     local function Add(kind, possible)
         if possible then
             kinds[#kinds + 1] = kind
         end
     end
     local counted = false
+
     for _, objective in ipairs(quest.objectives) do
-        counted = counted or objective.required > 1
+        counted = (counted or (objective.required > 1))
     end
     Add("quest.giver", quest.giver ~= "")
-    Add("quest.ender", quest.turnedIn and quest.ender ~= "")
+    Add("quest.ender", quest.turnedIn and (quest.ender ~= ""))
     Add("quest.place", quest.place ~= "")
-    Add("quest.endPlace", quest.turnedIn and quest.endPlace ~= "")
+    Add("quest.endPlace", quest.turnedIn and (quest.endPlace ~= ""))
     Add("quest.count", counted)
     Add("quest.objective", #quest.objectives > 0)
-    Add("quest.title", quest.giver ~= "" and #quest.title <= MaxLine)
-    state.blank = state.context.locale == "enUS" and BlankCandidate(state) or nil
+    Add("quest.title", (quest.giver ~= "") and (#quest.title <= MaxLine))
+    state.blank = (((state.context.locale == "enUS") and BlankCandidate(state)) or nil)
     Add("quest.blank", state.blank ~= nil)
     return kinds
 end
 
 local function Family(kind)
-    return Families[kind] or kind
+    return (Families[kind] or kind)
 end
 
 -- The kinds in the order to try them (see the header): each group shuffled.
 local function Ordered(state, kinds)
     local content, other, last = {}, {}, {}
     local lastFamily = Family(state.quest.askedKind)
+
     for _, kind in ipairs(kinds) do
-        local group = Family(kind) == lastFamily and last or (ContentKinds[kind] and content or other)
+        local group = (((Family(kind) == lastFamily) and last) or ((ContentKinds[kind] and content) or other))
+
         group[#group + 1] = kind
     end
     local ordered = {}
+
     for _, group in ipairs({ content, other, last }) do
         for _, kind in ipairs(Shuffle(state, group)) do
             ordered[#ordered + 1] = kind
@@ -385,11 +420,12 @@ local function AskQuest(state, record, known)
         return nil
     end
     state.known = {}
-    for _, other in ipairs(type(known) == "table" and known or {}) do
+    for _, other in ipairs(((type(known) == "table") and known) or {}) do
         state.known[#state.known + 1] = Clean(other)
     end
     for _, kind in ipairs(Ordered(state, Kinds(state))) do
         local puzzle = Generators[kind](state)
+
         if Fits(puzzle) then
             puzzle.book = Book(state.quest)
             return puzzle

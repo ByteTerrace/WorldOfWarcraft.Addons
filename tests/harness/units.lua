@@ -96,19 +96,21 @@ local ServerId = 5000
 
 -- Each raceFile's enUS race name, for the races Forever characters can be.
 local Races = {
-    Human = "Human", Orc = "Orc", Dwarf = "Dwarf", NightElf = "Night Elf", Scourge = "Undead", Tauren = "Tauren",
-    Gnome = "Gnome", Troll = "Troll",
+    Dwarf = "Dwarf", Gnome = "Gnome", Human = "Human", NightElf = "Night Elf", Orc = "Orc", Scourge = "Undead",
+    Tauren = "Tauren", Troll = "Troll",
 }
+
 Harness.RACES = Races
 
 -- FACTION_ALLIANCE and FACTION_HORDE (GlobalStrings, enUS).
 local Factions = { Alliance = "Alliance", Horde = "Horde" }
+
 Harness.FACTIONS = Factions
 
 -- Unit fields and per-harness unit state, from Harness.New's player spec.
 function Harness:InitUnits(player)
-    self.player.faction = player.faction or "Alliance"
-    self.player.race = player.race or "Human"
+    self.player.faction = (player.faction or "Alliance")
+    self.player.race = (player.race or "Human")
     self.player.guild, self.player.guildRealm = player.guild, player.guildRealm
     self.player.guildRank, self.player.guildRankIndex = player.guildRank, player.guildRankIndex
     self.guidSerial = 0
@@ -118,39 +120,42 @@ function Harness:InitUnits(player)
 end
 
 -- The aura sound throttle's documented bounds, in seconds (UnitAuraSoundInfo.throttleSeconds).
-local AuraSoundThrottle = { min = 0, max = 5 }
+local AuraSoundThrottle = { max = 5, min = 0 }
 
 -- C_UnitAuras.AddAuraSound (see the header): the new auraSoundID, or nil when it's rejected.
 local function AddAuraSound(h, trigger, sound)
     local known = false
+
     for _, value in pairs(h.env.Enum.UnitAuraSoundTrigger) do
-        known = known or value == trigger
+        known = (known or (value == trigger))
     end
     if not known then
         error("C_UnitAuras.AddAuraSound: bad argument #1 (trigger must be an Enum.UnitAuraSoundTrigger value)", 3)
     end
-    if type(sound) ~= "table" or type(sound.unitToken) ~= "string" or type(sound.spellID) ~= "number" then
+    if (type(sound) ~= "table") or (type(sound.unitToken) ~= "string") or (type(sound.spellID) ~= "number") then
         error("C_UnitAuras.AddAuraSound: bad argument #2 (sound must be a UnitAuraSoundInfo with unitToken and spellID)", 3)
     end
     local throttle = sound.throttleSeconds
-    if throttle ~= nil and (type(throttle) ~= "number" or throttle < AuraSoundThrottle.min or throttle > AuraSoundThrottle.max) then
+
+    if (throttle ~= nil) and ((type(throttle) ~= "number") or (throttle < AuraSoundThrottle.min) or (throttle > AuraSoundThrottle.max)) then
         return nil
     end
-    h.auraSoundSerial = h.auraSoundSerial + 1
+    h.auraSoundSerial = (h.auraSoundSerial + 1)
     local copy = {}
+
     for key, value in pairs(sound) do copy[key] = value end
-    h.auraSounds[h.auraSoundSerial] = { trigger = trigger, sound = copy }
+    h.auraSounds[h.auraSoundSerial] = { sound = copy, trigger = trigger }
     return h.auraSoundSerial
 end
 
 -- A unit's GUID, assigned on first use unless the test gave one. A player known only by GUID (a
 -- killer, a victim) is a Forever character too, so it gets the default surname.
 function Harness:GUID(unit)
-    if unit.isPlayer and unit.surname == nil then
+    if unit.isPlayer and (unit.surname == nil) then
         unit.surname = Harness.DEFAULT_SURNAME
     end
     if unit.guid == nil then
-        self.guidSerial = self.guidSerial + 1
+        self.guidSerial = (self.guidSerial + 1)
         if unit.isPlayer then
             unit.guid = ("Player-%d-%08X"):format(ServerId, self.guidSerial)
         else
@@ -164,9 +169,10 @@ end
 -- Every token that can name a unit, in the client's order (see the header).
 local function Tokens()
     local tokens = { "player", "target", "focus", "mouseover", "pet", "vehicle" }
-    for i = 1, 4 do tokens[#tokens + 1] = "party" .. i end
-    for i = 1, 40 do tokens[#tokens + 1] = "raid" .. i end
-    for i = 1, Harness.MAX_NAMEPLATES do tokens[#tokens + 1] = "nameplate" .. i end
+
+    for i = 1, 4 do tokens[#tokens + 1] = ("party" .. i) end
+    for i = 1, 40 do tokens[#tokens + 1] = ("raid" .. i) end
+    for i = 1, Harness.MAX_NAMEPLATES do tokens[#tokens + 1] = ("nameplate" .. i) end
     return tokens
 end
 
@@ -175,7 +181,8 @@ function Harness:UnitTokenForGUID(guid)
     guid = Reveal(guid)
     for _, token in ipairs(Tokens()) do
         local unit = self:Unit(token)
-        if unit and self:GUID(unit) == guid then
+
+        if unit and (self:GUID(unit) == guid) then
             return token
         end
     end
@@ -187,7 +194,8 @@ end
 function Harness:AddNamePlate(unit)
     assert(type(unit) == "table", "AddNamePlate: pass a unit table")
     for i = 1, Harness.MAX_NAMEPLATES do
-        local token = "nameplate" .. i
+        local token = ("nameplate" .. i)
+
         if not self.units[token] then
             self.units[token] = Harness.FillUnit(unit)
             self:SetWidgetShown(self:NamePlateFrame(token), true)
@@ -200,7 +208,7 @@ end
 
 -- Fires NAME_PLATE_UNIT_REMOVED(token) while the unit still exists, removes it, then hides the plate.
 function Harness:RemoveNamePlate(token)
-    assert(type(token) == "string" and token:find("^nameplate%d+$") and self.units[token],
+    assert((type(token) == "string") and token:find("^nameplate%d+$") and self.units[token],
         "RemoveNamePlate: " .. tostring(token) .. " isn't an active nameplate")
     self:Fire("NAME_PLATE_UNIT_REMOVED", token)
     self.units[token] = nil
@@ -211,6 +219,7 @@ end
 -- session uses it.
 function Harness:NamePlateFrame(token)
     local frame = self.namePlateFrames[token]
+
     if not frame then
         frame = self:CreateWidget("NamePlate", nil, nil)
         frame.UnitFrame = self:CreateWidget("Frame", nil, frame)
@@ -224,8 +233,9 @@ end
 -- The active nameplate token showing this unit table, or nil.
 local function PlateTokenFor(h, unit)
     for i = 1, Harness.MAX_NAMEPLATES do
-        local token = "nameplate" .. i
-        if unit ~= nil and h.units[token] == unit then
+        local token = ("nameplate" .. i)
+
+        if (unit ~= nil) and (h.units[token] == unit) then
             return token
         end
     end
@@ -234,7 +244,7 @@ end
 -- Sets the "mouseover" unit (nil clears it). A unit fires UPDATE_MOUSEOVER_UNIT; clearing fires
 -- nothing, like the client.
 function Harness:SetMouseover(unit)
-    self.units.mouseover = unit and Harness.FillUnit(unit) or nil
+    self.units.mouseover = ((unit and Harness.FillUnit(unit)) or nil)
     if unit then
         self:Fire("UPDATE_MOUSEOVER_UNIT")
     end
@@ -260,7 +270,7 @@ end
 -- Sets the player's combo points on the current target and fires UNIT_POWER_FREQUENT.
 function Harness:SetComboPoints(count)
     assert(self.target, "SetComboPoints: there's no target to hold them")
-    if self.comboHolder and self.comboHolder ~= self.target then
+    if self.comboHolder and (self.comboHolder ~= self.target) then
         self.comboHolder.comboPoints = 0
     end
     self.target.comboPoints, self.comboHolder = count, self.target
@@ -271,6 +281,7 @@ end
 -- COMBO_TARGET_CHANGED (no power event).
 function Harness:MoveComboPoints(unit)
     local holder = assert(self.comboHolder, "MoveComboPoints: no unit holds combo points")
+
     unit.comboPoints, holder.comboPoints = holder.comboPoints, 0
     self.comboHolder = unit
     self:Fire("COMBO_TARGET_CHANGED")
@@ -321,22 +332,26 @@ end
 -- Comes back to life at full health: PLAYER_UNGHOST from a ghost, PLAYER_ALIVE before releasing.
 function Harness:Revive()
     local player = self.player
+
     assert(player.dead or player.ghost, "Revive: the player is alive")
     local wasGhost = player.ghost
+
     player.dead, player.ghost, player.health = false, false, player.maxHealth
-    self:Fire(wasGhost and "PLAYER_UNGHOST" or "PLAYER_ALIVE")
+    self:Fire((wasGhost and "PLAYER_UNGHOST") or "PLAYER_ALIVE")
 end
 
 -- The unit fakes, merged into the env (env.lua) before it wraps them.
 function Harness:UnitFakes()
     local h = self
+
     local function Unit(token) return h:Unit(token) end
     local function Hostile(a, b, field)
-        if a == b or not Unit(a) or not Unit(b) then return false end
-        local other = a == "player" and Unit(b) or b == "player" and Unit(a) or nil
+        if (a == b) or not Unit(a) or not Unit(b) then return false end
+        local other = (((a == "player") and Unit(b)) or ((b == "player") and Unit(a)) or nil)
+
         if not other then return false end
-        if field == "isEnemy" and other.isEnemy ~= nil then return other.isEnemy end
-        return other.canAttack == true
+        if (field == "isEnemy") and (other.isEnemy ~= nil) then return other.isEnemy end
+        return (other.canAttack == true)
     end
     return {
         -- Hostility is modeled against the player: the other unit's canAttack (isEnemy).
@@ -344,52 +359,62 @@ function Harness:UnitFakes()
         UnitIsEnemy = function(a, b) return Hostile(a, b, "isEnemy") end,
         UnitPlayerControlled = function(u)
             local unit = Unit(u)
-            return unit ~= nil and unit.playerControlled == true
+
+            return ((unit ~= nil) and (unit.playerControlled == true))
         end,
         UnitIsDead = function(u)
             local unit = Unit(u)
-            return unit ~= nil and unit.dead == true
+
+            return ((unit ~= nil) and (unit.dead == true))
         end,
         UnitOnTaxi = function(u)
             local unit = Unit(u)
-            return unit == h.player and h.player.onTaxi == true
+
+            return ((unit == h.player) and (h.player.onTaxi == true))
         end,
         UnitIsDeadOrGhost = function(u)
             local unit = Unit(u)
-            return unit ~= nil and (unit.dead == true or unit.ghost == true)
+
+            return ((unit ~= nil) and ((unit.dead == true) or (unit.ghost == true)))
         end,
         UnitAffectingCombat = function(u)
             local unit = Unit(u)
+
             if unit == h.player then return h.inCombat end
-            return unit ~= nil and unit.inCombat == true
+            return ((unit ~= nil) and (unit.inCombat == true))
         end,
         UnitFactionGroup = function(u)
             local unit = Unit(u)
-            if not unit or unit.faction == nil then return end
+
+            if not unit or (unit.faction == nil) then return end
             assert(Factions[unit.faction], "UnitFactionGroup: unknown faction " .. tostring(unit.faction))
             return unit.faction, Factions[unit.faction]
         end,
         UnitGUID = function(u)
             local unit = Unit(u)
-            return unit and h:GUID(unit) or nil
+
+            return ((unit and h:GUID(unit)) or nil)
         end,
         SetRaidTarget = function() end, -- forbidden to addons (tools/api/forbidden.json): never runs
         GetRealmName = function() return h.player.realm end,
         GetGuildInfo = function(u)
             local unit = Unit(u)
-            if not unit or unit.guild == nil then return end
+
+            if not unit or (unit.guild == nil) then return end
             local realm = unit.guildRealm
-            if realm ~= nil and Harness.NormalizeRealm(realm) == Harness.NormalizeRealm(h.player.realm) then
+
+            if (realm ~= nil) and (Harness.NormalizeRealm(realm) == Harness.NormalizeRealm(h.player.realm)) then
                 realm = nil
             end
-            return unit.guild, unit.guildRank or "Member", unit.guildRankIndex or 1, realm
+            return unit.guild, (unit.guildRank or "Member"), (unit.guildRankIndex or 1), realm
         end,
-        IsInGuild = function() return h.player.guild ~= nil end,
+        IsInGuild = function() return (h.player.guild ~= nil) end,
         GetNormalizedRealmName = function() return Harness.NormalizeRealm(h.player.realm) end,
         C_NamePlate = {
             GetNamePlateForUnit = function(token)
                 local plate = PlateTokenFor(h, Unit(token))
-                return plate and h:NamePlateFrame(plate) or nil
+
+                return ((plate and h:NamePlateFrame(plate)) or nil)
             end,
         },
         C_UnitAuras = {

@@ -28,24 +28,24 @@
 -- the oldest death still owed one. A death that gave up still takes its recap if it comes within
 -- LateWait, and sets it aside, so a later death never takes another death's recap.
 
-local RecapWait = 3 -- seconds to wait for the damage meter to record your death
 local LateWait = 30 -- seconds after that in which a late recap is still your last death's
-local RecapRetries = { 0.3, 1 } -- seconds after the death to look again, whatever the meter says
 local PlayerControlled = 0x100 -- COMBATLOG_OBJECT_CONTROL_PLAYER in a combat log event's flags
+local RecapRetries = { 0.3, 1 } -- seconds after the death to look again, whatever the meter says
+local RecapWait = 3 -- seconds to wait for the damage meter to record your death
 -- UnitRace's raceFile for each race a Forever character can be, by faction.
 local RaceFactions = {
-    Human = "Alliance", Dwarf = "Alliance", NightElf = "Alliance", Gnome = "Alliance",
-    Orc = "Horde", Scourge = "Horde", Tauren = "Horde", Troll = "Horde",
+    Dwarf = "Alliance", Gnome = "Alliance", Human = "Alliance", NightElf = "Alliance", Orc = "Horde", Scourge = "Horde",
+    Tauren = "Horde", Troll = "Horde",
 }
 
 local ByteTerrace = ByteTerrace
 local C_DamageMeter, C_DeathRecap, Enum = C_DamageMeter, C_DeathRecap, Enum
-local GetPlayerInfoByGUID, issecretvalue, UnitGUID = GetPlayerInfoByGUID, issecretvalue, UnitGUID
 local floor, ipairs, max, type = math.floor, ipairs, math.max, type
+local GetPlayerInfoByGUID, issecretvalue, UnitGUID = GetPlayerInfoByGUID, issecretvalue, UnitGUID
 local remove, sort = table.remove, table.sort
 
 local function Plain(value, kind)
-    if issecretvalue(value) or type(value) ~= kind then
+    if issecretvalue(value) or (type(value) ~= kind) then
         return nil
     end
     return value
@@ -54,12 +54,14 @@ end
 -- Adds the recap IDs of your deaths above after in one meter session type to found ([id] = true).
 local function DeathsIn(sessionType, after, found)
     local session = C_DamageMeter.GetCombatSessionFromType(sessionType, Enum.DamageMeterType.Deaths)
-    if issecretvalue(session) or type(session) ~= "table" then
+
+    if issecretvalue(session) or (type(session) ~= "table") then
         return
     end
     for _, source in ipairs(Plain(session.combatSources, "table") or {}) do
         local id = Plain(source.deathRecapID, "number")
-        if Plain(source.isLocalPlayer, "boolean") and id and id > after then
+
+        if Plain(source.isLocalPlayer, "boolean") and id and (id > after) then
             found[id] = true
         end
     end
@@ -68,8 +70,10 @@ end
 -- The recap IDs of your deaths in the damage meter above after, oldest first.
 local function DeathsAfter(after)
     local found, list = {}, {}
+
     if C_DamageMeter.IsDamageMeterAvailable() then
         local types = Enum.DamageMeterSessionType
+
         DeathsIn(types.Current, after, found)
         DeathsIn(types.Overall, after, found)
     end
@@ -83,52 +87,45 @@ end
 -- The recap ID of your newest death in the damage meter, or 0.
 local function NewestDeath()
     local list = DeathsAfter(0)
-    return list[#list] or 0
+
+    return (list[#list] or 0)
 end
 
 -- What the killing blow of a recap says about your killer: { name, kind, class, faction, spell,
 -- damage }, or nil for a recap without events.
 local function Killer(recapID)
     local events = Plain(C_DeathRecap.GetRecapEvents(recapID), "table")
-    local blow = events and Plain(events[1], "table")
+    local blow = (events and Plain(events[1], "table"))
+
     if not blow then
         return nil
     end
     local guid, flags = Plain(blow.sourceGUID, "string"), Plain(blow.sourceFlags, "number")
-    local killer = { name = Plain(blow.sourceName, "string") or "", kind = "", class = "", faction = "",
-        spell = Plain(blow.spellName, "string") or "", damage = Plain(blow.amount, "number") or 0 }
+    local killer = { name = (Plain(blow.sourceName, "string") or ""), kind = "", class = "", faction = "",
+        spell = (Plain(blow.spellName, "string") or ""), damage = (Plain(blow.amount, "number") or 0) }
     local me = UnitGUID("player")
-    if guid and not issecretvalue(me) and guid == me then
+
+    if guid and not issecretvalue(me) and (guid == me) then
         killer.kind = "self"
     elseif guid and guid:find("^Player%-") then
         killer.kind = "player"
         local _, classFile, _, raceFile = GetPlayerInfoByGUID(guid)
-        killer.class = Plain(classFile, "string") or ""
-        killer.faction = RaceFactions[Plain(raceFile, "string") or ""] or ""
-    elseif flags and floor(flags / PlayerControlled) % 2 == 1 then
+
+        killer.class = (Plain(classFile, "string") or "")
+        killer.faction = (RaceFactions[Plain(raceFile, "string") or ""] or "")
+    elseif flags and ((floor(flags / PlayerControlled) % 2) == 1) then
         killer.kind = "pet"
     elseif guid then
         killer.kind = "npc"
     end
-    if killer.name == "" or Plain(blow.hideCaster, "boolean") then
+    if (killer.name == "") or Plain(blow.hideCaster, "boolean") then
         killer.name, killer.kind, killer.class, killer.faction = "", "", "", ""
     end
     return killer
 end
 
 ByteTerrace.Facts.death = {
-    toggle = false,
     demand = true,
-    state = {
-        { name = "count", kind = "number", default = 0, persist = false },
-        { name = "attributed", kind = "number", default = 0, persist = false },
-        { name = "killer", kind = "string", default = "", persist = false },
-        { name = "killerKind", kind = "string", default = "", persist = false },
-        { name = "killerClass", kind = "string", default = "", persist = false },
-        { name = "killerFaction", kind = "string", default = "", persist = false },
-        { name = "killerSpell", kind = "string", default = "", persist = false },
-        { name = "killerDamage", kind = "number", default = 0, persist = false },
-    },
     OnEnable = function(module)
         local state = module.Addon.State
         local count = module:Id("count")
@@ -138,7 +135,7 @@ ByteTerrace.Facts.death = {
 
         -- Publishes the killer of death number (nil: unknown).
         local function Attribute(number, killer)
-            killer = killer or {}
+            killer = (killer or {})
             module:Set("killer", killer.name or "")
             module:Set("killerKind", killer.kind or "")
             module:Set("killerClass", killer.class or "")
@@ -159,7 +156,7 @@ ByteTerrace.Facts.death = {
             for _, timer in ipairs(death.timers) do
                 module:Cancel(timer)
             end
-            if #owed == 0 and waitHandle then
+            if (#owed == 0) and waitHandle then
                 module:Off(waitHandle)
                 waitHandle = nil
             end
@@ -171,6 +168,7 @@ ByteTerrace.Facts.death = {
             for _, id in ipairs(DeathsAfter(handled)) do
                 handled = id
                 local death = owed[1]
+
                 if death then
                     Settle(death)
                     if not death.gaveUp then
@@ -181,15 +179,17 @@ ByteTerrace.Facts.death = {
         end
 
         module:On("PLAYER_DEAD", function()
-            local number = state.Values[count] + 1
+            local number = (state.Values[count] + 1)
+
             state:Set(count, number)
-            local death = { number = number, gaveUp = false, timers = {} }
+            local death = { gaveUp = false, number = number, timers = {} }
+
             owed[#owed + 1] = death
             TryRecap()
             if death.settled then
                 return -- its recap was already there
             end
-            waitHandle = waitHandle or module:On("DAMAGE_METER_COMBAT_SESSION_UPDATED", TryRecap)
+            waitHandle = (waitHandle or module:On("DAMAGE_METER_COMBAT_SESSION_UPDATED", TryRecap))
             for i, delay in ipairs(RecapRetries) do
                 death.timers[i] = module:After(delay, TryRecap)
             end
@@ -207,4 +207,15 @@ ByteTerrace.Facts.death = {
             end
         end)
     end,
+    state = {
+        { default = 0, kind = "number", name = "count", persist = false },
+        { default = 0, kind = "number", name = "attributed", persist = false },
+        { default = "", kind = "string", name = "killer", persist = false },
+        { default = "", kind = "string", name = "killerKind", persist = false },
+        { default = "", kind = "string", name = "killerClass", persist = false },
+        { default = "", kind = "string", name = "killerFaction", persist = false },
+        { default = "", kind = "string", name = "killerSpell", persist = false },
+        { default = 0, kind = "number", name = "killerDamage", persist = false },
+    },
+    toggle = false,
 }

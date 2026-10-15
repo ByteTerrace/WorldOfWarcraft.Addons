@@ -17,10 +17,11 @@
 -- (casting, targeting), which WoW only allows from secure templates and bindings.
 
 local ByteTerrace = ByteTerrace
-local Refuse, SortedKeys = ByteTerrace.Refuse, ByteTerrace.SortedKeys
 local ipairs, pairs, print, strtrim, tostring, type = ipairs, pairs, print, strtrim, tostring, type
+local Refuse, SortedKeys = ByteTerrace.Refuse, ByteTerrace.SortedKeys
 
 local Commands = {}
+
 Commands.__index = Commands
 ByteTerrace.Commands = Commands
 
@@ -36,10 +37,11 @@ end
 ---@param spec table see the file header
 function Commands:Define(spec)
     local own = {}
+
     for key, value in pairs(spec) do
         own[key] = value
     end
-    own.work = spec.module and spec.module.Work or self.m_addon.Work
+    own.work = ((spec.module and spec.module.Work) or self.m_addon.Work)
     self.m_declared[spec.name] = own
 end
 
@@ -48,24 +50,27 @@ function Commands:Compile()
     local problems = {}
     local names = SortedKeys(self.m_declared)
     local ids, specs, bySlash = {}, {}, {}
+
     for id, name in ipairs(names) do
         local spec = self.m_declared[name]
+
         ids[name], specs[id] = id, spec
         if type(spec.run) ~= "function" then
-            problems[#problems + 1] = name .. ": run must be a function"
+            problems[#problems + 1] = (name .. ": run must be a function")
         end
-        if type(spec.label) ~= "string" or spec.label == "" then
-            problems[#problems + 1] = name .. ": needs a label"
+        if (type(spec.label) ~= "string") or (spec.label == "") then
+            problems[#problems + 1] = (name .. ": needs a label")
         end
         local word = spec.slash
-        if word ~= nil and spec.held then
+
+        if (word ~= nil) and spec.held then
             -- Slash text only ever presses: a held command would never hear up or cancel.
-            problems[#problems + 1] = name .. ": a held command can't have a slash word"
+            problems[#problems + 1] = (name .. ": a held command can't have a slash word")
         elseif word ~= nil then
-            if type(word) ~= "string" or word ~= word:lower() or word:find("%s") then
-                problems[#problems + 1] = name .. ": slash word '" .. tostring(word) .. "' must be lowercase with no spaces"
+            if (type(word) ~= "string") or (word ~= word:lower()) or word:find("%s") then
+                problems[#problems + 1] = (name .. ": slash word '" .. tostring(word) .. "' must be lowercase with no spaces")
             elseif bySlash[word] then
-                problems[#problems + 1] = name .. ": slash word '" .. word .. "' is taken by " .. names[bySlash[word]]
+                problems[#problems + 1] = (name .. ": slash word '" .. word .. "' is taken by " .. names[bySlash[word]])
             else
                 bySlash[word] = id
             end
@@ -81,7 +86,8 @@ end
 ---@return table? module
 function Commands:ModuleOf(id)
     local spec = self.m_specs[id]
-    return spec and spec.module
+
+    return (spec and spec.module)
 end
 
 --- Runs a command as one state batch.
@@ -91,25 +97,29 @@ end
 ---@param source string? what ran it, e.g. "slash" or "gamepad"
 ---@return boolean ok false for an unknown command, stopped module or a run that errored
 function Commands:Run(ref, arg, phase, source)
-    local id = type(ref) == "number" and ref or self.Ids[ref]
-    local spec = id and self.m_specs[id]
+    local id = (((type(ref) == "number") and ref) or self.Ids[ref])
+    local spec = (id and self.m_specs[id])
+
     if not spec then
         return false
     end
-    phase = phase or "down"
-    if phase ~= "down" and not spec.held then
+    phase = (phase or "down")
+    if (phase ~= "down") and not spec.held then
         return true
     end
     local addon, module = self.m_addon, spec.module
+
     if module and not spec.always and not module:IsRunning() then
         if phase == "down" then
-            local slash = addon.Slash and addon.Slash[1] or ""
+            local slash = ((addon.Slash and addon.Slash[1]) or "")
+
             addon:Print(("%s is turned off. Turn it on in settings (%s)."):format(module.Spec.label or module.Name, slash))
         end
         return false
     end
     local work = spec.work
-    work.commands = work.commands + 1
+
+    work.commands = (work.commands + 1)
     return addon:Run(work, spec.run, arg, phase, source)
 end
 
@@ -119,21 +129,25 @@ end
 function Commands:Slash(input)
     local text = strtrim(input or "")
     local word, rest = text:match("^(%S*)%s*(.-)$")
+
     word = word:lower()
     local id = self.m_bySlash[word]
+
     if not id then
         self.m_addon:Print("Unknown command '" .. word .. "'. Type " .. self.m_addon.Slash[1] .. " help.")
         return false
     end
-    return self:Run(id, rest ~= "" and rest or nil, "down", "slash")
+    return self:Run(id, ((rest ~= "") and rest) or nil, "down", "slash")
 end
 
 --- Prints every slash command with its label, sorted by word.
 function Commands:PrintHelp()
     local addon = self.m_addon
+
     addon:Print("Commands:")
     for _, word in ipairs(SortedKeys(self.m_bySlash)) do
         local spec = self.m_specs[self.m_bySlash[word]]
-        print(("  %s%s - %s"):format(addon.Slash[1], word ~= "" and (" " .. word) or "", spec.label))
+
+        print(("  %s%s - %s"):format(addon.Slash[1], ((word ~= "") and (" " .. word)) or "", spec.label))
     end
 end

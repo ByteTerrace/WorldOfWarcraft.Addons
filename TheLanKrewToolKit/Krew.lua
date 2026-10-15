@@ -31,45 +31,46 @@ local addonName, ns = ...
 -- Krew once the roster settles: a raid forming fires a burst of roster updates, and the roster is
 -- read once, PruneDelay after the last of them. Showing or listing the Krew reads it first.
 
-local Prefix = "TLKKrew1"
-local ReplyDelay = 1 -- seconds that gather a burst of hellos into one reply
-local RollCallDelay = 2
-local PruneDelay = 1 -- seconds without a roster update that end a burst of them
-local MaxText = 60     -- longest text accepted from a message
+local KrewIcon = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend"
 local MaxLevel = 200   -- the highest level accepted from a message
 local MaxStars = 99999 -- the most stars accepted from a message
+local MaxText = 60     -- longest text accepted from a message
 local NewerQuorum = 2  -- Krew members on a newer version that make it worth saying
-local KrewIcon = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend"
 local PartyUnits, RaidUnits = {}, {}
+local Prefix = "TLKKrew1"
+local PruneDelay = 1 -- seconds without a roster update that end a burst of them
+local ReplyDelay = 1 -- seconds that gather a burst of hellos into one reply
+local RollCallDelay = 2
+
 for i = 1, 40 do
-    PartyUnits[i], RaidUnits[i] = "party" .. i, "raid" .. i
+    PartyUnits[i], RaidUnits[i] = ("party" .. i), ("raid" .. i)
 end
 
-local GetNumGroupMembers, GetTime, IsInGroup, IsInRaid = GetNumGroupMembers, GetTime, IsInGroup, IsInRaid
-local SOUNDKIT = SOUNDKIT
-local ipairs, next, pairs, tonumber, type, wipe = ipairs, next, pairs, tonumber, type, wipe
 local concat, sort = table.concat, table.sort
+local GetNumGroupMembers, GetTime, IsInGroup, IsInRaid = GetNumGroupMembers, GetTime, IsInGroup, IsInRaid
+local ipairs, next, pairs, tonumber, type, wipe = ipairs, next, pairs, tonumber, type, wipe
+local SOUNDKIT = SOUNDKIT
 
 local Addon = ns.Addon
 local Names = ByteTerrace.Names
 local ShowCard = ns.Cards.Show
 
+local Krew, Messages -- the module, and its Comms (ns.Krew)
 local Members = {} -- [name] = the version its hello named ("" unreadable), for members running the toolkit
 local Present = {} -- scratch: [name] = true for the group's members, while pruning Members
-local RollCallTimer -- pending timer that merges a burst of hellos into one card
-local ReplyTimer    -- pending timer that answers a burst of hellos with one reply
 local PruneTimer    -- pending timer that prunes Members once a burst of roster updates settles
+local ReplyTimer    -- pending timer that answers a burst of hellos with one reply
+local RollCallTimer -- pending timer that merges a burst of hellos into one card
 local RosterAt = 0  -- GetTime() of the last roster update
 local Said = false  -- you said hello to this group
 local ToldNewer = false -- this group heard that a newer version is out
-local Krew, Messages -- the module, and its Comms (ns.Krew)
 
 --- A text field from a message (a zone, a subzone, a name), or "" when it's missing, longer than
 --- MaxText, or holds a "|" or a control character.
 ---@param text string?
 ---@return string
 local function CleanText(text)
-    if type(text) ~= "string" or #text > MaxText or text:find("[|%c]") then
+    if (type(text) ~= "string") or (#text > MaxText) or text:find("[|%c]") then
         return ""
     end
     return text
@@ -81,16 +82,17 @@ end
 ---@param max integer
 ---@return integer?
 local function CleanCount(text, max)
-    if type(text) ~= "string" or #text > 9 or not text:find("^%d+$") then
+    if (type(text) ~= "string") or (#text > 9) or not text:find("^%d+$") then
         return nil
     end
     local count = tonumber(text)
-    return (count >= 1 and count <= max) and count or nil
+
+    return ((((count >= 1) and (count <= max)) and count) or nil)
 end
 
 -- A version from a message, "major.minor.patch" in digits (at most 6 each), or "".
 local function CleanVersion(text)
-    if type(text) ~= "string" or not text:find("^%d%d?%d?%d?%d?%d?%.%d%d?%d?%d?%d?%d?%.%d%d?%d?%d?%d?%d?$") then
+    if (type(text) ~= "string") or not text:find("^%d%d?%d?%d?%d?%d?%.%d%d?%d?%d?%d?%d?%.%d%d?%d?%d?%d?%d?$") then
         return ""
     end
     return text
@@ -101,14 +103,15 @@ end
 local function CompareVersions(a, b)
     local a1, a2, a3 = a:match("^(%d+)%.(%d+)%.(%d+)$")
     local b1, b2, b3 = b:match("^(%d+)%.(%d+)%.(%d+)$")
-    local major, minor = tonumber(a1) - tonumber(b1), tonumber(a2) - tonumber(b2)
+    local major, minor = (tonumber(a1) - tonumber(b1)), (tonumber(a2) - tonumber(b2))
+
     if major ~= 0 then
         return major
     end
     if minor ~= 0 then
         return minor
     end
-    return tonumber(a3) - tonumber(b3)
+    return (tonumber(a3) - tonumber(b3))
 end
 
 -- Drops Krew members who left the group. While any member's name is unreadable, nobody is dropped.
@@ -119,12 +122,14 @@ local function Prune()
     end
     wipe(Present)
     local raid, count = IsInRaid(), GetNumGroupMembers()
-    local units = raid and RaidUnits or PartyUnits
+    local units = ((raid and RaidUnits) or PartyUnits)
+
     if not raid then
-        count = count - 1 -- party tokens leave out the player
+        count = (count - 1) -- party tokens leave out the player
     end
     for i = 1, count do
         local name = Names.OfUnit(units[i])
+
         if not name then
             return
         end
@@ -139,7 +144,8 @@ end
 
 -- The pending prune, once the roster has been quiet for PruneDelay.
 local function PruneWhenQuiet()
-    local quiet = GetTime() - RosterAt
+    local quiet = (GetTime() - RosterAt)
+
     if quiet < PruneDelay then
         PruneTimer = Krew:After(PruneDelay - quiet, PruneWhenQuiet)
         return
@@ -160,6 +166,7 @@ end
 local function KrewNames()
     Settle()
     local names = {}
+
     for name in pairs(Members) do
         names[#names + 1] = name
     end
@@ -170,9 +177,11 @@ end
 -- "Bob Doe (0.2.0), Cara Doe": the Krew and the versions they run, for /tlk krew.
 local function KrewList()
     local names = KrewNames()
+
     for i, name in ipairs(names) do
         local version = Members[name]
-        names[i] = version ~= "" and ("%s (%s)"):format(name, version) or name
+
+        names[i] = (((version ~= "") and ("%s (%s)"):format(name, version)) or name)
     end
     return concat(names, ", ")
 end
@@ -182,16 +191,18 @@ end
 -- newer version (heard) counts them, so other hellos read no roster.
 local function NoticeNewer(heard)
     local mine = CleanVersion(Addon.Version)
-    if ToldNewer or mine == "" or heard == "" or CompareVersions(heard, mine) <= 0 then
+
+    if ToldNewer or (mine == "") or (heard == "") or (CompareVersions(heard, mine) <= 0) then
         return
     end
     Settle()
     local count, oldest, mixed = 0, nil, false
+
     for _, version in pairs(Members) do
-        if version ~= "" and CompareVersions(version, mine) > 0 then
-            count = count + 1
-            mixed = mixed or (oldest ~= nil and version ~= oldest)
-            if not oldest or CompareVersions(version, oldest) < 0 then
+        if (version ~= "") and (CompareVersions(version, mine) > 0) then
+            count = (count + 1)
+            mixed = (mixed or ((oldest ~= nil) and (version ~= oldest)))
+            if not oldest or (CompareVersions(version, oldest) < 0) then
                 oldest = version
             end
         end
@@ -199,21 +210,22 @@ local function NoticeNewer(heard)
     if count >= NewerQuorum then
         ToldNewer = true
         Addon:Print(("A newer %s is out (%d Krew members run %s%s)."):format(addonName, count, oldest,
-            mixed and " or newer" or ""))
+            (mixed and " or newer") or ""))
     end
 end
 
 local function ShowRollCall()
     RollCallTimer = nil
     local names = KrewNames()
+
     if #names > 0 then
         ShowCard({ icon = KrewIcon, sound = SOUNDKIT.READY_CHECK, title = "The Krew is here!",
-            body = concat(names, ", ") .. (#names == 1 and " is" or " are") .. " running the toolkit too." })
+            body = (concat(names, ", ") .. (((#names == 1) and " is") or " are") .. " running the toolkit too.") })
     end
 end
 
 local function SendHello(reply)
-    Messages:Send("HELLO", { Addon.Version or "?", reply and "1" or "0" })
+    Messages:Send("HELLO", { (Addon.Version or "?"), ((reply and "1") or "0") })
 end
 
 -- Says hello to this group, once; a group the messages can't reach yet (lockdown) waits for the
@@ -229,21 +241,22 @@ end
 -- burst; it waits out the updates that came after it was set.
 local function RosterChanged()
     RosterAt = GetTime()
-    if not PruneTimer and next(Members) ~= nil then
+    if not PruneTimer and (next(Members) ~= nil) then
         PruneTimer = Krew:After(PruneDelay, PruneWhenQuiet)
     end
 end
 
 local function Listen(module)
     module:Listen(Messages, "HELLO", function(sender, fields)
-        local version, known = CleanVersion(fields[1]), Members[sender] ~= nil
+        local version, known = CleanVersion(fields[1]), (Members[sender] ~= nil)
+
         Members[sender] = version
         if not known and Krew:Get("hello") then
             Krew:Cancel(RollCallTimer)
             RollCallTimer = Krew:After(RollCallDelay, ShowRollCall)
         end
         NoticeNewer(version)
-        if fields[2] ~= "1" and not ReplyTimer then
+        if (fields[2] ~= "1") and not ReplyTimer then
             ReplyTimer = Krew:After(ReplyDelay, function()
                 ReplyTimer = nil
                 SendHello(true)
@@ -253,47 +266,49 @@ local function Listen(module)
 
     module:Listen(Messages, "DING", function(sender, fields)
         local level = CleanCount(fields[1], MaxLevel)
+
         if level then
-            ShowCard({ icon = "Interface\\Icons\\Spell_Holy_SurgeOfLight", sound = SOUNDKIT.LFG_REWARDS,
-                title = sender .. " hit level " .. level .. "!", body = "Cheer them on! The Krew levels up together." })
+            ShowCard({ body = "Cheer them on! The Krew levels up together.",
+                icon = "Interface\\Icons\\Spell_Holy_SurgeOfLight", sound = SOUNDKIT.LFG_REWARDS,
+                title = (sender .. " hit level " .. level .. "!") })
         end
     end)
 
     module:Listen(Messages, "FLAWLESS", function(sender)
-        ShowCard({ icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
-            title = "Flawless victory!", body = sender .. " won a fight without taking a single hit." })
+        ShowCard({ body = (sender .. " won a fight without taking a single hit."),
+            icon = "Interface\\Icons\\Ability_Warrior_BattleShout", sound = SOUNDKIT.RAID_WARNING,
+            title = "Flawless victory!" })
     end)
 
     module:Listen(Messages, "SCHOLAR", function(sender, fields)
         local stars = CleanCount(fields[1], MaxStars)
+
         if stars then
-            ShowCard({ icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.IG_QUEST_LIST_COMPLETE,
-                title = sender .. " solved a riddle!", body = "That's " .. stars .. (stars == 1 and " star" or " stars") .. " of wisdom. Brilliant!" })
+            ShowCard({ body = ("That's " .. stars .. (((stars == 1) and " star") or " stars") .. " of wisdom. Brilliant!"),
+                icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.IG_QUEST_LIST_COMPLETE,
+                title = (sender .. " solved a riddle!") })
         end
     end)
 end
 
 Krew = Addon:Module("Krew", {
-    label = "Krew messages",
-    page = "Krew",
-    description = "Share fun moments with friends in your group who also run the toolkit. Group only, rare and rate-limited, and never during dungeon, raid or PvP lockdown.",
-    comms = { prefix = Prefix },
-    state = {
-        { name = "hello", kind = "boolean", default = true, label = "Show who's in the Krew",
-            description = "When you group up, a card shows which friends run the toolkit too." },
-        { name = "shareDings", kind = "boolean", default = true, label = "Share my level-ups",
-            description = "Your Krew sees a card when you level up." },
-        { name = "shareFlawless", kind = "boolean", default = true, label = "Share my flawless victories",
-            description = "Your Krew sees a card when you win a flawless victory (needs the Flawless victory sound on)." },
-        { name = "shareScholar", kind = "boolean", default = true, label = "Share solved riddles",
-            description = "Your Krew sees a card when you solve a Scholar's challenge riddle." },
-    },
     commands = {
-        { name = "list", slash = "krew", label = "Show who in your group runs the toolkit", run = function()
-            local list = KrewList()
-            Addon:Print(list ~= "" and ("The Krew: " .. list) or "No Krew members in your group yet.")
-        end },
+        { label = "Show who in your group runs the toolkit", name = "list",
+            run = function()
+                local list = KrewList()
+
+                Addon:Print(((list ~= "") and ("The Krew: " .. list)) or "No Krew members in your group yet.")
+            end,
+            slash = "krew" },
     },
+    comms = { prefix = Prefix },
+    description = "Share fun moments with friends in your group who also run the toolkit. Group only, rare and rate-limited, and never during dungeon, raid or PvP lockdown.",
+    label = "Krew messages",
+    OnDisable = function()
+        wipe(Members)
+        Said, ToldNewer = false, false
+        RollCallTimer, ReplyTimer, PruneTimer = nil, nil, nil -- the module's timers stop with it
+    end,
     OnEnable = function(module)
         Listen(module)
         module:On("GROUP_JOINED", SayHello)
@@ -327,12 +342,19 @@ Krew = Addon:Module("Krew", {
             SayHello()
         end
     end,
-    OnDisable = function()
-        wipe(Members)
-        Said, ToldNewer = false, false
-        RollCallTimer, ReplyTimer, PruneTimer = nil, nil, nil -- the module's timers stop with it
-    end,
+    page = "Krew",
+    state = {
+        { default = true, description = "When you group up, a card shows which friends run the toolkit too.",
+            kind = "boolean", label = "Show who's in the Krew", name = "hello" },
+        { default = true, description = "Your Krew sees a card when you level up.", kind = "boolean",
+            label = "Share my level-ups", name = "shareDings" },
+        { default = true,
+            description = "Your Krew sees a card when you win a flawless victory (needs the Flawless victory sound on).",
+            kind = "boolean", label = "Share my flawless victories", name = "shareFlawless" },
+        { default = true, description = "Your Krew sees a card when you solve a Scholar's challenge riddle.",
+            kind = "boolean", label = "Share solved riddles", name = "shareScholar" },
+    },
 })
 Messages = Krew.Comms
 ns.Krew = Messages
-ns.KrewFields = { CleanText = CleanText, CleanCount = CleanCount, MaxLevel = MaxLevel }
+ns.KrewFields = { CleanCount = CleanCount, CleanText = CleanText, MaxLevel = MaxLevel }

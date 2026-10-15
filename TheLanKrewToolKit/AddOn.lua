@@ -8,11 +8,11 @@ local addonName, ns = ...
 -- uses them runs (ByteTerrace_Core's Facts.lua).
 
 ns.Addon = ByteTerrace.NewAddOn({
+    facts = { "combat", "afk", "target", "kills", "death" },
     name = addonName,
     savedVariable = "TheLanKrewToolKitDB",
     savedVariablePerCharacter = "TheLanKrewToolKitCharDB",
     slash = { "/tlk", "/lankrew" },
-    facts = { "combat", "afk", "target", "kills", "death" },
 })
 
 --- Opens the toolkit's settings; the TOC's AddonCompartmentFunc.

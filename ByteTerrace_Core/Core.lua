@@ -42,7 +42,7 @@ ByteTerrace = { Errors = 0 }
 -- Looked up only when an error happens, so a handler installed later (BugSack) still receives
 -- it. Blizzard's CallErrorHandler does the same.
 local function OnError(message)
-    ByteTerrace.Errors = ByteTerrace.Errors + 1
+    ByteTerrace.Errors = (ByteTerrace.Errors + 1)
     return geterrorhandler()(message)
 end
 
@@ -52,6 +52,7 @@ end
 ---@return string[]
 function ByteTerrace.SortedKeys(t)
     local keys = {}
+
     for key in pairs(t) do
         keys[#keys + 1] = key
     end
@@ -83,14 +84,15 @@ end
 function ByteTerrace.TimedCall(work, fn, ...)
     local start = debugprofilestop()
     local ok = xpcall(fn, OnError, ...)
-    work.time = work.time + debugprofilestop() - start
+
+    work.time = ((work.time + debugprofilestop()) - start)
     return ok
 end
 
 --- A work record with every count at zero (see the file header).
 ---@return table
 function ByteTerrace.NewWork()
-    return { events = 0, timers = 0, changes = 0, commands = 0, messages = 0, actions = 0, time = 0 }
+    return { actions = 0, changes = 0, commands = 0, events = 0, messages = 0, time = 0, timers = 0 }
 end
 
 --- Raises every problem at once, so a bad declaration reports all of its mistakes in one pass.

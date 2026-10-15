@@ -7,6 +7,7 @@ local Prefix = "TLKKrew1"
 local function Load(player)
     local h = Harness.New(player)
     local ns = h:LoadAddon("TheLanKrewToolKit")
+
     return h, ns.Addon
 end
 
@@ -17,7 +18,8 @@ local function Media(h, ...)
 end
 
 local function EnemyPlayer(fields)
-    local unit = { name = "Bob", isPlayer = true, canAttack = true, playerControlled = true }
+    local unit = { canAttack = true, isPlayer = true, name = "Bob", playerControlled = true }
+
     for key, value in pairs(fields or {}) do unit[key] = value end
     return unit
 end
@@ -25,6 +27,7 @@ end
 -- The media files played, in order, as one line: "FinishHim.ogg Fatality.ogg".
 local function Heard(h)
     local names = {}
+
     for _, sound in ipairs(h.sounds) do
         names[#names + 1] = sound.path:sub(#MediaPath + 1)
     end
@@ -33,6 +36,7 @@ end
 
 local function Notices(h)
     local texts = {}
+
     for _, notice in ipairs(h.raidNotices) do
         texts[#texts + 1] = notice.text
     end
@@ -41,8 +45,9 @@ end
 
 local function Sent(h, kind)
     local found = {}
+
     for _, message in ipairs(h.addonMessages) do
-        if message.prefix == Prefix and message.message:find("^" .. kind .. ":") then
+        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
             found[#found + 1] = message.message
         end
     end
@@ -51,7 +56,7 @@ end
 
 -- Your killing blow on an enemy player: PARTY_KILL(your GUID, theirs).
 local function Blow(h, name)
-    h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ name = name, isPlayer = true }))
+    h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ isPlayer = true, name = name }))
 end
 
 -- A fight with an enemy player that dies while targeted; hit makes it not flawless.
@@ -68,14 +73,16 @@ end
 
 test("a sound plays one of its present variants at random, and /tlk sound can pick one", function()
     local h = Load()
+
     h:SeedRandom(3)
     Media(h, "FinishHim.ogg", "FinishHim3.mp3")
     for _ = 1, 20 do
         h:Slash("/tlk sound finish")
     end
     local base, third = select(2, Heard(h):gsub("FinishHim%.ogg", "")), select(2, Heard(h):gsub("FinishHim3%.mp3", ""))
+
     eq(base + third, 20, "every play found a present variant")
-    truthy(base > 0 and third > 0, "both variants play")
+    truthy((base > 0) and (third > 0), "both variants play")
     h.sounds = {}
     h:Slash("/tlk sound finish 3")
     eq(Heard(h), "FinishHim3.mp3")
@@ -85,6 +92,7 @@ end)
 
 test("test your might plays for elites, bosses and skull-level foes, instead of destiny", function()
     local h = Load()
+
     Media(h, "TestYourMight.ogg", "ChooseYourDestiny.ogg")
     h:SetTarget({ canAttack = true })
     h:SetTarget({ canAttack = false, classification = "elite" })
@@ -101,6 +109,7 @@ end)
 
 test("without a test your might file, a skull-level player still gets destiny", function()
     local h = Load()
+
     Media(h, "ChooseYourDestiny.ogg")
     h:SetTarget(EnemyPlayer({ level = -1 }))
     eq(Heard(h), "ChooseYourDestiny.ogg")
@@ -108,6 +117,7 @@ end)
 
 test("rogues hear each combo point, and finish him at five on an enemy player", function()
     local h = Load({ classFile = "ROGUE", powerType = 3 })
+
     Media(h, "ComboPoint1.ogg", "ComboPoint2.ogg", "ComboPoint3.ogg", "ComboPoint4.ogg", "ComboPoint5.ogg", "FinishHim.ogg")
     h:SetTarget(EnemyPlayer())
     for points = 1, 5 do
@@ -125,8 +135,10 @@ end)
 
 test("combo callouts are rogues' and druids' only, and switch off with their setting", function()
     local _, warrior = Load({ classFile = "WARRIOR", powerType = 1 })
+
     falsy(warrior.Events.Frame:IsEventRegistered("UNIT_POWER_FREQUENT"), "warriors have no combo points")
     local h, addon = Load({ classFile = "DRUID", powerType = 0 }) -- caster form: the fuck-o-meter stays off
+
     Media(h, "ComboPoint1.ogg")
     h:SetTarget({ canAttack = true })
     h:SetComboPoints(1)
@@ -139,8 +151,10 @@ end)
 
 test("a kill after finish him is a fatality; flawless still comes first", function()
     local h = Load({ classFile = "WARRIOR", powerType = 1 })
+
     Media(h, "FinishHim.ogg", "Fatality.ogg", "FlawlessVictory.ogg", "SuperbVictory.ogg")
     local enemy = EnemyPlayer()
+
     h:SetTarget(enemy)
     h.usable.Execute = { true, false }
     h:Fire("SPELL_UPDATE_USABLE")
@@ -158,8 +172,10 @@ end)
 
 test("any other kill in your fight is a superb victory; kills out of combat are silent", function()
     local h = Load()
+
     Media(h, "SuperbVictory.ogg", "Fatality.ogg")
     local enemy = EnemyPlayer()
+
     h:SetTarget(enemy)
     enemy.dead = true
     h:Fire("UNIT_HEALTH", "target")
@@ -172,6 +188,7 @@ end)
 
 test("a death taunt plays when you die", function()
     local h, addon = Load()
+
     Media(h, "DeathTaunt.ogg", "DeathTaunt2.ogg")
     h:Die()
     truthy(Heard(h):find("^DeathTaunt2?%.ogg$"), Heard(h))
@@ -184,6 +201,7 @@ end)
 
 test("the master switch silences every Kombat sound", function()
     local h, addon = Load()
+
     Media(h, "ChooseYourDestiny.ogg", "DeathTaunt.ogg")
     addon.State:Set("Sounds.enabled", false)
     h:SetTarget(EnemyPlayer())
@@ -193,6 +211,7 @@ end)
 
 test("killing blows announce first blood, multi kills and sprees", function()
     local h = Load()
+
     Media(h, "FirstBlood.ogg", "DoubleKill.ogg", "MultiKill.ogg", "KillingSpree.ogg")
     Blow(h, "Ann")
     eq(Heard(h), "FirstBlood.ogg")
@@ -212,6 +231,7 @@ end)
 
 test("dying ends the spree; bonus honor isn't a kill", function()
     local h, addon = Load()
+
     Media(h, "KillingSpree.ogg")
     for i = 1, 4 do
         Blow(h, "Foe" .. i)
@@ -229,10 +249,12 @@ end)
 test("a warrior listens for Execute only while an enemy player target lives", function()
     local h, addon = Load({ classFile = "WARRIOR", powerType = 1 })
     local frame = addon.Events.Frame
+
     falsy(frame:IsEventRegistered("SPELL_UPDATE_USABLE"), "no target")
     h:SetTarget({ canAttack = true })
     falsy(frame:IsEventRegistered("SPELL_UPDATE_USABLE"), "a creature")
     local enemy = EnemyPlayer()
+
     h:SetTarget(enemy)
     truthy(frame:IsEventRegistered("SPELL_UPDATE_USABLE"), "an enemy player")
     truthy(frame:IsEventRegistered("UPDATE_SHAPESHIFT_FORM"))
@@ -244,6 +266,7 @@ end)
 
 test("first blood and a spree in progress survive a /reload; the next login starts them over", function()
     local h = Load()
+
     Media(h, "FirstBlood.ogg", "KillingSpree.ogg")
     for i = 1, 4 do
         Blow(h, "Foe" .. i)
@@ -261,6 +284,7 @@ end)
 
 test("switching kill streaks off and on mid-session starts them over", function()
     local h, addon = Load()
+
     Media(h, "FirstBlood.ogg")
     Blow(h, "Foe1")
     h:Advance(20)
@@ -277,6 +301,7 @@ end)
 
 test("the Krew hears your first blood, sprees and a spree's end, and yours yields to theirs", function()
     local h, addon = Load()
+
     h:JoinGroup("party", { "Mom" })
     h:Echo(false)
     h:Advance(2)
@@ -309,6 +334,7 @@ end)
 
 test("streaks and Warband both off: honor messages aren't even registered", function()
     local _, addon = Load()
+
     addon.State:Set("Warband.enabled", false)
     truthy(addon.Events.Frame:IsEventRegistered("CHAT_MSG_COMBAT_HONOR_GAIN"), "streaks still listen")
     addon.State:Set("Streaks.enabled", false)
@@ -317,8 +343,10 @@ end)
 
 test("a duel you were hit in may be one you lost: it plays nothing", function()
     local h = Load({ classFile = "MAGE", powerType = 0 })
+
     Media(h, "SuperbVictory.ogg", "FlawlessVictory.ogg")
     local rival = EnemyPlayer({ canAttack = false })
+
     h:SetTarget(rival)
     rival.canAttack = true -- the duel starts
     h:Fire("UNIT_FLAGS", "target")
@@ -330,6 +358,7 @@ end)
 
 test("the fifth combo point calls out again on a second build, and when finish him has no file", function()
     local h = Load({ classFile = "ROGUE", powerType = 3 })
+
     Media(h, "ComboPoint1.ogg", "ComboPoint2.ogg", "ComboPoint3.ogg", "ComboPoint4.ogg", "ComboPoint5.ogg", "FinishHim.ogg")
     h:SetTarget(EnemyPlayer())
     for points = 1, 5 do
@@ -351,6 +380,7 @@ end)
 
 test("a death ends the spree and the multi kill at once, even before the recap names the killer", function()
     local h = Load()
+
     h:JoinGroup("party", { "Mom" })
     h:Echo(false)
     h:Advance(2)
@@ -367,20 +397,23 @@ test("a death ends the spree and the multi kill at once, even before the recap n
     h:Advance(4)
     eq(Heard(h), "", "a death between two kills ends the multi kill")
     local sent = Sent(h, "STREAK")
+
     eq(sent[#sent], "STREAK:ended\t8", "the Krew hears the 8-kill spree ended")
 end)
 
 test("a kill streak counts your killing blows and your pet's, not a groupmate's or a creature's", function()
     local h, addon = Load()
     local pet = { name = "Wolf", playerControlled = true }
+
     h:SetUnit("pet", pet)
-    local mom = { name = "Mom", isPlayer = true }
+    local mom = { isPlayer = true, name = "Mom" }
+
     h:HonorKill("Ann", "Private", 10) -- honor credit for a groupmate's kill
-    h:Fire("PARTY_KILL", h:GUID(mom), h:GUID({ name = "Ben", isPlayer = true }))
+    h:Fire("PARTY_KILL", h:GUID(mom), h:GUID({ isPlayer = true, name = "Ben" }))
     h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ name = "Kobold" }))
     eq(addon.State:Get("kills.blows"), 0)
     eq(addon.State:Get("kills.honorable"), 1, "the honor credit still counts for Warband")
-    h:Fire("PARTY_KILL", h:GUID(pet), h:GUID({ name = "Cid", isPlayer = true }))
+    h:Fire("PARTY_KILL", h:GUID(pet), h:GUID({ isPlayer = true, name = "Cid" }))
     Blow(h, "Dee")
     eq(addon.State:Get("kills.blows"), 2)
     eq(addon.State:Get("Streaks.streak"), 2)
@@ -388,6 +421,7 @@ end)
 
 test("a sound test tells a muted channel from a missing file", function()
     local h = Load()
+
     Media(h, "FinishHim.ogg")
     h.mutedChannels.Master = true
     h:Slash("/tlk sound finish")
@@ -398,10 +432,11 @@ end)
 
 test("points that move off the target count as gone, so building again calls out from one", function()
     local h = Load({ classFile = "ROGUE", powerType = 3 })
+
     Media(h, "ComboPoint1.ogg", "ComboPoint3.ogg")
     h:SetTarget(EnemyPlayer())
     h:SetComboPoints(3)
-    h:MoveComboPoints({ name = "Kobold Vermin", canAttack = true })
+    h:MoveComboPoints({ canAttack = true, name = "Kobold Vermin" })
     eq(h.env.GetComboPoints("player", "target"), 0)
     h:SetComboPoints(1)
     eq(Heard(h), "ComboPoint3.ogg ComboPoint1.ogg")

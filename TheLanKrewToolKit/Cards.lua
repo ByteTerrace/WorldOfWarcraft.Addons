@@ -19,20 +19,21 @@ local addonName, ns = ...
 
 local CardSeconds = 12
 local CardWidth = 440
-local MinCardHeight = 88
 local MaxQueued = 6
+local MinCardHeight = 88
 
 local C_Sound, ChatTypeInfo, CreateFrame, RaidWarningUtil = C_Sound, ChatTypeInfo, CreateFrame, RaidWarningUtil
 local insert, remove = table.insert, table.remove
 
 local Addon = ns.Addon
 local Card, HideTimer, Current
-local Queue = {}
-local InCombat = false
 local Cards -- the module, declared at the end; it always runs
+local InCombat = false
+local Queue = {}
 
 local function CreateCard()
     local frame = CreateFrame("Button", addonName .. "Card", UIParent, "BackdropTemplate")
+
     frame:SetWidth(CardWidth)
     frame:SetHeight(MinCardHeight)
     frame:SetPoint("TOP", UIParent, "TOP", 0, -140)
@@ -41,24 +42,27 @@ local function CreateCard()
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        insets = { bottom = 4, left = 4, right = 4, top = 4 },
     })
     frame:SetBackdropColor(0.08, 0.06, 0.03, 0.92)
     frame:SetBackdropBorderColor(1, 0.82, 0)
     frame:Hide()
 
     local icon = frame:CreateTexture(nil, "ARTWORK")
+
     icon:SetSize(52, 52)
     icon:SetPoint("TOPLEFT", 18, -18)
     frame.Icon = icon
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+
     title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 14, -2)
     title:SetPoint("TOPRIGHT", -16, -20)
     title:SetJustifyH("LEFT")
     frame.Title = title
 
     local body = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+
     body:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
     body:SetPoint("TOPRIGHT", title, "BOTTOMRIGHT", 0, -6)
     body:SetJustifyH("LEFT")
@@ -83,8 +87,9 @@ end
 -- Shows the next queued card, or hides when there's none (always, in combat).
 function ShowNext()
     HoldTimer()
-    local entry = not InCombat and remove(Queue, 1)
-    Current = entry or nil
+    local entry = (not InCombat and remove(Queue, 1))
+
+    Current = (entry or nil)
     if not entry then
         Card:Hide()
         return
@@ -94,8 +99,9 @@ function ShowNext()
     Card.Body:SetText(entry.body)
     -- Fit the text: 20px top, the title, 6px, the body, 18px bottom; never shorter than the icon.
     -- secret: card text is built from plain strings, so its fontstrings hold no secret aspect
-    local height = 20 + Card.Title:GetStringHeight() + 6 + Card.Body:GetStringHeight() + 18
-    Card:SetHeight(height > MinCardHeight and height or MinCardHeight)
+    local height = ((((20 + Card.Title:GetStringHeight()) + 6) + Card.Body:GetStringHeight()) + 18)
+
+    Card:SetHeight(((height > MinCardHeight) and height) or MinCardHeight)
     Card:Show()
     if entry.sound then
         C_Sound.PlaySound(entry.sound)
@@ -112,9 +118,10 @@ local function Show(entry)
         Card = CreateCard()
         Card:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         Card:SetScript("OnClick", function(_, button)
-            local onClick = Current and Current.onClick
+            local onClick = (Current and Current.onClick)
+
             ShowNext()
-            if onClick and button == "LeftButton" then
+            if onClick and (button == "LeftButton") then
                 Addon:Batch(onClick)
             end
         end)
@@ -149,22 +156,23 @@ local function Withdraw()
 end
 
 Cards = Addon:Module("Cards", {
-    toggle = false,
     OnEnable = function(module)
         local combat = module:Id("combat.active")
+
         InCombat = module:Get(combat)
         module:Rule({
-            reads = { combat }, when = function(state) return state.Values[combat] end,
             changed = function(active)
                 InCombat = active
                 if active then
                     Withdraw()
-                elseif Card and not Card:IsShown() and #Queue > 0 then
+                elseif Card and not Card:IsShown() and (#Queue > 0) then
                     ShowNext()
                 end
             end,
+            reads = { combat }, when = function(state) return state.Values[combat] end,
         })
     end,
+    toggle = false,
 })
 
-ns.Cards = { Show = Show, Alert = Alert }
+ns.Cards = { Alert = Alert, Show = Show }

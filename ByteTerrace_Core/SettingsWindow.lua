@@ -30,31 +30,32 @@
 -- View (nil until first shown), Pages, and Controls ([row id] = the row's control button: its
 -- Label is the value shown, Check the boolean's check, Minus and Plus the number's steppers).
 
-local Width = 620
-local NavWidth = 160
-local Pad = 16
-local TitleHeight = 44
-local RowHeight = 28
-local HeaderHeight = 30
-local NavButtonHeight = 26
-local ControlWidth = 170
-local Solid = "Interface\\Buttons\\WHITE8X8"
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local CanvasInset = 16
+local ControlWidth = 170
+local HeaderHeight = 30
+local NavButtonHeight = 26
+local NavWidth = 160
+local Pad = 16
+local RowHeight = 28
+local Solid = "Interface\\Buttons\\WHITE8X8"
+local TitleHeight = 44
+local Width = 620
 
 local ByteTerrace = ByteTerrace
 local CreateFrame, GameTooltip, Settings, UIParent = CreateFrame, GameTooltip, Settings, UIParent
-local ipairs, tostring, wipe = ipairs, tostring, wipe
 local floor, max, min = math.floor, math.max, math.min
+local ipairs, tostring, wipe = ipairs, tostring, wipe
 
 local SettingsWindow = {}
+
 SettingsWindow.__index = SettingsWindow
 
 -- A value as the window shows it: an enum's label, a number without trailing zeros. Only enums
 -- and numbers show text; a boolean shows a check.
 local function ValueText(spec, value)
     if spec.values then
-        return spec.valueLabels and spec.valueLabels[value] or tostring(value)
+        return ((spec.valueLabels and spec.valueLabels[value]) or tostring(value))
     end
     return ("%g"):format(value)
 end
@@ -62,6 +63,7 @@ end
 -- A flat button with a label, the window's one button style.
 local function NewButton(parent, width, text)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+
     button:SetSize(width, 22)
     button:SetBackdrop({ bgFile = Solid, edgeFile = Solid, edgeSize = 1 })
     button:SetBackdropColor(0.16, 0.15, 0.2, 1)
@@ -76,9 +78,10 @@ end
 -- is one of them.
 local function StepEnum(spec, value, delta)
     local count = #spec.values
+
     for i, candidate in ipairs(spec.values) do
         if candidate == value then
-            return spec.values[(i - 1 + delta) % count + 1]
+            return spec.values[(((i - 1) + delta) % count) + 1]
         end
     end
 end
@@ -88,19 +91,22 @@ end
 -- without one it moves by 1 and stops at min and max.
 local function StepNumber(spec, value, delta)
     local low, high, step = spec.min, spec.max, spec.step
+
     if not step then
-        local stepped = value + delta
-        return (low and stepped < low and low) or (high and stepped > high and high) or stepped
+        local stepped = (value + delta)
+
+        return ((low and (stepped < low) and low) or (high and (stepped > high) and high) or stepped)
     end
-    local base = low or 0
-    local index = floor((value - base) / step + 0.5) + delta
+    local base = (low or 0)
+    local index = (floor(((value - base) / step) + 0.5) + delta)
+
     if high then
-        index = min(index, floor((high - base) / step + 1e-9))
+        index = min(index, floor(((high - base) / step) + 1e-9))
     end
     if low then
         index = max(index, 0)
     end
-    return base + index * step
+    return (base + (index * step))
 end
 
 --- Creates the window; its frame is built the first time it shows.
@@ -109,15 +115,17 @@ end
 ---@return table window
 local function NewSettingsWindow(addon, pages)
     local window = setmetatable({
-        Pages = pages, Controls = {}, m_addon = addon, m_page = 1, m_rows = {}, m_watchers = {}, m_containers = {},
-        m_navButtons = {}, m_heights = {},
+        Controls = {}, m_addon = addon, m_containers = {}, m_heights = {}, m_navButtons = {}, m_page = 1, m_rows = {},
+        m_watchers = {}, Pages = pages,
     }, SettingsWindow)
+
     return window
 end
 
 -- Writes a row from the window: one batch, refused with a message while the row is locked.
 local function Write(window, entry, value)
     local addon, state = window.m_addon, window.m_addon.State
+
     if state:IsLocked(entry.id) then
         addon:Print(entry.spec.label .. " is locked.")
         return
@@ -146,6 +154,7 @@ end
 local function BuildRow(window, row, entry)
     local state, spec, id = window.m_addon.State, entry.spec, entry.id
     local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+
     label:SetPoint("LEFT", 0, 0)
     label:SetPoint("RIGHT", -(ControlWidth + 12), 0)
     label:SetJustifyH("LEFT")
@@ -153,6 +162,7 @@ local function BuildRow(window, row, entry)
     row:EnableMouse(true)
     AttachTooltip(row, spec)
     local control, Refresh
+
     if spec.kind == "boolean" then
         control = NewButton(row, 22)
         control:SetPoint("RIGHT", -(ControlWidth - 22), 0)
@@ -172,7 +182,7 @@ local function BuildRow(window, row, entry)
         control:SetPoint("RIGHT")
         control:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         control:SetScript("OnClick", function(_, button)
-            Write(window, entry, StepEnum(spec, state.Values[id], button == "RightButton" and -1 or 1))
+            Write(window, entry, StepEnum(spec, state.Values[id], ((button == "RightButton") and -1) or 1))
         end)
         Refresh = function()
             control.Label:SetText(ValueText(spec, state.Values[id]))
@@ -201,7 +211,7 @@ local function BuildRow(window, row, entry)
     window.Controls[id] = control
     return function()
         Refresh()
-        label:SetAlpha(state:IsLocked(id) and 0.5 or 1)
+        label:SetAlpha((state:IsLocked(id) and 0.5) or 1)
     end
 end
 
@@ -209,28 +219,34 @@ end
 -- goes in m_rows[index] as { watched = its row and lock ids, refresh }.
 local function BuildPage(window, content, page, index)
     local rows = {}
+
     window.m_rows[index] = rows
     local container = CreateFrame("Frame", nil, content)
+
     container:SetPoint("TOPLEFT")
     container:SetPoint("TOPRIGHT")
     local y = 0
+
     for _, entry in ipairs(page.entries) do
         if entry.header then
             local header = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+
             header:SetPoint("TOPLEFT", 0, -(y + 10))
             header:SetText(entry.header)
-            y = y + HeaderHeight
+            y = (y + HeaderHeight)
         else
             local row = CreateFrame("Frame", nil, container)
+
             row:SetPoint("TOPLEFT", 0, -y)
             row:SetPoint("TOPRIGHT", 0, -y)
             row:SetHeight(RowHeight)
             local watched = { entry.id }
+
             if entry.spec.lockId then
                 watched[2] = entry.spec.lockId
             end
             rows[#rows + 1] = { watched = watched, refresh = BuildRow(window, row, entry) }
-            y = y + RowHeight
+            y = (y + RowHeight)
         end
     end
     container:SetHeight(y)
@@ -242,6 +258,7 @@ end
 -- every other page, cost nothing when their rows change.
 local function Follow(window)
     local state, watchers = window.m_addon.State, window.m_watchers
+
     for i = 1, #watchers do
         state:Unwatch(watchers[i])
     end
@@ -261,13 +278,14 @@ local function ShowPage(window, index)
     window.m_page = index
     for i, container in ipairs(window.m_containers) do
         container:SetShown(i == index)
-        window.m_navButtons[i]:SetBackdropBorderColor(i == index and 1 or 0.42, i == index and 0.82 or 0.4,
-            i == index and 0 or 0.5, 1)
+        window.m_navButtons[i]:SetBackdropBorderColor(((i == index) and 1) or 0.42, ((i == index) and 0.82) or 0.4,
+            ((i == index) and 0) or 0.5, 1)
     end
     if window.m_host == window.Frame then
-        local navHeight = #window.Pages * NavButtonHeight
-        local height = window.m_heights[index] > navHeight and window.m_heights[index] or navHeight
-        window.Frame:SetHeight(TitleHeight + height + Pad)
+        local navHeight = (#window.Pages * NavButtonHeight)
+        local height = (((window.m_heights[index] > navHeight) and window.m_heights[index]) or navHeight)
+
+        window.Frame:SetHeight((TitleHeight + height) + Pad)
     end
     Follow(window)
 end
@@ -275,15 +293,18 @@ end
 -- Builds the view: the page list and every page, on a frame either host can hold.
 local function BuildView(window)
     local view = CreateFrame("Frame", nil, UIParent)
+
     window.View = view
     view:Hide()
     view:SetScript("OnShow", function() Follow(window) end)
     view:SetScript("OnHide", function() Follow(window) end)
     local content = CreateFrame("Frame", nil, view)
+
     content:SetPoint("TOPLEFT", NavWidth + Pad, 0)
     content:SetPoint("BOTTOMRIGHT")
     for i, page in ipairs(window.Pages) do
         local nav = NewButton(view, NavWidth, page.name)
+
         nav:SetPoint("TOPLEFT", 0, -((i - 1) * NavButtonHeight))
         nav:SetScript("OnClick", function() ShowPage(window, i) end)
         window.m_navButtons[i] = nav
@@ -294,12 +315,13 @@ end
 -- Builds the window: the backdrop, the title (dragging moves the window) and the close button.
 local function BuildFrame(window)
     local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+
     window.Frame = frame
     frame:SetFrameStrata("DIALOG")
     frame:SetWidth(Width)
     frame:SetPoint("CENTER")
     frame:SetBackdrop({ bgFile = Solid, edgeFile = Border, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+        insets = { bottom = 4, left = 4, right = 4, top = 4 } })
     frame:SetBackdropColor(0.05, 0.05, 0.07, 0.96)
     frame:EnableMouse(true)
     frame:SetMovable(true)
@@ -322,8 +344,9 @@ local function Present(window, host, page)
         BuildView(window)
     end
     local view = window.View
+
     if window.m_host ~= host then
-        if window.m_host == window.Frame and window.Frame then
+        if (window.m_host == window.Frame) and window.Frame then
             window.Frame:Hide()
         end
         window.m_host = host
@@ -345,11 +368,13 @@ end
 --- Esc > Options > AddOns. Controller focus is kept out of it (see the header).
 function SettingsWindow:Register()
     local canvas = CreateFrame("Frame", nil, UIParent)
+
     self.Canvas = canvas
     canvas:Hide()
     canvas.smartNavigationIgnored = true -- SmartNavigation_IsFrameIgnored: the canvas and its children
     canvas:SetScript("OnShow", function() Present(self, canvas) end)
     local category = Settings.RegisterCanvasLayoutCategory(canvas, self.m_addon.Title)
+
     Settings.RegisterAddOnCategory(category)
 end
 
@@ -368,7 +393,7 @@ function SettingsWindow:Hide()
     if self.Frame then
         self.Frame:Hide()
     end
-    if self.Canvas and self.Canvas:IsVisible() and self.m_host ~= self.Canvas then
+    if self.Canvas and self.Canvas:IsVisible() and (self.m_host ~= self.Canvas) then
         Present(self, self.Canvas)
     end
 end
@@ -376,7 +401,7 @@ end
 --- Whether the window shows.
 ---@return boolean
 function SettingsWindow:IsShown()
-    return self.Frame ~= nil and self.Frame:IsShown()
+    return ((self.Frame ~= nil) and self.Frame:IsShown())
 end
 
 --- Shows the window if it's hidden, else hides it.

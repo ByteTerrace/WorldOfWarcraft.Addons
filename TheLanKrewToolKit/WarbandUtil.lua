@@ -18,15 +18,15 @@ local addonName, ns = ...
 
 local Factions = { Alliance = true, Horde = true }
 
-local Names = ByteTerrace.Names
 local C_Map, C_SuperTrack = C_Map, C_SuperTrack
+local CleanCount, CleanText, MaxLevel = ns.KrewFields.CleanCount, ns.KrewFields.CleanText, ns.KrewFields.MaxLevel
+local floor, ipairs, issecretvalue, tonumber, tostring, type = math.floor, ipairs, issecretvalue, tonumber, tostring, type
 local GetGuildInfo, GetNormalizedRealmName, GetRealZoneText, GetSubZoneText, UiMapPoint = GetGuildInfo, GetNormalizedRealmName, GetRealZoneText, GetSubZoneText, UiMapPoint
+local Names = ByteTerrace.Names
 local UnitClass, UnitFactionGroup, UnitIsEnemy, UnitIsPlayer, UnitLevel = UnitClass, UnitFactionGroup, UnitIsEnemy, UnitIsPlayer, UnitLevel
-local issecretvalue, floor, ipairs, tonumber, tostring, type = issecretvalue, math.floor, ipairs, tonumber, tostring, type
-local CleanText, CleanCount, MaxLevel = ns.KrewFields.CleanText, ns.KrewFields.CleanCount, ns.KrewFields.MaxLevel
 
 local function MyRealm()
-    return GetNormalizedRealmName() or ""
+    return (GetNormalizedRealmName() or "")
 end
 
 --- A player's key from a name as text gives it (a chat sender, a recap, an honor message, a
@@ -42,20 +42,21 @@ end
 ---@param realm string? nil or "" for your own realm
 ---@return string
 local function GuildKey(name, realm)
-    return name .. "-" .. ((realm and realm ~= "") and realm or MyRealm())
+    return (name .. "-" .. (((realm and (realm ~= "")) and realm) or MyRealm()))
 end
 
 --- A guild key's name, for display.
 ---@param key string
 ---@return string
 local function GuildName(key)
-    return key:match("^(.*)%-[^%-]*$") or key
+    return (key:match("^(.*)%-[^%-]*$") or key)
 end
 
 -- The unit's guild key, or "" for none or a secret one.
 local function GuildOf(unit)
     local name, _, _, realm = GetGuildInfo(unit)
-    if issecretvalue(name) or issecretvalue(realm) or type(name) ~= "string" or name == "" then
+
+    if issecretvalue(name) or issecretvalue(realm) or (type(name) ~= "string") or (name == "") then
         return ""
     end
     return GuildKey(name, realm)
@@ -69,21 +70,24 @@ local function Identify(unit)
         return nil
     end
     local key = Names.OfUnit(unit)
+
     if not key then
         return nil
     end
     local _, classFile = UnitClass(unit)
     local class = ""
+
     if not issecretvalue(classFile) and classFile then
         class = classFile
     end
     local level = UnitLevel(unit)
     local faction = UnitFactionGroup(unit)
+
     return {
         key = key,
         class = class,
-        level = (level and level > 0) and level or 0,
-        faction = Factions[faction] and faction or "",
+        level = (((level and (level > 0)) and level) or 0),
+        faction = ((Factions[faction] and faction) or ""),
         guild = GuildOf(unit),
     }
 end
@@ -92,13 +96,13 @@ end
 ---@param unit string
 ---@return boolean
 local function Hostile(unit)
-    return UnitIsEnemy("player", unit) and true or false
+    return ((UnitIsEnemy("player", unit) and true) or false)
 end
 
 --- Your own key, or "" while your name is unreadable.
 ---@return string
 local function MyKey()
-    return Names.Mine() or ""
+    return (Names.Mine() or "")
 end
 
 --- Whether a message field is a player key: a full name of at most 64 bytes, with no "|", "-" or
@@ -106,7 +110,7 @@ end
 ---@param key string?
 ---@return boolean
 local function ValidKey(key)
-    return key and #key <= 64 and key:match("^[^%s|%c%-][^|%c%-]*[^%s|%c%-]$") ~= nil
+    return (key and (#key <= 64) and (key:match("^[^%s|%c%-][^|%c%-]*[^%s|%c%-]$") ~= nil))
 end
 
 --- Whether a message field is a guild key: at most 64 bytes, no "|" or control characters, and a
@@ -114,28 +118,28 @@ end
 ---@param key string?
 ---@return boolean
 local function ValidGuildKey(key)
-    return key and #key <= 64 and key:match("^[^|%c%-]+%-[^%s|%-]+$") ~= nil
+    return (key and (#key <= 64) and (key:match("^[^|%c%-]+%-[^%s|%-]+$") ~= nil))
 end
 
 --- A class file from a message (up to 12 capital letters), or "".
 ---@param class string?
 ---@return string
 local function CleanClass(class)
-    return (class and #class <= 12 and class:match("^%u+$")) and class or ""
+    return (((class and (#class <= 12) and class:match("^%u+$")) and class) or "")
 end
 
 --- A level from a message (a whole number from 1 to MaxLevel, in digits), or 0.
 ---@param level string?
 ---@return integer
 local function CleanLevel(level)
-    return CleanCount(level, MaxLevel) or 0
+    return (CleanCount(level, MaxLevel) or 0)
 end
 
 --- "Alliance" or "Horde" from a message, or "".
 ---@param faction string?
 ---@return string
 local function CleanFaction(faction)
-    return Factions[faction] and faction or ""
+    return ((Factions[faction] and faction) or "")
 end
 
 --- An info's first four message fields: key, class, level and faction.
@@ -161,6 +165,7 @@ local function Find(collection, key)
         return key
     end
     local wanted = key:lower()
+
     for _, candidate in ipairs(collection:Keys()) do
         if candidate:lower() == wanted then
             return candidate
@@ -173,11 +178,11 @@ end
 ---@param arg string?
 ---@return string|false|nil
 local function Typed(arg)
-    arg = arg and arg:match("^%s*(.-)%s*$")
-    if not arg or arg == "" then
+    arg = (arg and arg:match("^%s*(.-)%s*$"))
+    if not arg or (arg == "") then
         return nil
     end
-    return not arg:find("|", 1, true) and #arg <= 64 and arg
+    return (not arg:find("|", 1, true) and (#arg <= 64) and arg)
 end
 
 --- The player key a typed name means: the key in ledger, else people, that matches it ignoring
@@ -188,10 +193,11 @@ end
 ---@return string? key nil when it can't be a key
 local function PlayerNamed(name, ledger, people)
     local key = KeyOf(name)
-    key = Find(ledger, key) or Find(people, key) or key:gsub("(%S)(%S*)", function(first, rest)
-        return first:upper() .. rest:lower()
-    end)
-    return ValidKey(key) and key or nil
+
+    key = (Find(ledger, key) or Find(people, key) or key:gsub("(%S)(%S*)", function(first, rest)
+        return (first:upper() .. rest:lower())
+    end))
+    return ((ValidKey(key) and key) or nil)
 end
 
 --- The guild key a typed guild name ("Name" or "Name-Realm") means: the war, else a rivalry
@@ -202,12 +208,15 @@ end
 ---@param people table the rivalry records
 ---@return string? key nil when it can't be a guild key
 local function GuildNamed(name, wars, people)
-    local key = name:find("-", 1, true) and name or GuildKey(name)
+    local key = ((name:find("-", 1, true) and name) or GuildKey(name))
     local found = Find(wars, key)
+
     if not found then
         local wanted = key:lower()
+
         for _, person in ipairs(people:Keys()) do
             local guild = people:Field(person, "guild")
+
             if guild:lower() == wanted then
                 found = guild
                 break
@@ -215,13 +224,14 @@ local function GuildNamed(name, wars, people)
         end
     end
     local guildName, realm = key:match("^(.*)%-([^%-]*)$")
+
     if not found and not guildName:find("%u") then
-        found = guildName:gsub("(%S)(%S*)", function(first, rest)
-            return first:upper() .. rest
-        end) .. "-" .. realm
+        found = (guildName:gsub("(%S)(%S*)", function(first, rest)
+            return (first:upper() .. rest)
+        end) .. "-" .. realm)
     end
-    found = found or key
-    return ValidGuildKey(found) and found or nil
+    found = (found or key)
+    return ((ValidGuildKey(found) and found) or nil)
 end
 
 --- Where you are, as a message's zone and subzone fields (each cleaned, "" when unknown).
@@ -236,10 +246,10 @@ end
 ---@param subZone string cleaned
 ---@return string
 local function Where(zone, subZone)
-    if subZone ~= "" and zone ~= "" and subZone ~= zone then
-        return subZone .. " (" .. zone .. ")"
+    if (subZone ~= "") and (zone ~= "") and (subZone ~= zone) then
+        return (subZone .. " (" .. zone .. ")")
     end
-    return zone ~= "" and zone or "somewhere"
+    return (((zone ~= "") and zone) or "somewhere")
 end
 
 --- Your position as message fields, or nothing where the map has none.
@@ -248,25 +258,29 @@ end
 ---@return integer? y 0 to 10000
 local function Position()
     local mapID = C_Map.GetBestMapForUnit("player")
+
     if not mapID then
         return nil
     end
     local position = C_Map.GetPlayerMapPosition(mapID, "player")
+
     if not position then
         return nil
     end
     local x, y = position:GetXY()
-    return mapID, floor(x * 10000 + 0.5), floor(y * 10000 + 0.5)
+
+    return mapID, floor((x * 10000) + 0.5), floor((y * 10000) + 0.5)
 end
 
 -- A message field that's a whole number from 0 to max written in digits only (no sign, exponent,
 -- hex, fraction or "inf"), as a number; nil otherwise.
 local function Digits(text, max)
-    if type(text) ~= "string" or #text > 9 or not text:find("^%d+$") then
+    if (type(text) ~= "string") or (#text > 9) or not text:find("^%d+$") then
         return nil
     end
     local n = tonumber(text)
-    return n <= max and n or nil
+
+    return (((n <= max) and n) or nil)
 end
 
 --- Sets and tracks a map waypoint from message fields (see Position): each a whole number in
@@ -277,7 +291,7 @@ end
 ---@return boolean set
 local function SetWaypoint(mapID, x, y)
     mapID, x, y = Digits(mapID, 999999999), Digits(x, 10000), Digits(y, 10000)
-    if not (mapID and mapID > 0 and x and y) then
+    if not (mapID and (mapID > 0) and x and y) then
         return false
     end
     if not C_Map.CanSetUserWaypointOnMap(mapID) then
@@ -289,8 +303,8 @@ local function SetWaypoint(mapID, x, y)
 end
 
 ns.Warband = {
-    KeyOf = KeyOf, MyKey = MyKey, Identify = Identify, Hostile = Hostile, GuildName = GuildName,
-    ValidKey = ValidKey, ValidGuildKey = ValidGuildKey, CleanClass = CleanClass, CleanLevel = CleanLevel, CleanFaction = CleanFaction, InfoFields = InfoFields, InfoFrom = InfoFrom,
-    Here = Here, Where = Where, Position = Position, SetWaypoint = SetWaypoint,
-    Typed = Typed, PlayerNamed = PlayerNamed, GuildNamed = GuildNamed,
+    CleanClass = CleanClass, CleanFaction = CleanFaction, CleanLevel = CleanLevel, GuildName = GuildName,
+    GuildNamed = GuildNamed, Here = Here, Hostile = Hostile, Identify = Identify, InfoFields = InfoFields,
+    InfoFrom = InfoFrom, KeyOf = KeyOf, MyKey = MyKey, PlayerNamed = PlayerNamed, Position = Position,
+    SetWaypoint = SetWaypoint, Typed = Typed, ValidGuildKey = ValidGuildKey, ValidKey = ValidKey, Where = Where,
 }

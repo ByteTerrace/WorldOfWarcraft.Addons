@@ -11,11 +11,12 @@ local addonName, ns = ...
 -- "Aa", so "Dh Taketwo-Realm" records as "Aa Aa-Aa" and no character's name reaches the file.
 
 local Probes = ns.Probes
-local Value, NameShape, Senders, JoinSets = Probes.Value, Probes.NameShape, Probes.Senders, Probes.JoinSets
+local JoinSets, NameShape, Senders, Value = Probes.JoinSets, Probes.NameShape, Probes.Senders, Probes.Value
 
 -- Every return of a name API, as name shapes: { "Aa", "Aa" } for (name, surname).
 local function Returns(...)
     local shapes = {}
+
     for i = 1, select("#", ...) do
         shapes["r" .. i] = NameShape((select(i, ...)))
     end
@@ -27,8 +28,10 @@ end
 local function Names(unit)
     local guid = UnitGUID(unit) -- secret: only passed on to GetPlayerInfoByGUID when plain
     local byGUID
-    if not issecretvalue(guid) and type(guid) == "string" then
+
+    if not issecretvalue(guid) and (type(guid) == "string") then
         local _, _, _, _, _, name, realm = GetPlayerInfoByGUID(guid) -- secret: recorded as shapes
+
         byGUID = { name = NameShape(name), realm = NameShape(realm) }
     end
     return {
@@ -46,8 +49,9 @@ Probes.Define({
         run = function()
             local separators = Constants.CharacterNameSeparatorConsts
             local names = Names("player")
-            local separator = separators and separators.CHARACTERNAME_SURNAME_SEPARATOR
-            names.separator = type(separator) == "string" and ("[" .. separator .. "]") or Probes.Shape(separator)
+            local separator = (separators and separators.CHARACTERNAME_SURNAME_SEPARATOR)
+
+            names.separator = (((type(separator) == "string") and ("[" .. separator .. "]")) or Probes.Shape(separator))
             names.regionalUnique = Value(RegionalUniqueNamesEnabled())
             names.realm = NameShape(GetNormalizedRealmName())
             return names
@@ -61,13 +65,15 @@ Probes.Define({
         run = function()
             local _, second = UnitName("player") -- secret: only compared when plain
             local _, fullSecond = UnitFullName("player") -- secret: only compared when plain
+
             if issecretvalue(second) or issecretvalue(fullSecond) then
                 return { secret = true }
             end
             local realm, normalized = GetRealmName(), GetNormalizedRealmName()
+
             return {
-                unitNameIsRealm = second ~= nil and (second == realm or second == normalized),
-                unitFullNameIsRealm = fullSecond ~= nil and (fullSecond == realm or fullSecond == normalized),
+                unitFullNameIsRealm = ((fullSecond ~= nil) and ((fullSecond == realm) or (fullSecond == normalized))),
+                unitNameIsRealm = ((second ~= nil) and ((second == realm) or (second == normalized))),
             }
         end,
     },
@@ -93,6 +99,7 @@ Probes.Define({
         accumulates = true,
         run = function()
             local info = Probes.DiscordInfo
+
             return { shapes = JoinSets(info.shapes), fields = JoinSets(info.fields) }
         end,
     },

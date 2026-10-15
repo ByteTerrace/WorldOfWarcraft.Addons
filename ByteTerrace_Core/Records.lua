@@ -28,21 +28,22 @@
 -- Public members: Name (the full "<Module>.<name>"), Limit and Keep (the spec's keep function, or
 -- nil).
 
-local MaxKeyLength = 64
 local FieldPattern = "^%a[%w_]*$"
+local MaxKeyLength = 64
 
 local ByteTerrace = ByteTerrace
-local Refuse, SafeCall = ByteTerrace.Refuse, ByteTerrace.SafeCall
-local issecretvalue = issecretvalue
 local ipairs, pairs, tostring, type = ipairs, pairs, tostring, type
+local issecretvalue = issecretvalue
+local Refuse, SafeCall = ByteTerrace.Refuse, ByteTerrace.SafeCall
 local sort = table.sort
 
 local Records = {}
+
 Records.__index = Records
 ByteTerrace.Records = Records
 
 local function ValidKey(key)
-    return type(key) == "string" and not issecretvalue(key) and #key >= 1 and #key <= MaxKeyLength
+    return ((type(key) == "string") and not issecretvalue(key) and (#key >= 1) and (#key <= MaxKeyLength))
 end
 
 local function Loaded(self)
@@ -56,12 +57,14 @@ end
 -- handler and the key isn't protected: a broken keep can't stop the addon loading.
 local function Kept(keep, key)
     local ok, kept = SafeCall(keep, key)
-    return ok and kept and true or false
+
+    return ((ok and kept and true) or false)
 end
 
 local function Bump(self)
     local state = self.m_addon.State
     local id = self.m_versionId
+
     if not id then
         id = state:Id(self.Name)
         self.m_versionId = id
@@ -76,16 +79,19 @@ end
 ---@param spec table see the file header
 function ByteTerrace.NewRecords(addon, name, spec)
     local problems, fields, fieldOrder = {}, {}, {}
+
     for _, field in ipairs(spec.fields or {}) do
         local own = {}
+
         for key, value in pairs(field) do
             own[key] = value
         end
         local fieldName = tostring(own.name)
+
         if not fieldName:find(FieldPattern) then
-            problems[#problems + 1] = name .. ": field name '" .. fieldName .. "' must be an identifier"
+            problems[#problems + 1] = (name .. ": field name '" .. fieldName .. "' must be an identifier")
         elseif fields[fieldName] then
-            problems[#problems + 1] = name .. ": duplicate field " .. fieldName
+            problems[#problems + 1] = (name .. ": duplicate field " .. fieldName)
         else
             own.persist, own.label = false, nil -- fields have no settings control of their own
             ByteTerrace.State.Prepare(name .. "." .. fieldName, own, problems)
@@ -94,26 +100,26 @@ function ByteTerrace.NewRecords(addon, name, spec)
         end
     end
     if #fieldOrder == 0 then
-        problems[#problems + 1] = name .. ": a collection needs fields"
+        problems[#problems + 1] = (name .. ": a collection needs fields")
     end
     local limit = spec.limit
-    if type(limit) ~= "number" or limit < 1 or limit % 1 ~= 0 then
-        problems[#problems + 1] = name .. ": limit must be a positive whole number"
+
+    if (type(limit) ~= "number") or (limit < 1) or ((limit % 1) ~= 0) then
+        problems[#problems + 1] = (name .. ": limit must be a positive whole number")
     end
-    if spec.evict ~= nil and (not fields[spec.evict] or fields[spec.evict].kind ~= "number") then
-        problems[#problems + 1] = name .. ": evict must name a number field"
+    if (spec.evict ~= nil) and (not fields[spec.evict] or (fields[spec.evict].kind ~= "number")) then
+        problems[#problems + 1] = (name .. ": evict must name a number field")
     end
-    if spec.keep ~= nil and type(spec.keep) ~= "function" then
-        problems[#problems + 1] = name .. ": keep must be a function(key)"
+    if (spec.keep ~= nil) and (type(spec.keep) ~= "function") then
+        problems[#problems + 1] = (name .. ": keep must be a function(key)")
     end
     Refuse(addon.Name .. " records", problems)
 
-    local scope = spec.scope or "account"
+    local scope = (spec.scope or "account")
+
     return setmetatable({
-        Name = name, Limit = limit, Keep = spec.keep,
-        m_addon = addon, m_fields = fields, m_fieldOrder = fieldOrder,
-        m_evict = spec.evict, m_scope = scope,
-        m_store = nil, m_count = 0, m_versionId = nil,
+        Keep = spec.keep, Limit = limit, m_addon = addon, m_count = 0, m_evict = spec.evict, m_fieldOrder = fieldOrder,
+        m_fields = fields, m_scope = scope, m_store = nil, m_versionId = nil, Name = name,
     }, Records)
 end
 
@@ -125,37 +131,41 @@ end
 function Records:Load(stores)
     local root = stores[self.m_scope]
     local store = root[self.Name]
+
     if type(store) ~= "table" then
         store = {}
         root[self.Name] = store
     end
     local fields, admits = self.m_fields, ByteTerrace.State.Admits
     local dropped, reset, count = 0, 0, 0
+
     for key, record in pairs(store) do
-        if not ValidKey(key) or type(record) ~= "table" then
+        if not ValidKey(key) or (type(record) ~= "table") then
             store[key] = nil
-            dropped = dropped + 1
+            dropped = (dropped + 1)
         else
             for field, value in pairs(record) do
                 local spec = fields[field]
+
                 if not spec or not admits(spec, value) then
                     record[field] = nil
-                    reset = reset + 1
+                    reset = (reset + 1)
                 elseif value == spec.default then
                     record[field] = nil -- a changed default: store only what differs
                 end
             end
-            count = count + 1
+            count = (count + 1)
         end
     end
     self.m_store, self.m_count = store, count
     -- Nothing watches yet, so the version doesn't move.
     if self.m_count > self.Limit then
         local victims = self:EvictionOrder()
+
         for i = 1, self.m_count - self.Limit do
             store[victims[i]] = nil
         end
-        dropped = dropped + self.m_count - self.Limit
+        dropped = ((dropped + self.m_count) - self.Limit)
         self.m_count = self.Limit
     end
     return dropped, reset
@@ -164,7 +174,7 @@ end
 --- Whether a record exists for key.
 ---@return boolean
 function Records:Has(key)
-    return Loaded(self)[key] ~= nil
+    return (Loaded(self)[key] ~= nil)
 end
 
 --- How many records there are.
@@ -180,11 +190,13 @@ end
 ---@param field string
 function Records:Field(key, field)
     local spec = self.m_fields[field]
+
     if not spec then
         error(self.m_addon.Name .. ": records " .. self.Name .. " has no field " .. tostring(field), 2)
     end
     local record = Loaded(self)[key]
-    local value = record and record[field]
+    local value = (record and record[field])
+
     if value == nil then
         return spec.default
     end
@@ -196,12 +208,15 @@ end
 ---@return table?
 function Records:Get(key)
     local record = Loaded(self)[key]
+
     if not record then
         return nil
     end
     local copy = {}
+
     for _, field in ipairs(self.m_fieldOrder) do
         local value = record[field]
+
         if value == nil then
             value = self.m_fields[field].default
         end
@@ -214,6 +229,7 @@ end
 ---@return string[]
 function Records:Keys()
     local keys = {}
+
     for key in pairs(Loaded(self)) do
         keys[#keys + 1] = key
     end
@@ -228,13 +244,15 @@ function Records:EvictionCandidate()
     local store, evict, keep = Loaded(self), self.m_evict, self.Keep
     local default = self.m_fields[evict].default
     local best, bestValue
+
     for key, record in pairs(store) do
         if not (keep and Kept(keep, key)) then
             local value = record[evict]
+
             if value == nil then
                 value = default
             end
-            if not best or value < bestValue or (value == bestValue and key < best) then
+            if not best or (value < bestValue) or ((value == bestValue) and (key < best)) then
                 best, bestValue = key, value
             end
         end
@@ -247,22 +265,24 @@ end
 ---@return string[]
 function Records:EvictionOrder()
     local store, evict, keep = Loaded(self), self.m_evict, self.Keep
-    local default = evict and self.m_fields[evict].default or 0
+    local default = ((evict and self.m_fields[evict].default) or 0)
     local keys, kept, value = {}, {}, {}
+
     for key, record in pairs(store) do
         keys[#keys + 1] = key
-        kept[key] = keep ~= nil and Kept(keep, key)
-        local field = evict and record[evict]
-        value[key] = field == nil and default or field
+        kept[key] = ((keep ~= nil) and Kept(keep, key))
+        local field = (evict and record[evict])
+
+        value[key] = (((field == nil) and default) or field)
     end
     sort(keys, function(a, b)
         if kept[a] ~= kept[b] then
             return not kept[a]
         end
         if value[a] ~= value[b] then
-            return value[a] < value[b]
+            return (value[a] < value[b])
         end
-        return a < b
+        return (a < b)
     end)
     return keys
 end
@@ -274,41 +294,49 @@ end
 ---@param values table field = value
 function Records:Set(key, values)
     local store = Loaded(self)
+
     if not ValidKey(key) then
         local message = "%s: records %s key must be a plain string of 1 to %d characters"
+
         error(message:format(self.m_addon.Name, self.Name, MaxKeyLength), 2)
     end
     local fields, admits = self.m_fields, ByteTerrace.State.Admits
+
     for field, value in pairs(values) do
         local spec = fields[field]
+
         if not spec then
             error(self.m_addon.Name .. ": records " .. self.Name .. " has no field " .. tostring(field), 2)
         end
         local ok, why = admits(spec, value)
+
         if not ok then
             error(self.m_addon.Name .. ": records " .. self.Name .. "." .. field .. " " .. why, 2)
         end
     end
     local record = store[key]
     local changed = false
+
     if not record then
         if self.m_count >= self.Limit then
-            local victim = self.m_evict and self:EvictionCandidate()
+            local victim = (self.m_evict and self:EvictionCandidate())
+
             if not victim then
                 error(self.m_addon.Name .. ": records " .. self.Name .. " is full (" .. self.Limit .. ")", 2)
             end
             -- Publish only after the replacement is complete. Publishing the removal here lets
             -- a watcher fill the vacancy before this write resumes and exceed the limit.
             store[victim] = nil
-            self.m_count = self.m_count - 1
+            self.m_count = (self.m_count - 1)
         end
         record = {}
         store[key] = record
-        self.m_count = self.m_count + 1
+        self.m_count = (self.m_count + 1)
         changed = true
     end
     for field, value in pairs(values) do
         local stored = value
+
         if value == fields[field].default then
             stored = nil
         end
@@ -326,11 +354,12 @@ end
 ---@return boolean removed false when there was none
 function Records:Remove(key)
     local store = Loaded(self)
-    if key == nil or store[key] == nil then
+
+    if (key == nil) or (store[key] == nil) then
         return false
     end
     store[key] = nil
-    self.m_count = self.m_count - 1
+    self.m_count = (self.m_count - 1)
     Bump(self)
     return true
 end

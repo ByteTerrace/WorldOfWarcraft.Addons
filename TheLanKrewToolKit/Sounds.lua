@@ -15,7 +15,8 @@ local addonName, ns = ...
 
 local Addon = ns.Addon
 
-local SoundBank = ByteTerrace.NewSoundBank(Addon, { master = "Sounds.enabled", channel = "Sounds.channel" })
+local SoundBank = ByteTerrace.NewSoundBank(Addon, { channel = "Sounds.channel", master = "Sounds.enabled" })
+
 ns.SoundBank = SoundBank
 
 local CombatStartHandle
@@ -27,24 +28,26 @@ local function StopCombatStart()
     end
 end
 
-SoundBank:Define("combatStart", { file = "CombatStart", word = "start", label = "Combat start", row = "Sounds.combatStart" })
+SoundBank:Define("combatStart", { file = "CombatStart", label = "Combat start", row = "Sounds.combatStart", word = "start" })
 
 Addon:Module("Sounds", {
     label = "Sounds",
     page = "Sounds",
     description = "Play your own sounds for game moments. Each sound also has its own toggle below.",
     state = {
-        { name = "channel", kind = "string", default = "Master", values = { "Master", "SFX", "Music", "Ambience", "Dialog" },
-            valueLabels = { Master = "Master", SFX = "Sound effects", Music = "Music", Ambience = "Ambience", Dialog = "Dialog" },
-            label = "Sound channel", description = "Volume channel your sounds play on. Master plays even when game music is off." },
+        { default = "Master",
+            description = "Volume channel your sounds play on. Master plays even when game music is off.",
+            kind = "string", label = "Sound channel", name = "channel",
+            valueLabels = { Ambience = "Ambience", Dialog = "Dialog", Master = "Master", Music = "Music", SFX = "Sound effects" },
+            values = { "Master", "SFX", "Music", "Ambience", "Dialog" } },
         SoundBank:Row("combatStart", "Combat start sound",
             "When you enter combat. Give it variants for a battle playlist: each fight picks one.", { "combatStart" }),
-        { name = "stopOnCombatEnd", kind = "boolean", default = true,
-            label = "Stop combat start sound when combat ends", description = "Fade out the combat start sound when you leave combat." },
+        { default = true, description = "Fade out the combat start sound when you leave combat.", kind = "boolean",
+            label = "Stop combat start sound when combat ends", name = "stopOnCombatEnd" },
     },
     commands = {
-        { name = "test", slash = "sound", label = "List or test your sounds: sound [name] [variant]", always = true,
-            run = function(arg) SoundBank:Test(arg) end },
+        { always = true, label = "List or test your sounds: sound [name] [variant]", name = "test",
+            run = function(arg) SoundBank:Test(arg) end, slash = "sound" },
     },
 })
 
@@ -53,8 +56,8 @@ Addon:Module("CombatStartSound", {
     active = SoundBank:WhileOn("combatStart"),
     OnEnable = function(module)
         local combat = module:Id("combat.active")
+
         module:Rule({
-            reads = { combat }, when = function(state) return state.Values[combat] end,
             changed = function(active)
                 if active then
                     StopCombatStart()
@@ -63,6 +66,7 @@ Addon:Module("CombatStartSound", {
                     StopCombatStart()
                 end
             end,
+            reads = { combat }, when = function(state) return state.Values[combat] end,
         })
     end,
     OnDisable = StopCombatStart, -- turning the sound off stops it mid-play

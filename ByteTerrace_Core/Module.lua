@@ -22,18 +22,19 @@
 -- rules, listeners, timers, commands and deferred actions ran, kept across stops and starts).
 
 local ByteTerrace = ByteTerrace
-local SafeCall = ByteTerrace.SafeCall
 local C_Timer = C_Timer
 local ipairs, pairs, select, type, unpack = ipairs, pairs, select, type, unpack
 local remove = table.remove
+local SafeCall = ByteTerrace.SafeCall
 
 local Module = {}
+
 Module.__index = Module
 ByteTerrace.Module = Module
 
 local function Enable(module)
     for _, dependency in ipairs(module.m_uses) do
-        module.m_acquired = module.m_acquired + 1
+        module.m_acquired = (module.m_acquired + 1)
         if not dependency:Acquire() then
             return false
         end
@@ -65,7 +66,7 @@ end
 ---@param row string
 ---@return string
 function Module:RowName(row)
-    return row:find(".", 1, true) and row or (self.Name .. "." .. row)
+    return ((row:find(".", 1, true) and row) or (self.Name .. "." .. row))
 end
 
 --- A row's id, from its name (resolved once and cached) or an id passed straight through. An
@@ -78,6 +79,7 @@ function Module:Id(row, level)
         return row
     end
     local id = self.m_ids[row]
+
     if not id then
         id = self.Addon.State.Ids[self:RowName(row)]
         if not id then
@@ -103,7 +105,7 @@ end
 --- Whether the module can accept work; OnDisable and dependency teardown are already stopped.
 ---@return boolean
 function Module:IsRunning()
-    return self.Enabled and not self.m_stopping
+    return (self.Enabled and not self.m_stopping)
 end
 
 --- Raises when the module is stopped or stopping (in OnDisable): what it would create then would
@@ -122,6 +124,7 @@ end
 function Module:On(event, fn, unit)
     self:CheckRunning()
     local handle = self.Addon.Events:On(event, fn, unit, self.Work)
+
     self.m_handles[#self.m_handles + 1] = handle
     return handle
 end
@@ -145,6 +148,7 @@ end
 ---@return integer[]
 function Module:ResolveRows(rows, level)
     local ids = {}
+
     for i, row in ipairs(rows) do
         ids[i] = self:Id(row, (level or 1) + 1)
     end
@@ -160,6 +164,7 @@ function Module:Watch(rows, fn, skipInitial)
     self:CheckRunning()
     local state = self.Addon.State
     local watcher = state:Watch(self:ResolveRows(rows, 2), fn, true, self.Work)
+
     self.m_watchers[#self.m_watchers + 1] = watcher
     if not skipInitial then
         state:Run(watcher) -- ownership precedes a callback that may stop this module
@@ -176,8 +181,10 @@ end
 function Module:OnIncrease(row, fn)
     local id = self:Id(row, 2)
     local last = self.Addon.State.Values[id]
+
     return self:Watch({ id }, function(state)
         local count, previous = state.Values[id], last
+
         last = count
         if count > previous then
             fn(state, count, previous)
@@ -191,10 +198,12 @@ end
 function Module:Rule(spec)
     self:CheckRunning()
     local state, reads = self.Addon.State, self:ResolveRows(spec.reads, 2)
+
     state:BeginBatch()
     local watcher = state:Rule({
-        reads = reads, when = spec.when, changed = spec.changed, initial = spec.initial, work = self.Work,
+        changed = spec.changed, initial = spec.initial, reads = reads, when = spec.when, work = self.Work,
     })
+
     self.m_watchers[#self.m_watchers + 1] = watcher
     state:EndBatch()
     return watcher
@@ -208,6 +217,7 @@ end
 function Module:Listen(comms, kind, fn)
     self:CheckRunning()
     local handle = comms:Listen(kind, fn, self.Work)
+
     self.m_listeners[#self.m_listeners + 1] = { comms = comms, handle = handle }
     return handle
 end
@@ -225,11 +235,12 @@ function Module:Callback(fn, ...)
     end
     local generation, args, count = self.m_generation, { ... }, select("#", ...)
     local work = self.Work
+
     return function()
-        if not self:IsRunning() or self.m_generation ~= generation then
+        if not self:IsRunning() or (self.m_generation ~= generation) then
             return
         end
-        work.actions = work.actions + 1
+        work.actions = (work.actions + 1)
         self.Addon:Run(work, fn, unpack(args, 1, count))
     end
 end
@@ -244,9 +255,10 @@ function Module:After(seconds, fn)
     self:CheckRunning()
     local timers, addon, work = self.m_timers, self.Addon, self.Work
     local timer
+
     timer = C_Timer.NewTimer(seconds, function()
         timers[timer] = nil
-        work.timers = work.timers + 1
+        work.timers = (work.timers + 1)
         addon:Run(work, fn)
     end)
     timers[timer] = true
@@ -261,9 +273,10 @@ function Module:Every(seconds, fn)
     self:CheckRunning()
     local addon, work = self.Addon, self.Work
     local timer = C_Timer.NewTicker(seconds, function()
-        work.timers = work.timers + 1
+        work.timers = (work.timers + 1)
         addon:Run(work, fn)
     end)
+
     self.m_timers[timer] = true
     return timer
 end
@@ -281,8 +294,9 @@ end
 ---@return integer
 function Module:PendingTimers()
     local count = 0
+
     for _ in pairs(self.m_timers) do
-        count = count + 1
+        count = (count + 1)
     end
     return count
 end
@@ -290,6 +304,7 @@ end
 -- Returns the module's runtime rows to their defaults.
 local function ResetRuntime(module)
     local state = module.Addon.State
+
     for _, id in ipairs(module.m_runtime) do
         state:Set(id, state.Specs[id].default)
     end
@@ -299,7 +314,7 @@ end
 --- so a user started from its OnDisable doesn't run on it.
 ---@return boolean
 function Module:Acquire()
-    self.Users = self.Users + 1
+    self.Users = (self.Users + 1)
     if self.Users == 1 then
         self:SetEnabled(true)
     end
@@ -309,7 +324,7 @@ end
 --- Releases one user of a demand module; the last one stops it. Only a stopping user calls it,
 --- once for each Acquire it made.
 function Module:Release()
-    self.Users = self.Users - 1
+    self.Users = (self.Users - 1)
     if self.Users == 0 then
         self:SetEnabled(false)
     end
@@ -320,15 +335,17 @@ end
 --- cancels timers, resets runtime rows, and releases dependencies.
 ---@param enabled boolean
 function Module:SetEnabled(enabled)
-    if enabled == self.Enabled or self.m_stopping then
+    if (enabled == self.Enabled) or self.m_stopping then
         return -- a stop in progress finishes first; a nested start or stop is ignored
     end
     local addon, spec = self.Addon, self.Spec
+
     addon.State:BeginBatch()
     if enabled then
         self.Enabled = true
-        self.m_generation = self.m_generation + 1
+        self.m_generation = (self.m_generation + 1)
         local ok, started = SafeCall(Enable, self)
+
         if not ok or not started then
             self:SetEnabled(false)
         end
@@ -337,6 +354,7 @@ function Module:SetEnabled(enabled)
     end
     self.m_stopping = true
     local handles, watchers = self.m_handles, self.m_watchers
+
     self.m_handles, self.m_watchers = {}, {}
     for i = 1, #watchers do
         addon.State:Unwatch(watchers[i])
@@ -386,21 +404,25 @@ end
 --- on other rows, so a switched-off feature registers nothing. A demand module waits for users.
 function Module:Start()
     local spec, state = self.Spec, self.Addon.State
+
     if spec.demand then
         return
     end
-    local enabledId = spec.toggle ~= false and self:Id("enabled") or nil
+    local enabledId = (((spec.toggle ~= false) and self:Id("enabled")) or nil)
     local active = spec.active
+
     if not enabledId and not active then
         self:SetEnabled(true)
         return
     end
-    local reads = active and self:ResolveRows(active.reads) or {}
+    local reads = ((active and self:ResolveRows(active.reads)) or {})
+
     if enabledId then
         reads[#reads + 1] = enabledId
     end
-    local when = active and active.when
+    local when = (active and active.when)
+
     state:Watch(reads, function(current)
-        self:SetEnabled((not enabledId or current.Values[enabledId]) and (not when or when(current)) and true or false)
+        self:SetEnabled(((not enabledId or current.Values[enabledId]) and (not when or when(current)) and true) or false)
     end)
 end

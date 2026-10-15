@@ -5,19 +5,23 @@
 
 local function NewAddOn()
     local h = Harness.New()
+
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
-    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", title = "Test App", savedVariable = "TestDB",
-        slash = { "/test" } })
-    addon:Module("Meter", { label = "Meter", description = "A meter.", state = {
-        { name = "size", kind = "string", default = "wide", values = { "wide", "wider", "widest" },
-            valueLabels = { wide = "Wide", wider = "Wider", widest = "Widest" }, label = "Size" },
-        { name = "volume", kind = "number", default = 0.5, min = 0, max = 1, step = 0.25, label = "Volume" },
-    } })
+    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", slash = { "/test" },
+        title = "Test App" })
+
+    addon:Module("Meter", { description = "A meter.", label = "Meter",
+        state = {
+            { default = "wide", kind = "string", label = "Size", name = "size",
+                valueLabels = { wide = "Wide", wider = "Wider", widest = "Widest" },
+                values = { "wide", "wider", "widest" } },
+            { default = 0.5, kind = "number", label = "Volume", max = 1, min = 0, name = "volume", step = 0.25 },
+        } })
     addon:Module("Riddles", { label = "Riddles", page = "Riddles", state = {
-        { name = "locked", kind = "boolean", default = false, persist = false },
-        { name = "minutes", kind = "number", default = 30, min = 10, max = 120, step = 5, label = "Minutes",
-            lockedBy = "Riddles.locked" },
+        { default = false, kind = "boolean", name = "locked", persist = false },
+        { default = 30, kind = "number", label = "Minutes", lockedBy = "Riddles.locked", max = 120, min = 10,
+            name = "minutes", step = 5 },
     } })
     h:Fire("ADDON_LOADED", "TestApp", false)
     return h, addon
@@ -26,6 +30,7 @@ end
 test("the bare command toggles the window, in combat too, and never opens Blizzard's panel", function()
     local h, addon = NewAddOn()
     local window = addon.SettingsWindow
+
     falsy(window:IsShown())
     h:EnterCombat()
     h:Slash("/test")
@@ -39,6 +44,7 @@ end)
 test("Blizzard's panel gets one canvas page, kept out of controller focus, and no controls of its own", function()
     local h, addon = NewAddOn()
     local window = addon.SettingsWindow
+
     eq(h.category.name, "Test App")
     eq(h.category.canvas, window.Canvas, "the page is the view's canvas")
     truthy(window.Canvas.smartNavigationIgnored, "SmartNavigation ignores the canvas and every child")
@@ -49,8 +55,10 @@ end)
 test("the view moves to whichever host shows it, and works in both", function()
     local h, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
+
     window.Canvas:Show()
     local box = window.Controls[state:Id("Meter.enabled")]
+
     truthy(box:IsVisible(), "the canvas shows the view")
     box:Click()
     falsy(state:Get("Meter.enabled"))
@@ -67,6 +75,7 @@ end)
 test("the toolkit registers its canvas page and no Blizzard setting controls", function()
     local h = Harness.New()
     local addon = h:LoadAddon("TheLanKrewToolKit").Addon
+
     eq(h.category.name, addon.Title)
     truthy(addon.SettingsWindow.Canvas.smartNavigationIgnored)
     eq(#h.categories, 1)
@@ -75,10 +84,13 @@ end)
 test("window and external writes each refresh the changed control once", function()
     local h, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
+
     window:Show()
     local box = window.Controls[state:Id("Meter.enabled")]
+
     truthy(box.Check:IsShown(), "on by default")
     local calls = Harness.State(box.Check).calls.SetShown
+
     box:Click()
     falsy(state:Get("Meter.enabled"), "the checkbox flips its row")
     eq(Harness.State(box.Check).calls.SetShown, calls + 1)
@@ -91,8 +103,10 @@ end)
 test("an enum button steps forward on a left click and back on a right click, wrapping", function()
     local _, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
+
     window:Show()
     local button = window.Controls[state:Id("Meter.size")]
+
     eq(button.Label:GetText(), "Wide")
     button:Click("LeftButton")
     eq(state:Get("Meter.size"), "wider")
@@ -105,8 +119,10 @@ end)
 test("number steppers move by the row's step and stop at its bounds", function()
     local _, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
+
     window:Show()
     local control = window.Controls[state:Id("Meter.volume")]
+
     eq(control.Label:GetText(), "0.5")
     control.Plus:Click()
     control.Plus:Click()
@@ -122,10 +138,13 @@ end)
 test("the page list switches pages, and the window fits the page it shows", function()
     local _, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
+
     window:Show()
     local minutes = window.Controls[state:Id("Riddles.minutes")]
+
     falsy(minutes:IsVisible(), "the Riddles page is hidden")
     local mainHeight = window.Frame:GetHeight()
+
     window:Show(2)
     eq(window:Page(), 2)
     truthy(minutes:IsVisible())
@@ -139,6 +158,7 @@ end)
 test("a hidden window, or a page not shown, costs nothing when its rows change", function()
     local h, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
+
     window:Show()
     window:Hide()
     h:ResetCalls()
@@ -161,8 +181,10 @@ end)
 test("hovering a setting shows its label and description; leaving hides them", function()
     local h, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
+
     window:Show()
     local tooltip = h.env.GameTooltip
+
     truthy(h:Hover(window.Controls[state:Id("Meter.enabled")]))
     eq(table.concat(Harness.State(tooltip).lines, "|"), "Meter|A meter.")
     eq(tooltip:GetOwner(), window.Controls[state:Id("Meter.enabled")])
@@ -176,11 +198,14 @@ end)
 test("the page list's buttons switch pages, and the close button closes the window", function()
     local h, addon = NewAddOn()
     local window = addon.SettingsWindow
+
     window:Show()
     local riddles
+
     for _, child in ipairs({ window.View:GetChildren() }) do
         local label = rawget(child, "Label") -- the content frame has none
-        if label and label:GetText() == "Riddles" then
+
+        if label and (label:GetText() == "Riddles") then
             riddles = child
         end
     end
@@ -194,16 +219,20 @@ end)
 test("the window can be dragged by its frame", function()
     local h, addon = NewAddOn()
     local window = addon.SettingsWindow
+
     window:Show()
     local _, _, _, x, y = window.Frame:GetPoint(1)
+
     h:Drag(window.Frame, 40, -20)
     local _, _, _, movedX, movedY = window.Frame:GetPoint(1)
-    truthy(movedX ~= x or movedY ~= y, "it moved")
+
+    truthy((movedX ~= x) or (movedY ~= y), "it moved")
 end)
 
 test("the view moving into Blizzard's panel closes the window rather than leaving it empty", function()
     local _, addon = NewAddOn()
     local window = addon.SettingsWindow
+
     window:Show()
     window.Canvas:Show()
     falsy(window:IsShown(), "no empty window over the panel")
@@ -213,29 +242,36 @@ end)
 test("closing the window while Blizzard's panel shows gives the panel its view back", function()
     local _, addon = NewAddOn()
     local window = addon.SettingsWindow
+
     window.Canvas:Show()
     window:Show()
     window:Hide()
     local box = window.Controls[addon.State:Id("Meter.enabled")]
+
     truthy(box:IsVisible(), "not a blank page")
     eq(window.View:GetParent(), window.Canvas)
 end)
 
 test("number steppers stay on the row's grid and inside its bounds, whatever the bounds", function()
     local h = Harness.New()
+
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
-    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", title = "Test App", savedVariable = "TestDB", slash = { "/test" } })
-    addon:Module("M", { toggle = false, state = {
-        { name = "share", kind = "number", default = 0.8, min = 0, max = 1, step = 0.4, label = "Share" },
-        { name = "free", kind = "number", default = 2, min = 0.5, max = 2.5, label = "Free" },
-    } })
+    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", slash = { "/test" }, title = "Test App" })
+
+    addon:Module("M", { state = {
+            { default = 0.8, kind = "number", label = "Share", max = 1, min = 0, name = "share", step = 0.4 },
+            { default = 2, kind = "number", label = "Free", max = 2.5, min = 0.5, name = "free" },
+        },
+        toggle = false })
     h:Fire("ADDON_LOADED", "TestApp", false)
     local window, state = addon.SettingsWindow, addon.State
+
     window:Show()
     window.Controls[state:Id("M.share")].Plus:Click()
     eq(state:Get("M.share"), 0.8, "1.2 would pass max: the last step on the grid is 0.8")
     local free = window.Controls[state:Id("M.free")]
+
     free.Plus:Click()
     eq(state:Get("M.free"), 2.5, "no step: up to max")
     free.Minus:Click()
@@ -247,9 +283,11 @@ end)
 
 test("a module whose page is the addon's own title joins the main page", function()
     local h = Harness.New()
+
     h:LoadFiles("ByteTerrace_Core")
     h.declared.TestDB = true
-    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", title = "Test App", savedVariable = "TestDB", slash = { "/test" } })
+    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", slash = { "/test" }, title = "Test App" })
+
     addon:Module("M", { label = "M", page = "Test App" })
     h:Fire("ADDON_LOADED", "TestApp", false)
     eq(#addon.SettingsWindow.Pages, 1)

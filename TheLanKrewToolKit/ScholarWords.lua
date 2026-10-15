@@ -43,24 +43,24 @@ ns.ScholarWords = {
     },
     -- { one, many }
     items = {
-        small = {
-            { "apple", "apples" }, { "fish", "fish" }, { "egg", "eggs" }, { "frog", "frogs" },
-            { "gem", "gems" }, { "acorn", "acorns" }, { "carrot", "carrots" }, { "cookie", "cookies" },
-        },
         adventure = {
             { "potion", "potions" }, { "arrow", "arrows" }, { "candle", "candles" }, { "scroll", "scrolls" },
             { "gear", "gears" }, { "mushroom", "mushrooms" }, { "feather", "feathers" }, { "seashell", "seashells" },
             { "apple", "apples" }, { "gem", "gems" }, { "carrot", "carrots" }, { "pie", "pies" },
         },
+        small = {
+            { "apple", "apples" }, { "fish", "fish" }, { "egg", "eggs" }, { "frog", "frogs" },
+            { "gem", "gems" }, { "acorn", "acorns" }, { "carrot", "carrots" }, { "cookie", "cookies" },
+        },
     },
     classNouns = {
-        WARRIOR = "warrior", PALADIN = "paladin", HUNTER = "hunter", ROGUE = "rogue", PRIEST = "priest",
-        SHAMAN = "shaman", MAGE = "mage", WARLOCK = "warlock", DRUID = "druid",
+        DRUID = "druid", HUNTER = "hunter", MAGE = "mage", PALADIN = "paladin", PRIEST = "priest", ROGUE = "rogue",
+        SHAMAN = "shaman", WARLOCK = "warlock", WARRIOR = "warrior",
     },
     classItems = {
-        WARRIOR = { "shield", "shields" }, PALADIN = { "hammer", "hammers" }, HUNTER = { "arrow", "arrows" },
-        ROGUE = { "lockpick", "lockpicks" }, PRIEST = { "bandage", "bandages" }, SHAMAN = { "totem", "totems" },
-        MAGE = { "magic muffin", "magic muffins" }, WARLOCK = { "candle", "candles" }, DRUID = { "acorn", "acorns" },
+        DRUID = { "acorn", "acorns" }, HUNTER = { "arrow", "arrows" }, MAGE = { "magic muffin", "magic muffins" },
+        PALADIN = { "hammer", "hammers" }, PRIEST = { "bandage", "bandages" }, ROGUE = { "lockpick", "lockpicks" },
+        SHAMAN = { "totem", "totems" }, WARLOCK = { "candle", "candles" }, WARRIOR = { "shield", "shields" },
     },
     -- Counting rows: { symbol, one, many }
     countables = { { "*", "star", "stars" }, { "o", "apple", "apples" }, { "@", "fish", "fish" } },
@@ -124,348 +124,365 @@ ns.ScholarWords = {
     -- also comes counted with an item as {A} ("3 apples"), plus {Hero} (first mention), {hero},
     -- {place} and {items}. expr is the calculation behind the answer, in ASCII.
     math = {
+        addBig = {
+            explain = "{a} + {b} = {v}.", expr = "{a} + {b}", hint = "Add the ones first, then add the tens.",
+            prompts = {
+                "{Hero} collects {A} on a quest and {B} on the way home. How many {items} is that in all?",
+                "What is {a} + {b}?",
+                "A shop in {place} has {A} on one shelf and {B} on another. How many {items} in all?",
+            },
+        },
         addSmall = {
+            explain = "{a} + {b} = {v}.", expr = "{a} + {b}",
+            hint = "Start at {a} and count up {b} more. Fingers can help!",
             prompts = {
                 "{Hero} has {A}. Then {hero} finds {B}. How many {items} does {hero} have now?",
                 "A basket holds {A}. The Owl Sage adds {B}. How many {items} are in the basket now?",
                 "What is {a} + {b}?",
                 "In {place}, {Hero} picks up {A}. Then {hero} picks up {B}. How many {items} is that?",
             },
-            hint = "Start at {a} and count up {b} more. Fingers can help!", explain = "{a} + {b} = {v}.", expr = "{a} + {b}",
         },
-        subtractSmall = {
+        bigMultiply = {
+            explain = "{a} x {b} = {v}.", expr = "{a} x {b}",
+            hint = "Multiply the ones, then the tens. Don't forget to carry!",
             prompts = {
-                "{Hero} has {A}. {hero} gives {B} to a friend. How many {items} are left?",
-                "A basket holds {A}. A grumpy murloc grabs {B} and waddles away. How many {items} are left?",
-                "What is {a} - {b}?",
-                "In {place}, {Hero} finds {A}. {hero} shares {B} with a hungry gnome. How many {items} are left?",
+                "A gnome workshop makes {a} gears each day. How many gears does it make in {b} days?",
+                "{Hero} buys {b} stacks of arrows. Each stack has {a} arrows. How many arrows is that?",
+                "What is {a} x {b}?",
             },
-            hint = "Start at {a} and count back {b}.", explain = "{a} - {b} = {v}.", expr = "{a} - {b}",
         },
-        levels = {
-            prompts = { "You are level {b}! How many more levels until you reach level {a}?" },
-            hint = "Start at {b} and count up to {a}.", explain = "{a} - {b} = {v}. Keep questing!", expr = "{a} - {b}",
-        },
-        addBig = {
-            prompts = {
-                "{Hero} collects {A} on a quest and {B} on the way home. How many {items} is that in all?",
-                "What is {a} + {b}?",
-                "A shop in {place} has {A} on one shelf and {B} on another. How many {items} in all?",
-            },
-            hint = "Add the ones first, then add the tens.", explain = "{a} + {b} = {v}.", expr = "{a} + {b}",
-        },
-        subtractBig = {
-            prompts = {
-                "{Hero} has {A}. {hero} sells {B} at the market in {place}. How many {items} are left?",
-                "What is {a} - {b}?",
-                "A wagon carries {A}. A bump in the road knocks off {B}. How many {items} are still on the wagon?",
-            },
-            hint = "Subtract the ones first. If there aren't enough ones, trade a ten for ten ones.",
-            explain = "{a} - {b} = {v}.", expr = "{a} - {b}",
-        },
-        count = {
-            prompts = { "Count the {things}:\n{row}\nHow many {things} are there?" },
-            hint = "Touch each one as you count. Count each one only once!", explain = "There are {counted}.",
-        },
-        compare = {
-            prompts = { "Four gnomes each hold up a number card.\nWhich number is the {word}?" },
-            hint = "Count up from 1. The {word} number is the one you say {when}.", explain = "{v} is the {word} number.",
-        },
-        decimalCompare = {
-            prompts = { "Four gnomes measured their gears in inches.\nWhich number is the {word}?" },
-            hint = "Compare the whole numbers first. If they match, compare the tenths.", explain = "{v} is the {word}.",
-        },
-        missing = {
-            prompts = {
-                "{Hero} had {A}. After finding some more, {hero} has {C}. How many {items} did {hero} find?",
-                "What number goes in the blank?\n{a} + __ = {c}",
-                "A gnome needs {C} for a machine. The gnome has {A}. How many more {items} does the gnome need?",
-            },
-            hint = "Start at {a} and count up until you reach {c}.",
-            explain = "{a} + {v} = {c}, so the missing number is {v}.", expr = "{c} - {a}",
-        },
-        skip = {
-            prompts = {
-                "Hop along with the frog! It jumps by {n}s:\n{shown}, __\nWhat number comes next?",
-                "The gnome's gear clock clicks by {n}s:\n{shown}, __\nWhat number comes next?",
-                "Count by {n}s:\n{shown}, __\nWhat number comes next?",
-            },
-            hint = "How much does each number change? Do that one more time.",
-            explain = "Each number is {n} more, so {v} comes next.", expr = "{start} + 4 x {n}",
-        },
-        skipBack = {
-            prompts = { "Count back by {n}s:\n{shown}, __\nWhat number comes next?" },
-            hint = "How much does each number change? Do that one more time.",
-            explain = "Each number is {n} less, so {v} comes next.", expr = "{start} - 4 x {n}",
-        },
-        coinsMine = {
-            prompts = { "You have {a} copper right now! A friendly gnome gives you {b} more copper. How much copper do you have now?" },
-            hint = "Add the tens, then add the ones.", explain = "{a} + {b} = {v} copper.", expr = "{a} + {b}",
+        change = {
+            explain = "{n} x {p} = {np}, and {m} - {np} = {v} copper.", expr = "{m} - {n} x {p}",
+            hint = "Do it in two steps. What do you need to find out first?",
+            prompts = { "{Hero} buys {n} potions for {p} copper each and pays with {m} copper. How much change does {hero} get?" },
         },
         coinsAdd = {
+            explain = "{a} + {b} = {v} copper.", expr = "{a} + {b}", hint = "Add the tens, then add the ones.",
             prompts = {
                 "{Hero} has {a} copper. {hero} earns {b} copper for helping a farmer. How much copper does {hero} have now?",
                 "{Hero} finds {a} copper in an old boot and {b} copper under a rock. How much copper is that?",
             },
-            hint = "Add the tens, then add the ones.", explain = "{a} + {b} = {v} copper.", expr = "{a} + {b}",
         },
         coinsChange = {
+            explain = "100 - {b} = {v} copper.", expr = "{a} - {b}", hint = "What number plus {b} makes 100?",
             prompts = { "1 silver is worth 100 copper. {Hero} pays 1 silver for a pie that costs {b} copper. How much copper does {hero} get back?" },
-            hint = "What number plus {b} makes 100?", explain = "100 - {b} = {v} copper.", expr = "{a} - {b}",
         },
-        multiply = {
+        coinsMine = {
+            explain = "{a} + {b} = {v} copper.", expr = "{a} + {b}", hint = "Add the tens, then add the ones.",
+            prompts = { "You have {a} copper right now! A friendly gnome gives you {b} more copper. How much copper do you have now?" },
+        },
+        compare = {
+            explain = "{v} is the {word} number.",
+            hint = "Count up from 1. The {word} number is the one you say {when}.",
+            prompts = { "Four gnomes each hold up a number card.\nWhich number is the {word}?" },
+        },
+        count = {
+            explain = "There are {counted}.", hint = "Touch each one as you count. Count each one only once!",
+            prompts = { "Count the {things}:\n{row}\nHow many {things} are there?" },
+        },
+        decimalAdd = {
+            explain = "{da} + {db} = {dv}.", expr = "{da} + {db}",
+            hint = "Line up the decimal points, then add the tenths first.",
+            prompts = { "{Hero} walks {da} miles to {place}, then {db} miles more. How far is that in all?" },
+        },
+        decimalCompare = {
+            explain = "{v} is the {word}.",
+            hint = "Compare the whole numbers first. If they match, compare the tenths.",
+            prompts = { "Four gnomes measured their gears in inches.\nWhich number is the {word}?" },
+        },
+        decimalSubtract = {
+            explain = "{da} - {db} = {dv}.", expr = "{da} - {db}",
+            hint = "Line up the decimal points, then subtract the tenths first.",
+            prompts = { "{Hero} fills a jug with {da} cups of juice and pours out {db} cups. How many cups are left?" },
+        },
+        divide = {
+            explain = "{a} divided by {b} is {v}, because {b} x {v} = {a}.", expr = "{a} / {b}",
+            hint = "Think: {b} times what number makes {a}?",
             prompts = {
-                "What is {a} x {b}?",
-                "Quick! A gnome needs to know:\nWhat is {a} times {b}?",
-                "Solve the rune on the magic scroll:\n{a} x {b} = ?",
+                "{Hero} puts {A} into {b} bags, with the same number in each bag. How many {items} go in each bag?",
+                "What is {a} divided by {b}?",
+                "{A} are shared equally by {b} hunters. How many {items} does each hunter get?",
             },
-            hint = "{a} x {b} means {a} groups of {b}. Try skip counting by {b}.", explain = "{a} x {b} = {v}.", expr = "{a} x {b}",
+        },
+        fraction = {
+            explain = "{t} divided by {d} is {part}. So {n}/{d} of {t} is {v}.", expr = "{t} x {n} / {d}",
+            hint = "Split {t} into {d} equal parts. How many are in {n} of those parts?",
+            prompts = {
+                "{Hero} has {T} and gives {n}/{d} of them to a friend. How many {items} does the friend get?",
+                "What is {n}/{d} of {T}?",
+                "A chest in {place} holds {T}. {n}/{d} of them are sparkly. How many {items} are sparkly?",
+            },
         },
         groups = {
+            explain = "{a} groups of {b} is {a} x {b} = {v}.", expr = "{a} x {b}",
+            hint = "There are {a} groups with {b} in each group. You can multiply!",
             prompts = {
                 "There are {a} murloc huts. Each hut has {b} fish drying in the sun. How many fish are there in all?",
                 "{Hero} fills {a} bags with {b} apples in each bag. How many apples is that?",
                 "The gnomes line up in {a} rows with {b} gnomes in each row. How many gnomes are there?",
                 "A quest giver hands out {a} rewards of {b} silver each. How much silver is that in all?",
             },
-            hint = "There are {a} groups with {b} in each group. You can multiply!",
-            explain = "{a} groups of {b} is {a} x {b} = {v}.", expr = "{a} x {b}",
         },
-        divide = {
+        levels = {
+            explain = "{a} - {b} = {v}. Keep questing!", expr = "{a} - {b}", hint = "Start at {b} and count up to {a}.",
+            prompts = { "You are level {b}! How many more levels until you reach level {a}?" },
+        },
+        missing = {
+            explain = "{a} + {v} = {c}, so the missing number is {v}.", expr = "{c} - {a}",
+            hint = "Start at {a} and count up until you reach {c}.",
             prompts = {
-                "{Hero} puts {A} into {b} bags, with the same number in each bag. How many {items} go in each bag?",
-                "What is {a} divided by {b}?",
-                "{A} are shared equally by {b} hunters. How many {items} does each hunter get?",
+                "{Hero} had {A}. After finding some more, {hero} has {C}. How many {items} did {hero} find?",
+                "What number goes in the blank?\n{a} + __ = {c}",
+                "A gnome needs {C} for a machine. The gnome has {A}. How many more {items} does the gnome need?",
             },
-            hint = "Think: {b} times what number makes {a}?",
-            explain = "{a} divided by {b} is {v}, because {b} x {v} = {a}.", expr = "{a} / {b}",
         },
-        bigMultiply = {
+        moneyAdd = {
+            explain = "{ca} + {cb} = {cv}.", expr = "{a} + {b}",
+            hint = "Add the copper first. If it reaches 100 or more, trade 100 copper for 1 silver.",
             prompts = {
-                "A gnome workshop makes {a} gears each day. How many gears does it make in {b} days?",
-                "{Hero} buys {b} stacks of arrows. Each stack has {a} arrows. How many arrows is that?",
+                "{Hero} has {ca} and sells a wolf pelt for {cb}. How much money does {hero} have now?",
+                "{Hero} has {ca} and wins {cb} at the Darkmoon Faire. How much money does {hero} have now?",
+            },
+        },
+        moneyAddMine = {
+            explain = "{ca} + {cb} = {cv}.", expr = "{a} + {b}",
+            hint = "Add the copper first. If it reaches 100 or more, trade 100 copper for 1 silver.",
+            prompts = { "You have {ca} right now! You sell a wolf pelt for {cb}. How much money do you have now?" },
+        },
+        moneyConvert = {
+            explain = "{a} copper is {cv}.", expr = "{a}",
+            hint = "Every 100 copper makes 1 silver. How many hundreds are in {a}?",
+            prompts = { "A merchant pays {Hero} {a} copper. 100 copper = 1 silver. How much is that in silver and copper?" },
+        },
+        moneySubtract = {
+            explain = "{ca} - {cb} = {cv}.", expr = "{a} - {b}",
+            hint = "Subtract the copper first. If there isn't enough copper, trade 1 silver for 100 copper.",
+            prompts = {
+                "{Hero} has {ca} and buys a potion for {cb}. How much money is left?",
+                "{Hero} has {ca} and pays {cb} to fix a dented shield. How much money is left?",
+            },
+        },
+        moneySubtractMine = {
+            explain = "{ca} - {cb} = {cv}.", expr = "{a} - {b}",
+            hint = "Subtract the copper first. If there isn't enough copper, trade 1 silver for 100 copper.",
+            prompts = { "You have {ca} right now! You buy a potion for {cb}. How much money is left?" },
+        },
+        multiply = {
+            explain = "{a} x {b} = {v}.", expr = "{a} x {b}",
+            hint = "{a} x {b} means {a} groups of {b}. Try skip counting by {b}.",
+            prompts = {
                 "What is {a} x {b}?",
+                "Quick! A gnome needs to know:\nWhat is {a} times {b}?",
+                "Solve the rune on the magic scroll:\n{a} x {b} = ?",
             },
-            hint = "Multiply the ones, then the tens. Don't forget to carry!", explain = "{a} x {b} = {v}.", expr = "{a} x {b}",
+        },
+        order = {
+            explain = "{text} = {v}. Parentheses first, then multiply, then add or subtract!", expr = "{text}",
+            hint = "Parentheses first. Then multiply. Then add and subtract from left to right.",
+            prompts = { "The Owl Sage wrote a puzzle on the scroll:\n{text} = ?", "Solve it in the right order:\n{text} = ?" },
+        },
+        packs = {
+            explain = "{b} x {c} = {bc}, and {a} + {bc} = {v} arrows.", expr = "{a} + {b} x {c}",
+            hint = "Do it in two steps. What do you need to find out first?",
+            prompts = { "{Hero} has {a} arrows and buys {b} packs with {c} arrows in each pack. How many arrows does {hero} have now?" },
+        },
+        percentMine = {
+            explain = "{p}% of {n} is {v} gold.", expr = "{n} x {p} / 100",
+            hint = "{p}% means {p} out of every 100. To find 10%, divide by 10.",
+            prompts = { "You have {n} gold! If you spend {p}% of it on a new saddle, how much gold do you spend?" },
+        },
+        percentOf = {
+            explain = "{p}% of {n} is {v} gold.", expr = "{n} x {p} / 100",
+            hint = "{p}% means {p} out of every 100. To find 10%, divide by 10.",
+            prompts = { "What is {p}% of {n} gold?" },
+        },
+        percentSale = {
+            explain = "{p}% of {n} is {off}, and {n} - {off} = {v} gold.", expr = "{n} - {n} x {p} / 100",
+            hint = "{p}% means {p} out of every 100. Find the discount first.",
+            prompts = {
+                "A shiny {gear} in {place} costs {n} gold. Today it's {p}% off! What is the sale price?",
+                "A merchant sells a {gear} for {n} gold. For heroes, it's {p}% off! What is the sale price?",
+            },
+        },
+        ratio = {
+            explain = "{h} / {x} = {m} groups, and {m} x {y} = {v}.", expr = "{h} / {x} x {y}",
+            hint = "How many groups of {x} are in {h}? Each group needs {y}.",
+            prompts = { "{sentence} If there are {have}, how many {second} are needed?" },
+        },
+        ratioPart = {
+            explain = "{t} / {xy} = {m} groups, and {m} x {y} = {v}.", expr = "{t} / ({x} + {y}) x {y}",
+            hint = "Each group has {x} + {y} = {xy}. How many groups make {t}?",
+            prompts = { "At the fair, there are {x} {first} for every {y} {second}. There are {t} in all. How many are {second}?" },
         },
         remainder = {
+            explain = "{b} x {v} = {bv}, and {bv} + {r} = {a}. So it's {v}, with {r} left over.",
+            hint = "How many groups of {b} fit into {a}? Whatever is left is the remainder.",
             prompts = {
                 "{a} arrows go into quivers that hold {b} each. How many quivers can be filled, and how many arrows are left over?",
                 "{Hero} packs {a} cookies into boxes of {b}. How many boxes get filled, and how many cookies are left over?",
                 "What is {a} divided by {b}? How many, and how many left over?",
             },
-            hint = "How many groups of {b} fit into {a}? Whatever is left is the remainder.",
-            explain = "{b} x {v} = {bv}, and {bv} + {r} = {a}. So it's {v}, with {r} left over.",
-        },
-        moneyConvert = {
-            prompts = { "A merchant pays {Hero} {a} copper. 100 copper = 1 silver. How much is that in silver and copper?" },
-            hint = "Every 100 copper makes 1 silver. How many hundreds are in {a}?", explain = "{a} copper is {cv}.", expr = "{a}",
-        },
-        moneyAdd = {
-            prompts = {
-                "{Hero} has {ca} and sells a wolf pelt for {cb}. How much money does {hero} have now?",
-                "{Hero} has {ca} and wins {cb} at the Darkmoon Faire. How much money does {hero} have now?",
-            },
-            hint = "Add the copper first. If it reaches 100 or more, trade 100 copper for 1 silver.",
-            explain = "{ca} + {cb} = {cv}.", expr = "{a} + {b}",
-        },
-        moneyAddMine = {
-            prompts = { "You have {ca} right now! You sell a wolf pelt for {cb}. How much money do you have now?" },
-            hint = "Add the copper first. If it reaches 100 or more, trade 100 copper for 1 silver.",
-            explain = "{ca} + {cb} = {cv}.", expr = "{a} + {b}",
-        },
-        moneySubtract = {
-            prompts = {
-                "{Hero} has {ca} and buys a potion for {cb}. How much money is left?",
-                "{Hero} has {ca} and pays {cb} to fix a dented shield. How much money is left?",
-            },
-            hint = "Subtract the copper first. If there isn't enough copper, trade 1 silver for 100 copper.",
-            explain = "{ca} - {cb} = {cv}.", expr = "{a} - {b}",
-        },
-        moneySubtractMine = {
-            prompts = { "You have {ca} right now! You buy a potion for {cb}. How much money is left?" },
-            hint = "Subtract the copper first. If there isn't enough copper, trade 1 silver for 100 copper.",
-            explain = "{ca} - {cb} = {cv}.", expr = "{a} - {b}",
-        },
-        fraction = {
-            prompts = {
-                "{Hero} has {T} and gives {n}/{d} of them to a friend. How many {items} does the friend get?",
-                "What is {n}/{d} of {T}?",
-                "A chest in {place} holds {T}. {n}/{d} of them are sparkly. How many {items} are sparkly?",
-            },
-            hint = "Split {t} into {d} equal parts. How many are in {n} of those parts?",
-            explain = "{t} divided by {d} is {part}. So {n}/{d} of {t} is {v}.", expr = "{t} x {n} / {d}",
-        },
-        change = {
-            prompts = { "{Hero} buys {n} potions for {p} copper each and pays with {m} copper. How much change does {hero} get?" },
-            hint = "Do it in two steps. What do you need to find out first?",
-            explain = "{n} x {p} = {np}, and {m} - {np} = {v} copper.", expr = "{m} - {n} x {p}",
-        },
-        packs = {
-            prompts = { "{Hero} has {a} arrows and buys {b} packs with {c} arrows in each pack. How many arrows does {hero} have now?" },
-            hint = "Do it in two steps. What do you need to find out first?",
-            explain = "{b} x {c} = {bc}, and {a} + {bc} = {v} arrows.", expr = "{a} + {b} x {c}",
         },
         share = {
-            prompts = { "{n} gnomes share {t} gears equally. Then each gnome finds {e} more gears. How many gears does each gnome have now?" },
-            hint = "Do it in two steps. What do you need to find out first?",
             explain = "{t} / {n} = {q}, and {q} + {e} = {v} gears each.", expr = "{t} / {n} + {e}",
+            hint = "Do it in two steps. What do you need to find out first?",
+            prompts = { "{n} gnomes share {t} gears equally. Then each gnome finds {e} more gears. How many gears does each gnome have now?" },
         },
-        decimalAdd = {
-            prompts = { "{Hero} walks {da} miles to {place}, then {db} miles more. How far is that in all?" },
-            hint = "Line up the decimal points, then add the tenths first.", explain = "{da} + {db} = {dv}.", expr = "{da} + {db}",
-        },
-        decimalSubtract = {
-            prompts = { "{Hero} fills a jug with {da} cups of juice and pours out {db} cups. How many cups are left?" },
-            hint = "Line up the decimal points, then subtract the tenths first.", explain = "{da} - {db} = {dv}.", expr = "{da} - {db}",
-        },
-        percentMine = {
-            prompts = { "You have {n} gold! If you spend {p}% of it on a new saddle, how much gold do you spend?" },
-            hint = "{p}% means {p} out of every 100. To find 10%, divide by 10.", explain = "{p}% of {n} is {v} gold.", expr = "{n} x {p} / 100",
-        },
-        percentOf = {
-            prompts = { "What is {p}% of {n} gold?" },
-            hint = "{p}% means {p} out of every 100. To find 10%, divide by 10.", explain = "{p}% of {n} is {v} gold.", expr = "{n} x {p} / 100",
-        },
-        percentSale = {
+        skip = {
+            explain = "Each number is {n} more, so {v} comes next.", expr = "{start} + 4 x {n}",
+            hint = "How much does each number change? Do that one more time.",
             prompts = {
-                "A shiny {gear} in {place} costs {n} gold. Today it's {p}% off! What is the sale price?",
-                "A merchant sells a {gear} for {n} gold. For heroes, it's {p}% off! What is the sale price?",
+                "Hop along with the frog! It jumps by {n}s:\n{shown}, __\nWhat number comes next?",
+                "The gnome's gear clock clicks by {n}s:\n{shown}, __\nWhat number comes next?",
+                "Count by {n}s:\n{shown}, __\nWhat number comes next?",
             },
-            hint = "{p}% means {p} out of every 100. Find the discount first.",
-            explain = "{p}% of {n} is {off}, and {n} - {off} = {v} gold.", expr = "{n} - {n} x {p} / 100",
         },
-        ratio = {
-            prompts = { "{sentence} If there are {have}, how many {second} are needed?" },
-            hint = "How many groups of {x} are in {h}? Each group needs {y}.",
-            explain = "{h} / {x} = {m} groups, and {m} x {y} = {v}.", expr = "{h} / {x} x {y}",
+        skipBack = {
+            explain = "Each number is {n} less, so {v} comes next.", expr = "{start} - 4 x {n}",
+            hint = "How much does each number change? Do that one more time.",
+            prompts = { "Count back by {n}s:\n{shown}, __\nWhat number comes next?" },
         },
-        ratioPart = {
-            prompts = { "At the fair, there are {x} {first} for every {y} {second}. There are {t} in all. How many are {second}?" },
-            hint = "Each group has {x} + {y} = {xy}. How many groups make {t}?",
-            explain = "{t} / {xy} = {m} groups, and {m} x {y} = {v}.", expr = "{t} / ({x} + {y}) x {y}",
+        subtractBig = {
+            explain = "{a} - {b} = {v}.", expr = "{a} - {b}",
+            hint = "Subtract the ones first. If there aren't enough ones, trade a ten for ten ones.",
+            prompts = {
+                "{Hero} has {A}. {hero} sells {B} at the market in {place}. How many {items} are left?",
+                "What is {a} - {b}?",
+                "A wagon carries {A}. A bump in the road knocks off {B}. How many {items} are still on the wagon?",
+            },
         },
-        order = {
-            prompts = { "The Owl Sage wrote a puzzle on the scroll:\n{text} = ?", "Solve it in the right order:\n{text} = ?" },
-            hint = "Parentheses first. Then multiply. Then add and subtract from left to right.",
-            explain = "{text} = {v}. Parentheses first, then multiply, then add or subtract!", expr = "{text}",
+        subtractSmall = {
+            explain = "{a} - {b} = {v}.", expr = "{a} - {b}", hint = "Start at {a} and count back {b}.",
+            prompts = {
+                "{Hero} has {A}. {hero} gives {B} to a friend. How many {items} are left?",
+                "A basket holds {A}. A grumpy murloc grabs {B} and waddles away. How many {items} are left?",
+                "What is {a} - {b}?",
+                "In {place}, {Hero} finds {A}. {hero} shares {B} with a hungry gnome. How many {items} are left?",
+            },
         },
     },
     reading = {
-        rhyme = {
-            prompt = "The Owl Sage has a rhyme game!\nWhich word rhymes with \"{target}\"?",
-            hint = "Say \"{target}\" out loud. Listen to the sound at the end.",
-            explain = "\"{target}\" and \"{correct}\" rhyme. They end with the same sound.",
-        },
-        sound = {
-            prompt = "Listen closely, young hero!\nWhich word starts with the same sound as \"{target}\"?",
-            hint = "Say \"{target}\" slowly. Listen to the very first sound.",
-            explain = "\"{target}\" and \"{correct}\" both start with the \"{letter}\" sound.",
-        },
-        sight = {
-            prompt = "Which word fits in the sentence and is spelled right?\n\"{sentence}\"",
-            hint = "Sound it out, and picture the word in a book you know.", explain = "\"{word}\" is spelled {spelled}.",
-        },
-        blend = {
-            prompt = "Say each sound, then put them together:\n{sounds}\nWhat word do you get?",
-            hint = "Say the sounds slowly, then say them faster and faster.", explain = "{sounds} makes \"{target}\"!",
-        },
-        swap = {
-            prompt = "Word magic! Change the \"{was}\" in \"{from}\" to \"{now}\".\nWhat new word do you make?",
-            hint = "Say the word, swap just that one letter, then sound it out.",
-            explain = "Swap \"{was}\" for \"{now}\" and \"{from}\" becomes \"{target}\"!",
-        },
-        unscramble = {
-            prompt = "A gnome mixed up the letters of a word!\n{letters}\nClue: {clue}\nWhich word is it?",
-            hint = "Find the word that uses every letter exactly once.", explain = "The letters spell {word}!",
-        },
-        unscrambleNoClue = {
-            prompt = "A gnome mixed up the letters of a word!\n{letters}\nWhich word is it?",
-            hint = "Clue: {clue}", explain = "The letters spell {word}!",
-        },
-        synonym = {
-            prompt = "Which word means almost the same as \"{word}\"?",
-            hint = "Think of a sentence with \"{word}\". Which word could take its place?",
-            explain = "\"{correct}\" means almost the same as \"{word}\".",
-        },
         antonym = {
+            explain = "\"{correct}\" is the opposite of \"{word}\".",
+            hint = "Opposites are as different as can be, like up and down.",
             prompt = "Which word means the opposite of \"{word}\"?",
-            hint = "Opposites are as different as can be, like up and down.", explain = "\"{correct}\" is the opposite of \"{word}\".",
-        },
-        spelling = {
-            prompt = "Only one word is spelled right. Which one fits?\n\"{sentence}\"",
-            hint = "Look closely at every letter. Which one looks like the words in your books?",
-            explain = "\"{word}\" is spelled {spelled}.",
-        },
-        vocab = {
-            prompt = "{sentence}\nWhat does \"{word}\" mean?",
-            hint = "Read the whole sentence again. The other words are clues to the meaning.", explain = "\"{word}\" means {meaning}.",
         },
         blank = {
-            prompt = "Which word best fills the blank?\n{sentence}",
-            hint = "Try each word in the blank and read the sentence out loud. Which one makes sense?",
             explain = "It makes sense: \"{filled}\"",
+            hint = "Try each word in the blank and read the sentence out loud. Which one makes sense?",
+            prompt = "Which word best fills the blank?\n{sentence}",
+        },
+        blend = {
+            explain = "{sounds} makes \"{target}\"!", hint = "Say the sounds slowly, then say them faster and faster.",
+            prompt = "Say each sound, then put them together:\n{sounds}\nWhat word do you get?",
+        },
+        rhyme = {
+            explain = "\"{target}\" and \"{correct}\" rhyme. They end with the same sound.",
+            hint = "Say \"{target}\" out loud. Listen to the sound at the end.",
+            prompt = "The Owl Sage has a rhyme game!\nWhich word rhymes with \"{target}\"?",
+        },
+        sight = {
+            explain = "\"{word}\" is spelled {spelled}.",
+            hint = "Sound it out, and picture the word in a book you know.",
+            prompt = "Which word fits in the sentence and is spelled right?\n\"{sentence}\"",
+        },
+        sound = {
+            explain = "\"{target}\" and \"{correct}\" both start with the \"{letter}\" sound.",
+            hint = "Say \"{target}\" slowly. Listen to the very first sound.",
+            prompt = "Listen closely, young hero!\nWhich word starts with the same sound as \"{target}\"?",
+        },
+        spelling = {
+            explain = "\"{word}\" is spelled {spelled}.",
+            hint = "Look closely at every letter. Which one looks like the words in your books?",
+            prompt = "Only one word is spelled right. Which one fits?\n\"{sentence}\"",
         },
         story = {
+            explain = "You found it: {answer}.", hint = "Read the story again slowly. The answer is hiding in there!",
             prompt = "{story}\n{question}",
-            hint = "Read the story again slowly. The answer is hiding in there!", explain = "You found it: {answer}.",
+        },
+        swap = {
+            explain = "Swap \"{was}\" for \"{now}\" and \"{from}\" becomes \"{target}\"!",
+            hint = "Say the word, swap just that one letter, then sound it out.",
+            prompt = "Word magic! Change the \"{was}\" in \"{from}\" to \"{now}\".\nWhat new word do you make?",
+        },
+        synonym = {
+            explain = "\"{correct}\" means almost the same as \"{word}\".",
+            hint = "Think of a sentence with \"{word}\". Which word could take its place?",
+            prompt = "Which word means almost the same as \"{word}\"?",
+        },
+        unscramble = {
+            explain = "The letters spell {word}!", hint = "Find the word that uses every letter exactly once.",
+            prompt = "A gnome mixed up the letters of a word!\n{letters}\nClue: {clue}\nWhich word is it?",
+        },
+        unscrambleNoClue = {
+            explain = "The letters spell {word}!", hint = "Clue: {clue}",
+            prompt = "A gnome mixed up the letters of a word!\n{letters}\nWhich word is it?",
+        },
+        vocab = {
+            explain = "\"{word}\" means {meaning}.",
+            hint = "Read the whole sentence again. The other words are clues to the meaning.",
+            prompt = "{sentence}\nWhat does \"{word}\" mean?",
         },
     },
 
     -- Quest riddle text. {title} is the quest's title; the quest book holds every answer.
     quest = {
         giver = {
+            explain = "{answer} gave you \"{title}\".", hint = "Open the quest book: it says who sent you.",
             prompt = "Who gave you the quest \"{title}\"?",
-            hint = "Open the quest book: it says who sent you.", explain = "{answer} gave you \"{title}\".",
         },
         ender = {
+            explain = "You turned in \"{title}\" to {answer}.",
+            hint = "Open the quest book: it says who you reported to.",
             prompt = "Who did you turn in the quest \"{title}\" to?",
-            hint = "Open the quest book: it says who you reported to.", explain = "You turned in \"{title}\" to {answer}.",
         },
         place = {
+            explain = "You took \"{title}\" in {answer}.", hint = "Open the quest book: it says where it began.",
             prompt = "Where were you when you took the quest \"{title}\"?",
-            hint = "Open the quest book: it says where it began.", explain = "You took \"{title}\" in {answer}.",
         },
         endPlace = {
+            explain = "You turned it in at {answer}.", hint = "Open the quest book: it says where you finished.",
             prompt = "Where did you turn in the quest \"{title}\"?",
-            hint = "Open the quest book: it says where you finished.", explain = "You turned it in at {answer}.",
         },
         -- Objectives by kind: an item to bring, a foe to defeat, or a task to do.
         count = {
-            item = {
-                prompt = "The quest \"{title}\" asked you to bring \"{objective}\". How many?",
-                hint = "Open the quest book: it says what to bring.", explain = "It asked for {answer}: {objective}.",
-            },
             foe = {
+                explain = "It asked you to defeat {answer}: {objective}.",
+                hint = "Open the quest book: it says who to defeat.",
                 prompt = "The quest \"{title}\" asked you to defeat \"{objective}\". How many?",
-                hint = "Open the quest book: it says who to defeat.", explain = "It asked you to defeat {answer}: {objective}.",
+            },
+            item = {
+                explain = "It asked for {answer}: {objective}.", hint = "Open the quest book: it says what to bring.",
+                prompt = "The quest \"{title}\" asked you to bring \"{objective}\". How many?",
             },
             task = {
+                explain = "It asked for {answer}: {objective}.", hint = "Open the quest book and read what to do.",
                 prompt = "The quest \"{title}\" asked for \"{objective}\". How many?",
-                hint = "Open the quest book and read what to do.", explain = "It asked for {answer}: {objective}.",
             },
         },
         objective = {
-            item = {
-                prompt = "What did the quest \"{title}\" ask you to bring?",
-                hint = "Open the quest book: it says what to bring.", explain = "\"{title}\" asked you to bring {answer}.",
-            },
             foe = {
+                explain = "\"{title}\" asked you to defeat {answer}.",
+                hint = "Open the quest book: it says who to defeat.",
                 prompt = "Which enemy did the quest \"{title}\" ask you to defeat?",
-                hint = "Open the quest book: it says who to defeat.", explain = "\"{title}\" asked you to defeat {answer}.",
+            },
+            item = {
+                explain = "\"{title}\" asked you to bring {answer}.",
+                hint = "Open the quest book: it says what to bring.",
+                prompt = "What did the quest \"{title}\" ask you to bring?",
             },
             task = {
+                explain = "\"{title}\" asked you to: {answer}.", hint = "Open the quest book and read what to do.",
                 prompt = "What did the quest \"{title}\" ask you to do?",
-                hint = "Open the quest book and read what to do.", explain = "\"{title}\" asked you to: {answer}.",
             },
         },
         title = {
+            explain = "{giver} gave you \"{answer}\".", hint = "Open the quest book: it names who gave you this one.",
             prompt = "{giver} gave you a quest. Which one?",
-            hint = "Open the quest book: it names who gave you this one.", explain = "{giver} gave you \"{answer}\".",
         },
         blank = {
+            explain = "The quest says: \"{filled}\"", hint = "Open the quest book and find that sentence.",
             prompt = "From the quest \"{title}\":\n\"{sentence}\"\nWhich word is missing?",
-            hint = "Open the quest book and find that sentence.", explain = "The quest says: \"{filled}\"",
         },
     },
     -- Wrong answers for quest riddles, by the player's faction (Alliance when it's unknown): the
@@ -503,9 +520,25 @@ ns.ScholarWords = {
             },
         },
         Horde = {
+            foes = {
+                "Mottled Boar", "Scorpid Worker", "Vile Familiar", "Adult Plainstrider", "Battleboar",
+                "Rattlecage Soldier", "Mindless Zombie", "Scarlet Convert",
+            },
+            items = {
+                "Scorpid Worker Tail", "Cactus Apple", "Plainstrider Meat", "Plainstrider Feather", "Duskbat Pelt",
+                "Coarse Thread", "Doom Weed", "Embalming Ichor",
+            },
             names = {
                 "Gornek", "Kaltunk", "Hana'zua", "Zureetha Fargaze", "Foreman Thazz'ril", "Galgar", "Grull Hawkwind",
                 "Greatmother Hawkwind", "Shadow Priest Sarvis", "Executor Arren", "Gretchen Dedmar", "Innkeeper Renee",
+            },
+            places = {
+                "Valley of Trials", "Razor Hill", "Sen'jin Village", "Burning Blade Coven", "Camp Narache",
+                "Bloodhoof Village", "Red Cloud Mesa", "Deathknell", "Brill", "Night Web's Hollow",
+            },
+            tasks = {
+                "Report to Gornek", "Sit near the campfire", "Speak with the innkeeper", "Light the signal fire",
+                "Search the old wagon", "Wake the lazy peons",
             },
             titles = {
                 { "Your Place In The World", "Kaltunk" }, { "Cutting Teeth", "Gornek" },
@@ -514,22 +547,6 @@ ns.ScholarWords = {
                 { "The Hunt Begins", "Grull Hawkwind" }, { "A Humble Task", "Greatmother Hawkwind" },
                 { "Rattling the Rattlecages", "Shadow Priest Sarvis" }, { "Night Web's Hollow", "Executor Arren" },
                 { "The Chill of Death", "Gretchen Dedmar" },
-            },
-            places = {
-                "Valley of Trials", "Razor Hill", "Sen'jin Village", "Burning Blade Coven", "Camp Narache",
-                "Bloodhoof Village", "Red Cloud Mesa", "Deathknell", "Brill", "Night Web's Hollow",
-            },
-            items = {
-                "Scorpid Worker Tail", "Cactus Apple", "Plainstrider Meat", "Plainstrider Feather", "Duskbat Pelt",
-                "Coarse Thread", "Doom Weed", "Embalming Ichor",
-            },
-            foes = {
-                "Mottled Boar", "Scorpid Worker", "Vile Familiar", "Adult Plainstrider", "Battleboar",
-                "Rattlecage Soldier", "Mindless Zombie", "Scarlet Convert",
-            },
-            tasks = {
-                "Report to Gornek", "Sit near the campfire", "Speak with the innkeeper", "Light the signal fire",
-                "Search the old wagon", "Wake the lazy peons",
             },
         },
     },

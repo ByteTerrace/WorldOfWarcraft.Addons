@@ -11,19 +11,19 @@
 
 --- The connected controller's mapped state, or nil for an unavailable device.
 function Harness:GamePadMappedState(id)
-    if id ~= 1 or not self.labelStyle then
+    if (id ~= 1) or not self.labelStyle then
         return nil
     end
     -- [E] gamePad.device's fields; [D] GamePadMappedState and GamePadStick in
     -- GamePadDocumentation.lua (forever). [G] A neutral pad with six axes and sixteen buttons.
     local buttons, axes, sticks = {}, {}, {}
+
     for i = 1, 16 do buttons[i] = false end
     for i = 1, 6 do axes[i] = 0 end
-    for i = 1, 2 do sticks[i] = { x = 0, y = 0, len = 0 } end
+    for i = 1, 2 do sticks[i] = { len = 0, x = 0, y = 0 } end
     return {
-        name = "Test Controller", labelStyle = self.labelStyle,
-        buttonCount = #buttons, axisCount = #axes, stickCount = #sticks,
-        buttons = buttons, axes = axes, sticks = sticks,
+        axes = axes, axisCount = #axes, buttonCount = #buttons, buttons = buttons, labelStyle = self.labelStyle,
+        name = "Test Controller", stickCount = #sticks, sticks = sticks,
     }
 end
 
@@ -35,23 +35,26 @@ end
 -- propagates passes it on. A key no frame consumes goes to the game's bindings and is recorded
 -- in h.propagatedKeys. Returns whether a frame consumed it.
 function Harness:Key(key, down)
-    local script = down and "OnKeyDown" or "OnKeyUp"
+    local script = ((down and "OnKeyDown") or "OnKeyUp")
     local receivers = {}
+
     for i, frame in ipairs(self.frames) do
         if Harness.State(frame).keyboardEnabled and self:IsVisibleWidget(frame) then
             receivers[#receivers + 1] = { frame = frame, strata = self:FrameStrataIndex(frame), level = self:FrameLevel(frame), index = i }
         end
     end
     table.sort(receivers, function(a, b)
-        if a.strata ~= b.strata then return a.strata > b.strata end
-        if a.level ~= b.level then return a.level > b.level end
-        return a.index > b.index
+        if a.strata ~= b.strata then return (a.strata > b.strata) end
+        if a.level ~= b.level then return (a.level > b.level) end
+        return (a.index > b.index)
     end)
     for _, receiver in ipairs(receivers) do
         local frame = receiver.frame
         local state = Harness.State(frame)
+
         if state.keyboardEnabled and self:IsVisibleWidget(frame) then -- an earlier script may change either
             local handler = state.scripts[script]
+
             if handler then
                 self:Protect(handler, frame, key)
             end
@@ -70,8 +73,9 @@ local function CoversScreen(h, region, depth)
     if type(region) == "string" then
         region = rawget(h.env, region)
     end
-    local s = type(region) == "table" and Harness.State(region)
-    if not s or depth > 20 then
+    local s = ((type(region) == "table") and Harness.State(region))
+
+    if not s or (depth > 20) then
         return false
     end
     if region == rawget(h.env, "UIParent") then
@@ -81,19 +85,22 @@ local function CoversScreen(h, region, depth)
         return CoversScreen(h, s.allPoints, depth + 1)
     end
     local byPoint = {}
+
     for _, p in ipairs(s.points) do
         byPoint[p.point] = p
     end
     -- sx, sy: the sign an offset may have to stay flush or push the corner outward.
     local function Corner(point, sx, sy)
         local p = byPoint[point]
-        if p and p.relativePoint == point and p.x * sx >= 0 and p.y * sy >= 0 then
-            return p.relativeTo or s.parent
+
+        if p and (p.relativePoint == point) and ((p.x * sx) >= 0) and ((p.y * sy) >= 0) then
+            return (p.relativeTo or s.parent)
         end
     end
     for _, pair in ipairs({ { "TOPLEFT", -1, 1, "BOTTOMRIGHT", 1, -1 }, { "TOPRIGHT", 1, 1, "BOTTOMLEFT", -1, -1 } }) do
         local a, b = Corner(pair[1], pair[2], pair[3]), Corner(pair[4], pair[5], pair[6])
-        if a ~= nil and a == b and CoversScreen(h, a, depth + 1) then
+
+        if (a ~= nil) and (a == b) and CoversScreen(h, a, depth + 1) then
             return true
         end
     end
@@ -106,6 +113,7 @@ end
 function Harness:WorldClickBlocked()
     for _, frame in ipairs(self.frames) do
         local state = Harness.State(frame)
+
         if state.mouseEnabled and self:IsVisibleWidget(frame) and CoversScreen(self, frame, 0) then
             return true
         end
@@ -123,8 +131,9 @@ end
 -- leave moving keeps following the mouse until StopMovingOrSizing, so a later h:Drag moves it
 -- again. Returns whether the drag started.
 function Harness:Drag(frame, dx, dy, button)
-    button = button or "LeftButton"
+    button = (button or "LeftButton")
     local s = Harness.State(frame)
+
     if not self:IsVisibleWidget(frame) or not s.mouseEnabled or not (s.dragButtons and s.dragButtons[button]) then
         return false
     end
@@ -133,7 +142,7 @@ function Harness:Drag(frame, dx, dy, button)
     if s.moving then
         s.allPoints = nil -- the anchors now carry offsets
         for _, p in ipairs(s.points) do
-            p.x, p.y = p.x + (dx or 0), p.y + (dy or 0)
+            p.x, p.y = (p.x + (dx or 0)), (p.y + (dy or 0))
         end
     end
     if s.scripts.OnDragStop then self:Protect(s.scripts.OnDragStop, frame) end
@@ -146,6 +155,7 @@ end
 -- Returns whether the frame took it.
 function Harness:MouseWheel(frame, delta)
     local s = Harness.State(frame)
+
     if not (s.mouseWheel and self:IsVisibleWidget(frame)) then
         return false
     end
@@ -163,20 +173,21 @@ end
 -- next (seeds 1 to 20 all start near 0.24), so a loop over seeds would see one first draw.
 function Harness:SeedRandom(n)
     assert(type(n) == "number", "SeedRandom: the seed must be a number")
-    self.rng = math.floor(n) % 4294967296
+    self.rng = (math.floor(n) % 4294967296)
     self:NextRandom()
     self:NextRandom()
 end
 
 -- The generator's next value in [0, 1).
 function Harness:NextRandom()
-    self.rng = (1664525 * self.rng + 1013904223) % 4294967296
-    return self.rng / 4294967296
+    self.rng = (((1664525 * self.rng) + 1013904223) % 4294967296)
+    return (self.rng / 4294967296)
 end
 
 -- Lua 5.1's math.random contract: () -> [0, 1), (m) -> integer in [1, m], (m, n) -> [m, n].
 function Harness:Random(...)
     local count = select("#", ...)
+
     if not self.rng then
         return math.random(...)
     end
@@ -184,10 +195,12 @@ function Harness:Random(...)
         error("wrong number of arguments", 3)
     end
     local r = self:NextRandom()
+
     if count == 0 then
         return r
     end
     local m, n = ...
+
     if count == 1 then
         m, n = 1, m
     end
@@ -195,5 +208,5 @@ function Harness:Random(...)
     if m > n then
         error(("bad argument #%d to 'random' (interval is empty)"):format(count), 3)
     end
-    return m + math.floor(r * (n - m + 1))
+    return (m + math.floor(r * ((n - m) + 1)))
 end

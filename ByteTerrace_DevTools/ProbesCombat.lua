@@ -17,33 +17,34 @@ local addonName, ns = ...
 -- Spell and environmental payloads depend on the event kind; mitigation is optional in
 -- Blizzard_DeathRecap's damage tooltip. Neither belongs in the common event shape.
 local ConditionalRecapFields = {
-    spellId = true, spellName = true, spellSchool = true, avoidable = true, deadly = true,
-    environmentalType = true, absorbed = true, resisted = true, blocked = true,
+    absorbed = true, avoidable = true, blocked = true, deadly = true, environmentalType = true, resisted = true,
+    spellId = true, spellName = true, spellSchool = true,
 }
 local RecapSpellFields = { "spellId", "spellName", "spellSchool", "avoidable", "deadly" }
 
 local Probes = ns.Probes
-local Marker, Value, Shape, Text = Probes.Marker, Probes.Value, Probes.Shape, Probes.Text
+local EnumName, Note, Restricted, Token = Probes.EnumName, Probes.Note, Probes.Restricted, Probes.Token
 local Fields, FieldShapes, Same = Probes.Fields, Probes.FieldShapes, Probes.Same
 local First, Joined, JoinSets = Probes.First, Probes.Joined, Probes.JoinSets
-local Note, Token, EnumName, Restricted = Probes.Note, Probes.Token, Probes.EnumName, Probes.Restricted
+local Marker, Shape, Text, Value = Probes.Marker, Probes.Shape, Probes.Text, Probes.Value
 
 -- The current DamageDone session's totals read on leaving combat in a PvP match
 -- (Probes.NotePvPLeftCombat): leftCombat (at PLAYER_REGEN_ENABLED) and later (PvPLaterSeconds on)
 -- each map where the read was ("<IsInInstance type>/<restrictions>", as in "pvp/PvPMatch") to the
 -- set of shapes of totalAmount (the session's) and localTotalAmount (the local player's entry's,
 -- "none" without one).
-local PvPMeter = { leftCombat = {}, later = {} }
+local PvPMeter = { later = {}, leftCombat = {} }
 
 -- Boss encounters and their warnings since load (Probes.NoteEncounterStart, NoteEncounterWarning):
 -- whether ENCOUNTER_START fired, and the sets of ENCOUNTER_WARNING's info shapes and of each of
 -- its fields' shapes.
-local EncounterWarnings = { started = false, shapes = {}, fields = {} }
+local EncounterWarnings = { fields = {}, shapes = {}, started = false }
 
 -- IsInInstance's type ("none", "pvp", "arena", ...), or "secret".
 local function InstanceType()
     local _, instanceType = IsInInstance()
-    return issecretvalue(instanceType) and "secret" or tostring(instanceType)
+
+    return ((issecretvalue(instanceType) and "secret") or tostring(instanceType))
 end
 
 -- Keeps the shapes of the current DamageDone session's totals under when ("leftCombat" or
@@ -52,18 +53,21 @@ local function NotePvPMeter(when)
     local types = Enum.DamageMeterSessionType
     -- secret: totals go through Token; the sources list and isLocalPlayer are checked with issecretvalue
     local session = C_DamageMeter.GetCombatSessionFromType(types.Current, Enum.DamageMeterType.DamageDone)
-    local where = InstanceType() .. "/" .. Restricted.text
+    local where = (InstanceType() .. "/" .. Restricted.text)
     local fields = PvPMeter[when][where]
+
     if not fields then
         fields = {}
         PvPMeter[when][where] = fields
     end
     Note(fields, "totalAmount", Token(session.totalAmount))
     local localTotal, sources = "none", session.combatSources
-    if not issecretvalue(sources) and type(sources) == "table" then
+
+    if not issecretvalue(sources) and (type(sources) == "table") then
         for _, source in ipairs(sources) do
             local isLocalPlayer = source.isLocalPlayer
-            if not issecretvalue(isLocalPlayer) and isLocalPlayer == true then
+
+            if not issecretvalue(isLocalPlayer) and (isLocalPlayer == true) then
                 localTotal = Token(source.totalAmount)
             end
         end
@@ -79,7 +83,8 @@ Probes.PvPMeter, Probes.EncounterWarnings = PvPMeter, EncounterWarnings
 --- damageMeter.pvpSecrecy, then and again PvPLaterSeconds later. Elsewhere it does nothing.
 function Probes.NotePvPLeftCombat()
     local instanceType = InstanceType()
-    if not Restricted.active.PvPMatch and instanceType ~= "pvp" and instanceType ~= "arena" then
+
+    if not Restricted.active.PvPMatch and (instanceType ~= "pvp") and (instanceType ~= "arena") then
         return
     end
     NotePvPMeter("leftCombat")
@@ -96,16 +101,17 @@ end
 --- as its Enum.EncounterEventSeverity name, anything else as its Token.
 function Probes.NoteEncounterWarning(info)
     EncounterWarnings.shapes[Token(info)] = true
-    if issecretvalue(info) or type(info) ~= "table" then
+    if issecretvalue(info) or (type(info) ~= "table") then
         return
     end
     for key, value in pairs(info) do
         if type(key) == "string" then
             local shape = Token(value)
+
             if shape == "boolean" then
                 shape = tostring(value)
-            elseif key == "severity" and shape == "number" then
-                shape = EnumName(Enum.EncounterEventSeverity, value) or "unknown"
+            elseif (key == "severity") and (shape == "number") then
+                shape = (EnumName(Enum.EncounterEventSeverity, value) or "unknown")
             end
             Note(EncounterWarnings.fields, key, shape)
         end
@@ -121,9 +127,10 @@ local function WhichSession(durationSeconds, sessions)
         return "none"
     end
     local latest, previous = sessions[#sessions], sessions[#sessions - 1]
-    if latest and Same(latest.durationSeconds, durationSeconds) == true then
+
+    if latest and (Same(latest.durationSeconds, durationSeconds) == true) then
         return "latest"
-    elseif previous and Same(previous.durationSeconds, durationSeconds) == true then
+    elseif previous and (Same(previous.durationSeconds, durationSeconds) == true) then
         return "previous"
     end
     return "neither"
@@ -132,25 +139,28 @@ end
 -- A damage meter session's session-level fields.
 local function SessionShape(session)
     local sources = session.combatSources
+
     return {
         durationSeconds = Shape(session.durationSeconds),
         totalAmount = Shape(session.totalAmount),
         maxAmount = Shape(session.maxAmount),
         combatSources = Shape(sources),
-        hasSources = not issecretvalue(sources) and type(sources) == "table" and sources[1] ~= nil,
+        hasSources = (not issecretvalue(sources) and (type(sources) == "table") and (sources[1] ~= nil)),
     }
 end
 
 -- The current damage meter session of a DamageMeterType.
 local function CurrentSession(meterType)
     local types = Enum.DamageMeterSessionType
+
     return C_DamageMeter.GetCombatSessionFromType(types.Current, meterType) -- secret: fields go through Shape
 end
 
 -- A damage meter spell (DamageMeterCombatSpell) and its details, as shapes.
 local function SpellShape(spell)
     local details = spell.combatSpellDetails
-    local plainDetails = not issecretvalue(details) and type(details) == "table" and details or {}
+    local plainDetails = ((not issecretvalue(details) and (type(details) == "table") and details) or {})
+
     return {
         fields = Fields(spell), spellID = Shape(spell.spellID), creatureName = Text(spell.creatureName),
         isDeadly = Shape(spell.isDeadly), isAvoidable = Shape(spell.isAvoidable),
@@ -162,12 +172,14 @@ end
 -- The local player's entry in the current session's Deaths list, or nil.
 local function LocalDeath()
     local sources = CurrentSession(Enum.DamageMeterType.Deaths).combatSources
-    if issecretvalue(sources) or type(sources) ~= "table" then
+
+    if issecretvalue(sources) or (type(sources) ~= "table") then
         return nil
     end
     for _, source in ipairs(sources) do
         local isLocalPlayer = source.isLocalPlayer
-        if not issecretvalue(isLocalPlayer) and isLocalPlayer == true then
+
+        if not issecretvalue(isLocalPlayer) and (isLocalPlayer == true) then
             return source
         end
     end
@@ -176,6 +188,7 @@ end
 
 local function CommonRecapShape(event)
     local shapes = FieldShapes(event)
+
     for field in pairs(ConditionalRecapFields) do
         shapes[field] = nil
     end
@@ -186,12 +199,15 @@ end
 -- guarantees at least one sample, so a missing kind never becomes a successful observation.
 local function RecapSpellShapes(kind)
     local result = {}
+
     for _, event in ipairs(C_DeathRecap.GetRecapEvents()) do
         local eventKind = event.event
-        if not issecretvalue(eventKind) and eventKind == kind then
+
+        if not issecretvalue(eventKind) and (eventKind == kind) then
             for _, field in ipairs(RecapSpellFields) do
                 local shape = Shape(event[field])
-                assert(result[field] == nil or #Probes.Diff(result[field], shape) == 0,
+
+                assert((result[field] == nil) or (#Probes.Diff(result[field], shape) == 0),
                     kind .. "." .. field .. " varies between recap events")
                 result[field] = shape
             end
@@ -206,6 +222,7 @@ Probes.Define({
         needs = {},
         run = function()
             local isAvailable, failureReason = C_DamageMeter.IsDamageMeterAvailable()
+
             return { isAvailable = Value(isAvailable), failureReason = Value(failureReason) }
         end,
     },
@@ -215,7 +232,8 @@ Probes.Define({
         run = function()
             local sessions = C_DamageMeter.GetAvailableCombatSessions()
             local first, last = sessions[1], sessions[#sessions]
-            local oldestFirst = Same(first.sessionID, last.sessionID) == false and first.sessionID < last.sessionID
+            local oldestFirst = ((Same(first.sessionID, last.sessionID) == false) and (first.sessionID < last.sessionID))
+
             return {
                 fields = Fields(last), sessionID = Shape(last.sessionID), name = Text(last.name),
                 durationSeconds = Shape(last.durationSeconds), oldestFirst = oldestFirst,
@@ -231,6 +249,7 @@ Probes.Define({
             local current = CurrentSession(Enum.DamageMeterType.DamageDone)
             local expired = C_DamageMeter.GetCombatSessionFromType(types.Expired, Enum.DamageMeterType.DamageDone) -- secret: fields go through Shape
             local currentShape, expiredShape = SessionShape(current), SessionShape(expired)
+
             currentShape.session = WhichSession(current.durationSeconds, sessions)
             expiredShape.session = WhichSession(expired.durationSeconds, sessions)
             return { current = currentShape, expired = expiredShape }
@@ -248,6 +267,7 @@ Probes.Define({
         needs = { "afterFight" },
         run = function()
             local types = Enum.DamageMeterType
+
             return {
                 damageTaken = SessionShape(CurrentSession(types.DamageTaken)),
                 enemyDamageTaken = SessionShape(CurrentSession(types.EnemyDamageTaken)),
@@ -259,6 +279,7 @@ Probes.Define({
         needs = { "afterFight" },
         run = function()
             local guid = UnitGUID("player") -- secret: checked with issecretvalue before it goes back to the API
+
             if issecretvalue(guid) then
                 return { guid = Marker(guid) }
             end
@@ -266,9 +287,10 @@ Probes.Define({
             -- secret: fields go through Shape
             local source = C_DamageMeter.GetCombatSessionSourceFromType(current, damageTaken, guid)
             local spell = First(source.combatSpells)
+
             return {
-                fields = Fields(source), totalAmount = Shape(source.totalAmount), hasSpells = spell ~= nil,
-                combatSpells = Shape(source.combatSpells), spell = spell and SpellShape(spell) or nil,
+                fields = Fields(source), totalAmount = Shape(source.totalAmount), hasSpells = (spell ~= nil),
+                combatSpells = Shape(source.combatSpells), spell = ((spell and SpellShape(spell)) or nil),
             }
         end,
     },
@@ -278,6 +300,7 @@ Probes.Define({
         -- The need saw a plain sources list with an entry, so the first source is there.
         run = function()
             local source = First(CurrentSession(Enum.DamageMeterType.EnemyDamageTaken).combatSources)
+
             return {
                 hasSources = true, fields = Fields(source), name = Text(source.name),
                 sourceGUID = Shape(source.sourceGUID), sourceCreatureID = Shape(source.sourceCreatureID),
@@ -292,13 +315,15 @@ Probes.Define({
         needs = { "diedToMob" },
         run = function()
             local death = LocalDeath()
+
             if not death then
                 return { localPlayer = false }
             end
             local recapID = death.deathRecapID
+
             return {
                 localPlayer = true, fields = Fields(death), deathRecapID = Shape(recapID),
-                hasRecapID = not issecretvalue(recapID) and type(recapID) == "number" and recapID ~= 0,
+                hasRecapID = (not issecretvalue(recapID) and (type(recapID) == "number") and (recapID ~= 0)),
                 deathTimeSeconds = Shape(death.deathTimeSeconds),
             }
         end,
@@ -313,18 +338,22 @@ Probes.Define({
         accumulates = true,
         run = function()
             local death = LocalDeath()
-            local recapID = death and death.deathRecapID
-            if issecretvalue(recapID) or type(recapID) ~= "number" or recapID == 0 then
+            local recapID = (death and death.deathRecapID)
+
+            if issecretvalue(recapID) or (type(recapID) ~= "number") or (recapID == 0) then
                 return { recapID = Shape(recapID) }
             end
             local events = C_DeathRecap.GetRecapEvents(recapID)
             local killingBlow = First(events)
             local byKind = {}
-            for _, event in ipairs(killingBlow and events or {}) do
+
+            for _, event in ipairs((killingBlow and events) or {}) do
                 local kind = event.event
-                if not issecretvalue(kind) and type(kind) == "string" then
+
+                if not issecretvalue(kind) and (type(kind) == "string") then
                     local fields = CommonRecapShape(event)
                     local kept = byKind[kind]
+
                     if kept then
                         for key in pairs(kept) do
                             if fields[key] == nil then
@@ -337,14 +366,15 @@ Probes.Define({
                 end
             end
             local fieldsByKind = {}
+
             for kind, fields in pairs(byKind) do
                 fieldsByKind[kind] = Joined(fields)
             end
             return {
                 recapID = "number", hasRecapEvents = Value(C_DeathRecap.HasRecapEvents(recapID)),
                 events = Shape(events), fieldsByKind = fieldsByKind,
-                killingBlow = killingBlow and CommonRecapShape(killingBlow) or nil,
-                sourceName = killingBlow and Text(killingBlow.sourceName) or nil,
+                killingBlow = ((killingBlow and CommonRecapShape(killingBlow)) or nil),
+                sourceName = ((killingBlow and Text(killingBlow.sourceName)) or nil),
                 maxHealth = Shape(C_DeathRecap.GetRecapMaxHealth(recapID)),
             }
         end,
@@ -366,7 +396,7 @@ Probes.Define({
         needs = { "diedToMob", "deathWatched" },
         accumulates = true,
         run = function()
-            return { types = next(Probes.AfterDeath.types) and Joined(Probes.AfterDeath.types) or "none" }
+            return { types = ((next(Probes.AfterDeath.types) and Joined(Probes.AfterDeath.types)) or "none") }
         end,
     },
     {
@@ -375,16 +405,19 @@ Probes.Define({
         needs = { "diedToMob" },
         run = function()
             local death = LocalDeath()
-            local recapID = death and death.deathRecapID
+            local recapID = (death and death.deathRecapID)
             local latest = C_DeathRecap.GetRecapEvents()
             local blow = First(latest)
             local result = { hasLatest = Value(C_DeathRecap.HasRecapEvents()), latest = Shape(latest) }
-            if blow and not issecretvalue(recapID) and type(recapID) == "number" and recapID ~= 0 then
+
+            if blow and not issecretvalue(recapID) and (type(recapID) == "number") and (recapID ~= 0) then
                 local byID = First(C_DeathRecap.GetRecapEvents(recapID))
                 -- false when a plain field differs, else "secret" when one couldn't be compared.
-                local same = byID ~= nil
-                for _, field in ipairs(byID and { "timestamp", "sourceName", "amount" } or {}) do
+                local same = (byID ~= nil)
+
+                for _, field in ipairs((byID and { "timestamp", "sourceName", "amount" }) or {}) do
                     local verdict = Same(blow[field], byID[field])
+
                     if verdict == false then
                         same = false
                         break
@@ -408,6 +441,7 @@ Probes.Define({
         accumulates = true,
         run = function()
             local edges = Probes.CombatEdges
+
             return { enter = table.concat(edges.enter, " > "), leave = table.concat(edges.leave, " > ") }
         end,
     },
@@ -422,6 +456,7 @@ Probes.Define({
         accumulates = true,
         run = function()
             local meter = Probes.PvPMeter
+
             return { leftCombat = JoinSets(meter.leftCombat), later = JoinSets(meter.later) }
         end,
     },
@@ -438,10 +473,11 @@ Probes.Define({
             local seen = Probes.EncounterWarnings
             local warnings = C_EncounterWarnings
             local result = {
-                heard = next(seen.shapes) ~= nil,
+                heard = (next(seen.shapes) ~= nil),
                 featureAvailable = Value(warnings.IsFeatureAvailable()),
                 featureEnabled = Value(warnings.IsFeatureEnabled()),
             }
+
             if result.heard then
                 result.info, result.fields = Joined(seen.shapes), JoinSets(seen.fields)
             end

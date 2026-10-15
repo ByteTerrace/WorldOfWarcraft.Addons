@@ -81,10 +81,10 @@
 
 local Snapshot = __snapshot
 
-local Enums = Snapshot.enums
-local MenuInputContext = { None = 1, MouseButton = 2, MouseWheel = 3 }   -- MenuConstants.lua
-local MenuResponse = { Open = 1, Refresh = 2, Close = 3, CloseAll = 4 }   -- MenuConstants.lua
 local CheckboxSound = 856 -- SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
+local Enums = Snapshot.enums
+local MenuInputContext = { MouseButton = 2, MouseWheel = 3, None = 1 }   -- MenuConstants.lua
+local MenuResponse = { Close = 3, CloseAll = 4, Open = 1, Refresh = 2 }   -- MenuConstants.lua
 
 -- A description's harness side: its kind and child elements (the private description).
 local Private = setmetatable({}, { __mode = "k" })
@@ -93,10 +93,11 @@ local Methods = {}
 local DescriptionMeta = {
     __index = function(_, key)
         local method = Methods[key]
+
         if method then
             return method
         end
-        if type(key) == "string" and key:find("^%u") then
+        if (type(key) == "string") and key:find("^%u") then
             error("the harness doesn't model menu description method " .. key, 2)
         end
     end,
@@ -106,8 +107,9 @@ local DescriptionMeta = {
 local ActiveHarness
 
 local function NewDescription(kind, text, data)
-    local d = setmetatable({ text = text, data = data }, DescriptionMeta)
-    Private[d] = { kind = kind, elements = {}, initializers = {}, harness = ActiveHarness }
+    local d = setmetatable({ data = data, text = text }, DescriptionMeta)
+
+    Private[d] = { elements = {}, harness = ActiveHarness, initializers = {}, kind = kind }
     return d
 end
 
@@ -115,80 +117,111 @@ end
 local Creators = {
     CreateButton = function(text, callback, data)
         local d = NewDescription("button", text, data)
+
         d.responder = callback
         return d
     end,
-    CreateTitle = function(text) return NewDescription("title", text) end,
-    CreateDivider = function() return NewDescription("divider") end,
-    CreateSpacer = function() return NewDescription("spacer") end,
     CreateCheckbox = function(text, isSelected, setSelected, data)
         local d = NewDescription("checkbox", text, data)
+
         d.isSelected, d.responder, d.defaultResponse = isSelected, setSelected, MenuResponse.Refresh
         return d
     end,
+    CreateDivider = function() return NewDescription("divider") end,
     CreateRadio = function(text, isSelected, setSelected, data)
         local d = NewDescription("radio", text, data)
+
         d.isSelected, d.responder = isSelected, setSelected
         return d
     end,
+    CreateSpacer = function() return NewDescription("spacer") end,
+    CreateTitle = function(text) return NewDescription("title", text) end,
 }
 
 function Methods:Insert(description, index)
     local elements = Private[self].elements
     local queued = self.queuedProxies
+
     self.queuedProxies = nil
     for _, q in ipairs(queued or {}) do
         elements[#elements + 1] = q
     end
-    table.insert(elements, index or #elements + 1, description)
+    table.insert(elements, index or (#elements + 1), description)
     return description
 end
+
 for name, create in pairs(Creators) do
     Methods[name] = function(self, ...) return self:Insert(create(...)) end
 end
+
 function Methods:AddQueuedDescription(description)
-    self.queuedProxies = self.queuedProxies or {}
+    self.queuedProxies = (self.queuedProxies or {})
     table.insert(self.queuedProxies, description)
 end
+
 function Methods:ClearQueuedDescriptions() self.queuedProxies = nil end
+
 local function Queue(self, description, clear)
     if clear then self:ClearQueuedDescriptions() end
     self:AddQueuedDescription(description)
 end
+
 function Methods:QueueTitle(text, _, clear) Queue(self, Creators.CreateTitle(text), clear) end
+
 function Methods:QueueDivider(clear) Queue(self, Creators.CreateDivider(), clear) end
+
 function Methods:QueueSpacer(_, clear) Queue(self, Creators.CreateSpacer(), clear) end
+
 function Methods:SetTag(tag, contextData) self.tag, self.contextData = tag, contextData end
+
 function Methods:GetTag() return self.tag, self.contextData end
+
 function Methods:SetEnabled(isEnabled) self.isEnabled = isEnabled end
+
 function Methods:IsEnabled()
     if self.isEnabled == nil then return true end
     if type(self.isEnabled) == "boolean" then return self.isEnabled end
     return self.isEnabled(self)
 end
+
 function Methods:SetData(data) self.data = data end
+
 function Methods:GetData() return self.data end
+
 function Methods:SetResponder(callback) self.responder = callback end
-function Methods:HasResponder() return self.responder ~= nil end
+
+function Methods:HasResponder() return (self.responder ~= nil) end
+
 function Methods:SetResponse(response) self.defaultResponse = response end
+
 function Methods:SetCanSelect(canSelect) self.canSelect = canSelect end
+
 function Methods:CanSelect()
     if not self:IsEnabled() then return false end
     if self.canSelect == nil then return true end
     if type(self.canSelect) == "boolean" then return self.canSelect end
     return self.canSelect(self:GetData())
 end
+
 function Methods:SetIsSelected(isSelected) self.isSelected = isSelected end
+
 function Methods:IsSelected()
     if self.isSelected == nil then return false end
     return self.isSelected(self:GetData())
 end
+
 function Methods:AddInitializer(initializer) table.insert(Private[self].initializers, initializer) end
+
 function Methods:SetTooltip(initializer) self.tooltipInitializer = initializer end
+
 function Methods:SetOnEnter(onEnter) self.onEnter = onEnter end
+
 function Methods:SetOnLeave(onLeave) self.onLeave = onLeave end
-function Methods:HasElements() return #Private[self].elements > 0 end
+
+function Methods:HasElements() return (#Private[self].elements > 0) end
+
 Methods.CanOpenSubmenu = Methods.HasElements
+
 function Methods:EnumerateElementDescriptions() return ipairs(Private[self].elements) end
 
 -- The menu a responder receives: the harness models none of its methods.
@@ -212,8 +245,9 @@ function Methods:Pick(context, buttonName)
     local menuProxy = setmetatable({}, MenuProxyMeta)
     local override
     local ok = h:Protect(function()
-        override = self.responder(self:GetData(), { context = context, buttonName = buttonName }, menuProxy)
+        override = self.responder(self:GetData(), { buttonName = buttonName, context = context }, menuProxy)
     end)
+
     if ok and override then
         response = override
     end
@@ -231,6 +265,7 @@ end
 
 local function NewMenu(_, root)
     local menu = { root = root }
+
     function menu:Find(text)
         for _, element in ipairs(Walk(root, {})) do
             if element.text == text then
@@ -240,6 +275,7 @@ local function NewMenu(_, root)
     end
     function menu:Texts()
         local texts = {}
+
         for _, element in ipairs(Walk(root, {})) do
             if element.text ~= nil then texts[#texts + 1] = element.text end
         end
@@ -247,6 +283,7 @@ local function NewMenu(_, root)
     end
     function menu:Click(text)
         local element = self:Find(text)
+
         if not element then
             error(("menu %s has no element %q (it has: %s)"):format(tostring(root.tag), tostring(text),
                 table.concat(self:Texts(), ", ")), 2)
@@ -259,7 +296,8 @@ end
 -- UnitPopupManager:OpenMenu's contextData completion for a MENU_UNIT_ tag.
 local function CompleteUnitContext(h, which, contextData)
     contextData.which = which
-    local unit = contextData.unit and h:Unit(contextData.unit)
+    local unit = (contextData.unit and h:Unit(contextData.unit))
+
     if unit then
         contextData.name, contextData.surname = unit.name, unit.surname
     end
@@ -268,14 +306,17 @@ end
 -- Generates the menu tagged tag: Blizzard's title, then every Menu.ModifyMenu callback.
 function Harness:OpenMenu(tag, contextData, owner)
     assert(type(tag) == "string", "OpenMenu: tag must be a string")
-    contextData = contextData or {}
+    contextData = (contextData or {})
     local which = tag:match("^MENU_UNIT_(.+)$")
+
     if which then
         CompleteUnitContext(self, which, contextData)
     end
     local previous = ActiveHarness
+
     ActiveHarness = self
     local root = NewDescription("root")
+
     root:SetTag(tag, contextData)
     if which then
         root:CreateTitle() -- UnitPopupManager's title; its text comes from an initializer
@@ -287,9 +328,9 @@ end
 
 -- SecureModifyMenu: remembers the tag's latest description and runs its callbacks.
 function Harness:ModifyMenu(tag, owner, root)
-    self.generatedMenus[tag] = { root = root, owner = owner }
+    self.generatedMenus[tag] = { owner = owner, root = root }
     for _, registration in ipairs(self.menuCallbacks) do
-        if registration.tag == tag and not registration.unregistered then
+        if (registration.tag == tag) and not registration.unregistered then
             self:Protect(registration.callback, owner, root, root.contextData)
         end
     end
@@ -303,10 +344,12 @@ end
 local Closing = { [MenuResponse.Close] = true, [MenuResponse.CloseAll] = true }
 
 local function CreateContextMenu(h, ownerRegion, generator, ...)
-    ownerRegion = ownerRegion or h.env.UIParent
+    ownerRegion = (ownerRegion or h.env.UIParent)
     local previous = ActiveHarness
+
     ActiveHarness = h
     local root = NewDescription("root")
+
     h:Protect(generator, ownerRegion, root, ...)
     if root.tag then
         h:ModifyMenu(root.tag, ownerRegion, root)
@@ -318,9 +361,11 @@ local function CreateContextMenu(h, ownerRegion, generator, ...)
     end
     local menu = NewMenu(h, root)
     local click = menu.Click
+
     function menu:Click(text)
         local responded, response = click(self, text)
-        if responded and (response == nil or Closing[response]) and h.contextMenu == self then
+
+        if responded and ((response == nil) or Closing[response]) and (h.contextMenu == self) then
             h.contextMenu = nil
         end
         return responded, response
@@ -334,17 +379,19 @@ end
 -- UnitInRaid holds for a raid's members, and UnitInParty, asked next, for any other group's.
 function Harness:TargetMenuWhich()
     local target = self.target
+
     assert(target, "OpenTargetMenu: no target")
     if target == self.player then return "SELF" end
     if target.isPlayer then
         for _, member in ipairs(self.group.members) do
             if member == target then
-                return self:GroupIsRaid() and "RAID_PLAYER" or "PARTY"
+                return ((self:GroupIsRaid() and "RAID_PLAYER") or "PARTY")
             end
         end
         local enemy = target.isEnemy
+
         if enemy == nil then enemy = target.canAttack end
-        return enemy and "ENEMY_PLAYER" or "PLAYER"
+        return ((enemy and "ENEMY_PLAYER") or "PLAYER")
     end
     return "TARGET"
 end
@@ -357,8 +404,9 @@ local function MenuFakes(h)
     return {
         ModifyMenu = function(tag, callback)
             assert(type(tag) == "string")
-            local registration = { tag = tag, callback = callback }
+            local registration = { callback = callback, tag = tag }
             local generated = h.generatedMenus[tag]
+
             if generated then
                 callback(generated.owner, generated.root, generated.root.contextData)
             end
@@ -370,34 +418,37 @@ end
 
 -- ChrClasses colors in bytes (warcraft.wiki.gg Class colors), for the classes the client has.
 local ClassColorBytes = {
-    WARRIOR = { 198, 155, 109 }, PALADIN = { 244, 140, 186 }, HUNTER = { 170, 211, 114 }, ROGUE = { 255, 244, 104 },
-    PRIEST = { 255, 255, 255 }, SHAMAN = { 0, 112, 221 }, MAGE = { 63, 199, 235 }, WARLOCK = { 135, 136, 238 },
-    DRUID = { 255, 124, 10 },
+    DRUID = { 255, 124, 10 }, HUNTER = { 170, 211, 114 }, MAGE = { 63, 199, 235 }, PALADIN = { 244, 140, 186 },
+    PRIEST = { 255, 255, 255 }, ROGUE = { 255, 244, 104 }, SHAMAN = { 0, 112, 221 }, WARLOCK = { 135, 136, 238 },
+    WARRIOR = { 198, 155, 109 },
 }
 
 local function ColorFakes()
     local classColors = {}
+
     for className, bytes in pairs(ClassColorBytes) do
         classColors[className] = {
-            r = bytes[1] / 255, g = bytes[2] / 255, b = bytes[3] / 255,
+            r = (bytes[1] / 255), g = (bytes[2] / 255), b = (bytes[3] / 255),
             colorStr = ("ff%.2x%.2x%.2x"):format(bytes[1], bytes[2], bytes[3]),
         }
     end
     return { RAID_CLASS_COLORS = classColors }
 end
 
-local TooltipTypes = Enums.TooltipDataType
-local LineTypes = Enums.TooltipDataLineType
 local AllTypes = "ALL" -- TooltipDataProcessor.AllTypes
+local LineTypes = Enums.TooltipDataLineType
+local TooltipTypes = Enums.TooltipDataType
 
 -- The unit's TooltipData (see the header), with the secrecy the unit's identity APIs have.
 function Harness:UnitTooltipData(token)
     local unit = self:Unit(token)
+
     if not unit then
         return nil
     end
     local env = self.env
-    self.tooltipSerial = self.tooltipSerial + 1
+
+    self.tooltipSerial = (self.tooltipSerial + 1)
     return {
         type = TooltipTypes.Unit, dataInstanceID = self.tooltipSerial, guid = env.UnitGUID(token),
         lines = { { type = LineTypes.UnitName, leftText = (env.UnitName(token)), unitToken = token } },
@@ -411,13 +462,14 @@ local function LineText(left, right)
     if right == nil then
         return left
     end
-    local text = tostring(Reveal(left)) .. "\t" .. tostring(Reveal(right))
-    return (IsSecret(left) or IsSecret(right)) and Secret(text) or text
+    local text = (tostring(Reveal(left)) .. "\t" .. tostring(Reveal(right)))
+
+    return (((IsSecret(left) or IsSecret(right)) and Secret(text)) or text)
 end
 
 local function AddTooltipLine(s, left, right, r, g, b, wrap)
     s.lines[#s.lines + 1] = LineText(left, right)
-    s.lineInfo[#s.lineInfo + 1] = { left = left, right = right, r = r, g = g, b = b, wrap = wrap }
+    s.lineInfo[#s.lineInfo + 1] = { b = b, g = g, left = left, r = r, right = right, wrap = wrap }
 end
 
 local function ClearTooltipLines(s)
@@ -425,40 +477,55 @@ local function ClearTooltipLines(s)
 end
 
 function TooltipBehaviors.AddLine(s, _, text, r, g, b, wrap) AddTooltipLine(s, text, nil, r, g, b, wrap) end
+
 function TooltipBehaviors.AddDoubleLine(s, _, left, right, r, g, b) AddTooltipLine(s, left, right, r, g, b) end
+
 function TooltipBehaviors.ClearLines(s) ClearTooltipLines(s) end
+
 function TooltipBehaviors.NumLines(s) return #s.lines end
+
 function TooltipBehaviors.SetText(s, _, text, r, g, b, _, wrap)
     ClearTooltipLines(s)
     AddTooltipLine(s, text, nil, r, g, b, wrap)
 end
+
 function TooltipBehaviors.SetOwner(s, _, owner, anchor)
     s.owner, s.anchor, s.tooltipData = owner, anchor, nil
     ClearTooltipLines(s)
 end
+
 function TooltipBehaviors.GetOwner(s) return s.owner end
-function TooltipBehaviors.IsOwned(s, _, frame) return s.owner == frame end
+
+function TooltipBehaviors.IsOwned(s, _, frame) return (s.owner == frame) end
+
 function TooltipBehaviors.GetPrimaryTooltipData(s) return s.tooltipData end
+
 TooltipBehaviors.GetTooltipData = TooltipBehaviors.GetPrimaryTooltipData
+
 function TooltipBehaviors.IsTooltipType(s, _, tooltipType)
-    return s.tooltipData ~= nil and s.tooltipData.type == tooltipType
+    return ((s.tooltipData ~= nil) and (s.tooltipData.type == tooltipType))
 end
+
 -- TooltipUtil.GetDisplayedUnit.
 function TooltipBehaviors.GetUnit(s)
     local data = s.tooltipData
-    if not data or data.type ~= TooltipTypes.Unit then
+
+    if not data or (data.type ~= TooltipTypes.Unit) then
         return
     end
     local h = s.harness
     local guid = data.guid
-    local unit = guid and h.tokenFromGUID(guid)
-    local name = unit and h.env.UnitName(unit)
+    local unit = (guid and h.tokenFromGUID(guid))
+    local name = (unit and h.env.UnitName(unit))
+
     return name, unit, guid
 end
+
 -- TooltipDataHandlerMixin:ProcessInfo for C_TooltipInfo.GetUnit's data.
 function TooltipBehaviors.SetUnit(s, tooltip, token)
     local h = s.harness
     local data = h:UnitTooltipData(token)
+
     if not data then
         s.shown = false
         return false
@@ -483,6 +550,7 @@ end
 function Harness:ShowUnitTooltip(token)
     local tooltip = self.env.GameTooltip
     local s = Harness.State(tooltip)
+
     TooltipBehaviors.SetOwner(s, tooltip, self.env.UIParent, "ANCHOR_NONE")
     TooltipBehaviors.SetUnit(s, tooltip, token)
     return s.tooltipData
@@ -492,7 +560,7 @@ local function TooltipFakes(h)
     return {
         AddTooltipPostCall = function(tooltipType, fn)
             if tooltipType == nil then return end
-            h.tooltipPostCalls[tooltipType] = h.tooltipPostCalls[tooltipType] or {}
+            h.tooltipPostCalls[tooltipType] = (h.tooltipPostCalls[tooltipType] or {})
             table.insert(h.tooltipPostCalls[tooltipType], fn)
         end,
     }
@@ -508,6 +576,7 @@ function Harness:InterfaceFakes(uiParent)
     self.namePlateFrames = {}
     local tooltip = self:CreateWidget("GameTooltip", "GameTooltip", uiParent)
     local s = Harness.State(tooltip)
+
     s.shown = false
     ClearTooltipLines(s)
     self.contextMenu = nil
@@ -519,6 +588,7 @@ function Harness:InterfaceFakes(uiParent)
         TooltipDataProcessor = TooltipFakes(self),
         GameTooltip = tooltip,
     }
+
     for name, value in pairs(ColorFakes()) do
         fakes[name] = value
     end

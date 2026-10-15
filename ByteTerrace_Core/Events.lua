@@ -21,10 +21,11 @@
 -- dispatch does exactly the counting and nothing more.
 
 local ByteTerrace = ByteTerrace
-local SafeCall, TimedCall = ByteTerrace.SafeCall, ByteTerrace.TimedCall
 local CreateFrame, issecretvalue, pairs, pcall = CreateFrame, issecretvalue, pairs, pcall
+local SafeCall, TimedCall = ByteTerrace.SafeCall, ByteTerrace.TimedCall
 
 local Events = {}
+
 Events.__index = Events
 ByteTerrace.Events = Events
 
@@ -35,13 +36,15 @@ local function Wanted(list)
         return nil
     end
     local unit1, unit2, filtered, all
+
     for i = 1, #list do
         local unit = list[i].unit
+
         if not unit then
             all = true
         else
             filtered = true
-            if unit ~= unit1 and unit ~= unit2 then
+            if (unit ~= unit1) and (unit ~= unit2) then
                 if not unit1 then
                     unit1 = unit
                 elseif not unit2 then
@@ -53,23 +56,25 @@ local function Wanted(list)
         end
     end
     if all then
-        return "all", nil, nil, filtered or false
+        return "all", nil, nil, (filtered or false)
     end
-    if unit2 and unit2 < unit1 then
+    if unit2 and (unit2 < unit1) then
         unit1, unit2 = unit2, unit1
     end
-    return unit1 .. "|" .. (unit2 or ""), unit1, unit2, filtered
+    return (unit1 .. "|" .. (unit2 or "")), unit1, unit2, filtered
 end
 
 -- Brings an event's client registration in line with what its handlers want, touching it only
 -- when that changed.
 local function Refresh(self, event)
     local key, unit1, unit2, filtered = Wanted(self.m_handlers[event])
+
     self.m_filtered[event] = filtered
     if key == self.m_registered[event] then
         return
     end
     local frame = self.Frame
+
     if self.m_registered[event] then
         frame:UnregisterEvent(event)
         self.m_registered[event] = nil -- stays accurate if registering below fails
@@ -84,6 +89,7 @@ end
 
 local function Rebuild(self, event)
     local list, copy = self.m_handlers[event], {}
+
     if list then
         for i = 1, #list do
             if not list[i].dead then
@@ -91,27 +97,32 @@ local function Rebuild(self, event)
             end
         end
     end
-    self.m_handlers[event] = #copy > 0 and copy or nil
+    self.m_handlers[event] = (((#copy > 0) and copy) or nil)
     Refresh(self, event)
 end
 
 -- Dispatch while profiling (SetProfiling): the same, with each handler timed into its work.
 local function ProfiledDispatch(self, event, ...)
     local list = self.m_handlers[event]
+
     if not list then
         return
     end
     local counts = self.Counts
-    counts[event] = (counts[event] or 0) + 1
+
+    counts[event] = ((counts[event] or 0) + 1)
     local state = self.m_addon.State
     local unit = ...
-    local comparable = not self.m_filtered[event] or not issecretvalue(unit)
+    local comparable = (not self.m_filtered[event] or not issecretvalue(unit))
+
     state:BeginBatch()
     for i = 1, #list do
         local handle = list[i]
-        if not handle.dead and (not handle.unit or (comparable and handle.unit == unit)) then
+
+        if not handle.dead and (not handle.unit or (comparable and (handle.unit == unit))) then
             local work = handle.work
-            work.events = work.events + 1
+
+            work.events = (work.events + 1)
             TimedCall(work, handle.fn, ...)
         end
     end
@@ -122,9 +133,10 @@ end
 ---@param addon table the owning AddOn, whose state batches each dispatch
 function ByteTerrace.NewEvents(addon)
     local self = setmetatable({
-        Counts = {}, m_addon = addon, m_handlers = {}, m_registered = {}, m_filtered = {},
+        Counts = {}, m_addon = addon, m_filtered = {}, m_handlers = {}, m_registered = {},
     }, Events)
     local frame = CreateFrame("Frame")
+
     frame:SetScript("OnEvent", function(_, event, ...)
         self:Dispatch(event, ...)
     end)
@@ -141,15 +153,18 @@ end
 function Events:On(event, fn, unit, work)
     local list = self.m_handlers[event]
     local copy = {}
+
     if list then
         for i = 1, #list do
             copy[i] = list[i]
         end
     end
-    local handle = { event = event, fn = fn, unit = unit, work = work or self.m_addon.Work }
+    local handle = { event = event, fn = fn, unit = unit, work = (work or self.m_addon.Work) }
+
     copy[#copy + 1] = handle
     self.m_handlers[event] = copy
     local ok, err = pcall(Refresh, self, event)
+
     if not ok then
         self.m_handlers[event] = list
         pcall(Refresh, self, event)
@@ -169,8 +184,10 @@ end
 ---@param handles table[] from On
 function Events:OffAll(handles)
     local events = {}
+
     for i = 1, #handles do
         local handle = handles[i]
+
         if not handle.dead then
             handle.dead = true
             events[handle.event] = true
@@ -186,6 +203,7 @@ end
 ---@return table
 function Events:Registrations()
     local registrations = {}
+
     for event, key in pairs(self.m_registered) do
         registrations[event] = key
     end
@@ -197,28 +215,34 @@ end
 ---@return integer
 function Events:HandlerCount(event)
     local list = self.m_handlers[event]
-    return list and #list or 0
+
+    return ((list and #list) or 0)
 end
 
 --- Runs an event's live handlers as one state batch. The frame's OnEvent calls it.
 ---@param event string
 function Events:Dispatch(event, ...)
     local list = self.m_handlers[event]
+
     if not list then
         return
     end
     local counts = self.Counts
-    counts[event] = (counts[event] or 0) + 1
+
+    counts[event] = ((counts[event] or 0) + 1)
     local state = self.m_addon.State
     local unit = ...
     -- A unit token that is itself secret can't be compared; filtered handlers can't claim it.
-    local comparable = not self.m_filtered[event] or not issecretvalue(unit)
+    local comparable = (not self.m_filtered[event] or not issecretvalue(unit))
+
     state:BeginBatch()
     for i = 1, #list do
         local handle = list[i]
-        if not handle.dead and (not handle.unit or (comparable and handle.unit == unit)) then
+
+        if not handle.dead and (not handle.unit or (comparable and (handle.unit == unit))) then
             local work = handle.work
-            work.events = work.events + 1
+
+            work.events = (work.events + 1)
             SafeCall(handle.fn, ...)
         end
     end
@@ -228,5 +252,5 @@ end
 --- Times each handler into its work record from now on (true), or goes back to Dispatch (false).
 ---@param on boolean
 function Events:SetProfiling(on)
-    self.Dispatch = on and ProfiledDispatch or nil
+    self.Dispatch = ((on and ProfiledDispatch) or nil)
 end

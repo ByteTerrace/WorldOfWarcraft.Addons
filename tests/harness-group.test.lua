@@ -3,11 +3,13 @@
 local function Watch(h, ...)
     local seen = {}
     local frame = h.env.CreateFrame("Frame")
+
     for _, event in ipairs({ ... }) do
         frame:RegisterEvent(event)
     end
     frame:SetScript("OnEvent", function(_, event, ...)
         local parts = { event }
+
         for i = 1, select("#", ...) do
             parts[#parts + 1] = tostring(Reveal((select(i, ...))))
         end
@@ -20,6 +22,7 @@ test("joining a party fires GROUP_JOINED with its category and GUID, then GROUP_
     local h = Harness.New()
     local env = h.env
     local seen = Watch(h, "GROUP_JOINED", "GROUP_LEFT", "GROUP_ROSTER_UPDATE")
+
     falsy(env.IsInGroup())
     eq(env.GetNumGroupMembers(), 0)
     h:JoinGroup("party", { "Bob", "Cara-Other Realm" })
@@ -33,6 +36,7 @@ test("joining a party fires GROUP_JOINED with its category and GUID, then GROUP_
     eq(env.GetNumGroupMembers(env.LE_PARTY_CATEGORY_INSTANCE), 0)
     eq(h.group.members[1].unit, "party1")
     local guid = h.group.guid
+
     h:LeaveGroup()
     eq(seen[3], "GROUP_LEFT:1:" .. guid)
     eq(seen[4], "GROUP_ROSTER_UPDATE")
@@ -44,11 +48,13 @@ end)
 test("group members are named, existing, identity-accessible units, even in combat", function()
     local h = Harness.New({ realm = "Home Realm" })
     local env = h.env
+
     h:JoinGroup("party", { "Bob", "Cara Smith-OtherRealm" })
     h:EnterCombat()
     truthy(env.UnitExists("party1"))
     falsy(env.UnitExists("party3"))
     local name, surname = env.UnitName("party1")
+
     falsy(env.issecretvalue(name), "group members aren't identity-restricted")
     eq(name, "Bob")
     eq(surname, Harness.DEFAULT_SURNAME, "a member named by first name gets the default surname")
@@ -63,8 +69,10 @@ end)
 test("members come and go with GROUP_ROSTER_UPDATE; the last one leaving disbands the group", function()
     local h = Harness.New()
     local env = h.env
+
     h:JoinGroup("party", { "Bob" })
     local seen = Watch(h, "GROUP_LEFT", "GROUP_ROSTER_UPDATE")
+
     h:AddMember("Cara")
     eq(table.concat(seen, ","), "GROUP_ROSTER_UPDATE")
     eq(env.UnitName("party2"), "Cara")
@@ -77,7 +85,7 @@ test("members come and go with GROUP_ROSTER_UPDATE; the last one leaving disband
     throws(function() h:AddMember("Gus") end, "at most 4")
     h:RemoveMember("Cara"); h:RemoveMember("Dan"); h:RemoveMember("Eve")
     h:RemoveMember("Fay")
-    eq(seen[#seen - 1], "GROUP_LEFT:1:" .. "Party-0-0000000000000001")
+    eq(seen[#seen - 1], "GROUP_LEFT:1:Party-0-0000000000000001")
     falsy(env.IsInGroup())
 end)
 
@@ -85,7 +93,8 @@ test("raids give raid tokens, the player a raid index too, and party tokens for 
     local h = Harness.New()
     local env = h.env
     local names = {}
-    for i = 1, 7 do names[i] = "M" .. i end
+
+    for i = 1, 7 do names[i] = ("M" .. i) end
     h:JoinGroup("raid", names)
     truthy(env.IsInRaid())
     truthy(env.IsInRaid(Harness.PARTY_CATEGORY.HOME))
@@ -101,6 +110,7 @@ test("instance groups are LE_PARTY_CATEGORY_INSTANCE, and a raid past five", fun
     local h = Harness.New()
     local env = h.env
     local seen = Watch(h, "GROUP_JOINED")
+
     h:JoinGroup("instance", { "A", "B", "C", "D" })
     eq(seen[1]:match("^GROUP_JOINED:(%d)"), "2")
     truthy(env.IsInGroup(env.LE_PARTY_CATEGORY_INSTANCE))
@@ -118,6 +128,7 @@ local function Result(h, name) return h.env.Enum.SendAddonMessageResult[name] en
 test("prefixes register once, up to 16 characters", function()
     local h = Harness.New()
     local chatInfo, results = h.env.C_ChatInfo, h.env.Enum.RegisterAddonMessagePrefixResult
+
     eq(chatInfo.RegisterAddonMessagePrefix("Krew"), results.Success)
     eq(chatInfo.RegisterAddonMessagePrefix("Krew"), results.DuplicatePrefix)
     eq(chatInfo.RegisterAddonMessagePrefix(""), results.InvalidPrefix)
@@ -133,6 +144,7 @@ end)
 test("SendAddonMessage validates prefix, message and chat type, and records every call", function()
     local h = Harness.New()
     local chatInfo = h.env.C_ChatInfo
+
     h:JoinGroup("party", { "Bob" })
     eq(chatInfo.SendAddonMessage("Unregistered", "hi"), Result(h, "Success"), "sending needs no registration, only receiving does")
     eq(chatInfo.SendAddonMessage(string.rep("p", 17), "hi", "PARTY"), Result(h, "InvalidPrefix"))
@@ -145,6 +157,7 @@ test("SendAddonMessage validates prefix, message and chat type, and records ever
     eq(chatInfo.SendAddonMessage("K", "hi", "GUILD"), Result(h, "NotInGuild"))
     throws(function() chatInfo.SendAddonMessage("K", "hi", "SAY") end, "isn't modeled")
     local first = h.addonMessages[1]
+
     eq(first.prefix, "Unregistered")
     eq(first.chatType, "PARTY", "the default chat type is recorded")
     eq(first.result, 0)
@@ -155,6 +168,7 @@ end)
 test("group chat types need that group", function()
     local h = Harness.New()
     local chatInfo = h.env.C_ChatInfo
+
     for _, chatType in ipairs({ "PARTY", "RAID", "INSTANCE_CHAT" }) do
         eq(chatInfo.SendAddonMessage("K", "hi", chatType), Result(h, "NotInGroup"), chatType .. " outside a group")
     end
@@ -171,6 +185,7 @@ end)
 test("chat messaging lockdown refuses sends: encounter, challenge mode, PvP, map, chat; not combat", function()
     local h = Harness.New()
     local chatInfo = h.env.C_ChatInfo
+
     h:JoinGroup("party", { "Bob" })
     h:EnterCombat()
     falsy(chatInfo.InChatMessagingLockdown(), "combat alone")
@@ -188,6 +203,7 @@ end)
 test("each prefix may burst 10 messages and regains 1 per second; refused sends cost nothing", function()
     local h = Harness.New()
     local chatInfo = h.env.C_ChatInfo
+
     h:JoinGroup("party", { "Bob" })
     for i = 1, 10 do
         eq(chatInfo.SendAddonMessage("K", "m" .. i), Result(h, "Success"), "burst " .. i)
@@ -210,6 +226,7 @@ test("received addon messages reach only registered prefixes, with the full docu
     local h = Harness.New({ realm = "Home Realm" })
     local got = {}
     local frame = h.env.CreateFrame("Frame")
+
     frame:RegisterEvent("CHAT_MSG_ADDON")
     frame:SetScript("OnEvent", function(_, _, ...) got[#got + 1] = { n = select("#", ...), ... } end)
     falsy(h:ReceiveAddonMessage("Krew", "hi", "PARTY", "Bob Doe"), "unregistered: not delivered")
@@ -217,8 +234,9 @@ test("received addon messages reach only registered prefixes, with the full docu
     h.env.C_ChatInfo.RegisterAddonMessagePrefix("Krew")
     truthy(h:ReceiveAddonMessage("Krew", "hi", "PARTY", "Bob Doe-Home Realm"))
     local p = got[1]
+
     eq(p.n, 9)
-    eq(table.concat({ p[1], p[2], p[3], p[4], "[" .. p[5] .. "]", p[6], p[7], "[" .. p[8] .. "]", p[9] }, "|"),
+    eq(table.concat({ p[1], p[2], p[3], p[4], ("[" .. p[5] .. "]"), p[6], p[7], ("[" .. p[8] .. "]"), p[9] }, "|"),
         "Krew|hi|PARTY|Bob Doe|[]|0|0|[]|0", "a sender on your realm is \"First Last\" with no realm")
     h:ReceiveAddonMessage("Krew", "psst", "WHISPER", "Cara Doe-Elsewhere")
     eq(got[2][4], "Cara Doe-Elsewhere", "another realm's sender keeps its realm")
@@ -228,11 +246,13 @@ end)
 test("your own group messages echo back on the next Advance, never during the send", function()
     local h = Harness.New()
     local chatInfo = h.env.C_ChatInfo
+
     chatInfo.RegisterAddonMessagePrefix("Krew")
     local got = {}
     local frame = h.env.CreateFrame("Frame")
+
     frame:RegisterEvent("CHAT_MSG_ADDON")
-    frame:SetScript("OnEvent", function(_, _, _, text, channel, sender) got[#got + 1] = text .. "@" .. channel .. "<" .. sender end)
+    frame:SetScript("OnEvent", function(_, _, _, text, channel, sender) got[#got + 1] = (text .. "@" .. channel .. "<" .. sender) end)
     h:JoinGroup("party", { "Bob" })
     chatInfo.SendAddonMessage("Krew", "hello", "PARTY")
     eq(#got, 0, "not inside the call")

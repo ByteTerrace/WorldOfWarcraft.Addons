@@ -27,12 +27,13 @@ local UnitExists, UnitIsBossMob, UnitIsDeadOrGhost = UnitExists, UnitIsBossMob, 
 local UnitIsFeignDeath, UnitIsPlayer, UnitLevel = UnitIsFeignDeath, UnitIsPlayer, UnitLevel
 
 local function IsTrue(value)
-    return not issecretvalue(value) and value == true
+    return (not issecretvalue(value) and (value == true))
 end
 
 -- Whether the target is elite, rare elite, a world boss, a boss mob or skull level.
 local function IsFormidable()
     local classification = UnitClassification("target")
+
     if not issecretvalue(classification) and FormidableClassifications[classification] then
         return true
     end
@@ -40,20 +41,12 @@ local function IsFormidable()
         return true
     end
     local level = UnitLevel("target")
-    return not issecretvalue(level) and level == SkullLevel
+
+    return (not issecretvalue(level) and (level == SkullLevel))
 end
 
 ByteTerrace.Facts.target = {
-    toggle = false,
     demand = true,
-    state = {
-        { name = "serial", kind = "number", default = 0, persist = false },
-        { name = "enemyPlayer", kind = "boolean", default = false, persist = false },
-        { name = "formidable", kind = "boolean", default = false, persist = false },
-        { name = "alive", kind = "boolean", default = false, persist = false },
-        { name = "died", kind = "boolean", default = false, persist = false },
-        { name = "duelEnded", kind = "boolean", default = false, persist = false },
-    },
     OnEnable = function(module)
         local state = module.Addon.State
         local serial, enemy, formidable = module:Id("serial"), module:Id("enemyPlayer"), module:Id("formidable")
@@ -68,10 +61,11 @@ ByteTerrace.Facts.target = {
                 return false, false, false
             end
             local hostile = IsTrue(UnitCanAttack("player", "target"))
-            if hostile and rank == nil then
+
+            if hostile and (rank == nil) then
                 rank = IsFormidable()
             end
-            return hostile and isPlayer, hostile and rank, not IsTrue(UnitIsDeadOrGhost("target"))
+            return (hostile and isPlayer), (hostile and rank), not IsTrue(UnitIsDeadOrGhost("target"))
         end
 
         -- The same target lives or dies; wasEnemy says it was an enemy player while alive (one may
@@ -88,6 +82,7 @@ ByteTerrace.Facts.target = {
         -- Same target, new facts: attackability, rank, death, resurrection.
         local function Refresh()
             local isEnemy, isFormidable, isAlive = Read()
+
             Live(isAlive, isEnemy or state.Values[enemy])
             if isEnemy and isAlive and not state.Values[enemy] then
                 dueling = true
@@ -109,6 +104,7 @@ ByteTerrace.Facts.target = {
         module:On("PLAYER_TARGET_CHANGED", function()
             isPlayer, rank, dueling = IsTrue(UnitIsPlayer("target")), nil, false
             local isEnemy, isFormidable, isAlive = Read()
+
             state:Set(serial, state.Values[serial] + 1)
             state:Set(died, false)
             state:Set(duelEnded, false)
@@ -120,6 +116,7 @@ ByteTerrace.Facts.target = {
         -- Duels end at 1 HP. Fleeing out of bounds forfeits, so that doesn't count. DUEL_FINISHED
         -- names no one (it also ends a declined request), so it counts only for your duel partner.
         local outOfBounds = false
+
         module:On("DUEL_OUTOFBOUNDS", function() outOfBounds = true end)
         module:On("DUEL_INBOUNDS", function() outOfBounds = false end)
         module:On("DUEL_FINISHED", function()
@@ -140,4 +137,13 @@ ByteTerrace.Facts.target = {
         Refresh()
         dueling = false -- an attackable target at a /reload may be anyone
     end,
+    state = {
+        { default = 0, kind = "number", name = "serial", persist = false },
+        { default = false, kind = "boolean", name = "enemyPlayer", persist = false },
+        { default = false, kind = "boolean", name = "formidable", persist = false },
+        { default = false, kind = "boolean", name = "alive", persist = false },
+        { default = false, kind = "boolean", name = "died", persist = false },
+        { default = false, kind = "boolean", name = "duelEnded", persist = false },
+    },
+    toggle = false,
 }

@@ -6,6 +6,7 @@ local Prefix = "TLKKrew1"
 local function Grouped()
     local h = Harness.New({ saved = {} })
     local ns = h:LoadAddon("TheLanKrewToolKit")
+
     h:JoinGroup("party", { "Mom" })
     h:Echo(false)
     h:Advance(2)
@@ -13,15 +14,16 @@ local function Grouped()
 end
 
 local function Enemy(name, extra)
-    local unit = { name = name or "Bob", isPlayer = true, playerControlled = true, canAttack = true, isEnemy = true,
-        classFile = "ROGUE", className = "Rogue", level = 60, faction = "Alliance" }
+    local unit = { canAttack = true, classFile = "ROGUE", className = "Rogue", faction = "Alliance", isEnemy = true,
+        isPlayer = true, level = 60, name = (name or "Bob"), playerControlled = true }
+
     for key, value in pairs(extra or {}) do unit[key] = value end
     return unit
 end
 
 -- A player's key: Forever's full name (every test player's surname is the harness default).
 local function Key(_, name)
-    return name .. " " .. Harness.DEFAULT_SURNAME
+    return (name .. " " .. Harness.DEFAULT_SURNAME)
 end
 
 local function People(addon)
@@ -30,16 +32,18 @@ end
 
 local function Card(h)
     local card = rawget(h.env, "TheLanKrewToolKitCard")
+
     if not (card and card:IsShown()) then
         return nil
     end
-    return Reveal(Harness.State(card.Title).text) .. "\n" .. Reveal(Harness.State(card.Body).text), card
+    return (Reveal(Harness.State(card.Title).text) .. "\n" .. Reveal(Harness.State(card.Body).text)), card
 end
 
 local function Sent(h, kind)
     local found = {}
+
     for _, message in ipairs(h.addonMessages) do
-        if message.prefix == Prefix and message.message:find("^" .. kind .. ":") then
+        if (message.prefix == Prefix) and message.message:find("^" .. kind .. ":") then
             found[#found + 1] = message.message
         end
     end
@@ -48,34 +52,38 @@ end
 
 -- Your killing blow on an enemy player: PARTY_KILL(your GUID, theirs).
 local function Blow(h, name)
-    h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ name = name, isPlayer = true }))
+    h:Fire("PARTY_KILL", h.env.UnitGUID("player"), h:GUID({ isPlayer = true, name = name }))
 end
 
 -- The player's source in a fight they die in, killed by attacker (a unit table) with one blow.
 local function KilledBy(attacker, blow)
-    blow = blow or {}
+    blow = (blow or {})
     return {
-        unit = "player",
-        spells = { DamageTaken = { {
-            spellID = blow.spellID or 8676, name = blow.name, totalAmount = blow.amount or 700, overkillAmount = 200,
-            details = { unit = attacker, unitName = attacker.name, isMob = not attacker.isPlayer,
-                isPet = blow.isPet == true },
-        } } },
         death = {},
+        spells = { DamageTaken = { {
+            details = { isMob = not attacker.isPlayer, isPet = (blow.isPet == true), unit = attacker,
+                unitName = attacker.name },
+            name = blow.name, overkillAmount = 200, spellID = (blow.spellID or 8676),
+            totalAmount = (blow.amount or 700),
+        } } },
+        unit = "player",
     }
 end
 
 test("the death recap names the enemy player who killed you: it counts, and a card offers the grudge", function()
     local h, addon = Grouped()
     local bob = Enemy("Bob", { race = "Human" })
+
     h:MeterFight({ duration = 5, sources = { KilledBy(bob, { name = "Ambush" }) } })
     local key = Key(h, "Bob")
+
     eq(addon.State:Get("death.killer"), "Bob Doe")
     eq(addon.State:Get("death.killerKind"), "player")
     eq(People(addon):Field(key, "deaths"), 1, "a certain kill counts without a click")
     eq(People(addon):Field(key, "class"), "ROGUE", "the class, from the killer's GUID")
     eq(People(addon):Field(key, "faction"), "Alliance", "the faction, from the killer's race")
     local text, card = Card(h)
+
     truthy(text:find("Slain by Bob Doe\n", 1, true), text)
     truthy(text:find("Ambush for 700. Krew 0 : 1 Bob Doe.", 1, true), text)
     h:Click(card)
@@ -88,18 +96,21 @@ end)
 test("a melee killing blow reads as a melee hit, and the suspect fills in what the recap can't", function()
     local h, addon = Grouped()
     local bob = Enemy("Bob") -- no race: the recap can't tell the faction
+
     h:SetTarget(bob)
-    h:MeterFight({ duration = 5, sources = { KilledBy(bob, { spellID = 6603, amount = 90 }) } })
+    h:MeterFight({ duration = 5, sources = { KilledBy(bob, { amount = 90, spellID = 6603 }) } })
     truthy(Card(h):find("A melee hit for 90.", 1, true), Card(h))
     local key = Key(h, "Bob")
+
     eq(People(addon):Field(key, "level"), 60, "the level of the player you had targeted")
     eq(People(addon):Field(key, "faction"), "Alliance")
 end)
 
 test("a creature's kill asks nothing, even with an enemy player targeted", function()
     local h, addon = Grouped()
+
     h:SetTarget(Enemy("Bob"))
-    h:MeterFight({ duration = 5, sources = { KilledBy({ name = "Kobold Vermin", canAttack = true }) } })
+    h:MeterFight({ duration = 5, sources = { KilledBy({ canAttack = true, name = "Kobold Vermin" }) } })
     eq(addon.State:Get("death.killerKind"), "npc")
     eq(Card(h), nil)
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0)
@@ -107,14 +118,16 @@ end)
 
 test("a pet's kill falls back to asking about the enemy player you were fighting", function()
     local h = Grouped()
+
     h:SetTarget(Enemy("Bob"))
-    h:MeterFight({ duration = 5, sources = { KilledBy({ name = "Wolf", canAttack = true }, { isPet = true }) } })
+    h:MeterFight({ duration = 5, sources = { KilledBy({ canAttack = true, name = "Wolf" }, { isPet = true }) } })
     truthy(Card(h):find("Slain by Bob Doe?", 1, true), Card(h))
 end)
 
 test("a recap that lands after the death still names the killer, with the suspect from the moment of death", function()
     local h, addon = Grouped()
     local bob = Enemy("Bob")
+
     h:SetTarget(bob)
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
@@ -129,6 +142,7 @@ end)
 
 test("the Ask who killed me setting silences the cards; the record still counts", function()
     local h, addon = Grouped()
+
     addon.State:Set("Warband.deathPrompt", false)
     h:MeterFight({ duration = 5, sources = { KilledBy(Enemy("Bob")) } })
     eq(Card(h), nil)
@@ -137,6 +151,7 @@ end)
 
 test("a spree's end names who ended it, for you and the Krew", function()
     local h = Grouped()
+
     for i = 1, 5 do
         Blow(h, "Foe" .. i)
         h:Advance(20)
@@ -148,6 +163,7 @@ test("a spree's end names who ended it, for you and the Krew", function()
     h:ReceiveAddonMessage(Prefix, "STREAK:ended\t7\tCid", "PARTY", "Mom")
     h:ReceiveAddonMessage(Prefix, "STREAK:ended\t7\t|cffff0000Evil", "PARTY", "Mom")
     local notices = {}
+
     for _, notice in ipairs(h.raidNotices) do
         notices[#notices + 1] = notice.text
     end
@@ -157,17 +173,20 @@ end)
 
 test("your own blow is no one's kill", function()
     local h, addon = Grouped()
+
     h:SetTarget(Enemy("Bob"))
-    h:MeterFight({ duration = 5, sources = { KilledBy(h.player, { spellID = 13241, name = "Goblin Sapper Charge" }) } })
+    h:MeterFight({ duration = 5, sources = { KilledBy(h.player, { name = "Goblin Sapper Charge", spellID = 13241 }) } })
     eq(addon.State:Get("death.killerKind"), "self")
     eq(Card(h), nil)
-    local me = h.player.name .. " " .. h.player.surname
+    local me = (h.player.name .. " " .. h.player.surname)
+
     eq(People(addon):Field(me, "deaths"), 0)
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 0)
 end)
 
 test("a recap that comes too late is set aside, not given to your next death", function()
     local h, addon = Grouped()
+
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
     h:Advance(3) -- given up: unknown
@@ -186,6 +205,7 @@ end)
 
 test("a death inside the late window takes its own recap, not the death before's", function()
     local h, addon = Grouped()
+
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
     h:Advance(3) -- the first death gives up: unknown
@@ -206,6 +226,7 @@ end)
 test("two deaths before either recap lands each get their own killer, in order", function()
     local h, addon = Grouped()
     local killers = {}
+
     addon.State:Watch({ "death.attributed" }, function(state) killers[#killers + 1] = state:Get("death.killer") end, true)
     h:EnterCombat()
     h:Fire("PLAYER_DEAD")
@@ -219,6 +240,7 @@ end)
 test("an attacker the recap hides is unknown: the card asks about the suspect", function()
     local h, addon = Grouped()
     local bob = Enemy("Bob")
+
     h:SetTarget(bob)
     h:MeterFight({ duration = 5, sources = { { unit = "player", death = { events = {
         { event = "SPELL_DAMAGE", spellId = 8676, spellName = "Ambush", amount = 700, hideCaster = true,
@@ -233,6 +255,7 @@ end)
 test("a killing blow the recap gives no amount for names the killer without a damage line", function()
     local h, addon = Grouped()
     local bob = Enemy("Bob")
+
     h:MeterFight({ duration = 5, sources = { { unit = "player", death = { events = {
         { event = "SPELL_INSTAKILL", spellId = 8676, spellName = "Ambush", sourceName = Key(h, "Bob"),
             sourceGUID = h:GUID(bob), sourceFlags = 0x548 },
@@ -240,11 +263,13 @@ test("a killing blow the recap gives no amount for names the killer without a da
     eq(addon.State:Get("death.killer"), "Bob Doe")
     eq(addon.State:Get("death.killerDamage"), 0)
     local text = Card(h)
+
     truthy(text:find("Slain by Bob Doe\nKrew 0 : 1 Bob Doe.", 1, true), text)
 end)
 
 test("the recap is read again shortly after the death, even without a meter update", function()
     local h, addon = Grouped()
+
     h:EnterCombat()
     h:SetMeterAvailable(false, "")
     h:Fire("PLAYER_DEAD")

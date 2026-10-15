@@ -7,7 +7,7 @@
 // --check writes nothing and exits 1 when a file would change, naming the first line that would.
 // A file that doesn't parse, or that a pass would break, exits 2 and is left alone.
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { FormatError, PASSES, firstDifference, formatLua } from "../lib/format-lua.mjs";
 import { findAddons, repoRoot, toPosix } from "../lib/repo.mjs";
@@ -26,7 +26,7 @@ export function formatFiles(root = repoRoot) {
         }
     };
     for (const addon of findAddons(root)) add(addon.dir);
-    add(join(root, "tests"), (file) => !file.startsWith("fixtures/"));
+    if (existsSync(join(root, "tests"))) add(join(root, "tests"), (file) => !file.startsWith("fixtures/"));
     return files.sort();
 }
 

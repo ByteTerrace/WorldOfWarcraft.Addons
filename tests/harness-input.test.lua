@@ -6,20 +6,22 @@ test("keyboard input: a keyboard-enabled frame consumes keys unless it propagate
     local env = h.env
     local log = {}
     local under = env.CreateFrame("Frame")
+
     under:EnableKeyboard(true)
     under:SetPropagateKeyboardInput(true)
-    under:SetScript("OnKeyDown", function(_, key) log[#log + 1] = "under:" .. key end)
+    under:SetScript("OnKeyDown", function(_, key) log[#log + 1] = ("under:" .. key) end)
     eq(h:Key("W", true), false, "a propagating frame passes the key on")
     eq(h.propagatedKeys[1], "W")
     local top = env.CreateFrame("Frame")
+
     falsy(top:IsKeyboardEnabled(), "off by default")
     falsy(top:GetPropagateKeyboardInput(), "doesn't propagate by default")
     top:EnableKeyboard(true)
     top:SetScript("OnKeyDown", function(self, key)
-        log[#log + 1] = "top:" .. key
-        self:SetPropagateKeyboardInput(key ~= "ESCAPE" and key ~= "1") -- decided per key, after the script
+        log[#log + 1] = ("top:" .. key)
+        self:SetPropagateKeyboardInput((key ~= "ESCAPE") and (key ~= "1")) -- decided per key, after the script
     end)
-    top:SetScript("OnKeyUp", function(_, key) log[#log + 1] = "topUp:" .. key end)
+    top:SetScript("OnKeyUp", function(_, key) log[#log + 1] = ("topUp:" .. key) end)
     truthy(h:Key("1", true), "consumed")
     h:Key("ENTER", true)
     h:Key("ESCAPE", true)
@@ -30,6 +32,7 @@ test("keyboard input: a keyboard-enabled frame consumes keys unless it propagate
     h:Key("4", true)
     eq(log[#log], "under:4", "hidden frames get nothing")
     local silent = env.CreateFrame("Frame")
+
     silent:EnableKeyboard(true)
     truthy(h:Key("W", true), "a keyboard-enabled frame without a script still consumes the key")
 end)
@@ -38,17 +41,21 @@ test("keyboard order follows strata, then level, then creation", function()
     local h = Harness.New()
     local env = h.env
     local order = {}
+
     local function Receiver(name)
         local f = env.CreateFrame("Frame", nil, env.UIParent)
+
         f:EnableKeyboard(true)
         f:SetPropagateKeyboardInput(true)
         f:SetScript("OnKeyDown", function() order[#order + 1] = name end)
         return f
     end
     local overlay = Receiver("overlay")
+
     overlay:SetFrameStrata("FULLSCREEN_DIALOG")
     local low = Receiver("low")
     local high = Receiver("high")
+
     low:SetFrameLevel(1)
     high:SetFrameLevel(5)
     Receiver("newest")
@@ -58,10 +65,12 @@ end)
 
 test("EnableKeyboard is blocked in combat only on protected frames; SetPropagateKeyboardInput on any", function()
     local h = Harness.New()
+
     h:ExpectBlocked(2) -- the calls under test
     local env = h.env
     local plain = env.CreateFrame("Frame")
     local secure = env.CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
+
     h:EnterCombat()
     plain:EnableKeyboard(true)
     truthy(plain:IsKeyboardEnabled(), "a plain frame enables its keyboard in combat")
@@ -79,10 +88,12 @@ end)
 
 test("frame strata and levels: set, inherited, validated", function()
     local h = Harness.New()
+
     h:ExpectBlocked(1) -- the calls under test
     local env = h.env
     local parent = env.CreateFrame("Frame", nil, env.UIParent)
     local child = env.CreateFrame("Frame", nil, parent)
+
     eq(env.UIParent:GetFrameStrata(), "MEDIUM")
     eq(child:GetFrameStrata(), "MEDIUM")
     eq(parent:GetFrameLevel(), 1)
@@ -94,6 +105,7 @@ test("frame strata and levels: set, inherited, validated", function()
     throws(function() child:SetFrameStrata("SKY") end, "unknown strata")
     throws(function() child:SetFrameLevel(Secret(3)) end, "AllowedWhenUntainted")
     local secure = env.CreateFrame("Frame", nil, nil, "SecureHandlerBaseTemplate")
+
     h:EnterCombat()
     secure:SetFrameStrata("HIGH")
     eq(secure:GetFrameStrata(), "MEDIUM", "protected: blocked on a protected frame in combat")
@@ -102,8 +114,10 @@ end)
 test("a visible, mouse-enabled frame covering the screen blocks world clicks", function()
     local h = Harness.New()
     local env = h.env
+
     falsy(h:WorldClickBlocked())
     local cover = env.CreateFrame("Frame", nil, env.UIParent)
+
     cover:SetAllPoints(env.UIParent)
     falsy(h:WorldClickBlocked(), "not mouse-enabled")
     cover:EnableMouse(true)
@@ -111,6 +125,7 @@ test("a visible, mouse-enabled frame covering the screen blocks world clicks", f
     cover:Hide()
     falsy(h:WorldClickBlocked(), "hidden")
     local corners = env.CreateFrame("Frame", nil, env.UIParent)
+
     corners:EnableMouse(true)
     corners:SetPoint("TOPLEFT", env.UIParent, "TOPLEFT", 0, 0)
     corners:SetPoint("BOTTOMRIGHT", env.UIParent, "BOTTOMRIGHT", 0, 0)
@@ -122,6 +137,7 @@ test("a visible, mouse-enabled frame covering the screen blocks world clicks", f
     corners:SetPoint("CENTER")
     falsy(h:WorldClickBlocked(), "a dialog")
     local inner = env.CreateFrame("Button", nil, cover)
+
     inner:SetAllPoints()
     cover:Show()
     cover:EnableMouse(false)
@@ -136,26 +152,34 @@ Harness.DefineAddOn("RandomProbe", { sources = { [[
 
 test("SeedRandom makes math.random deterministic, even through an addon's local copy", function()
     local h = Harness.New()
+
     truthy(h.env.math.random, "the client has math.random")
     local ns = h:LoadAddon("RandomProbe")
+
     h:SeedRandom(42)
     local first = {}
+
     for i = 1, 20 do first[i] = ns.Roll() end
     h:SeedRandom(42)
     for i = 1, 20 do eq(ns.Roll(), first[i], "roll " .. i) end
     local seen = {}
+
     for _ = 1, 200 do
         local roll = ns.Roll()
-        truthy(roll >= 1 and roll <= 6 and roll == math.floor(roll), "in range")
+
+        truthy((roll >= 1) and (roll <= 6) and (roll == math.floor(roll)), "in range")
         seen[roll] = true
     end
     for face = 1, 6 do truthy(seen[face], "face " .. face) end
     local r = h.env.math.random()
-    truthy(r >= 0 and r < 1)
+
+    truthy((r >= 0) and (r < 1))
     local n = h.env.random(3)
-    truthy(n >= 1 and n <= 3, "random is math.random")
+
+    truthy((n >= 1) and (n <= 3), "random is math.random")
     throws(function() h.env.math.random(5, 1) end, "interval is empty")
     local other = Harness.New()
+
     other:SeedRandom(42)
     eq(other.env.math.random(1, 1000000), (function() h:SeedRandom(42); return h.env.math.random(1, 1000000) end)(),
         "independent of Lua's global random state")
@@ -164,6 +188,7 @@ end)
 test("an error in a gamepad handler reaches the error handler, like a key handler's", function()
     local h = Harness.New()
     local frame = h.env.CreateFrame("Frame")
+
     frame:EnableGamePadButton(true)
     frame:SetScript("OnGamePadButtonDown", function() error("pad broke") end)
     h:ExpectErrors("pad broke")
@@ -173,15 +198,17 @@ end)
 test("C_GamePad answers the connected controller's mapped state as fresh typed arrays", function()
     local h = Harness.New()
     local gamePad = h.env.C_GamePad
+
     eq(gamePad.GetDeviceMappedState(gamePad.GetActiveDeviceID()), nil, "no connected controller")
     h.labelStyle = "Letters"
     local state = gamePad.GetDeviceMappedState(gamePad.GetActiveDeviceID())
+
     eq(state.name, "Test Controller")
     eq(state.labelStyle, "Letters")
     eq(state.buttonCount, #state.buttons)
     eq(state.axisCount, #state.axes)
     eq(state.stickCount, #state.sticks)
-    truthy(state.buttonCount > 0 and state.axisCount > 0 and state.stickCount > 0)
+    truthy((state.buttonCount > 0) and (state.axisCount > 0) and (state.stickCount > 0))
     for _, button in ipairs(state.buttons) do eq(type(button), "boolean") end
     for _, axis in ipairs(state.axes) do eq(type(axis), "number") end
     for _, stick in ipairs(state.sticks) do
@@ -189,6 +216,7 @@ test("C_GamePad answers the connected controller's mapped state as fresh typed a
     end
     state.buttons[1], state.axes[1], state.sticks[1].x = true, 1, 1
     local again = gamePad.GetDeviceMappedState(1)
+
     eq(again.buttons[1], false, "each call answers a fresh table")
     eq(again.axes[1], 0)
     eq(again.sticks[1].x, 0)
@@ -200,6 +228,7 @@ test("the mouse wheel reaches a visible frame with the wheel enabled, and only t
     local h = Harness.New()
     local frame = h.env.CreateFrame("Frame", nil, h.env.UIParent)
     local turns = {}
+
     frame:SetScript("OnMouseWheel", function(_, delta) turns[#turns + 1] = delta end)
     falsy(h:MouseWheel(frame, 1), "the wheel isn't enabled")
     frame:EnableMouseWheel(true)

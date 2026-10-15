@@ -28,38 +28,39 @@ local addonName, ns = ...
 -- Scholar.lua owns the rules and gives it handlers through ns.ScholarView.Init before the first
 -- Show. Its colors, textures and backdrop come from ns.ScholarStyle (ScholarPictures.lua).
 
-local Width = 760
-local Pad = 28
-local AnswerHeight = 72
 local AnswerGap = 14
-local ButtonWidth = (Width - 2 * Pad - AnswerGap) / 2
-local KeycapSize = 34
-local FooterHeight = 44
-local PortraitSize = 60
-local ScreenMargin = 20 -- the least room above and below the panel
-local LiftUp = 30 -- the panel sits this much above the screen's center when it has room
-local ScrollStep = 48 -- pixels the quest book scrolls per wheel notch, arrow key or D-pad press
-local ScrollBarWidth = 6
-local OwlIcon = "Interface\\Icons\\Ability_Hunter_Pet_Owl"
+local AnswerHeight = 72
 local CircleMask = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
-local RightIcon = "Interface\\RAIDFRAME\\ReadyCheck-Ready"
-local SpeakerIcon = "Interface\\Common\\VoiceChat-Speaker"
+local FooterHeight = 44
+local KeycapSize = 34
+local LiftUp = 30 -- the panel sits this much above the screen's center when it has room
 local NumberColor = "|cffffd100"
-local SubjectLabels = { math = "MATH", reading = "READING", quest = "QUEST" }
+local OwlIcon = "Interface\\Icons\\Ability_Hunter_Pet_Owl"
+local Pad = 28
+local PortraitSize = 60
+local RightIcon = "Interface\\RAIDFRAME\\ReadyCheck-Ready"
+local ScreenMargin = 20 -- the least room above and below the panel
+local ScrollBarWidth = 6
+local ScrollStep = 48 -- pixels the quest book scrolls per wheel notch, arrow key or D-pad press
+local SpeakerIcon = "Interface\\Common\\VoiceChat-Speaker"
+local SubjectLabels = { math = "MATH", quest = "QUEST", reading = "READING" }
+local Width = 760
+local ButtonWidth = (((Width - (2 * Pad)) - AnswerGap) / 2)
 local WordColor = "|cff7fe0ff"
 -- Riddles whose wrong choices are misspellings: Read aloud spells their choices.
 local SpelledKinds = { ["reading.spelling"] = true, ["reading.sight"] = true }
 
+local concat = table.concat
 local CreateFrame, UIParent = CreateFrame, UIParent
 local floor, max, min = math.floor, math.max, math.min
-local concat = table.concat
 
 local ScholarStyle = ns.ScholarStyle
+local Backdrop, TextColor = ScholarStyle.Backdrop, ScholarStyle.TextColor
 local Palette, Solid, StarIcon, WrongIcon = ScholarStyle.Palette, ScholarStyle.Solid, ScholarStyle.StarIcon,
     ScholarStyle.WrongIcon
-local Backdrop, TextColor = ScholarStyle.Backdrop, ScholarStyle.TextColor
 
 local ScholarView = {}
+
 ns.ScholarView = ScholarView
 
 local Overlay, Callbacks
@@ -71,8 +72,9 @@ local PlaceFooter
 local function Emphasize(text)
     -- Numbers go first: the color codes added for words contain digits of their own.
     text = text:gsub("(%d[%d,%.]*%%?)", function(number)
-        local trailing = number:match("[,%.]+$") or "" -- a sentence's full stop isn't part of the number
-        return NumberColor .. number:sub(1, #number - #trailing) .. "|r" .. trailing
+        local trailing = (number:match("[,%.]+$") or "") -- a sentence's full stop isn't part of the number
+
+        return (NumberColor .. number:sub(1, #number - #trailing) .. "|r" .. trailing)
     end)
     text = text:gsub('"([^"]+)"', WordColor .. '"%1"|r')
     return text
@@ -89,15 +91,18 @@ local function Split(prompt)
         return "", prompt
     end
     local cut = 0
+
     for i = #prompt - 1, 1, -1 do
         local character = prompt:sub(i, i)
-        if character == "\n" or ((character == "." or character == "!" or character == "?")
+
+        if (character == "\n") or (((character == ".") or (character == "!") or (character == "?"))
             and prompt:sub(i + 1, i + 1):match("%s")) then
             cut = i
             break
         end
     end
     local story = prompt:sub(1, cut):gsub("%s+$", ""):gsub("\n", " ")
+
     return story, (prompt:sub(cut + 1):gsub("^%s+", ""))
 end
 
@@ -109,6 +114,7 @@ end
 -- A word as its letters, for the voice to spell: "BELIEVE" is "B, E, L, I, E, V, E".
 local function Spelled(word)
     local letters = {}
+
     for letter in word:gmatch("%a") do
         letters[#letters + 1] = letter:upper()
     end
@@ -122,12 +128,14 @@ end
 ---@return string
 local function Spoken(puzzle)
     local prompt, choices = Sayable((puzzle.prompt:gsub("\n", " "))), puzzle.choices
+
     if SpelledKinds[puzzle.kind] then
         local spelled = {}
+
         for i, choice in ipairs(choices) do
             spelled[i] = ("Choice %d: %s."):format(i, Spelled(choice))
         end
-        return prompt .. " " .. concat(spelled, " ")
+        return (prompt .. " " .. concat(spelled, " "))
     end
     return ("%s Is it %s, %s, %s, or %s?"):format(prompt, choices[1], choices[2], choices[3], choices[4])
 end
@@ -138,11 +146,13 @@ end
 ---@return string shown
 ---@return string? clue
 local function DisplayPrompt(puzzle)
-    local drawn = puzzle.tiles and concat(puzzle.tiles, " ") or (puzzle.picture and puzzle.picture.row)
+    local drawn = ((puzzle.tiles and concat(puzzle.tiles, " ")) or (puzzle.picture and puzzle.picture.row))
+
     if not drawn then
         return puzzle.prompt, nil
     end
     local lines, clue = {}, nil
+
     for line in (puzzle.prompt .. "\n"):gmatch("([^\n]*)\n") do
         if puzzle.tiles and line:find("^Clue:") then
             clue = line
@@ -180,6 +190,7 @@ local function Paint(button, state)
     button.State = state
     local background, edge, text, key = Palette.button, Palette.edge, Palette.question, Palette.story
     local mark
+
     if state == "hover" then
         edge = Palette.gold
     elseif state == "wrong" then
@@ -193,7 +204,7 @@ local function Paint(button, state)
     button:SetBackdropBorderColor(edge[1], edge[2], edge[3])
     TextColor(button.Text, text)
     TextColor(button.Key, key)
-    Fill(button.Keycap, (state == "dim" or state == "wrong") and Palette.keycapDim or Palette.keycap)
+    Fill(button.Keycap, (((state == "dim") or (state == "wrong")) and Palette.keycapDim) or Palette.keycap)
     button.Mark:SetTexture(mark)
     button.Mark:SetShown(mark ~= nil)
 end
@@ -201,8 +212,10 @@ end
 -- A quick side-to-side shake, for a wrong answer.
 local function CreateShake(button)
     local group = button:CreateAnimationGroup()
+
     for order, offset in ipairs({ 8, -16, 12, -4 }) do
         local move = group:CreateAnimation("Translation")
+
         move:SetOffset(offset, 0)
         move:SetDuration(0.05)
         move:SetOrder(order)
@@ -212,15 +225,18 @@ end
 
 local function CreateAnswer(panel, i)
     local button = CreateFrame("Button", nil, panel, "BackdropTemplate")
+
     button:SetSize(ButtonWidth, AnswerHeight)
     Backdrop(button, 14)
 
     -- The keycap: a raised key at the button's edge, so "1" never reads as part of the answer.
     local cap = button:CreateTexture(nil, "ARTWORK")
+
     cap:SetSize(KeycapSize, KeycapSize)
     cap:SetPoint("LEFT", 12, 0)
     Fill(cap, { 0, 0, 0 }, 0.7)
     local top = button:CreateTexture(nil, "ARTWORK", nil, 1)
+
     top:SetPoint("TOPLEFT", cap, "TOPLEFT", 1, -1)
     top:SetPoint("BOTTOMRIGHT", cap, "BOTTOMRIGHT", -1, 3)
     Fill(top, Palette.keycap)
@@ -253,10 +269,12 @@ end
 -- Small text buttons (Need a hint?, Read aloud, Skip).
 local function CreatePill(parent, text, icon)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+
     Backdrop(button, 10)
     button:SetBackdropColor(0.14, 0.1, 0.05, 1)
     button:SetBackdropBorderColor(Palette.edge[1], Palette.edge[2], Palette.edge[3])
     local left = 12
+
     if icon then
         button.Icon = button:CreateTexture(nil, "ARTWORK")
         button.Icon:SetSize(16, 16)
@@ -275,22 +293,25 @@ end
 
 -- Labels a pill with its key ("LB  Need a hint?") and fits the pill to it.
 local function LabelPill(button, key)
-    button.Label:SetText(key and (NumberColor .. key .. "|r  " .. button.m_text) or button.m_text)
+    button.Label:SetText((key and (NumberColor .. key .. "|r  " .. button.m_text)) or button.m_text)
     -- secret: pill labels are built from fixed strings and key names, so they hold no secret aspect
-    button:SetWidth(button.m_left + button.Label:GetStringWidth() + 14)
+    button:SetWidth((button.m_left + button.Label:GetStringWidth()) + 14)
 end
 
 local function CreateHeader(frame, panel)
     local ring = panel:CreateTexture(nil, "ARTWORK")
+
     ring:SetSize(PortraitSize + 6, PortraitSize + 6)
     ring:SetPoint("TOPLEFT", Pad - 3, -15)
     Fill(ring, Palette.gold)
     local portrait = panel:CreateTexture(nil, "ARTWORK", nil, 1)
+
     portrait:SetSize(PortraitSize, PortraitSize)
     portrait:SetPoint("CENTER", ring, "CENTER")
     portrait:SetTexture(OwlIcon)
     for _, texture in ipairs({ ring, portrait }) do
         local mask = panel:CreateMaskTexture()
+
         mask:SetTexture(CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
         mask:SetAllPoints(texture)
         texture:AddMaskTexture(mask)
@@ -298,7 +319,7 @@ local function CreateHeader(frame, panel)
     frame.Portrait = portrait
 
     frame.Asks = panel:CreateFontString(nil, "OVERLAY", "Game20Font")
-    frame.Asks:SetPoint("TOPLEFT", Pad + PortraitSize + 16, -24)
+    frame.Asks:SetPoint("TOPLEFT", (Pad + PortraitSize) + 16, -24)
     frame.Asks:SetText("The Owl Sage asks...")
     TextColor(frame.Asks, Palette.gold)
     frame.Tag = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -313,6 +334,7 @@ local function CreateHeader(frame, panel)
     frame.StarIcon:SetPoint("RIGHT", frame.Stars, "LEFT", -6, 0)
 
     local bar = CreateFrame("StatusBar", nil, panel, "BackdropTemplate")
+
     bar:SetSize(210, 10)
     bar:SetPoint("TOPRIGHT", -Pad, -52)
     bar:SetStatusBarTexture(Solid)
@@ -339,9 +361,11 @@ local function CreateHeader(frame, panel)
     frame.Gain:SetAlpha(0)
     local rise = frame.Gain:CreateAnimationGroup()
     local up = rise:CreateAnimation("Translation")
+
     up:SetOffset(0, 24)
     up:SetDuration(1)
     local fade = rise:CreateAnimation("Alpha")
+
     fade:SetFromAlpha(1)
     fade:SetToAlpha(0)
     fade:SetStartDelay(0.4)
@@ -357,7 +381,7 @@ end
 
 local function CreateBody(frame, panel)
     frame.Story = panel:CreateFontString(nil, "OVERLAY", "Game20Font")
-    frame.Story:SetWidth(Width - 2 * Pad)
+    frame.Story:SetWidth(Width - (2 * Pad))
     frame.Story:SetJustifyH("LEFT")
     frame.Story:SetWordWrap(true)
     frame.Story:SetSpacing(4)
@@ -365,15 +389,17 @@ local function CreateBody(frame, panel)
     -- The quest book: the quest's text in a scroll frame in the story's place, the wheel scrolling
     -- it, and a slim bar on its right showing where in the text you are.
     local book = CreateFrame("ScrollFrame", nil, panel)
+
     book:EnableMouseWheel(true)
     book:SetScript("OnMouseWheel", function(_, delta) ScholarView.ScrollBook(-delta) end)
     book:Hide()
     local page = CreateFrame("Frame", nil, book)
-    page:SetWidth(Width - 2 * Pad - 16)
+
+    page:SetWidth((Width - (2 * Pad)) - 16)
     book:SetScrollChild(page)
     frame.BookText = page:CreateFontString(nil, "OVERLAY", "Game20Font")
     frame.BookText:SetPoint("TOPLEFT")
-    frame.BookText:SetWidth(Width - 2 * Pad - 16)
+    frame.BookText:SetWidth((Width - (2 * Pad)) - 16)
     frame.BookText:SetJustifyH("LEFT")
     frame.BookText:SetWordWrap(true)
     frame.BookText:SetSpacing(4)
@@ -400,7 +426,7 @@ local function CreateBody(frame, panel)
     frame.Stripe:SetWidth(4)
     Fill(frame.Stripe, Palette.gold)
     frame.Question = panel:CreateFontString(nil, "OVERLAY", "Game30Font")
-    frame.Question:SetWidth(Width - 2 * Pad - 48)
+    frame.Question:SetWidth((Width - (2 * Pad)) - 48)
     frame.Question:SetJustifyH("LEFT")
     frame.Question:SetWordWrap(true)
     frame.Question:SetSpacing(4)
@@ -419,6 +445,7 @@ local function CreateFooter(frame, panel)
     frame.Skip:SetScript("OnClick", function() Callbacks.skip() end)
 
     local banner = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+
     Backdrop(banner, 10)
     banner.Text = banner:CreateFontString(nil, "OVERLAY", "Game18Font")
     banner.Text:SetPoint("LEFT", 14, 0)
@@ -432,16 +459,19 @@ end
 local function Create()
     -- Parentless, so hiding the UI (Alt+Z) doesn't hide the riddle.
     local frame = CreateFrame("Frame", addonName .. "Scholar")
+
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     frame:SetAllPoints(UIParent)
     frame:EnableMouse(true)
     frame:Hide()
 
     local shade = frame:CreateTexture(nil, "BACKGROUND")
+
     shade:SetAllPoints()
     shade:SetColorTexture(0, 0, 0, 0.85)
 
     local panel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+
     panel:SetWidth(Width)
     panel:SetPoint("CENTER", 0, 30)
     Backdrop(panel, 16)
@@ -461,20 +491,23 @@ end
 -- banner stretches to whichever right-hand button comes first.
 function PlaceFooter()
     local y = Overlay.FooterTop
+
     Overlay.Hint:ClearAllPoints()
     Overlay.Hint:SetPoint("TOPLEFT", Pad, -(y + 8))
     local right = -Pad
     local leftmost
+
     for _, pill in ipairs({ Overlay.Speak, Overlay.Skip }) do
         if pill:IsShown() then
             pill:ClearAllPoints()
             pill:SetPoint("TOPRIGHT", right, -(y + 8))
             -- secret: pill sizes come from fixed strings and key names
-            right = right - pill:GetWidth() - 8
+            right = ((right - pill:GetWidth()) - 8)
             leftmost = pill
         end
     end
     local banner = Overlay.Feedback
+
     banner:ClearAllPoints()
     if Overlay.Hint:IsShown() then
         banner:SetPoint("TOPLEFT", Overlay.Hint, "TOPRIGHT", 10, 8)
@@ -496,14 +529,16 @@ end
 local function PlaceThumb()
     local thumb = Overlay.Thumb
     local range, view, offset = Overlay.m_bookRange, Overlay.m_bookView, Overlay.m_bookOffset
-    local scrolls = range > 0
+    local scrolls = (range > 0)
+
     Overlay.Track:SetShown(scrolls)
     thumb:SetShown(scrolls)
     if scrolls then
-        local size = max(view * view / (view + range), 24)
+        local size = max((view * view) / (view + range), 24)
+
         thumb:SetHeight(size)
         thumb:ClearAllPoints()
-        thumb:SetPoint("TOPRIGHT", Overlay.Book, "TOPRIGHT", 0, -(view - size) * offset / range)
+        thumb:SetPoint("TOPRIGHT", Overlay.Book, "TOPRIGHT", 0, (-(view - size) * offset) / range)
     end
 end
 
@@ -511,43 +546,48 @@ end
 -- to be, and centers it on screen (LiftUp above center when there's room). Returns its height.
 local function Layout(hasStory, puzzle)
     local panel, y = Overlay.Panel, 116
+
     Overlay.Book:SetShown(Overlay.m_bookOpen == true)
     if Overlay.m_bookOpen then
         local book = Overlay.Book
         -- secret: the book's text is built from plain strings, as the story's is
         local textHeight = Overlay.BookText:GetStringHeight()
         local view = min(textHeight, Overlay.m_bookRoom)
-        Overlay.m_bookView, Overlay.m_bookRange = view, textHeight - view -- secret: plain, as above
+
+        Overlay.m_bookView, Overlay.m_bookRange = view, (textHeight - view) -- secret: plain, as above
         Overlay.BookPage:SetHeight(textHeight)
         book:ClearAllPoints()
         book:SetPoint("TOPLEFT", Pad, -y)
-        book:SetSize(Width - 2 * Pad, view)
+        book:SetSize(Width - (2 * Pad), view)
         Overlay.Story:Hide()
         PlaceThumb()
-        y = y + view + 14
+        y = ((y + view) + 14)
     elseif hasStory then
         Overlay.Story:ClearAllPoints()
         Overlay.Story:SetPoint("TOPLEFT", Pad, -y)
         Overlay.Story:Show()
         -- secret: riddle text is built from plain strings, so its fontstrings hold no secret aspect
-        y = y + max(Overlay.Story:GetStringHeight(), 24) + 14
+        y = ((y + max(Overlay.Story:GetStringHeight(), 24)) + 14)
     else
         Overlay.Story:Hide()
     end
     local pictureHeight = ns.ScholarPictures.Draw(Overlay.Pictures, puzzle.picture, puzzle.tiles)
+
     if pictureHeight > 0 then
         local pictures = Overlay.Pictures
+
         pictures:ClearAllPoints()
         pictures:SetPoint("TOP", panel, "TOP", 0, -y)
-        y = y + pictureHeight + 14
+        y = ((y + pictureHeight) + 14)
     end
     if Overlay.Clue:IsShown() then
         Overlay.Clue:ClearAllPoints()
         Overlay.Clue:SetPoint("TOP", panel, "TOP", 0, -y)
-        y = y + 26
+        y = (y + 26)
     end
     -- secret: as above
     local questionHeight = Overlay.Question:GetStringHeight()
+
     Overlay.Band:ClearAllPoints()
     Overlay.Band:SetPoint("TOPLEFT", Pad, -y)
     Overlay.Band:SetPoint("TOPRIGHT", -Pad, -y)
@@ -557,19 +597,22 @@ local function Layout(hasStory, puzzle)
     Overlay.Stripe:SetPoint("BOTTOMLEFT", Overlay.Band, "BOTTOMLEFT")
     Overlay.Question:ClearAllPoints()
     Overlay.Question:SetPoint("TOPLEFT", Pad + 22, -(y + 15))
-    y = y + questionHeight + 30 + 20 -- secret: plain, as above
+    y = (((y + questionHeight) + 30) + 20) -- secret: plain, as above
     for i, button in ipairs(Overlay.Buttons) do
-        local column, row = (i - 1) % 2, i > 2 and 1 or 0
+        local column, row = ((i - 1) % 2), (((i > 2) and 1) or 0)
+
         button:ClearAllPoints()
-        button:SetPoint("TOPLEFT", Pad + column * (ButtonWidth + AnswerGap), -(y + row * (AnswerHeight + AnswerGap)))
+        button:SetPoint("TOPLEFT", Pad + (column * (ButtonWidth + AnswerGap)), -(y + (row * (AnswerHeight + AnswerGap))))
     end
-    y = y + 2 * AnswerHeight + AnswerGap + 16
+    y = (((y + (2 * AnswerHeight)) + AnswerGap) + 16)
     Overlay.FooterTop = y
     PlaceFooter()
-    local height = y + FooterHeight + 18
+    local height = ((y + FooterHeight) + 18)
+
     panel:SetHeight(height)
     -- secret: UIParent is the client's own screen-sized frame, anchored to nothing an addon sets
-    local room = (UIParent:GetHeight() - height) / 2 - ScreenMargin
+    local room = (((UIParent:GetHeight() - height) / 2) - ScreenMargin)
+
     panel:ClearAllPoints()
     panel:SetPoint("CENTER", 0, max(0, min(LiftUp, room)))
     return height
@@ -580,14 +623,16 @@ end
 local function ShowFeedback(text, good, said)
     Overlay.m_said = said
     local banner = Overlay.Feedback
-    local tint = good and { 0.07, 0.19, 0.09 } or { 0.17, 0.13, 0.05 }
-    local edge = good and { 0.2, 0.5, 0.26 } or { 0.48, 0.38, 0.13 }
+    local tint = ((good and { 0.07, 0.19, 0.09 }) or { 0.17, 0.13, 0.05 })
+    local edge = ((good and { 0.2, 0.5, 0.26 }) or { 0.48, 0.38, 0.13 })
+
     banner:SetBackdropColor(tint[1], tint[2], tint[3], 1)
     banner:SetBackdropBorderColor(edge[1], edge[2], edge[3])
     banner.Text:SetText(text)
     banner:Show()
     -- On a quest riddle the hint is the quest book, which stays a click away beside the banner.
-    local book = Overlay.m_puzzle and Overlay.m_puzzle.book
+    local book = (Overlay.m_puzzle and Overlay.m_puzzle.book)
+
     Overlay.Hint:SetShown(book ~= nil)
     PlaceFooter()
 end
@@ -601,8 +646,8 @@ local function ShowProgress(info)
     else
         Overlay.Rank:SetText(Hex(Palette.story) .. info.rank .. "|r")
     end
-    if info.streak and info.streak >= 2 then
-        Overlay.Streak:SetText(info.streak .. " in a row" .. (info.levelUp and "  -  harder riddles!" or ""))
+    if info.streak and (info.streak >= 2) then
+        Overlay.Streak:SetText(info.streak .. " in a row" .. ((info.levelUp and "  -  harder riddles!") or ""))
         Overlay.Streak:Show()
     else
         Overlay.Streak:Hide()
@@ -630,37 +675,42 @@ end
 ---  puzzle.book's text) }
 ---@return table frame the full-screen overlay
 function ScholarView.Show(puzzle, info)
-    Overlay = Overlay or Create()
-    local subject = SubjectLabels[puzzle.subject] and puzzle.subject or "math"
+    Overlay = (Overlay or Create())
+    local subject = ((SubjectLabels[puzzle.subject] and puzzle.subject) or "math")
+
     Overlay.Tag:SetText(("%s%s|r  %s-  %s|r"):format(Hex(Palette[subject]), SubjectLabels[subject],
         Hex(Palette.muted), puzzle.title))
     ShowProgress(info)
     local shown, clue = DisplayPrompt(puzzle)
     local story, question = Split(shown)
-    Overlay.Clue:SetText(clue and Emphasize(clue) or "")
+
+    Overlay.Clue:SetText((clue and Emphasize(clue)) or "")
     Overlay.Clue:SetShown(clue ~= nil)
     Overlay.Story:SetText(Emphasize(story))
     Overlay.m_puzzle, Overlay.m_story, Overlay.m_bookOpen, Overlay.m_said = puzzle, story, false, nil
-    Overlay.Question:SetFontObject(#question <= 44 and "Game30Font" or "Game24Font")
+    Overlay.Question:SetFontObject(((#question <= 44) and "Game30Font") or "Game24Font")
     Overlay.Question:SetText(Emphasize(question))
     for i, button in ipairs(Overlay.Buttons) do
         local choice = puzzle.choices[i]
+
         button.Key:SetText(info.keys[i])
         button.Text:SetFontObject(AnswerFont(choice))
         button.Text:SetText(choice)
-        local missed = info.wrong and info.wrong[i]
+        local missed = (info.wrong and info.wrong[i])
+
         button:SetEnabled(not missed)
-        Paint(button, missed and "wrong" or "normal")
+        Paint(button, (missed and "wrong") or "normal")
     end
-    local actions = info.actions or {}
+    local actions = (info.actions or {})
+
     LabelPill(Overlay.Speak, actions.speak)
-    Overlay.Hint.m_text, Overlay.Hint.m_key = info.book and "Quest book" or "Need a hint?", actions.hint
+    Overlay.Hint.m_text, Overlay.Hint.m_key = ((info.book and "Quest book") or "Need a hint?"), actions.hint
     LabelPill(Overlay.Hint, actions.hint)
     LabelPill(Overlay.Skip, actions.skip)
-    Overlay.Speak:SetShown(info.canSpeak and true or false)
+    Overlay.Speak:SetShown((info.canSpeak and true) or false)
     Overlay.Feedback:Hide()
     Overlay.Hint:Show()
-    Overlay.Skip:SetShown(info.canSkip and true or false)
+    Overlay.Skip:SetShown((info.canSkip and true) or false)
     Layout(story ~= "", puzzle)
     Overlay:Show()
     return Overlay
@@ -673,17 +723,18 @@ end
 function ScholarView.ToggleBook()
     local puzzle = Overlay.m_puzzle
     local open = not Overlay.m_bookOpen
+
     Overlay.m_bookOpen = false
     if open then
         -- The room the book may take: the screen, less the margins and the rest of the riddle.
         local rest = Layout(false, puzzle)
         -- secret: as in Layout
-        Overlay.m_bookRoom = max(UIParent:GetHeight() - 2 * ScreenMargin - rest - 14, 2 * ScrollStep)
+        Overlay.m_bookRoom = max(((UIParent:GetHeight() - (2 * ScreenMargin)) - rest) - 14, 2 * ScrollStep)
         Overlay.BookText:SetText(Emphasize(puzzle.book))
         Overlay.Book:SetVerticalScroll(0)
         Overlay.m_bookOpen, Overlay.m_bookOffset = true, 0
     end
-    Overlay.Hint.m_text = open and "Close book" or "Quest book"
+    Overlay.Hint.m_text = ((open and "Close book") or "Quest book")
     LabelPill(Overlay.Hint, Overlay.Hint.m_key)
     Layout(Overlay.m_story ~= "", puzzle)
 end
@@ -695,7 +746,7 @@ function ScholarView.ScrollBook(notches)
     if not ScholarView.BookOpen() then
         return
     end
-    Overlay.m_bookOffset = max(0, min(Overlay.m_bookOffset + notches * ScrollStep, Overlay.m_bookRange))
+    Overlay.m_bookOffset = max(0, min(Overlay.m_bookOffset + (notches * ScrollStep), Overlay.m_bookRange))
     Overlay.Book:SetVerticalScroll(Overlay.m_bookOffset)
     PlaceThumb()
 end
@@ -703,7 +754,7 @@ end
 --- Whether the quest book is open.
 ---@return boolean
 function ScholarView.BookOpen()
-    return Overlay ~= nil and Overlay.m_bookOpen == true
+    return ((Overlay ~= nil) and (Overlay.m_bookOpen == true))
 end
 
 --- What Read aloud says for what the screen shows now: the open quest book, else the feedback
@@ -713,7 +764,7 @@ function ScholarView.Speech()
     if Overlay.m_bookOpen then
         return Sayable(Overlay.m_puzzle.book)
     end
-    return Overlay.m_said and Sayable(Overlay.m_said) or Spoken(Overlay.m_puzzle)
+    return ((Overlay.m_said and Sayable(Overlay.m_said)) or Spoken(Overlay.m_puzzle))
 end
 
 --- Shows the hint in the footer's place (no penalty; asking for help is part of learning).
@@ -729,7 +780,7 @@ end
 function ScholarView.Correct(i, explanation, info)
     for j, button in ipairs(Overlay.Buttons) do
         button:Disable()
-        Paint(button, j == i and "right" or "dim")
+        Paint(button, ((j == i) and "right") or "dim")
     end
     ShowFeedback("|cff59f273Correct!|r  " .. Emphasize(explanation), true, "Correct! " .. explanation)
     Overlay.Gain:SetText("+" .. max(info.earned or 1, 1))
@@ -745,6 +796,7 @@ end
 ---@param canSkip boolean
 function ScholarView.Wrong(i, hint, canSkip)
     local button = Overlay.Buttons[i]
+
     button:Disable()
     Paint(button, "wrong")
     button.Shake:Stop()
@@ -767,7 +819,7 @@ end
 --- Whether the screen is showing.
 ---@return boolean
 function ScholarView.IsShown()
-    return Overlay ~= nil and Overlay:IsShown()
+    return ((Overlay ~= nil) and Overlay:IsShown())
 end
 
 --- The full-screen overlay, or nil before the first Show. Among its children: Buttons[1..4] (each with

@@ -7,21 +7,21 @@ local addonName, ns = ...
 
 -- UnitClassification's documented answers (warcraft.wiki.gg API_UnitClassification).
 local Classifications = {
-    worldboss = true, rareelite = true, elite = true, rare = true, normal = true, trivial = true, minus = true,
+    elite = true, minus = true, normal = true, rare = true, rareelite = true, trivial = true, worldboss = true,
 }
 
 -- The aura auraSound.api registers a sound for: Mark of the Wild (Rank 1), a common buff on the
 -- player. The sound file doesn't exist and never plays: the registration is removed in the same run.
-local AuraSoundSpellID = 1126
 local AuraSoundFile = "Interface\\AddOns\\ByteTerrace_DevTools\\AuraSoundProbe.ogg"
+local AuraSoundSpellID = 1126
 
 -- The most seconds UnitAuraSoundInfo's throttleSeconds takes (its doc: 0 to 5, inclusive).
 local MaxAuraSoundThrottle = 5
 
 local Probes = ns.Probes
-local Value, Shape, Joined, JoinSets = Probes.Value, Probes.Shape, Probes.Joined, Probes.JoinSets
+local Joined, JoinSets, Shape, Value = Probes.Joined, Probes.JoinSets, Probes.Shape, Probes.Value
+local Kills, UnitCombat = Probes.Kills, Probes.UnitCombat
 local NamePlateToken = Probes.NamePlateToken
-local UnitCombat, Kills = Probes.UnitCombat, Probes.Kills
 
 -- A unit's identity: UnitName, UnitClass and UnitGUID, as shapes. withRealm adds UnitName's realm,
 -- for units whose realm is always the player's (an NPC's is nil).
@@ -29,8 +29,9 @@ local function Identity(unit, withRealm)
     local name, realm = UnitName(unit) -- secret: recorded by Shape as a marker
     local className, classFile, classID = UnitClass(unit) -- secret: recorded by Shape as a marker
     local guid = UnitGUID(unit) -- secret: recorded by Shape as a marker
+
     return {
-        name = Shape(name), realm = withRealm and Shape(realm) or nil, className = Shape(className),
+        name = Shape(name), realm = ((withRealm and Shape(realm)) or nil), className = Shape(className),
         classFile = Shape(classFile), classID = Shape(classID), guid = Shape(guid),
     }
 end
@@ -40,13 +41,14 @@ end
 local function TryAuraSound(throttleSeconds)
     local auras = C_UnitAuras
     local sound = {
-        unitToken = "player", spellID = AuraSoundSpellID, soundFileName = AuraSoundFile,
-        throttleSeconds = throttleSeconds,
+        soundFileName = AuraSoundFile, spellID = AuraSoundSpellID, throttleSeconds = throttleSeconds,
+        unitToken = "player",
     }
     -- protected: auraSound.api needs idle, so this never runs in combat lockdown
     local ok, id = pcall(auras.AddAuraSound, Enum.UnitAuraSoundTrigger.Added, sound)
-    local result = { errors = not ok, auraSoundID = ok and Shape(id) or nil }
-    if ok and not issecretvalue(id) and type(id) == "number" then
+    local result = { errors = not ok, auraSoundID = ((ok and Shape(id)) or nil) }
+
+    if ok and not issecretvalue(id) and (type(id) == "number") then
         result.removeErrors = not pcall(auras.RemoveAuraSound, id)
     end
     return result
@@ -55,6 +57,7 @@ end
 local function Health(unit)
     local health = UnitHealth(unit) -- secret: recorded by Shape as a marker
     local healthMax = UnitHealthMax(unit) -- secret: recorded by Shape as a marker
+
     return { health = Shape(health), healthMax = Shape(healthMax) }
 end
 
@@ -64,6 +67,7 @@ local function HealthSignals(unit)
     local percentUnpredicted = UnitHealthPercent(unit, false) -- secret: recorded by Shape as a marker
     local missing = UnitHealthMissing(unit) -- secret: recorded by Shape as a marker
     local missingUnpredicted = UnitHealthMissing(unit, false) -- secret: recorded by Shape as a marker
+
     return {
         percent = Shape(percent), percentUnpredicted = Shape(percentUnpredicted), missing = Shape(missing),
         missingUnpredicted = Shape(missingUnpredicted),
@@ -73,11 +77,12 @@ end
 -- A unit's UnitClassification and UnitLevel, as shapes; isSkull is a plain level of -1.
 local function Classification(unit)
     local classification, level = UnitClassification(unit), UnitLevel(unit)
-    local plainClassification = not issecretvalue(classification) and type(classification) == "string"
-    local plainLevel = not issecretvalue(level) and type(level) == "number"
+    local plainClassification = (not issecretvalue(classification) and (type(classification) == "string"))
+    local plainLevel = (not issecretvalue(level) and (type(level) == "number"))
+
     return {
-        classification = Shape(classification), level = Shape(level), isSkull = plainLevel and level == -1,
-        isDocumented = plainClassification and Classifications[classification] == true,
+        classification = Shape(classification), level = Shape(level), isSkull = (plainLevel and (level == -1)),
+        isDocumented = (plainClassification and (Classifications[classification] == true)),
     }
 end
 
@@ -88,6 +93,7 @@ local function ComboPoints()
     local current = UnitPower("player", comboPoints) -- secret: recorded by Shape as a marker
     local max = UnitPowerMax("player", comboPoints) -- secret: recorded by Shape as a marker
     local onTarget = GetComboPoints("player", "target") -- secret: recorded by Shape as a marker
+
     return { comboPoints = Shape(current), comboPointsMax = Shape(max), onTarget = Shape(onTarget) }
 end
 
@@ -97,12 +103,14 @@ local function PrimaryPower(unit)
     local powerType, token = UnitPowerType(unit)
     local current = UnitPower(unit) -- secret: recorded by Shape as a marker
     local max = UnitPowerMax(unit) -- secret: recorded by Shape as a marker
+
     return { powerType = Shape(powerType), token = Shape(token), current = Shape(current), max = Shape(max) }
 end
 
 -- The nameplate frame of a non-player unit (enemy or friendly, NamePlateToken), as shapes.
 local function NamePlateShape(enemy)
     local plate = C_NamePlate.GetNamePlateForUnit(NamePlateToken(enemy))
+
     if plate == nil then
         return { plate = "nil" }
     end
@@ -110,7 +118,7 @@ local function NamePlateShape(enemy)
         plate = Shape(plate),
         forbidden = Value(plate:IsForbidden()), -- secret: recorded by Value as a marker
         objectType = Value(plate:GetObjectType()), -- secret: recorded by Value as a marker
-        hasUnitFrame = rawget(plate, "UnitFrame") ~= nil, -- Blizzard_NamePlateBase assigns it as a plain field
+        hasUnitFrame = (rawget(plate, "UnitFrame") ~= nil), -- Blizzard_NamePlateBase assigns it as a plain field
     }
 end
 
@@ -124,24 +132,26 @@ Probes.Define({
         needs = {},
         run = function()
             local health = UnitHealth("player") -- secret: only handed to the operations under test
+
             local function Try(fn)
                 return (pcall(fn))
             end
             local function Result(fn)
                 local ok, result = pcall(fn)
-                return ok and Shape(result) or "refused"
+
+                return ((ok and Shape(result)) or "refused")
             end
             return {
                 isSecret = issecretvalue(health),
                 tostring = Try(function() return tostring(health) end), -- secret: the operation under test
-                concat = Try(function() return "hp " .. health end), -- secret: the operation under test
-                concatResult = Result(function() return "hp " .. health end), -- secret: the operation under test
+                concat = Try(function() return ("hp " .. health) end), -- secret: the operation under test
+                concatResult = Result(function() return ("hp " .. health) end), -- secret: the operation under test
                 format = Try(function() return ("%d"):format(health) end), -- secret: the operation under test
                 formatString = Try(function() return ("%s"):format(health) end), -- secret: the operation under test
                 formatResult = Result(function() return ("%s"):format(health) end), -- secret: the operation under test
-                truthTest = Try(function() return health and true end), -- secret: the operation under test
+                truthTest = Try(function() return (health and true) end), -- secret: the operation under test
                 tableValue = Try(function() return { value = health } end), -- secret: the operation under test
-                arithmetic = Try(function() return health + 1 end), -- secret: the operation under test
+                arithmetic = Try(function() return (health + 1) end), -- secret: the operation under test
             }
         end,
     },
@@ -154,11 +164,12 @@ Probes.Define({
         harness = "Lua 5.1 compares a value with itself and keys a table without consulting a metamethod",
         run = function()
             local health = UnitHealth("player") -- secret: only handed to the operations under test
+
             local function Try(fn)
                 return (pcall(fn))
             end
             return {
-                compare = Try(function() return health == health end), -- secret: the operation under test
+                compare = Try(function() return (health == health) end), -- secret: the operation under test
                 tableKey = Try(function() return ({ [health] = true }) end), -- secret: the operation under test
             }
         end,
@@ -291,11 +302,12 @@ Probes.Define({
         end,
     },
     {
+        accumulates = true,
         name = "unitCombat.seen",
         needs = { "unitCombat" },
-        accumulates = true,
         run = function()
             local units = UnitCombat.units
+
             return {
                 player = JoinSets(units.player), target = JoinSets(units.target), actions = Joined(UnitCombat.actions),
                 flagTexts = Joined(UnitCombat.flagTexts),
@@ -323,6 +335,7 @@ Probes.Define({
         needs = { "idle" },
         run = function()
             local auras = C_UnitAuras
+
             return {
                 -- protected: only its type is read here; TryAuraSound calls it
                 addAuraSound = Shape(auras.AddAuraSound), removeAuraSound = Shape(auras.RemoveAuraSound),
@@ -339,7 +352,7 @@ Probes.Define({
         accumulates = true,
         run = function()
             return {
-                partyKill = Kills.partyKill and JoinSets(Kills.partyKill), unitDied = Kills.unitDied and JoinSets(Kills.unitDied),
+                partyKill = (Kills.partyKill and JoinSets(Kills.partyKill)), unitDied = (Kills.unitDied and JoinSets(Kills.unitDied)),
                 targetDied = Kills.targetDied,
             }
         end,

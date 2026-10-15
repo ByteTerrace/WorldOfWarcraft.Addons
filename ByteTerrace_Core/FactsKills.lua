@@ -14,17 +14,18 @@
 --                    count.
 
 local ByteTerrace = ByteTerrace
-local issecretvalue, type, UnitGUID = issecretvalue, type, UnitGUID
 local ipairs = ipairs
+local issecretvalue, type, UnitGUID = issecretvalue, type, UnitGUID
 
 -- A Lua pattern from a client format string ("%s dies (Honorable Kill: %s). ..."): each %s is a
 -- capture, so the first capture is the victim's name. Both formats are GlobalStrings the client
 -- always defines (tools/api/forever.json).
 local function Pattern(formatString)
     local pattern = formatString:gsub("%%%d+%$([sd])", "%%%1") -- "%1$s" (another locale's order) is "%s"
+
     pattern = pattern:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
     pattern = pattern:gsub("%%s", "(.-)"):gsub("%%d", "%%d+")
-    return "^" .. pattern .. "$"
+    return ("^" .. pattern .. "$")
 end
 
 local HonorPatterns = { Pattern(COMBATLOG_HONORGAIN), Pattern(COMBATLOG_HONORGAIN_NO_RANK) }
@@ -33,7 +34,8 @@ local HonorPatterns = { Pattern(COMBATLOG_HONORGAIN), Pattern(COMBATLOG_HONORGAI
 local function Victim(text)
     for _, pattern in ipairs(HonorPatterns) do
         local victim = text:match(pattern)
-        if victim and victim ~= "" then
+
+        if victim and (victim ~= "") then
             return victim
         end
     end
@@ -41,38 +43,40 @@ local function Victim(text)
 end
 
 ByteTerrace.Facts.kills = {
-    toggle = false,
     demand = true,
-    state = {
-        { name = "honorable", kind = "number", default = 0, persist = false },
-        { name = "victim", kind = "string", default = "", persist = false },
-        { name = "blows", kind = "number", default = 0, persist = false },
-    },
     OnEnable = function(module)
         local state = module.Addon.State
         local honorable, victim = module:Id("honorable"), module:Id("victim")
         local blows = module:Id("blows")
 
         module:On("CHAT_MSG_COMBAT_HONOR_GAIN", function(text)
-            local name = not issecretvalue(text) and type(text) == "string" and Victim(text)
+            local name = (not issecretvalue(text) and (type(text) == "string") and Victim(text))
+
             if name then
                 state:Set(victim, name)
                 state:Set(honorable, state.Values[honorable] + 1)
             end
         end)
         module:On("PARTY_KILL", function(attackerGUID, targetGUID)
-            if issecretvalue(attackerGUID) or issecretvalue(targetGUID) or type(targetGUID) ~= "string"
+            if issecretvalue(attackerGUID) or issecretvalue(targetGUID) or (type(targetGUID) ~= "string")
                 or not targetGUID:find("^Player%-") then
                 return
             end
             local me, pet = UnitGUID("player"), UnitGUID("pet")
+
             if issecretvalue(me) or issecretvalue(pet) then
                 return
             end
-            if attackerGUID ~= me and (pet == nil or attackerGUID ~= pet) then
+            if (attackerGUID ~= me) and ((pet == nil) or (attackerGUID ~= pet)) then
                 return -- a groupmate's blow
             end
             state:Set(blows, state.Values[blows] + 1)
         end)
     end,
+    state = {
+        { default = 0, kind = "number", name = "honorable", persist = false },
+        { default = "", kind = "string", name = "victim", persist = false },
+        { default = 0, kind = "number", name = "blows", persist = false },
+    },
+    toggle = false,
 }

@@ -25,6 +25,7 @@ local Who = {}    -- [unit token] = that plate's info, as Warband read it when t
 
 local function BadgeFor(plate)
     local badge = Badges[plate]
+
     if not badge then
         badge = CreateFrame("Frame", nil, plate)
         badge:SetSize(BadgeSize, BadgeSize)
@@ -39,8 +40,10 @@ end
 -- Shows or hides a plate's badge for the standing of the player info names.
 local function Paint(plate, info)
     local status = Warband.Status(info.key, info.guild)
+
     if status then
         local badge = BadgeFor(plate)
+
         badge.Icon:SetTexture(Warband.Icons[status])
         badge:Show()
     elseif Badges[plate] then
@@ -54,6 +57,7 @@ local function Show(unit, info)
         return
     end
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
+
     if not plate then
         return -- a plate addons can't touch (friendly plates in instances)
     end
@@ -76,16 +80,20 @@ local function HideAll()
 end
 
 Addon:Module("Badges", {
-    label = "Nameplate badges",
-    page = "Warband",
-    description = "A skull, cross, square or star above the nameplates of marked, grudge, guild-at-war and champion players. Needs enemy nameplates on.",
     active = { reads = { "Warband.enabled" }, when = function(state) return state:Get("Warband.enabled") end },
+    description = "A skull, cross, square or star above the nameplates of marked, grudge, guild-at-war and champion players. Needs enemy nameplates on.",
+    label = "Nameplate badges",
+    OnDisable = function()
+        Warband.OnPlate = nil
+        HideAll()
+    end,
     OnEnable = function(module)
         Warband.OnPlate = Show
         -- The plate the unit showed on, kept since: nameplate addons find GetNamePlateForUnit can
         -- already answer nil while the removal dispatches. Only those plates can wear a badge.
         module:On("NAME_PLATE_UNIT_REMOVED", function(unit)
             local plate = Shown[unit]
+
             Shown[unit], Who[unit] = nil, nil
             if plate and Badges[plate] then
                 Badges[plate]:Hide()
@@ -93,14 +101,12 @@ Addon:Module("Badges", {
         end)
         module:Watch({ "Warband.ledger", "Warband.wars" }, RefreshAll, true)
         for i = 1, MaxNameplates do -- plates already on screen (a /reload, or switched back on)
-            local unit = "nameplate" .. i
+            local unit = ("nameplate" .. i)
+
             if UnitExists(unit) then
                 Show(unit, Warband.Identify(unit))
             end
         end
     end,
-    OnDisable = function()
-        Warband.OnPlate = nil
-        HideAll()
-    end,
+    page = "Warband",
 })

@@ -23,8 +23,8 @@
 -- what the client did, so its result is compared merged into the record (Probes.Merge), and
 -- anything the client never showed is a difference.
 
-Harness.OBSERVED_PROBES = type(__probes) == "string" and assert(loadstring("return " .. __probes))()
-    or { build = "", probes = {} }
+Harness.OBSERVED_PROBES = (((type(__probes) == "string") and assert(loadstring("return " .. __probes))())
+    or { build = "", probes = {} })
 
 -- One run of the probe in a fresh harness, in the recorded context (or none).
 local function RunOnce(name, observed, context)
@@ -32,28 +32,33 @@ local function RunOnce(name, observed, context)
     local Probes = h:LoadFiles("ByteTerrace_DevTools").Probes
     local probe = Probes.ByName[name]
     local run = { context = context, h = h }
+
     Probes.Setup(probe, h)
     local pinned = false
+
     for _, need in ipairs(probe.needs) do
-        pinned = pinned or need == "idle" or need == "combat" or need == "meterInCombat"
+        pinned = (pinned or (need == "idle") or (need == "combat") or (need == "meterInCombat"))
     end
     if not pinned and context and context:match("^combat/") and not h.inCombat then
         h:EnterCombat()
     end
     local met, unmet = Probes.Check(probe)
+
     if not met then
-        run.problem = "the harness setup doesn't meet the need: " .. tostring(unmet)
+        run.problem = ("the harness setup doesn't meet the need: " .. tostring(unmet))
         return run
     end
     local record, problem = Probes.Record(probe)
+
     if not record then
-        run.problem = "the probe failed in the harness: " .. problem
+        run.problem = ("the probe failed in the harness: " .. problem)
         return run
     end
     run.problem = h:UnexpectedErrors()
     run.record = record
     if observed then
-        local result = probe.accumulates and Probes.Merge(observed.result, record.result) or record.result
+        local result = ((probe.accumulates and Probes.Merge(observed.result, record.result)) or record.result)
+
         run.differences = Probes.Diff({ context = context, result = observed.result },
             { context = next(record.contexts), result = result })
     end
@@ -63,28 +68,32 @@ end
 function Harness.RunProbe(name, observed)
     local Probes = Harness.New():LoadFiles("ByteTerrace_DevTools").Probes
     local probe = assert(Probes.ByName[name], "no probe named " .. tostring(name))
+
     if observed == nil then
         observed = Harness.OBSERVED_PROBES.probes[name]
     end
     -- A record from another version of the probe answered another question: no observation.
-    local run = { probe = probe, Probes = Probes, observed = Probes.IsCurrent(probe, observed) and observed or nil, runs = {} }
+    local run = { probe = probe, Probes = Probes, observed = ((Probes.IsCurrent(probe, observed) and observed) or nil), runs = {} }
+
     run.gap = Probes.HarnessGap(probe)
     if run.gap then
         return run
     end
     local contexts = {}
-    for context in pairs(run.observed and run.observed.contexts or {}) do
+
+    for context in pairs((run.observed and run.observed.contexts) or {}) do
         contexts[#contexts + 1] = context
     end
     table.sort(contexts)
     for i = 1, math.max(#contexts, 1) do
         local one = RunOnce(name, run.observed, contexts[i])
+
         run.runs[i] = one
         if one.problem and not run.problem then
-            run.problem = one.context and ("in %s: %s"):format(one.context, one.problem) or one.problem
+            run.problem = ((one.context and ("in %s: %s"):format(one.context, one.problem)) or one.problem)
         end
         if one.differences then
-            run.differences = run.differences or {}
+            run.differences = (run.differences or {})
             for _, difference in ipairs(one.differences) do
                 difference.context = one.context
                 run.differences[#run.differences + 1] = difference

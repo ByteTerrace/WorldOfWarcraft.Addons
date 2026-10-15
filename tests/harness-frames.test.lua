@@ -12,8 +12,9 @@ test("OnShow and OnHide run when visibility changes, for the frame and its visib
     local parent = env.CreateFrame("Frame", nil, env.UIParent)
     local child = env.CreateFrame("Frame", nil, parent)
     local hidden = env.CreateFrame("Frame", nil, child)
+
     hidden:Hide()
-    for name, frame in pairs({ parent = parent, child = child, hidden = hidden }) do
+    for name, frame in pairs({ child = child, hidden = hidden, parent = parent }) do
         frame:SetScript("OnShow", Recorder(log, name .. "+"))
         frame:SetScript("OnHide", Recorder(log, name .. "-"))
     end
@@ -22,7 +23,7 @@ test("OnShow and OnHide run when visibility changes, for the frame and its visib
     parent:Hide()
     eq(table.concat(log, ","), "parent-,child-", "the frame first, then descendants that were visible")
     log = {}
-    for name, frame in pairs({ parent = parent, child = child, hidden = hidden }) do
+    for name, frame in pairs({ child = child, hidden = hidden, parent = parent }) do
         frame:SetScript("OnShow", Recorder(log, name .. "+"))
         frame:SetScript("OnHide", Recorder(log, name .. "-"))
     end
@@ -42,6 +43,7 @@ test("an error in OnHide is reported and the rest still run", function()
     local parent = env.CreateFrame("Frame")
     local child = env.CreateFrame("Frame", nil, parent)
     local ran = false
+
     parent:SetScript("OnHide", function() error("boom") end)
     child:SetScript("OnHide", function() ran = true end)
     h:ExpectErrors("boom")
@@ -52,6 +54,7 @@ end)
 local function Movable(h)
     local env = h.env
     local frame = env.CreateFrame("Frame", "HarnessMover", env.UIParent)
+
     frame:SetSize(100, 20)
     frame:SetPoint("CENTER", env.UIParent, "CENTER", 10, 20)
     frame:SetMovable(true)
@@ -65,10 +68,11 @@ test("dragging runs OnMouseDown, OnDragStart and OnDragStop, not OnMouseUp or On
     local env = h.env
     local frame = Movable(h)
     local log, stopped = {}, nil
-    frame:SetScript("OnMouseDown", function(_, button) log[#log + 1] = "down:" .. button end)
+
+    frame:SetScript("OnMouseDown", function(_, button) log[#log + 1] = ("down:" .. button) end)
     frame:SetScript("OnMouseUp", Recorder(log, "up"))
     frame:SetScript("OnDragStart", function(self, button)
-        log[#log + 1] = "start:" .. button
+        log[#log + 1] = ("start:" .. button)
         self:StartMoving()
     end)
     frame:SetScript("OnDragStop", function(self)
@@ -92,7 +96,8 @@ test("only a visible, mouse-enabled frame dragged with a registered button start
     local h = Harness.New()
     local frame = Movable(h)
     local starts = 0
-    frame:SetScript("OnDragStart", function() starts = starts + 1 end)
+
+    frame:SetScript("OnDragStart", function() starts = (starts + 1) end)
     falsy(h:Drag(frame, 5, 5, "RightButton"), "not registered")
     frame:RegisterForDrag("LeftButton", "RightButton")
     truthy(h:Drag(frame, 5, 5, "RightButton"))
@@ -106,6 +111,7 @@ test("only a visible, mouse-enabled frame dragged with a registered button start
     falsy(h:Drag(frame, 5, 5), "a hidden frame")
     eq(starts, 1)
     local _, _, _, x, y = frame:GetPoint(1)
+
     eq(x, 10, "without StartMoving the frame stays")
     eq(y, 20)
 end)
@@ -113,6 +119,7 @@ end)
 test("StartMoving needs a movable frame; a moving frame follows the mouse until it stops or hides", function()
     local h = Harness.New()
     local frame = Movable(h)
+
     frame:SetMovable(false)
     falsy(frame:IsMovable())
     throws(function() frame:StartMoving() end, "Frame is not movable")
@@ -123,6 +130,7 @@ test("StartMoving needs a movable frame; a moving frame follows the mouse until 
     frame:SetScript("OnDragStart", nil)
     h:Drag(frame, 1, 1)
     local _, _, _, x = frame:GetPoint(1)
+
     eq(x, 12, "still moving: the next drag moves it too")
     frame:Hide()
     frame:Show()
@@ -137,9 +145,11 @@ end)
 
 test("moving a protected frame is blocked in combat lockdown", function()
     local h = Harness.New()
+
     h:ExpectBlocked(2) -- the calls under test
     local env = h.env
     local secure = env.CreateFrame("Button", nil, env.UIParent, "SecureActionButtonTemplate")
+
     secure:SetMovable(true)
     h:EnterCombat()
     secure:StartMoving()
@@ -157,13 +167,16 @@ test("GetChildren lists child frames and GetRegions the regions, in creation ord
     local text = parent:CreateFontString()
     local b = env.CreateFrame("Button", nil, parent)
     local texture = parent:CreateTexture()
+
     parent:CreateAnimationGroup()
     local children = { parent:GetChildren() }
+
     eq(#children, 2)
     eq(children[1], a)
     eq(children[2], b)
     eq(parent:GetNumChildren(), 2)
     local regions = { parent:GetRegions() }
+
     eq(regions[1], text)
     eq(regions[2], texture)
     eq(parent:GetNumRegions(), 2)
@@ -175,6 +188,7 @@ test("mask textures attach to textures once each, and translation and scale anim
     local frame = h.env.CreateFrame("Frame")
     local texture = frame:CreateTexture()
     local mask = frame:CreateMaskTexture()
+
     mask:SetTexture("Interface\CharacterFrame\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     texture:AddMaskTexture(mask)
     texture:AddMaskTexture(mask)
@@ -184,9 +198,11 @@ test("mask textures attach to textures once each, and translation and scale anim
     eq(texture:GetNumMaskTextures(), 0)
     local group = frame:CreateAnimationGroup()
     local move = group:CreateAnimation("Translation")
+
     move:SetOffset(8, -2)
     eq(select(2, move:GetOffset()), -2)
     local grow = group:CreateAnimation("Scale")
+
     grow:SetScaleTo(1.3, 1.3)
     eq(grow:GetScaleTo(), 1.3)
     throws(function() group:CreateAnimation("Wobble") end, "unsupported animation type")
@@ -196,8 +212,10 @@ test("a scroll frame scrolls its child: the range is the child's height less its
     local h = Harness.New()
     local env = h.env
     local scroll = env.CreateFrame("ScrollFrame", nil, env.UIParent)
+
     scroll:SetSize(300, 200)
     local child = env.CreateFrame("Frame", nil, scroll)
+
     child:SetSize(300, 500)
     eq(scroll:GetVerticalScrollRange(), 0, "no child yet")
     scroll:SetScrollChild(child)

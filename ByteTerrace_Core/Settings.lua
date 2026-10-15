@@ -20,26 +20,29 @@ local ipairs = ipairs
 ---@return table[] pages
 local function SettingsPages(addon)
     local state = addon.State
-    local main = { name = addon.Title, entries = {} }
+    local main = { entries = {}, name = addon.Title }
     local pages, byName = { main }, {}
+
     local function AddHeader(page, text)
-        if text and text ~= page.name then
+        if text and (text ~= page.name) then
             page.entries[#page.entries + 1] = { header = text }
         end
     end
     for _, name in ipairs(state.Order) do
         local id = state.Ids[name]
         local spec = state.Specs[id]
+
         if spec.label and spec.persist then
             local moduleName = name:match("^([^.]+)%.")
             local module = addon.Modules[moduleName]
-            local moduleSpec = module and module.Spec
-            local pageName = moduleSpec and moduleSpec.page
+            local moduleSpec = (module and module.Spec)
+            local pageName = (moduleSpec and moduleSpec.page)
             local page = main
-            if pageName and pageName ~= addon.Title then -- a page named for the addon is the main page
+
+            if pageName and (pageName ~= addon.Title) then -- a page named for the addon is the main page
                 page = byName[pageName]
                 if not page then
-                    page = { name = pageName, entries = {} }
+                    page = { entries = {}, name = pageName }
                     byName[pageName] = page
                     pages[#pages + 1] = page
                 end

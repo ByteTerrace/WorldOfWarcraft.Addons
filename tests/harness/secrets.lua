@@ -124,6 +124,7 @@ local function Refuse(what)
         error("attempt to " .. what .. " a secret value", 2)
     end
 end
+
 SecretMeta.__index, SecretMeta.__newindex = Refuse("index"), Refuse("index")
 SecretMeta.__len = Refuse("take the length of")
 SecretMeta.__eq, SecretMeta.__lt, SecretMeta.__le = Refuse("compare"), Refuse("compare"), Refuse("compare")
@@ -131,7 +132,9 @@ SecretMeta.__add, SecretMeta.__sub, SecretMeta.__mul = Refuse("compute with"), R
 SecretMeta.__div, SecretMeta.__mod, SecretMeta.__pow = Refuse("compute with"), Refuse("compute with"), Refuse("compute with")
 SecretMeta.__unm = Refuse("compute with")
 SecretMeta.__call = Refuse("call")
+
 SecretMeta.__tostring = function() return "<secret>" end -- harness diagnostics; the env's tostring refuses
+
 SecretMeta.__metatable = false
 
 -- Wraps a value as a secret (nil stays nil: an API that returns nothing returns nothing).
@@ -140,12 +143,13 @@ function Secret(value)
         return nil
     end
     local box = newproxy(Template)
+
     Boxes[box] = { value = value }
     return box
 end
 
 function IsSecret(value)
-    return type(value) == "userdata" and Boxes[value] ~= nil
+    return ((type(value) == "userdata") and (Boxes[value] ~= nil))
 end
 
 function Reveal(value)
@@ -159,9 +163,11 @@ end
 -- rules still apply: only strings and numbers concatenate.
 SecretMeta.__concat = function(left, right)
     local a, b = Reveal(left), Reveal(right)
+
     for _, value in ipairs({ a, b }) do
         local kind = type(value)
-        if kind ~= "string" and kind ~= "number" then
+
+        if (kind ~= "string") and (kind ~= "number") then
             error("attempt to concatenate a " .. kind .. " value", 2)
         end
     end
@@ -177,6 +183,7 @@ local RawFormat = string.format
 function SecretFormat(fmt, ...)
     local n, secret = select("#", ...), IsSecret(fmt)
     local args = { ... }
+
     for i = 1, n do
         if IsSecret(args[i]) then
             secret = true
@@ -187,7 +194,8 @@ function SecretFormat(fmt, ...)
         return RawFormat(fmt, ...)
     end
     local plainFormat = Reveal(fmt)
-    if type(plainFormat) == "string" and plainFormat:find("%%[-+ #0]*%d*%.%d*s") then
+
+    if (type(plainFormat) == "string") and plainFormat:find("%%[-+ #0]*%d*%.%d*s") then
         error("attempt to format a secret value with a precision", 2)
     end
     return Secret(RawFormat(plainFormat, unpack(args, 1, n)))
@@ -232,12 +240,13 @@ end
 -- A missing unit has nothing to hide.
 local function PlayerControlled(h, token)
     local unit = h:Unit(token)
-    return unit == nil or unit.playerControlled == true
+
+    return ((unit == nil) or (unit.playerControlled == true))
 end
 
 -- The unit a call names: its unit argument, else the unit with its WOWGUID argument.
 local function ContextUnit(h, ctx)
-    if ctx.unit == nil and ctx.guid ~= nil then
+    if (ctx.unit == nil) and (ctx.guid ~= nil) then
         return h:UnitTokenForGUID(ctx.guid)
     end
     return ctx.unit
@@ -245,29 +254,39 @@ end
 
 local function IdentityAccessible(h, token)
     local unit = h:Unit(token)
-    return unit == nil or unit.playerControlled == true or unit.inGroup == true
+
+    return ((unit == nil) or (unit.playerControlled == true) or (unit.inGroup == true))
 end
 
 local Predicates = {
-    SecretReturns = function() return true end,
-    SecretWhenAurasRestricted = function(h) return AnyOf(h, Aura) end,
-    SecretWhenUnitAuraRestricted = function(h) return AnyOf(h, Aura) end,
-    SecretWhenCooldownsRestricted = function(h) return AnyOf(h, Aura) end,
-    SecretWhenTotemSlotSecret = function(h) return AnyOf(h, Aura) end,
-    SecretWhenInCombat = function(h) return h.restrictions.Combat end,
     SecretInActivePvPMatch = function(h) return h.restrictions.PvPMatch end,
-    SecretOnRestrictedMaps = function(h) return h.restrictions.Map end,
     SecretInChatMessagingLockdown = function(h) return AnyOf(h, Chat) end,
+    SecretOnRestrictedMaps = function(h) return h.restrictions.Map end,
+    SecretReturns = function() return true end,
+    SecretWhenAnchoringSecret = function(h, ctx)
+        if ctx.widget then
+            return (next(ctx.widget.secretAspects) ~= nil) -- ctx.widget is the widget's state
+        end
+        return AnyRestriction(h)
+    end,
+    SecretWhenAurasRestricted = function(h) return AnyOf(h, Aura) end,
+    SecretWhenCooldownsRestricted = function(h) return AnyOf(h, Aura) end,
+    SecretWhenInCombat = function(h) return h.restrictions.Combat end,
+    SecretWhenLossOfControlInfoRestricted = function(h, ctx) return ((h:Unit(ctx.unit) ~= nil) and (ctx.unit ~= "player")) end,
+    SecretWhenTotemSlotSecret = function(h) return AnyOf(h, Aura) end,
+    SecretWhenUnitAuraRestricted = function(h) return AnyOf(h, Aura) end,
+    SecretWhenUnitHealthMaxRestricted = function(h, ctx) return not PlayerControlled(h, ctx.unit) end,
     SecretWhenUnitIdentityRestricted = function(h, ctx)
         if not AnyOf(h, Instance) then
             return false
         end
-        if ctx.unit == nil and ctx.guids then
+        if (ctx.unit == nil) and ctx.guids then
             -- Every GUID counts (PARTY_KILL carries two). A GUID names someone even when the
             -- harness has no unit for them, so an unknown one is restricted [C].
             for _, guid in ipairs(ctx.guids) do
                 local token = h:UnitTokenForGUID(guid)
-                if token == nil or not IdentityAccessible(h, token) then
+
+                if (token == nil) or not IdentityAccessible(h, token) then
                     return true
                 end
             end
@@ -280,42 +299,38 @@ local Predicates = {
             return false
         end
         local unit = h:Unit(ctx.unit)
+
         if h.restrictions.PvPMatch and unit and unit.isPlayer then
             return false
         end
         return not IdentityAccessible(h, ctx.unit)
     end,
-    SecretWhenUnitHealthMaxRestricted = function(h, ctx) return not PlayerControlled(h, ctx.unit) end,
+    SecretWhenUnitPossessionRestricted = function(h, ctx)
+        return (AnyOf(h, Aura) and (h:Unit(ctx.unit) ~= nil) and (ctx.unit ~= "player") and (ctx.unit ~= "pet") and (ctx.unit ~= "vehicle"))
+    end,
     SecretWhenUnitPowerMaxRestricted = function(h, ctx) return not PlayerControlled(h, ctx.unit) end,
     SecretWhenUnitPowerRestricted = function(h, ctx)
         local unit = h:Unit(ctx.unit)
         local powerType = ctx.powerType
-        if powerType == nil and unit then
+
+        if (powerType == nil) and unit then
             powerType = unit.powerType
         end
         if not unit or Harness.NEVER_SECRET_POWER[powerType] then
             return false
         end
-        return not (unit.power and unit.power[powerType] == nil)
+        return not (unit.power and (unit.power[powerType] == nil))
     end,
     SecretWhenUnitSpellCastRestricted = function(h, ctx)
-        return h:Unit(ctx.unit) ~= nil and ctx.unit ~= "player" and ctx.unit ~= "pet"
-    end,
-    SecretWhenLossOfControlInfoRestricted = function(h, ctx) return h:Unit(ctx.unit) ~= nil and ctx.unit ~= "player" end,
-    SecretWhenUnitPossessionRestricted = function(h, ctx)
-        return AnyOf(h, Aura) and h:Unit(ctx.unit) ~= nil and ctx.unit ~= "player" and ctx.unit ~= "pet" and ctx.unit ~= "vehicle"
+        return ((h:Unit(ctx.unit) ~= nil) and (ctx.unit ~= "player") and (ctx.unit ~= "pet"))
     end,
     SecretWhenUnitThreatStateRestricted = function(h, ctx)
         local a, b = ctx.units[1], ctx.units[2]
-        return AnyRestriction(h) and b ~= nil and a ~= "player" and b ~= "player"
-    end,
-    SecretWhenAnchoringSecret = function(h, ctx)
-        if ctx.widget then
-            return next(ctx.widget.secretAspects) ~= nil -- ctx.widget is the widget's state
-        end
-        return AnyRestriction(h)
+
+        return (AnyRestriction(h) and (b ~= nil) and (a ~= "player") and (b ~= "player"))
     end,
 }
+
 Predicates.SecretWhenUnitThreatValuesRestricted = Predicates.SecretWhenUnitThreatStateRestricted
 Harness.PREDICATES = Predicates
 
@@ -325,7 +340,8 @@ function Harness:SecretFor(flags, ctx)
         return false
     end
     for flag in pairs(flags) do
-        local predicate = Predicates[flag] or AnyRestriction
+        local predicate = (Predicates[flag] or AnyRestriction)
+
         if predicate(self, ctx) then
             return true
         end
@@ -343,7 +359,8 @@ Harness.SECRET_SHAPES = {}
 Harness.OBSERVED_SECRET = {
     UnitHealthMax = function(h, ctx)
         local unit = h:Unit(ctx.unit)
-        return unit ~= nil and unit ~= h.player -- a unit that doesn't exist has nothing to hide
+
+        return ((unit ~= nil) and (unit ~= h.player)) -- a unit that doesn't exist has nothing to hide
     end,
 }
 
@@ -353,8 +370,9 @@ end
 
 -- An entry's documented argument (or payload) types, in order; parsed once per entry.
 local function Types(entry, key)
-    local cacheKey = key .. "List"
+    local cacheKey = (key .. "List")
     local list = rawget(entry, cacheKey)
+
     if not list then
         list = {}
         for kind in (entry[key] or ""):gmatch("[^,]+") do
@@ -367,14 +385,15 @@ end
 
 -- A vararg repeats the last documented type (StrideIndex).
 local function TypeAt(types, i)
-    return types[i] or types[#types]
+    return (types[i] or types[#types])
 end
+
 Harness.Types, Harness.TypeAt = Types, TypeAt
 
 -- The Lua type each primitive documented type arrives as.
 local PayloadLuaTypes = {
-    number = "number", luaIndex = "number", time_t = "number", BigUInteger = "number",
-    cstring = "string", string = "string", WOWGUID = "string", bool = "boolean",
+    BigUInteger = "number", bool = "boolean", cstring = "string", luaIndex = "number", number = "number",
+    string = "string", time_t = "number", WOWGUID = "string",
 }
 
 -- Errors (at Fire's caller) on a payload the client couldn't send: more values than the event
@@ -382,21 +401,23 @@ local PayloadLuaTypes = {
 -- secret in an event without secret flags, or a primitive of another type than documented.
 function Harness.CheckPayload(event, entry, payload)
     local types = Types(entry, "Payload")
+
     if payload.n > #types then
         error(("Fire: %s documents %d payload values, got %d"):format(event, #types, payload.n), 3)
     end
     for i = 1, #types do
-        if payload[i] == nil and not entry.PayloadNilable[i] then
+        if (payload[i] == nil) and not entry.PayloadNilable[i] then
             error(("Fire: %s payload #%d (%s) isn't nilable"):format(event, i, types[i]), 3)
         end
     end
     for i = 1, payload.n do
         local value, want = payload[i], PayloadLuaTypes[types[i]]
+
         if IsSecret(value) then
             if not entry.secret then
                 error(("Fire: %s has no secret flags, so payload #%d can't be secret"):format(event, i), 3)
             end
-        elseif want and value ~= nil and type(value) ~= want then
+        elseif want and (value ~= nil) and (type(value) ~= want) then
             error(("Fire: %s payload #%d is a %s (%s), got a %s"):format(event, i, types[i], want, type(value)), 3)
         end
     end
@@ -407,9 +428,10 @@ end
 local PassThrough = { LuaValueReference = true }
 
 local function IsUnitType(kind)
-    return kind == "UnitToken" or kind == "UnitTokenVariant" or kind == "UnitTokenNamePlate"
-        or kind == "UnitTokenPvPRestrictedForAddOns" or kind == "UnitTokenRestrictedForAddOns"
+    return ((kind == "UnitToken") or (kind == "UnitTokenVariant") or (kind == "UnitTokenNamePlate")
+        or (kind == "UnitTokenPvPRestrictedForAddOns") or (kind == "UnitTokenRestrictedForAddOns"))
 end
+
 Harness.IsUnitType = IsUnitType
 
 -- A secret, or a (non-widget) table holding one as a key or value, one level deep.
@@ -417,7 +439,7 @@ local function HoldsSecret(value)
     if IsSecret(value) then
         return true
     end
-    if type(value) == "table" and not Harness.State(value) then
+    if (type(value) == "table") and not Harness.State(value) then
         for k, v in next, value do
             if IsSecret(k) or IsSecret(v) then
                 return true
@@ -426,6 +448,7 @@ local function HoldsSecret(value)
     end
     return false
 end
+
 Harness.HoldsSecret = HoldsSecret
 
 -- The predicate context for a call or event: the unit arguments (by documented type; without
@@ -433,23 +456,25 @@ Harness.HoldsSecret = HoldsSecret
 function Harness.CallContext(entry, key, args, widgetState)
     local types = Types(entry, key)
     local ctx = { args = args, units = {}, widget = widgetState }
+
     for i = 1, args.n or #args do
         local kind = TypeAt(types, i)
-        if kind and IsUnitType(kind) and type(args[i]) == "string" then
+
+        if kind and IsUnitType(kind) and (type(args[i]) == "string") then
             ctx.units[#ctx.units + 1] = args[i]
             if kind == "UnitTokenPvPRestrictedForAddOns" then
-                ctx.pvpRestricted = ctx.pvpRestricted or {}
+                ctx.pvpRestricted = (ctx.pvpRestricted or {})
                 ctx.pvpRestricted[#ctx.pvpRestricted + 1] = args[i]
             end
-        elseif kind == "WOWGUID" and type(args[i]) == "string" then
-            ctx.guid = ctx.guid or args[i]
-            ctx.guids = ctx.guids or {}
+        elseif (kind == "WOWGUID") and (type(args[i]) == "string") then
+            ctx.guid = (ctx.guid or args[i])
+            ctx.guids = (ctx.guids or {})
             ctx.guids[#ctx.guids + 1] = args[i]
         elseif kind == "PowerType" then
             ctx.powerType = args[i]
         end
     end
-    if #types == 0 and type(args[1]) == "string" then
+    if (#types == 0) and (type(args[1]) == "string") then
         ctx.units[1] = args[1]
     end
     ctx.unit = ctx.units[1]
@@ -458,7 +483,7 @@ end
 
 -- The UnitTokenPvPRestrictedForAddOns rule (see the header): during a PvP match, a restricted
 -- token naming a unit outside the player's control and group makes the results secret.
-local UnderControl = { player = true, pet = true, vehicle = true }
+local UnderControl = { pet = true, player = true, vehicle = true }
 
 function Harness:PvPRestrictedToken(ctx)
     if not self.restrictions.PvPMatch or not ctx.pvpRestricted then
@@ -466,7 +491,8 @@ function Harness:PvPRestrictedToken(ctx)
     end
     for _, token in ipairs(ctx.pvpRestricted) do
         local unit = self:Unit(token)
-        if unit and not UnderControl[token] and unit ~= self.player and not unit.inGroup then
+
+        if unit and not UnderControl[token] and (unit ~= self.player) and not unit.inGroup then
             return true
         end
     end
@@ -476,10 +502,11 @@ end
 -- Fakes that are Lua (Lua's base library, or Blizzard's Lua) rather than client C API: exempt
 -- from the undocumented default. A secret refuses whatever they do with it by itself.
 Harness.LUA_FAKES = {
-    assert = true, error = true, ipairs = true, next = true, pairs = true, pcall = true, select = true,
-    setmetatable = true, getmetatable = true, rawget = true, rawset = true, rawequal = true, unpack = true,
-    xpcall = true, type = true, tostring = true, format = true, tonumber = true, print = true, tinsert = true, tremove = true,
-    wipe = true, CreateColor = true, GetMoneyString = true, SecondsToTime = true, random = true, date = true,
+    assert = true, CreateColor = true, date = true, error = true, format = true, getmetatable = true,
+    GetMoneyString = true, ipairs = true, next = true, pairs = true, pcall = true, print = true, random = true,
+    rawequal = true, rawget = true, rawset = true, SecondsToTime = true, select = true, setmetatable = true,
+    tinsert = true, tonumber = true, tostring = true, tremove = true, type = true, unpack = true, wipe = true,
+    xpcall = true,
 }
 
 -- An undocumented C API fake gets the default policy: no secret arguments.
@@ -499,7 +526,7 @@ end
 
 -- Functions the Forever client refused to addon code when tried in game, though the docs don't
 -- mark them IsProtectedFunction (see the header): tools/api/forbidden.json.
-Harness.FORBIDDEN_IN_GAME = type(__forbidden) == "string" and assert(loadstring("return " .. __forbidden))() or {}
+Harness.FORBIDDEN_IN_GAME = (((type(__forbidden) == "string") and assert(loadstring("return " .. __forbidden))()) or {})
 
 -- The event a call fires instead of running (nil = it runs): addon code is always tainted.
 function Harness:BlockedBy(entry, isMethod, widget, name)
@@ -543,15 +570,17 @@ function Harness:WrapApi(name, entry, fn, isMethod)
     end
     local h = self
     local policy = entry.SecretArguments
-    local preconditions = entry.Preconditions or {}
+    local preconditions = (entry.Preconditions or {})
+
     return function(...)
         if not isMethod then
-            h.apiCalls[name] = (h.apiCalls[name] or 0) + 1
+            h.apiCalls[name] = ((h.apiCalls[name] or 0) + 1)
         end
         local args = Pack(...)
-        local widget = isMethod and args[1] or nil
-        local first = isMethod and 2 or 1
+        local widget = ((isMethod and args[1]) or nil)
+        local first = ((isMethod and 2) or 1)
         local blocked = h:BlockedBy(entry, isMethod, widget, name)
+
         if blocked then
             h:BlockAction(blocked, name)
             return
@@ -559,23 +588,25 @@ function Harness:WrapApi(name, entry, fn, isMethod)
         local receivedSecret = false
         local types = Types(entry, "Arguments")
         local nilable = entry.ArgumentsNilable
+
         if nilable and not isMethod then -- widget methods have overloads the docs can't state (SetPoint("CENTER"))
             for i = 1, #types do
-                if args[first + i - 1] == nil and not nilable[i] and not PassThrough[types[i]] then -- a reference may be nil
+                if (args[(first + i) - 1] == nil) and not nilable[i] and not PassThrough[types[i]] then -- a reference may be nil
                     error(("%s: argument #%d (%s) isn't nilable"):format(name, i, types[i]), 2)
                 end
             end
         end
         for i = first, args.n do
-            if not PassThrough[TypeAt(types, i - first + 1) or ""] and HoldsSecret(args[i]) then
+            if not PassThrough[TypeAt(types, (i - first) + 1) or ""] and HoldsSecret(args[i]) then
                 if policy ~= "AllowedWhenTainted" then
                     error(("%s: secret argument #%d refused (SecretArguments %s; addon code is tainted)")
-                        :format(name, i - first + 1, policy or "missing, so NotAllowed"), 2)
+                        :format(name, (i - first) + 1, policy or "missing, so NotAllowed"), 2)
                 end
                 receivedSecret = true
             end
         end
-        local state = widget and Harness.State(widget)
+        local state = (widget and Harness.State(widget))
+
         if preconditions.RequiresFontStringTextAccess and state and state.secretAspects.Text then
             return -- FailureMode ReturnNothing for a tainted caller
         end
@@ -585,13 +616,15 @@ function Harness:WrapApi(name, entry, fn, isMethod)
             end
         end
         local results = Pack(fn(...))
-        local callArgs = isMethod and Pack(select(2, ...)) or args
+        local callArgs = ((isMethod and Pack(select(2, ...))) or args)
         local ctx = Harness.CallContext(entry, "Arguments", callArgs, state)
-        ctx.powerType = ctx.powerType or Harness.IMPLIED_POWER_TYPE[name]
+
+        ctx.powerType = (ctx.powerType or Harness.IMPLIED_POWER_TYPE[name])
         local observed = Harness.OBSERVED_SECRET[name]
-        local secret = (entry.secret ~= nil and h:SecretFor(entry.secret, ctx)) or h:PvPRestrictedToken(ctx)
-            or (observed ~= nil and observed(h, ctx))
-            or (receivedSecret and not isMethod)
+        local secret = (((entry.secret ~= nil) and h:SecretFor(entry.secret, ctx)) or h:PvPRestrictedToken(ctx)
+            or ((observed ~= nil) and observed(h, ctx))
+            or (receivedSecret and not isMethod))
+
         if not secret and state and entry.SecretReturnsForAspect then
             for aspect in pairs(entry.SecretReturnsForAspect) do
                 if state.secretAspects[aspect] then
@@ -601,8 +634,9 @@ function Harness:WrapApi(name, entry, fn, isMethod)
         end
         if secret then
             local shape = Harness.SECRET_SHAPES[name]
+
             for i = 1, results.n do
-                if shape and type(results[i]) == "table" then
+                if shape and (type(results[i]) == "table") then
                     results[i] = shape(results[i])
                 elseif not IsSecret(results[i]) then
                     results[i] = Secret(results[i])

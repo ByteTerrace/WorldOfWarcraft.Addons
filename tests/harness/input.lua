@@ -5,6 +5,7 @@
 --     (the default) consumes the key; unconsumed keys land in h.propagatedKeys.
 --   * h:WorldClickBlocked() is true while a visible, mouse-enabled frame covers the screen.
 --   * h:Drag(frame, dx, dy [, button]) drags a frame with the mouse (see Harness:Drag).
+--   * h:MouseWheel(frame, delta) turns the mouse wheel over a frame (see Harness:MouseWheel).
 --   * h:SeedRandom(n) makes the env's math.random (and random) deterministic.
 --   * h:GamePadMappedState(id) supplies the C_GamePad fake's connected controller state.
 
@@ -136,6 +137,21 @@ function Harness:Drag(frame, dx, dy, button)
         end
     end
     if s.scripts.OnDragStop then self:Protect(s.scripts.OnDragStop, frame) end
+    return true
+end
+
+-- Turns the mouse wheel over a frame: delta 1 is a notch up, -1 a notch down ([D] OnMouseWheel's
+-- delta). A visible frame with the mouse wheel enabled runs its OnMouseWheel(frame, delta); [G] the
+-- wheel over any other frame does nothing here (the client offers it to the frames beneath).
+-- Returns whether the frame took it.
+function Harness:MouseWheel(frame, delta)
+    local s = Harness.State(frame)
+    if not (s.mouseWheel and self:IsVisibleWidget(frame)) then
+        return false
+    end
+    if s.scripts.OnMouseWheel then
+        self:Protect(s.scripts.OnMouseWheel, frame, delta)
+    end
     return true
 end
 

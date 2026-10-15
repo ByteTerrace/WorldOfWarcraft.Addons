@@ -37,6 +37,13 @@
 -- coordinates, so a move shifts each of the frame's anchors by the mouse's travel and keeps their
 -- points and relative regions. Verify saved positions in game.
 --
+-- Scrolling: a ScrollFrame shows its scroll child (SetScrollChild) through its own size, moved up
+-- by its vertical scroll (SetVerticalScroll). [D] GetVerticalScrollRange is how far it can scroll:
+-- the child's height less the frame's, never below 0 (SimpleScrollFrameAPI). [G] SetVerticalScroll
+-- keeps any offset; Blizzard's ScrollFrame_OnMouseWheel clamps to the range itself. Which part of
+-- the child is visible isn't modeled. EnableMouseWheel / IsMouseWheelEnabled keep their state, and
+-- h:MouseWheel (input.lua) turns the wheel over a frame.
+--
 -- GameTooltip and NamePlate are the client's own frame types (the env's GameTooltip, the plates
 -- C_NamePlate returns). Methods the API docs don't list for a type come from
 -- Harness.TYPE_METHODS, with behaviors in Harness.TYPE_BEHAVIORS (ui.lua).
@@ -62,6 +69,7 @@ local WidgetApis = {
     Frame = Chain("SimpleFrameAPI", ScriptRegion, FrameScriptObject),
     Button = Chain("SimpleButtonAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
     StatusBar = Chain("SimpleStatusBarAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
+    ScrollFrame = Chain("SimpleScrollFrameAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
     FontString = Chain("SimpleFontStringAPI", "SimpleRegionAPI", ScriptRegion, FrameScriptObject),
     Texture = Chain("SimpleTextureAPI", "SimpleTextureBaseAPI", "SimpleRegionAPI", ScriptRegion, FrameScriptObject),
     -- A mask shapes the textures it's added to; it has a texture's base API but no drawing of its own.
@@ -76,7 +84,7 @@ local WidgetApis = {
 }
 Harness.WIDGET_APIS = WidgetApis
 
-local IsFrame = { Frame = true, Button = true, StatusBar = true, GameTooltip = true, NamePlate = true }
+local IsFrame = { Frame = true, Button = true, StatusBar = true, ScrollFrame = true, GameTooltip = true, NamePlate = true }
 
 -- Template-provided methods that aren't C API (BackdropTemplateMixin).
 local TemplateMethods = { BackdropTemplate = { SetBackdrop = true, SetBackdropColor = true, SetBackdropBorderColor = true } }
@@ -310,6 +318,16 @@ function Behaviors.GetNumRegions(s) return #Kids(s, "region") end
 function Behaviors.SetParent(s, w, parent) s.harness:Adopt(w, parent) end
 function Behaviors.SetAlpha(s, _, alpha) s.alpha = alpha end
 function Behaviors.GetAlpha(s) return s.alpha end
+function Behaviors.EnableMouseWheel(s, _, enabled) s.mouseWheel = enabled ~= false end
+function Behaviors.IsMouseWheelEnabled(s) return s.mouseWheel == true end
+function Behaviors.SetScrollChild(s, _, child) s.scrollChild = child end
+function Behaviors.GetScrollChild(s) return s.scrollChild end
+function Behaviors.SetVerticalScroll(s, _, offset) s.verticalScroll = offset end
+function Behaviors.GetVerticalScroll(s) return s.verticalScroll or 0 end
+function Behaviors.GetVerticalScrollRange(s, w)
+    local child = s.scrollChild
+    return child and math.max(0, Size(child, Axes.y) - Size(w, Axes.y)) or 0
+end
 function Behaviors.SetSize(s, _, width, height) s.width, s.height = width, height end
 function Behaviors.SetWidth(s, _, width) s.width = width end
 function Behaviors.SetHeight(s, _, height) s.height = height end

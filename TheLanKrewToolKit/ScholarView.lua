@@ -12,10 +12,10 @@ local addonName, ns = ...
 --   answers   a 2 x 2 grid of big answers, each with its key (1-4 or a controller face button) on a
 --             raised keycap at its edge; hover glows, a wrong answer turns red and shakes, the right
 --             one turns green and a "+1" rises from the star counter
---   book      on a quest riddle, Need a hint? is the quest book: it puts the quest's text, as the
---             player saw it, in the story's place, and closes again the same way. Text too long for
---             the screen comes in pages that fit, broken at a sentence where one fits; the button
---             says "Page 1 of 3, next" and turns them, and the last page's press closes the book
+--   book      on a quest riddle, Need a hint? is the quest book: it puts the quest's whole text, as
+--             the player saw it, in the story's place, and closes again the same way. Text too long
+--             for the screen scrolls, like the quest log: the mouse wheel, the Up and Down arrows or
+--             the D-pad (held, it keeps going), with a slim bar showing where you are
 --   footer    Need a hint? and how to answer; feedback (the hint, or the working) replaces it in
 --             place, so the panel never jumps. Every button names its key: the controller's
 --             buttons when one is connected (face buttons answer, shoulders ask for the hint and read
@@ -36,6 +36,8 @@ local FooterHeight = 44
 local PortraitSize = 60
 local ScreenMargin = 20 -- the least room above and below the panel
 local LiftUp = 30 -- the panel sits this much above the screen's center when it has room
+local ScrollStep = 48 -- pixels the quest book scrolls per wheel notch, arrow key or D-pad press
+local ScrollBarWidth = 6
 local OwlIcon = "Interface\\Icons\\Ability_Hunter_Pet_Owl"
 local CircleMask = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local RightIcon = "Interface\\RAIDFRAME\\ReadyCheck-Ready"
@@ -333,6 +335,31 @@ local function CreateBody(frame, panel)
     frame.Story:SetWordWrap(true)
     frame.Story:SetSpacing(4)
     TextColor(frame.Story, Palette.story)
+    -- The quest book: the quest's text in a scroll frame in the story's place, the wheel scrolling
+    -- it, and a slim bar on its right showing where in the text you are.
+    local book = CreateFrame("ScrollFrame", nil, panel)
+    book:EnableMouseWheel(true)
+    book:SetScript("OnMouseWheel", function(_, delta) ScholarView.ScrollBook(-delta) end)
+    book:Hide()
+    local page = CreateFrame("Frame", nil, book)
+    page:SetWidth(Width - 2 * Pad - 16)
+    book:SetScrollChild(page)
+    frame.BookText = page:CreateFontString(nil, "OVERLAY", "Game20Font")
+    frame.BookText:SetPoint("TOPLEFT")
+    frame.BookText:SetWidth(Width - 2 * Pad - 16)
+    frame.BookText:SetJustifyH("LEFT")
+    frame.BookText:SetWordWrap(true)
+    frame.BookText:SetSpacing(4)
+    TextColor(frame.BookText, Palette.story)
+    frame.Track = book:CreateTexture(nil, "ARTWORK")
+    frame.Track:SetWidth(ScrollBarWidth)
+    frame.Track:SetPoint("TOPRIGHT")
+    frame.Track:SetPoint("BOTTOMRIGHT")
+    Fill(frame.Track, Palette.gold, 0.15)
+    frame.Thumb = book:CreateTexture(nil, "OVERLAY")
+    frame.Thumb:SetWidth(ScrollBarWidth)
+    Fill(frame.Thumb, Palette.gold, 0.7)
+    frame.Book, frame.BookPage = book, page
     frame.Speak = CreatePill(panel, "Read aloud", SpeakerIcon)
     frame.Speak:SetScript("OnClick", function() Callbacks.speak() end)
 
@@ -435,11 +462,43 @@ function PlaceFooter()
     banner:SetHeight(FooterHeight)
 end
 
+-- The quest book's scroll bar: a thumb along the book's right edge, as long as the share of the
+-- text in view and as far down as the book is scrolled; hidden when the text fits. The view keeps
+-- the book's numbers itself (Layout, ScrollBook): m_bookView tall, m_bookRange to scroll, at
+-- m_bookOffset.
+local function PlaceThumb()
+    local thumb = Overlay.Thumb
+    local range, view, offset = Overlay.m_bookRange, Overlay.m_bookView, Overlay.m_bookOffset
+    local scrolls = range > 0
+    Overlay.Track:SetShown(scrolls)
+    thumb:SetShown(scrolls)
+    if scrolls then
+        local size = max(view * view / (view + range), 24)
+        thumb:SetHeight(size)
+        thumb:ClearAllPoints()
+        thumb:SetPoint("TOPRIGHT", Overlay.Book, "TOPRIGHT", 0, -(view - size) * offset / range)
+    end
+end
+
 -- Lays the panel out top to bottom from its content, so it's always exactly as tall as it needs
 -- to be, and centers it on screen (LiftUp above center when there's room). Returns its height.
 local function Layout(hasStory, puzzle)
     local panel, y = Overlay.Panel, 116
-    if hasStory then
+    Overlay.Book:SetShown(Overlay.m_bookOpen == true)
+    if Overlay.m_bookOpen then
+        local book = Overlay.Book
+        -- secret: the book's text is built from plain strings, as the story's is
+        local textHeight = Overlay.BookText:GetStringHeight()
+        local view = min(textHeight, Overlay.m_bookRoom)
+        Overlay.m_bookView, Overlay.m_bookRange = view, textHeight - view -- secret: plain, as above
+        Overlay.BookPage:SetHeight(textHeight)
+        book:ClearAllPoints()
+        book:SetPoint("TOPLEFT", Pad, -y)
+        book:SetSize(Width - 2 * Pad, view)
+        Overlay.Story:Hide()
+        PlaceThumb()
+        y = y + view + 14
+    elseif hasStory then
         Overlay.Story:ClearAllPoints()
         Overlay.Story:SetPoint("TOPLEFT", Pad, -y)
         Overlay.Story:Show()
@@ -487,46 +546,6 @@ local function Layout(hasStory, puzzle)
     panel:ClearAllPoints()
     panel:SetPoint("CENTER", 0, max(0, min(LiftUp, room)))
     return height
-end
-
--- The book's text in pages whose story fits in room (pixels of height): words fill each page,
--- which ends at the last sentence or line that fits (or at a word, in a sentence too long for a
--- page). Measures with the story fontstring, so the story's text changes.
-local function Pages(text, room)
-    local story, pages, page, cut = Overlay.Story, {}, "", nil
-    local function Fits(candidate)
-        story:SetText(Emphasize(candidate))
-        -- secret: the book's text is built from plain strings, as the story's is
-        return story:GetStringHeight() <= room
-    end
-    for word in text:gmatch("%S+%s*") do
-        if page ~= "" and not Fits(page .. word) then
-            local at = cut or #page
-            pages[#pages + 1] = (page:sub(1, at):gsub("%s+$", ""))
-            page, cut = page:sub(at + 1), nil
-        end
-        page = page .. word
-        if word:find("[%.!%?:]%s*$") or word:find("\n") then
-            cut = #page -- a sentence or line ends here: the page may end here
-        end
-    end
-    if page:find("%S") then
-        pages[#pages + 1] = (page:gsub("%s+$", ""))
-    end
-    return pages
-end
-
--- Labels the quest book's button for what pressing it does: open it, turn the page, or close it.
-local function LabelBook()
-    local hint, pages, page = Overlay.Hint, Overlay.m_pages, Overlay.m_page
-    if not Overlay.m_bookOpen then
-        hint.m_text = "Quest book"
-    elseif #pages == 1 then
-        hint.m_text = "Close book"
-    else
-        hint.m_text = ("Page %d of %d, %s"):format(page, #pages, page < #pages and "next" or "close")
-    end
-    LabelPill(hint, hint.m_key)
 end
 
 -- Shows a message in the footer's place: the hint (gold) or the working (green).
@@ -607,7 +626,6 @@ function ScholarView.Show(puzzle, info)
     local actions = info.actions or {}
     LabelPill(Overlay.Speak, actions.speak)
     Overlay.Hint.m_text, Overlay.Hint.m_key = info.book and "Quest book" or "Need a hint?", actions.hint
-    Overlay.m_pages, Overlay.m_page = nil, 0
     LabelPill(Overlay.Hint, actions.hint)
     LabelPill(Overlay.Skip, actions.skip)
     Overlay.Speak:SetShown(info.canSpeak and true or false)
@@ -619,27 +637,38 @@ function ScholarView.Show(puzzle, info)
     return Overlay
 end
 
---- Opens the quest book in the story's place, turns its page, or closes it after the last one:
---- the quest's text, as the player saw it, holds every answer to a quest riddle. Only while a
---- puzzle with a book is on screen.
+--- Opens the quest book in the story's place, or closes it again: the quest's text, as the player
+--- saw it, holds every answer to a quest riddle. It opens at the top, as tall as its text or the
+--- room the screen leaves, and scrolls the rest (ScrollBook). Only while a puzzle with a book is on
+--- screen.
 function ScholarView.ToggleBook()
     local puzzle = Overlay.m_puzzle
-    if not Overlay.m_bookOpen then
-        -- The room the story may take: the screen, less the margins and the rest of the riddle.
+    local open = not Overlay.m_bookOpen
+    Overlay.m_bookOpen = false
+    if open then
+        -- The room the book may take: the screen, less the margins and the rest of the riddle.
         local rest = Layout(false, puzzle)
         -- secret: as in Layout
-        local room = max(UIParent:GetHeight() - 2 * ScreenMargin - rest - 14, 24)
-        Overlay.m_pages = Overlay.m_pages or Pages(puzzle.book, room)
-        Overlay.m_bookOpen, Overlay.m_page = true, 1
-    elseif Overlay.m_page < #Overlay.m_pages then
-        Overlay.m_page = Overlay.m_page + 1
-    else
-        Overlay.m_bookOpen, Overlay.m_page = false, 0
+        Overlay.m_bookRoom = max(UIParent:GetHeight() - 2 * ScreenMargin - rest - 14, 2 * ScrollStep)
+        Overlay.BookText:SetText(Emphasize(puzzle.book))
+        Overlay.Book:SetVerticalScroll(0)
+        Overlay.m_bookOpen, Overlay.m_bookOffset = true, 0
     end
-    local story = Overlay.m_bookOpen and Overlay.m_pages[Overlay.m_page] or Overlay.m_story
-    Overlay.Story:SetText(Emphasize(story))
-    LabelBook()
-    Layout(story ~= "", puzzle)
+    Overlay.Hint.m_text = open and "Close book" or "Quest book"
+    LabelPill(Overlay.Hint, Overlay.Hint.m_key)
+    Layout(Overlay.m_story ~= "", puzzle)
+end
+
+--- Scrolls the open quest book by notches (positive is down, ScrollStep pixels each), never past
+--- the top or the end of its text.
+---@param notches number
+function ScholarView.ScrollBook(notches)
+    if not ScholarView.BookOpen() then
+        return
+    end
+    Overlay.m_bookOffset = max(0, min(Overlay.m_bookOffset + notches * ScrollStep, Overlay.m_bookRange))
+    Overlay.Book:SetVerticalScroll(Overlay.m_bookOffset)
+    PlaceThumb()
 end
 
 --- Whether the quest book is open.

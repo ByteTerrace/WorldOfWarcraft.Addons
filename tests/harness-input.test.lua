@@ -195,3 +195,18 @@ test("C_GamePad answers the connected controller's mapped state as fresh typed a
     eq(again.sticks[2].x, 0, "sticks are separate tables")
     eq(gamePad.GetDeviceMappedState(999), nil, "an unknown device")
 end)
+
+test("the mouse wheel reaches a visible frame with the wheel enabled, and only that", function()
+    local h = Harness.New()
+    local frame = h.env.CreateFrame("Frame", nil, h.env.UIParent)
+    local turns = {}
+    frame:SetScript("OnMouseWheel", function(_, delta) turns[#turns + 1] = delta end)
+    falsy(h:MouseWheel(frame, 1), "the wheel isn't enabled")
+    frame:EnableMouseWheel(true)
+    truthy(frame:IsMouseWheelEnabled())
+    truthy(h:MouseWheel(frame, 1))
+    truthy(h:MouseWheel(frame, -1))
+    frame:Hide()
+    falsy(h:MouseWheel(frame, -1), "a hidden frame doesn't get it")
+    eq(table.concat(turns, ","), "1,-1")
+end)

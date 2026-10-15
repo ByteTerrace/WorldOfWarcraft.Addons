@@ -267,8 +267,8 @@ test("the quest book opens in the riddle's place with the quest's text, and clos
     truthy(Reveal(Harness.State(overlay.Hint.Label).text):find("Quest book", 1, true), "the hint is the book")
     h:Key("H", true)
     truthy(ns.ScholarView.BookOpen())
-    truthy(Reveal(Harness.State(overlay.Story).text):find("Stonefield", 1, true), "the quest's text")
-    truthy(overlay.Story:IsShown())
+    truthy(Reveal(Harness.State(overlay.BookText).text):find("Stonefield", 1, true), "the quest's text")
+    truthy(overlay.Book:IsShown())
     h:Key("H", true)
     falsy(ns.ScholarView.BookOpen())
 end)
@@ -285,43 +285,70 @@ test("a long quest's text is kept whole, as the quest log shows it, through to t
     truthy(shown[1].book:find("Help us.", 1, true), "the book ends as the quest does")
 end)
 
-test("a quest book too long for the screen turns its pages, and the riddle always fits on screen", function()
+test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-pad, and the riddle fits", function()
     local h, _, ns = LoadKid()
+    h.labelStyle = "Letters" -- a controller is connected
+    h.env.UIParent:SetSize(1366, 600) -- a short screen: the harness's 14 px lines are shorter than the real font's
     local paragraph = "Greetings, rogue. I can see you've got the look of an adventurer about you. This is good. "
         .. "The world needs more of us restless souls, seeking fortune and glory. "
     local long = {
         id = 34, title = "The Great Outdoors", header = "Tirisfal Glades",
-        text = paragraph:rep(9) .. "Have a seat near the fire and get comfortable.",
+        text = paragraph:rep(20) .. "Have a seat near the fire and get comfortable.",
         goal = "Sit near Eleanor's Basic Campfire and wait until you receive the Boosted Rest buff.",
         objectives = { { text = "Sit near the campfire", required = 1 }, { text = "Gain the Boosted Rest buff", required = 1 } },
     }
-    h.env.UIParent:SetSize(1366, 600) -- a short screen: the harness's 14 px lines are shorter than the real font's
     Accept(h, long, "Eleanor Shackleton")
     h:Slash("/tlk puzzle")
     local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
-    local screen = h.env.UIParent:GetHeight()
+    local book, screen = overlay.Book, h.env.UIParent:GetHeight()
     local function Fits(what)
-        local panel = overlay.Panel
-        truthy(panel:GetHeight() <= screen - 40, ("%s: the panel (%d) fits the screen (%d)"):format(what, panel:GetHeight(), screen))
+        truthy(overlay.Panel:GetHeight() <= screen - 40, ("%s: the panel (%d) fits the screen (%d)"):format(what,
+            overlay.Panel:GetHeight(), screen))
     end
     Fits("the riddle")
-    local pages, seen = {}, 0
-    repeat
-        h:Key("H", true)
-        if ns.ScholarView.BookOpen() then
-            seen = seen + 1
-            Fits("page " .. seen)
-            pages[#pages + 1] = Reveal(Harness.State(overlay.Story).text)
-            local label = Reveal(Harness.State(overlay.Hint.Label).text)
-            truthy(label:find(("Page %d of"):format(seen), 1, true), "the button says which page: " .. label)
-        end
-    until not ns.ScholarView.BookOpen() or seen > 10
-    truthy(seen > 1, "the book took more than one page")
-    falsy(ns.ScholarView.BookOpen(), "the last page's press closes the book")
-    local whole = table.concat(pages, " "):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("%s+", " ")
-    truthy(whole:find("Have a seat near the fire and get comfortable.", 1, true), "every page together is the whole text: " .. whole)
-    truthy(whole:find("Eleanor Shackleton", 1, true), "who gave it, too")
+    falsy(book:IsShown(), "the book waits to be opened")
+    local hadStory = overlay.Story:IsShown()
+    h:Key("H", true)
+    truthy(ns.ScholarView.BookOpen())
+    truthy(book:IsShown() and not overlay.Story:IsShown(), "the book scrolls in the story's place")
+    Fits("the open book")
+    local text = Reveal(Harness.State(overlay.BookText).text)
+    truthy(text:find("Eleanor Shackleton", 1, true) and text:find("get comfortable.", 1, true), "the whole quest, scrolled")
+    truthy(Reveal(Harness.State(overlay.Hint.Label).text):find("Close book", 1, true), "the button closes it")
+    local range = book:GetVerticalScrollRange()
+    truthy(range > 0, "more text than room")
+    eq(book:GetVerticalScroll(), 0, "it opens at the top")
+    local function Offset() return book:GetVerticalScroll() end
+    truthy(h:MouseWheel(book, -1), "the book takes the wheel")
+    local step = Offset()
+    truthy(step > 0, "the wheel scrolls down")
+    h:MouseWheel(book, 1)
+    eq(Offset(), 0, "and back up")
+    h:MouseWheel(book, 1)
+    eq(Offset(), 0, "never above the top")
+    h:Key("DOWN", true)
+    eq(Offset(), step, "the Down arrow scrolls like a notch")
+    h:Key("UP", true)
+    eq(Offset(), 0)
+    h:Gamepad("PADDDOWN", true)
+    h:Gamepad("PADDDOWN", false)
+    eq(Offset(), step, "a D-pad press scrolls a notch")
+    h:Gamepad("PADDDOWN", true)
+    h:Advance(1)
+    truthy(Offset() > 2 * step, "held, it keeps scrolling")
+    h:Gamepad("PADDDOWN", false)
+    local held = Offset()
+    h:Advance(1)
+    eq(Offset(), held, "let go, it stops")
+    for _ = 1, 100 do h:MouseWheel(book, -1) end
+    eq(Offset(), range, "never below the end")
+    h:Key("H", true)
+    falsy(ns.ScholarView.BookOpen())
+    falsy(book:IsShown(), "closed")
+    eq(overlay.Story:IsShown(), hadStory, "the riddle is as it was")
     Fits("the riddle again")
+    h:Key("H", true)
+    eq(Offset(), 0, "opened again, it starts at the top")
 end)
 
 test("with only quest riddles on, a riddle that comes due waits for a quest", function()

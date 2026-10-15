@@ -20,7 +20,8 @@ local addonName, ns = ...
 --            fight to end, and one on screen steps aside if a fight starts and comes back after.
 --   How      answer with 1-4, a click, or the controller's face buttons; Need a hint? (the quest
 --            book, on a quest riddle) is H or the left shoulder, Read aloud is R or the right
---            shoulder, Skip is Esc or Back.
+--            shoulder, Skip is Esc or Back. The open quest book scrolls with the wheel, the Up and
+--            Down arrows or the D-pad.
 --   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the grade.
 --
 -- Limits, honestly: a controller's sticks still move the character, and a determined child can
@@ -35,6 +36,10 @@ local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NU
 -- The screen's other actions: their controller buttons and keyboard keys.
 local ActionSources = { hint = "gamepad.leftShoulder", speak = "gamepad.rightShoulder", skip = "gamepad.back" }
 local ActionKeys = { hint = "H", speak = "R", skip = "Esc" }
+-- The open quest book scrolls with the arrow keys and the D-pad; held, the D-pad keeps going.
+local ScrollKeys = { UP = -1, DOWN = 1 }
+local ScrollSources = { scrollUp = "gamepad.dpadUp", scrollDown = "gamepad.dpadDown" }
+local ScrollRepeat = 0.12 -- seconds between notches while a D-pad direction is held
 local LockedBy = "Scholar.locked"
 local MaxPinMisses = 3
 local PinWaitSeconds = 60
@@ -338,6 +343,8 @@ ScholarView.Init({
             Hint()
         elseif key == "R" then
             Speak()
+        elseif ScrollKeys[key] then
+            ScholarView.ScrollBook(ScrollKeys[key])
         end
     end,
 })
@@ -443,12 +450,31 @@ Commands[#Commands + 1] = { name = "hint", label = "Show the riddle's hint", run
 Commands[#Commands + 1] = { name = "speak", label = "Read the riddle aloud", run = function() Speak() end }
 Commands[#Commands + 1] = { name = "skip", label = "Skip the riddle (Gentle mode, after a try)", run = function() Skip() end }
 
+-- A held D-pad direction scrolls the open quest book a notch, then a notch every ScrollRepeat
+-- seconds until it's let go.
+local Scrolling
+local function ScrollHeld(notches, phase)
+    Scholar:Cancel(Scrolling)
+    Scrolling = nil
+    if phase == "down" then
+        ScholarView.ScrollBook(notches)
+        Scrolling = Scholar:Every(ScrollRepeat, function() ScholarView.ScrollBook(notches) end)
+    end
+end
+Commands[#Commands + 1] = { name = "scrollUp", label = "Scroll the quest book up", held = true,
+    run = function(_, phase) ScrollHeld(-1, phase) end }
+Commands[#Commands + 1] = { name = "scrollDown", label = "Scroll the quest book down", held = true,
+    run = function(_, phase) ScrollHeld(1, phase) end }
+
 local Bindings = {}
 for i, source in ipairs(AnswerSources) do
     Bindings[i] = { map = "scholar", source = source, command = "Scholar.answer" .. i }
 end
 for action, source in pairs(ActionSources) do
     Bindings[#Bindings + 1] = { map = "scholar", source = source, command = "Scholar." .. action }
+end
+for command, source in pairs(ScrollSources) do
+    Bindings[#Bindings + 1] = { map = "scholar", source = source, command = "Scholar." .. command }
 end
 
 Scholar = Addon:Module("Scholar", {

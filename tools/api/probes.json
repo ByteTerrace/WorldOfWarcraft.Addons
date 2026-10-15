@@ -274,7 +274,12 @@
       "contexts": { "idle/none": true }
     },
     "names.chatSenders": {
-      "result": { "CHAT_MSG_CHANNEL": "Aa Aa", "CHAT_MSG_SAY": "Aa Aa", "CHAT_MSG_YELL": "Aa Aa" },
+      "result": {
+        "CHAT_MSG_ADDON": "Aa Aa",
+        "CHAT_MSG_CHANNEL": "Aa Aa",
+        "CHAT_MSG_SAY": "Aa Aa",
+        "CHAT_MSG_YELL": "Aa Aa"
+      },
       "contexts": { "idle/none": true }
     },
     "names.otherPlayer": {

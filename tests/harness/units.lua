@@ -1,5 +1,6 @@
 -- Units of the fake client beyond the player and target: enemy players, nameplates, mouseover,
--- the player's death, combo points, raid target icons and realms (see wow.lua for the rest).
+-- the player's death, combo points, raid target icons, realms and aura sounds (see wow.lua for the
+-- rest).
 --
 -- A unit table (h.player, h:SetTarget, h:SetUnit, h:AddNamePlate, h:SetMouseover) holds:
 --   name, surname (players default to Harness.DEFAULT_SURNAME; UnitName returns name, surname,
@@ -77,6 +78,18 @@
 --               The client only knows a nearby unit's guild; the harness answers for any unit.
 --               [D] IsInGuild() (no secret flags) is whether the player has a guild. Guild
 --               rosters and PLAYER_GUILD_UPDATE aren't modeled.
+--   Aura sounds [D] C_UnitAuras.AddAuraSound(trigger, sound) registers a sound for an aura event
+--               and returns its auraSoundID (Nilable), and RemoveAuraSound(auraSoundID) undoes it
+--               (UnitAuraDocumentation). trigger is an Enum.UnitAuraSoundTrigger value; sound is a
+--               UnitAuraSoundInfo: unitToken and spellID (not Nilable), soundFileName,
+--               soundFileID, outputChannel and throttleSeconds (Nilable). [D] A throttleSeconds
+--               outside 0 to 5 "rejects registration": no ID. [G] A trigger that isn't an enum
+--               value, or a sound without its unitToken or spellID, is an error; the sound file
+--               isn't checked when it registers; IDs count up from 1 per harness; removing an ID
+--               that isn't registered does nothing. Registrations are kept in h.auraSounds
+--               ([auraSoundID] = { trigger, sound }). [G] HasRestrictions without a marker:
+--               blocked during combat lockdown (secrets.lua). Playing the sounds on aura events
+--               isn't modeled.
 
 Harness.MAX_NAMEPLATES = 40
 local ServerId = 5000
@@ -100,6 +113,34 @@ function Harness:InitUnits(player)
     self.player.guildRank, self.player.guildRankIndex = player.guildRank, player.guildRankIndex
     self.guidSerial = 0
     self.guidUnits = {} -- [guid] = the unit table it was given to
+    self.auraSounds = {} -- [auraSoundID] = { trigger, sound } (C_UnitAuras.AddAuraSound)
+    self.auraSoundSerial = 0
+end
+
+-- The aura sound throttle's documented bounds, in seconds (UnitAuraSoundInfo.throttleSeconds).
+local AuraSoundThrottle = { min = 0, max = 5 }
+
+-- C_UnitAuras.AddAuraSound (see the header): the new auraSoundID, or nil when it's rejected.
+local function AddAuraSound(h, trigger, sound)
+    local known = false
+    for _, value in pairs(h.env.Enum.UnitAuraSoundTrigger) do
+        known = known or value == trigger
+    end
+    if not known then
+        error("C_UnitAuras.AddAuraSound: bad argument #1 (trigger must be an Enum.UnitAuraSoundTrigger value)", 3)
+    end
+    if type(sound) ~= "table" or type(sound.unitToken) ~= "string" or type(sound.spellID) ~= "number" then
+        error("C_UnitAuras.AddAuraSound: bad argument #2 (sound must be a UnitAuraSoundInfo with unitToken and spellID)", 3)
+    end
+    local throttle = sound.throttleSeconds
+    if throttle ~= nil and (type(throttle) ~= "number" or throttle < AuraSoundThrottle.min or throttle > AuraSoundThrottle.max) then
+        return nil
+    end
+    h.auraSoundSerial = h.auraSoundSerial + 1
+    local copy = {}
+    for key, value in pairs(sound) do copy[key] = value end
+    h.auraSounds[h.auraSoundSerial] = { trigger = trigger, sound = copy }
+    return h.auraSoundSerial
 end
 
 -- A unit's GUID, assigned on first use unless the test gave one. A player known only by GUID (a
@@ -350,6 +391,10 @@ function Harness:UnitFakes()
                 local plate = PlateTokenFor(h, Unit(token))
                 return plate and h:NamePlateFrame(plate) or nil
             end,
+        },
+        C_UnitAuras = {
+            AddAuraSound = function(trigger, sound) return AddAuraSound(h, trigger, sound) end,
+            RemoveAuraSound = function(auraSoundID) h.auraSounds[auraSoundID] = nil end,
         },
     }
 end

@@ -4,8 +4,15 @@ local addonName, ns = ...
 -- (C_DeathRecap): what a session holds idle, in combat and right after a fight, the local
 -- player's damage taken, the enemies' sources, and a death. Recaps record common fields and
 -- the killing blow's common shape; separate swing/spell probes require that event kind before
--- recording its spell fields. Also the order of the steps into and out of combat (combat.edges,
--- from what DevTools.lua heard). Probes.lua's header is the contract; ProbeNeeds.lua defines needs.
+-- recording its spell fields. Also the order of the steps into and out of combat (combat.edges),
+-- whether the meter's totals are secret on leaving a PvP fight (damageMeter.pvpSecrecy), and
+-- ENCOUNTER_WARNING's payload (encounterWarning.seen), from what DevTools.lua heard. Probes.lua's
+-- header is the contract; ProbeNeeds.lua defines needs.
+--
+-- The last two keep what they hear here, as Probes.lua's listeners do (sets of shapes):
+-- DevTools.lua passes each PLAYER_REGEN_ENABLED to Probes.NotePvPLeftCombat, which in a PvP match
+-- reads the damage meter then and PvPLaterSeconds later, and ENCOUNTER_START and ENCOUNTER_WARNING
+-- to Probes.NoteEncounterStart and NoteEncounterWarning.
 
 -- Spell and environmental payloads depend on the event kind; mitigation is optional in
 -- Blizzard_DeathRecap's damage tooltip. Neither belongs in the common event shape.
@@ -18,7 +25,92 @@ local RecapSpellFields = { "spellId", "spellName", "spellSchool", "avoidable", "
 local Probes = ns.Probes
 local Marker, Value, Shape, Text = Probes.Marker, Probes.Value, Probes.Shape, Probes.Text
 local Fields, FieldShapes, Same = Probes.Fields, Probes.FieldShapes, Probes.Same
-local First, Joined = Probes.First, Probes.Joined
+local First, Joined, JoinSets = Probes.First, Probes.Joined, Probes.JoinSets
+local Note, Token, EnumName, Restricted = Probes.Note, Probes.Token, Probes.EnumName, Probes.Restricted
+
+-- The current DamageDone session's totals read on leaving combat in a PvP match
+-- (Probes.NotePvPLeftCombat): leftCombat (at PLAYER_REGEN_ENABLED) and later (PvPLaterSeconds on)
+-- each map where the read was ("<IsInInstance type>/<restrictions>", as in "pvp/PvPMatch") to the
+-- set of shapes of totalAmount (the session's) and localTotalAmount (the local player's entry's,
+-- "none" without one).
+local PvPMeter = { leftCombat = {}, later = {} }
+
+-- Boss encounters and their warnings since load (Probes.NoteEncounterStart, NoteEncounterWarning):
+-- whether ENCOUNTER_START fired, and the sets of ENCOUNTER_WARNING's info shapes and of each of
+-- its fields' shapes.
+local EncounterWarnings = { started = false, shapes = {}, fields = {} }
+
+-- IsInInstance's type ("none", "pvp", "arena", ...), or "secret".
+local function InstanceType()
+    local _, instanceType = IsInInstance()
+    return issecretvalue(instanceType) and "secret" or tostring(instanceType)
+end
+
+-- Keeps the shapes of the current DamageDone session's totals under when ("leftCombat" or
+-- "later"), keyed by where you are and the restrictions in force.
+local function NotePvPMeter(when)
+    local types = Enum.DamageMeterSessionType
+    -- secret: totals go through Token; the sources list and isLocalPlayer are checked with issecretvalue
+    local session = C_DamageMeter.GetCombatSessionFromType(types.Current, Enum.DamageMeterType.DamageDone)
+    local where = InstanceType() .. "/" .. Restricted.text
+    local fields = PvPMeter[when][where]
+    if not fields then
+        fields = {}
+        PvPMeter[when][where] = fields
+    end
+    Note(fields, "totalAmount", Token(session.totalAmount))
+    local localTotal, sources = "none", session.combatSources
+    if not issecretvalue(sources) and type(sources) == "table" then
+        for _, source in ipairs(sources) do
+            local isLocalPlayer = source.isLocalPlayer
+            if not issecretvalue(isLocalPlayer) and isLocalPlayer == true then
+                localTotal = Token(source.totalAmount)
+            end
+        end
+    end
+    Note(fields, "localTotalAmount", localTotal)
+end
+
+--- The PvP meter reads and the encounters and warnings seen (above), for their probes and needs.
+Probes.PvPMeter, Probes.EncounterWarnings = PvPMeter, EncounterWarnings
+
+--- On leaving combat (DevTools.lua passes each PLAYER_REGEN_ENABLED) in a PvP match (the PvPMatch
+--- restriction, a battleground or an arena), keeps the shapes of the damage meter's totals for
+--- damageMeter.pvpSecrecy, then and again PvPLaterSeconds later. Elsewhere it does nothing.
+function Probes.NotePvPLeftCombat()
+    local instanceType = InstanceType()
+    if not Restricted.active.PvPMatch and instanceType ~= "pvp" and instanceType ~= "arena" then
+        return
+    end
+    NotePvPMeter("leftCombat")
+    C_Timer.After(Probes.PvPLaterSeconds, function() NotePvPMeter("later") end)
+end
+
+--- Notes a boss encounter's start (DevTools.lua passes ENCOUNTER_START), for encounterWarning.seen.
+function Probes.NoteEncounterStart()
+    EncounterWarnings.started = true
+end
+
+--- Keeps an ENCOUNTER_WARNING payload's shapes for encounterWarning.seen (DevTools.lua passes each):
+--- the info's Token, and each field's: "secret", a boolean as "true" or "false", a plain severity
+--- as its Enum.EncounterEventSeverity name, anything else as its Token.
+function Probes.NoteEncounterWarning(info)
+    EncounterWarnings.shapes[Token(info)] = true
+    if issecretvalue(info) or type(info) ~= "table" then
+        return
+    end
+    for key, value in pairs(info) do
+        if type(key) == "string" then
+            local shape = Token(value)
+            if shape == "boolean" then
+                shape = tostring(value)
+            elseif key == "severity" and shape == "number" then
+                shape = EnumName(Enum.EncounterEventSeverity, value) or "unknown"
+            end
+            Note(EncounterWarnings.fields, key, shape)
+        end
+    end
+end
 
 -- Which damage meter session a session's duration matches in the available list (oldest
 -- first): "latest", "previous", "neither", "none" (no duration) or "secret".
@@ -317,6 +409,43 @@ Probes.Define({
         run = function()
             local edges = Probes.CombatEdges
             return { enter = table.concat(edges.enter, " > "), leave = table.concat(edges.leave, " > ") }
+        end,
+    },
+    {
+        -- Whether the damage meter's totals stay secret in a PvP match once you leave combat: the
+        -- current DamageDone session's totalAmount and your own entry's, read at
+        -- PLAYER_REGEN_ENABLED (leftCombat) and PvPLaterSeconds later (later), each under where it
+        -- was read ("pvp/PvPMatch"). The docs flag the session getters SecretWhenInCombat only;
+        -- Details! treats arena sessions as secret, which may be its main-game path.
+        name = "damageMeter.pvpSecrecy",
+        needs = { "pvpFight" },
+        accumulates = true,
+        run = function()
+            local meter = Probes.PvPMeter
+            return { leftCombat = JoinSets(meter.leftCombat), later = JoinSets(meter.later) }
+        end,
+    },
+    {
+        -- Whether the client fires ENCOUNTER_WARNING in boss encounters, and its
+        -- EncounterWarningInfo's fields' shapes (the docs mark text, the caster's and target's
+        -- names and GUIDs, the icon, spell, isDeadly and color SecretValue; severity,
+        -- duration and the should* flags not). BigWigs listens for it on Forever, DBM only in the
+        -- main game. Also whether C_EncounterWarnings says the feature is there and turned on.
+        name = "encounterWarning.seen",
+        needs = { "encounter" },
+        accumulates = true,
+        run = function()
+            local seen = Probes.EncounterWarnings
+            local warnings = C_EncounterWarnings
+            local result = {
+                heard = next(seen.shapes) ~= nil,
+                featureAvailable = Value(warnings.IsFeatureAvailable()),
+                featureEnabled = Value(warnings.IsFeatureEnabled()),
+            }
+            if result.heard then
+                result.info, result.fields = Joined(seen.shapes), JoinSets(seen.fields)
+            end
+            return result
         end,
     },
 })

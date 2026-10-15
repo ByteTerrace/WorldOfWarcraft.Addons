@@ -4,11 +4,15 @@ local addonName, ns = ...
 -- with Probes.AddNeeds. Keys are what probes name in their needs; step places each in one play
 -- session in a starting zone (Probes.Steps). A check only reads, and its harness setup recreates
 -- the situation in the fake client from the harness's own scripting (h:SetTarget, h:MeterFight).
--- NamePlateToken and FirstBagItem are shared with the probes that read the same things.
+-- NamePlateToken and FirstBagItem are shared with the probes that read the same things, and
+-- PvPLaterSeconds with ProbesCombat.lua's PvP listener.
 
 -- The restrictions that make auras secret (SecretPredicatesDocumentation's
 -- SecretWhenAurasRestricted).
 local AuraRestrictions = { "Combat", "Encounter", "ChallengeMode", "PvPMatch" }
+
+-- Seconds after leaving combat in a PvP match at which damageMeter.pvpSecrecy reads the meter again.
+local PvPLaterSeconds = 5
 
 local Probes = ns.Probes
 local UnitCombat, Kills, AfterDeath = Probes.UnitCombat, Probes.Kills, Probes.AfterDeath
@@ -425,6 +429,29 @@ local Needs = {
             h:SetRestriction("Map", true)
         end,
     },
+    pvpFight = {
+        label = "after a PvP fight",
+        text = ("a fight in a battleground or arena since DevTools loaded, over %d seconds ago (deal damage, "
+            .. "leave combat, wait, then type it)"):format(PvPLaterSeconds),
+        step = 6,
+        check = function()
+            local meter = Probes.PvPMeter -- ProbesCombat.lua's, which loads after this file
+            return next(meter.leftCombat) ~= nil and next(meter.later) ~= nil
+        end,
+        setup = function(h)
+            h:SetLocation({ instance = "pvp" })
+            h:SetRestriction("PvPMatch", true)
+            h:MeterFight({ duration = 10, sources = { { unit = "player", amounts = { DamageDone = 420 } } } })
+            h:Advance(PvPLaterSeconds + 1)
+        end,
+    },
+    encounter = {
+        label = "boss encounter",
+        text = "a boss encounter started since DevTools loaded (pull a dungeon or raid boss; type it during or after)",
+        step = 6,
+        check = function() return Probes.EncounterWarnings.started end, -- ProbesCombat.lua's
+        setup = function(h) h:StartEncounter({ name = "Hogger" }) end,
+    },
     maxLevel = {
         label = "max level",
         text = "playing a character at the max level (GetMaxPlayerLevel)",
@@ -470,4 +497,5 @@ local Needs = {
 
 Probes.NamePlateToken = NamePlateToken
 Probes.FirstBagItem = FirstBagItem
+Probes.PvPLaterSeconds = PvPLaterSeconds
 Probes.AddNeeds(Needs)

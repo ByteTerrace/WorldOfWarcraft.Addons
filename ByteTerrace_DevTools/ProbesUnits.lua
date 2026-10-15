@@ -1,13 +1,22 @@
 local addonName, ns = ...
 
 -- Calibration probes about units: identity and health (secret or plain, idle and in combat),
--- health percent, classification, primary power, combo points, nameplate frames, and the UNIT_COMBAT payloads
--- and UNIT_AURA tokens DevTools.lua collects. Probes.lua's header is the contract; ProbeNeeds.lua defines the needs.
+-- health percent, classification, primary power, combo points, nameplate frames, the UNIT_COMBAT payloads
+-- and UNIT_AURA tokens DevTools.lua collects, and whether aura sounds (C_UnitAuras.AddAuraSound)
+-- register. Probes.lua's header is the contract; ProbeNeeds.lua defines the needs.
 
 -- UnitClassification's documented answers (warcraft.wiki.gg API_UnitClassification).
 local Classifications = {
     worldboss = true, rareelite = true, elite = true, rare = true, normal = true, trivial = true, minus = true,
 }
+
+-- The aura auraSound.api registers a sound for: Mark of the Wild (Rank 1), a common buff on the
+-- player. The sound file doesn't exist and never plays: the registration is removed in the same run.
+local AuraSoundSpellID = 1126
+local AuraSoundFile = "Interface\\AddOns\\ByteTerrace_DevTools\\AuraSoundProbe.ogg"
+
+-- The most seconds UnitAuraSoundInfo's throttleSeconds takes (its doc: 0 to 5, inclusive).
+local MaxAuraSoundThrottle = 5
 
 local Probes = ns.Probes
 local Value, Shape, Joined, JoinSets = Probes.Value, Probes.Shape, Probes.Joined, Probes.JoinSets
@@ -24,6 +33,23 @@ local function Identity(unit, withRealm)
         name = Shape(name), realm = withRealm and Shape(realm) or nil, className = Shape(className),
         classFile = Shape(classFile), classID = Shape(classID), guid = Shape(guid),
     }
+end
+
+-- Registers an aura sound for AuraSoundSpellID on the player with throttleSeconds, then removes
+-- it by the ID it returned: whether either call errored, and the ID's shape.
+local function TryAuraSound(throttleSeconds)
+    local auras = C_UnitAuras
+    local sound = {
+        unitToken = "player", spellID = AuraSoundSpellID, soundFileName = AuraSoundFile,
+        throttleSeconds = throttleSeconds,
+    }
+    -- protected: auraSound.api needs idle, so this never runs in combat lockdown
+    local ok, id = pcall(auras.AddAuraSound, Enum.UnitAuraSoundTrigger.Added, sound)
+    local result = { errors = not ok, auraSoundID = ok and Shape(id) or nil }
+    if ok and not issecretvalue(id) and type(id) == "number" then
+        result.removeErrors = not pcall(auras.RemoveAuraSound, id)
+    end
+    return result
 end
 
 local function Health(unit)
@@ -285,6 +311,24 @@ Probes.Define({
         needs = { "auraRestricted" },
         accumulates = true,
         run = function() return JoinSets(Probes.AuraTokens) end,
+    },
+    {
+        -- Whether C_UnitAuras.AddAuraSound works on Forever, as BigWigs uses it: a registration for
+        -- an aura on the player (its ID's shape, or that it errored), removed at once with
+        -- RemoveAuraSound and that ID, which the docs give as the way to undo it. Registration is
+        -- HasRestrictions, so this runs idle only. A throttle past the documented 5 seconds
+        -- "rejects registration": invalidThrottle says whether that's an error or no ID (any ID
+        -- it does return is removed the same way).
+        name = "auraSound.api",
+        needs = { "idle" },
+        run = function()
+            local auras = C_UnitAuras
+            return {
+                -- protected: only its type is read here; TryAuraSound calls it
+                addAuraSound = Shape(auras.AddAuraSound), removeAuraSound = Shape(auras.RemoveAuraSound),
+                added = TryAuraSound(MaxAuraSoundThrottle), invalidThrottle = TryAuraSound(MaxAuraSoundThrottle + 1),
+            }
+        end,
     },
     {
         -- PARTY_KILL is how killing-blow addons read kills since the combat log closed: whose blow

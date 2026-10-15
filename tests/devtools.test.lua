@@ -260,10 +260,11 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
     table.sort(registered)
     eq(table.concat(registered, " "), "ADDON_RESTRICTION_STATE_CHANGED() CHAT_MSG_ADDON() CHAT_MSG_CHANNEL() "
         .. "CHAT_MSG_GUILD() CHAT_MSG_PARTY() CHAT_MSG_RAID() CHAT_MSG_SAY() CHAT_MSG_WHISPER() CHAT_MSG_YELL() "
-        .. "DAMAGE_METER_COMBAT_SESSION_UPDATED() PARTY_KILL() PLAYER_DEAD() PLAYER_ENTERING_WORLD() PLAYER_REGEN_DISABLED() "
-        .. "PLAYER_REGEN_ENABLED() PLAYER_TARGET_DIED() UNIT_AURA(player,target) UNIT_COMBAT(player,target) UNIT_DIED()",
+        .. "DAMAGE_METER_COMBAT_SESSION_UPDATED() ENCOUNTER_START() ENCOUNTER_WARNING() PARTY_KILL() PLAYER_DEAD() "
+        .. "PLAYER_ENTERING_WORLD() PLAYER_REGEN_DISABLED() PLAYER_REGEN_ENABLED() PLAYER_TARGET_DIED() "
+        .. "UNIT_AURA(player,target) UNIT_COMBAT(player,target) UNIT_DIED()",
         "the chat events, restriction changes and combat edges, UNIT_AURA and UNIT_COMBAT for two units, the kill "
-        .. "events, and deaths with the meter's updates")
+        .. "events, deaths with the meter's updates, and encounters with their warnings")
     h:Fire("UNIT_COMBAT", "target", "WOUND", "CRITICAL", 42, 1)
     h:Fire("UNIT_COMBAT", "target", "DODGE", "", 0, 1)
     h:Slash("/btdev probe")
@@ -731,4 +732,69 @@ test("chat events' discordInfo is kept as shapes, with a table's fields, for nam
     eq(result.fields.globalName, "empty,text", "each field keeps every shape it showed")
     eq(result.fields.hasPoll, "false,true")
     eq(result.fields.fromDiscord, "false,true")
+end)
+
+test("leaving combat in a PvP match keeps the meter's totals' shapes then and later, for damageMeter.pvpSecrecy", function()
+    local h = Load()
+    local Probes, probe = h.ns.Probes, h.ns.Probes.ByName["damageMeter.pvpSecrecy"]
+    local function Reads() return h:CountApiCalls("C_DamageMeter.GetCombatSessionFromType") end
+    h:MeterFight({ duration = 10, sources = { { unit = "player", amounts = { DamageDone = 420 } } } })
+    h:Advance(Probes.PvPLaterSeconds + 1)
+    eq(Reads(), 0, "a fight outside PvP reads nothing")
+    h:SetLocation({ instance = "arena" })
+    h:SetRestriction("PvPMatch", true)
+    h:MeterFight({ duration = 10, sources = { { unit = "player", amounts = { DamageDone = 420 } } } })
+    eq(Reads(), 1, "one read on leaving combat")
+    falsy((Probes.Check(probe)), "the read a few seconds later is still to come")
+    h:Advance(Probes.PvPLaterSeconds)
+    eq(Reads(), 2, "and one more then")
+    local shapes = '{ arena/PvPMatch = { localTotalAmount = "number", totalAmount = "number" } }'
+    eq(Probes.Show(probe.run().leftCombat) .. " " .. Probes.Show(probe.run().later), shapes .. " " .. shapes)
+    h:EnterCombat()
+    h:LeaveCombat()
+    eq(probe.run().leftCombat["arena/PvPMatch"].localTotalAmount, "none,number", "no entry of yours without damage dealt")
+    h:EnterCombat()
+    h:MeterAdd({ unit = "player", amounts = { DamageDone = 50 } })
+    Probes.NotePvPLeftCombat() -- as if PLAYER_REGEN_ENABLED came while the Combat restriction held
+    local read = probe.run().leftCombat["arena/Combat,PvPMatch"]
+    eq(read.totalAmount .. " " .. read.localTotalAmount, "secret secret", "your entry is found by isLocalPlayer, never secret")
+end)
+
+test("auraSound.api registers an aura sound and removes it, idle only; the fake follows the docs", function()
+    local h = Load()
+    h:Slash("/btdev probe")
+    eq(h.ns.Probes.Show(Records(h)["auraSound.api"].result), '{ addAuraSound = "function", added = { auraSoundID = '
+        .. '"number", errors = false, removeErrors = false }, invalidThrottle = { auraSoundID = "nil", errors = false }, '
+        .. 'removeAuraSound = "function" }', "a throttle past five seconds rejects registration without an error")
+    eq(next(h.auraSounds), nil, "nothing stays registered")
+    local auras, triggers = h.env.C_UnitAuras, h.env.Enum.UnitAuraSoundTrigger
+    local sound = { unitToken = "player", spellID = 1126, soundFileID = 1, throttleSeconds = 0 }
+    falsy(pcall(auras.AddAuraSound, 7, sound), "a trigger that isn't an enum value")
+    local id = auras.AddAuraSound(triggers.Removed, sound)
+    eq(h.auraSounds[id].sound.spellID, 1126)
+    auras.RemoveAuraSound(id)
+    eq(next(h.auraSounds), nil)
+    h:EnterCombat()
+    local adds = h:CountApiCalls("C_UnitAuras.AddAuraSound")
+    h:Slash("/btdev probe")
+    eq(h:CountApiCalls("C_UnitAuras.AddAuraSound"), adds, "the probe waits for idle")
+    h:ExpectBlocked("^C_UnitAuras%.AddAuraSound$")
+    eq(auras.AddAuraSound(triggers.Added, sound), nil, "registering is blocked in combat lockdown")
+end)
+
+test("ENCOUNTER_WARNING's payload is kept as field shapes once an encounter started, for encounterWarning.seen", function()
+    local h = Load()
+    local Probes, probe = h.ns.Probes, h.ns.Probes.ByName["encounterWarning.seen"]
+    falsy((Probes.Check(probe)), "no encounter yet")
+    h:StartEncounter({ name = "Hogger" })
+    eq(Probes.Show(probe.run()), "{ featureAvailable = false, featureEnabled = false, heard = false }")
+    local severity = h.env.Enum.EncounterEventSeverity
+    local before, checks = ApiCalls(h), h:CountApiCalls("issecretvalue")
+    h:EncounterWarning({ text = "Hogger enrages!", severity = severity.High, shouldPlaySound = false, duration = 5 })
+    eq(ApiCalls(h) - before, h:CountApiCalls("issecretvalue") - checks, "a warning asks the client nothing else")
+    h:EncounterWarning({ severity = severity.Low })
+    local result = probe.run()
+    local fields = result.fields
+    eq(table.concat({ result.info, fields.text, fields.targetGUID, fields.isDeadly, fields.color, fields.duration,
+        fields.severity, fields.shouldPlaySound }, " "), "table secret secret secret secret number High,Low false,true")
 end)

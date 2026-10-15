@@ -1,5 +1,6 @@
--- The world around the player in the fake client: location and maps, the user waypoint, honor
--- and raid warnings (see wow.lua for the rest). Only what the addons call is modeled.
+-- The world around the player in the fake client: location and maps, the user waypoint, honor,
+-- raid warnings and boss encounters (see wow.lua for the rest). Only what the addons call is
+-- modeled.
 --
 -- State: h.zone, h.subZone (GetRealZoneText, GetSubZoneText), h.mapID (the uiMapID the player is on),
 -- h.mapPosition = { x, y } (normalized to h.mapID), h.instance (nil, or IsInInstance's type:
@@ -48,6 +49,18 @@
 --               instead of running the fading frame. ChatTypeInfo.RAID_WARNING's color is
 --               r = 1, g = 0.282, b = 0 (printed in game); its other fields are
 --               ChatTypeInfoConstants.lua's.
+--   Encounters  [D] ENCOUNTER_START carries encounterID, encounterName, difficultyID and groupSize
+--               (EncounterInfoDocumentation). [G] h:StartEncounter(spec) activates the Encounter
+--               restriction, then fires ENCOUNTER_START; the harness raises no boss abilities, so
+--               it fires no ENCOUNTER_WARNING of its own. h:EncounterWarning(spec) fires one: [D] its
+--               EncounterWarningInfo carries text, casterGUID, casterName, targetGUID, targetName,
+--               iconFileID, tooltipSpellID, isDeadly and color (a ColorMixin) as secrets, since the
+--               docs mark them SecretValue, and duration, severity (Enum.EncounterEventSeverity),
+--               shouldPlaySound, shouldShowChatMessage and shouldShowWarning plain
+--               (EncounterWarningsDocumentation). [G] Unset fields are empty strings, 0, false, a
+--               white color, Medium severity, and true for the should* flags.
+--               [G] C_EncounterWarnings.IsFeatureAvailable and IsFeatureEnabled are false: Blizzard's
+--               Forever UI never reads C_EncounterWarnings (h.encounterWarnings sets both).
 
 -- The Forever client's enUS GlobalStrings for honor and quest objectives (see the header).
 Harness.GLOBAL_STRINGS = {
@@ -74,6 +87,40 @@ function Harness:InitWorld(player)
     self.superTracked = false
     self.raidNotices = {}
     self.chatLineID = 0
+    self.encounterWarnings = { available = false, enabled = false }
+end
+
+-- A boss encounter starts: spec = { id, name, difficultyID, groupSize } (defaults 1, "Encounter",
+-- 1, 5). The Encounter restriction activates, then ENCOUNTER_START fires (see the header).
+function Harness:StartEncounter(spec)
+    spec = spec or {}
+    self:SetRestriction("Encounter", true)
+    self:Fire("ENCOUNTER_START", spec.id or 1, spec.name or "Encounter", spec.difficultyID or 1, spec.groupSize or 5)
+end
+
+-- The EncounterWarningInfo fields the docs mark SecretValue (EncounterWarningsDocumentation).
+local SecretWarningFields = {
+    text = true, casterGUID = true, casterName = true, targetGUID = true, targetName = true, iconFileID = true,
+    tooltipSpellID = true, isDeadly = true, color = true,
+}
+
+-- Fires ENCOUNTER_WARNING with an EncounterWarningInfo from spec (any of its fields; see the
+-- header for the defaults and which are secret).
+function Harness:EncounterWarning(spec)
+    local info = {
+        text = "", casterGUID = "", casterName = "", targetGUID = "", targetName = "", iconFileID = 0,
+        tooltipSpellID = 0, isDeadly = false, color = self.env.CreateColor(1, 1, 1, 1), duration = 0,
+        severity = self.env.Enum.EncounterEventSeverity.Medium, shouldPlaySound = true,
+        shouldShowChatMessage = true, shouldShowWarning = true,
+    }
+    for key, value in pairs(spec or {}) do
+        assert(info[key] ~= nil, "EncounterWarning: EncounterWarningInfo has no field " .. tostring(key))
+        info[key] = value
+    end
+    for key in pairs(SecretWarningFields) do
+        info[key] = Secret(info[key])
+    end
+    self:Fire("ENCOUNTER_WARNING", info)
 end
 
 -- Moves the player: spec = { zone, subZone, mapID, x, y, instance } (a missing field keeps its
@@ -269,6 +316,10 @@ function Harness:WorldFakes()
         IsInInstance = function()
             return h.instance ~= nil, h.instance or "none"
         end,
+        C_EncounterWarnings = {
+            IsFeatureAvailable = function() return h.encounterWarnings.available end,
+            IsFeatureEnabled = function() return h.encounterWarnings.available and h.encounterWarnings.enabled end,
+        },
         UiMapPoint = UiMapPoint(),
         ChatTypeInfo = ChatTypeInfo(),
         RaidWarningUtil = {

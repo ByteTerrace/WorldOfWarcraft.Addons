@@ -23,8 +23,11 @@ local addonName, ns = ...
 -- comms.addonMessageInLockdown (Probes.NoteAddonMessage), for UNIT_AURA on the player and the
 -- target, for units.secretTokenInAuraEvent (Probes.NoteAuraToken), for the steps into and out of
 -- combat and every restriction change, for combat.edges and the restrictions the others key by
--- (Probes.NoteCombatEdge, NoteRestriction, SyncRestrictions), and for your deaths and the damage
--- meter's updates after them, for damageMeter.afterDeath (Probes.NoteDeath, NoteMeterUpdate).
+-- (Probes.NoteCombatEdge, NoteRestriction, SyncRestrictions), for leaving combat in a PvP match,
+-- for damageMeter.pvpSecrecy (Probes.NotePvPLeftCombat reads the meter's totals then and a few
+-- seconds later), for your deaths and the damage meter's updates after them, for
+-- damageMeter.afterDeath (Probes.NoteDeath, NoteMeterUpdate), and for boss encounters' starts and
+-- warnings, for encounterWarning.seen (Probes.NoteEncounterStart, NoteEncounterWarning).
 --
 -- Only the client's own names are dumped. A global or table member any addon set is tainted by
 -- that addon (issecurevariable), so it's counted under `skipped` instead, per addon: other addons'
@@ -300,6 +303,9 @@ RestrictionListener:SetScript("OnEvent", function(_, event, kind, state)
         end
     else
         Probes.NoteCombatEdge(event)
+        if event == "PLAYER_REGEN_ENABLED" then
+            Probes.NotePvPLeftCombat()
+        end
     end
 end)
 
@@ -329,4 +335,16 @@ KillListener:RegisterEvent("PLAYER_TARGET_DIED")
 KillListener:RegisterEvent("UNIT_DIED")
 KillListener:SetScript("OnEvent", function(_, event, ...)
     Probes.NoteKill(event, ...)
+end)
+
+-- Boss encounters' starts and warnings for encounterWarning.seen, from load.
+local EncounterListener = CreateFrame("Frame")
+EncounterListener:RegisterEvent("ENCOUNTER_START")
+EncounterListener:RegisterEvent("ENCOUNTER_WARNING")
+EncounterListener:SetScript("OnEvent", function(_, event, info)
+    if event == "ENCOUNTER_START" then
+        Probes.NoteEncounterStart()
+    else
+        Probes.NoteEncounterWarning(info)
+    end
 end)

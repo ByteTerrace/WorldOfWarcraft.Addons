@@ -20,9 +20,9 @@ local addonName, ns = ...
 --     finite numbers or such tables. Results describe shapes (a type, an empty string, a color's
 --     bytes), never data that differs between characters, targets or sessions, so any player's
 --     run compares with any other's. The exceptions are the accumulating probes below, which list
---     what sessions happened to show (unitCombat.seen, kills.seen, names.chatSenders,
---     names.chatDiscordInfo, combat.edges, comms.addonMessageInLockdown,
---     units.secretTokenInAuraEvent, questLog.objectives, questLog.countForm): that's their point.
+--     what sessions happened to show (unitCombat.seen, kills.seen, names.chatSenders, names.chatDiscordInfo,
+--     combat.edges, comms.addonMessageInLockdown, units.secretTokenInAuraEvent, questLog.objectives,
+--     questLog.countForm, damageMeter.pvpSecrecy, encounterWarning.seen): that's their point.
 --   * harness (optional) is the reason the harness can't run this probe at all.
 --   * accumulates (optional) marks a probe whose result lists what sessions happened to show. Its
 --     new result merges into the current record instead of replacing it (Probes.Merge), so each
@@ -34,6 +34,7 @@ local addonName, ns = ...
 -- state, and never compares, computes with or stores a secret: a secret becomes the marker
 -- { secret = true, type = <its type> } (Value, Shape, Text), checked with issecretvalue first.
 -- textures.used draws on hidden textures of a frame of its own, made the first time it runs.
+-- auraSound.api alone registers something, and removes it at once (ProbesUnits.lua says why).
 --
 -- UNIT_COMBAT can't be asked for after the fact, so DevTools.lua listens for it from load (for
 -- the player and the target only) and passes each payload to Probes.NoteUnitCombat, which keeps
@@ -666,6 +667,9 @@ function Probes.NoteDiscordInfo(event, info)
         end
     end
 end
+
+--- The listeners' helpers, for the probe files' own listeners (ProbesCombat.lua's).
+Probes.Note, Probes.Token, Probes.EnumName = Note, Token, EnumName
 
 --- Shape sets (Note's) as a record holds them: each set joined by commas, a table of sets
 --- likewise, key by key.

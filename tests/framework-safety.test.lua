@@ -14,7 +14,7 @@ local function NewAddOn(saved, options)
 end
 
 local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp")
+    h:Fire("ADDON_LOADED", "TestApp", false)
 end
 
 test("mixed unit filters check secret tokens regardless of registration order and keep publishing", function()
@@ -42,7 +42,7 @@ test("mixed unit filters check secret tokens regardless of registration order an
             general:On("UNIT_AURA", General)
         end
         h.apiCalls = {}
-        h:Fire("UNIT_AURA", Secret("player"))
+        h:Fire("UNIT_AURA", Secret("player"), {})
         eq(#h.errors, 0)
         eq(filtered, 0, "a filtered handler cannot claim a secret unit")
         eq(published, 1, "the unfiltered handler's write publishes")
@@ -50,7 +50,7 @@ test("mixed unit filters check secret tokens regardless of registration order an
         eq(published, 2, "the event batch closes, so subsequent writes still publish")
         -- Lua 5.1 cannot trap secret == string; the API count proves dispatch checks the token.
         eq(secretChecks, 1, "a later unit filter still requires a secrecy check")
-        h:Fire("UNIT_AURA", "player")
+        h:Fire("UNIT_AURA", "player", {})
         eq(filtered, 1, "a plain matching token still reaches the filtered handler")
         eq(published, 3)
     end
@@ -206,7 +206,7 @@ test("honor messages in a locale with positional arguments still parse", functio
     local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", facts = { "kills" } })
     addon:Module("User", { toggle = false, uses = { "kills" } })
     Start(h)
-    h:Fire("CHAT_MSG_COMBAT_HONOR_GAIN", "Sergeant: Bob Doe stirbt (Ehrenhafter Sieg). Ihr erhaltet 12 Ehre.")
+    h:FireHonorMessage("Sergeant: Bob Doe stirbt (Ehrenhafter Sieg). Ihr erhaltet 12 Ehre.")
     eq(addon.State:Get("kills.honorable"), 1)
 end)
 

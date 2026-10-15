@@ -15,7 +15,7 @@ local function NewAddOn()
 end
 
 local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp")
+    h:Fire("ADDON_LOADED", "TestApp", false)
 end
 
 local function EnemyPlayer()

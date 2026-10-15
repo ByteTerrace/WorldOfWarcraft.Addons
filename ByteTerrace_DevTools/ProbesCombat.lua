@@ -4,7 +4,8 @@ local addonName, ns = ...
 -- (C_DeathRecap): what a session holds idle, in combat and right after a fight, the local
 -- player's damage taken, the enemies' sources, and a death. Recaps record common fields and
 -- the killing blow's common shape; separate swing/spell probes require that event kind before
--- recording its spell fields. Probes.lua's header is the contract; ProbeNeeds.lua defines needs.
+-- recording its spell fields. Also the order of the steps into and out of combat (combat.edges,
+-- from what DevTools.lua heard). Probes.lua's header is the contract; ProbeNeeds.lua defines needs.
 
 -- Spell and environmental payloads depend on the event kind; mitigation is optional in
 -- Blizzard_DeathRecap's damage tooltip. Neither belongs in the common event shape.
@@ -286,6 +287,20 @@ Probes.Define({
                 result.sameAsMeter = same
             end
             return result
+        end,
+    },
+    {
+        -- The steps of your latest entering and leaving of combat, in the order they came, each with
+        -- what InCombatLockdown, UnitAffectingCombat("player") and IsAddOnRestrictionActive(Combat)
+        -- said then (Probes.NoteCombatEdge). Kombat.lua's victory waits for the damage meter on the
+        -- assumption that the Combat restriction can outlast PLAYER_REGEN_ENABLED; the leave edge
+        -- says whether it does. A session whose order differs adds its own sequence.
+        name = "combat.edges",
+        needs = { "idle", "combatEdges" },
+        accumulates = true,
+        run = function()
+            local edges = Probes.CombatEdges
+            return { enter = table.concat(edges.enter, " > "), leave = table.concat(edges.leave, " > ") }
         end,
     },
 })

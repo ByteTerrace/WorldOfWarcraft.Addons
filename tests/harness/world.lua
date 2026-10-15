@@ -33,9 +33,8 @@
 --               no secret flags. The text uses COMBATLOG_HONORGAIN (or _NO_RANK) and
 --               COMBATLOG_HONORAWARD with the Forever client's enUS GlobalStrings
 --               (Ketho/BlizzardInterfaceResources, forever branch, 1.60.1 (70009); the two HONORGAIN
---               strings also printed identically in game). [G] The sender
---               fields are empty ("" / 0 / false), guid is "" (documented non-nil), discordInfo nil,
---               and lineID counts up from 1.
+--               strings also printed identically in game). [G] The other fields are as
+--               h:FireChat fills them.
 --   Raid notice [D] RaidWarningUtil.AddMessage(text, colorInfo, displayTime) adds the message to
 --               RaidWarningFrame: SetText(text) takes a secret (the Text aspect
 --               turns secret), SetTextColor(colorInfo.r, .g, .b) takes secrets, and displayTime is
@@ -186,11 +185,19 @@ local function MapFakes(h)
     }
 end
 
--- CHAT_MSG_COMBAT_HONOR_GAIN with the documented 18-field payload around text.
-function Harness:FireHonorMessage(text)
+-- A chat event (CHAT_MSG_SAY, CHAT_MSG_CHANNEL, ...) with the documented 18-field payload around
+-- text and sender ("First Last", or "" for a system message): the other fields are empty
+-- ("" / 0 / false), guid is "" (documented non-nil), the lineID counts up from 1 and discordInfo is
+-- nil (secrets.lua's NILABLE_IN_PRACTICE says why).
+function Harness:FireChat(event, text, sender)
     self.chatLineID = self.chatLineID + 1
-    self:Fire("CHAT_MSG_COMBAT_HONOR_GAIN", text, "", "", "", "", "", 0, 0, "", 0, self.chatLineID, "", 0,
+    self:Fire(event, text, sender or "", "", "", "", "", 0, 0, "", 0, self.chatLineID, "", 0,
         false, false, false, false, nil)
+end
+
+-- CHAT_MSG_COMBAT_HONOR_GAIN around text: a system message, with no sender.
+function Harness:FireHonorMessage(text)
+    self:FireChat("CHAT_MSG_COMBAT_HONOR_GAIN", text)
 end
 
 -- An honorable kill: COMBATLOG_HONORGAIN (victim, rank, honor), or COMBATLOG_HONORGAIN_NO_RANK

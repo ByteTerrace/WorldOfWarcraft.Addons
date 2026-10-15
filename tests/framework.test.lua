@@ -15,7 +15,7 @@ local function NewAddOn(options)
 end
 
 local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp")
+    h:Fire("ADDON_LOADED", "TestApp", false)
 end
 
 -- Starts an addon whose declarations are invalid. Compile refuses; the refusal reaches the error
@@ -531,7 +531,7 @@ test("a secret unit token in a payload can't break publication", function()
     for _, unit in ipairs({ "player", "target", "focus" }) do
         m:On("UNIT_AURA", function() filtered = filtered + 1 end, unit)
     end
-    h:Fire("UNIT_AURA", Secret("nameplate3"))
+    h:Fire("UNIT_AURA", Secret("nameplate3"), {})
     eq(filtered, 0, "filtered handlers can't claim a secret unit")
     m:Set("x", 1)
     eq(seen, 1, "the batch closed, so a write publishes at once")
@@ -569,8 +569,8 @@ test("a module spec shared by two addons isn't changed by either", function()
     a1:Module("Lib", spec)
     local h2, a2 = NewAddOn({ name = "A2" })
     a2:Module("Lib", spec)
-    h1:Fire("ADDON_LOADED", "A1")
-    h2:Fire("ADDON_LOADED", "A2")
+    h1:Fire("ADDON_LOADED", "A1", false)
+    h2:Fire("ADDON_LOADED", "A2", false)
     eq(spec.commands[1].name, "go")
     truthy(a2.Commands.Ids["Lib.go"])
 end)
@@ -669,8 +669,8 @@ test("a row spec shared by two addons in one client writes to each addon's own S
     local b = h.env.ByteTerrace.NewAddOn({ name = "B", title = "B", version = "1", savedVariable = "BDB" })
     a:Module("S", shared)
     b:Module("S", shared)
-    h:Fire("ADDON_LOADED", "A")
-    h:Fire("ADDON_LOADED", "B")
+    h:Fire("ADDON_LOADED", "A", false)
+    h:Fire("ADDON_LOADED", "B", false)
     a.State:Set("S.n", 5)
     eq(h.env.ADB["S.n"], 5)
     eq(h.env.BDB["S.n"], nil)

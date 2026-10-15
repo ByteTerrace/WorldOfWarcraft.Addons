@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 -- Calibration probes about units: identity and health (secret or plain, idle and in combat),
 -- health percent, classification, primary power, combo points, nameplate frames, and the UNIT_COMBAT payloads
--- DevTools.lua collects. Probes.lua's header is the contract; ProbeNeeds.lua defines the needs.
+-- and UNIT_AURA tokens DevTools.lua collects. Probes.lua's header is the contract; ProbeNeeds.lua defines the needs.
 
 -- UnitClassification's documented answers (warcraft.wiki.gg API_UnitClassification).
 local Classifications = {
@@ -276,6 +276,15 @@ Probes.Define({
                 amountInCombat = UnitCombat.amountInCombat,
             }
         end,
+    },
+    {
+        -- UNIT_AURA's unit token per restriction text it came under ("secret", or the token): the
+        -- event is SecretWhenAurasRestricted, and the harness never makes a unit token secret, while
+        -- ByteTerrace_Core's Events.lua guards it. DevTools.lua listens for the player and the target.
+        name = "units.secretTokenInAuraEvent",
+        needs = { "auraRestricted" },
+        accumulates = true,
+        run = function() return JoinSets(Probes.AuraTokens) end,
     },
     {
         -- PARTY_KILL is how killing-blow addons read kills since the combat log closed: whose blow

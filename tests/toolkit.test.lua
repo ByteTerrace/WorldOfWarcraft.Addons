@@ -466,7 +466,7 @@ test("the next login welcomes you back with last session's highlights and rested
     h:Fire("QUEST_TURNED_IN", 2, 100, 50)
     h.player.money = h.player.money + 452000
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     h.player.rested = 0
     h.player.xpMax = 1000
     h:Relog(3 * 86400, function() h.player.rested = 380 end)
@@ -494,7 +494,7 @@ test("a level-up shows a Ding! card for the level you just finished", function()
     h:Advance(90 * 60)
     h:Fire("QUEST_TURNED_IN", 1, 100, 50)
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     local text = CardText(h)
     truthy(text:find("Ding! Level " .. h.player.level, 1, true), text)
     truthy(text:find("1 quest", 1, true), text)
@@ -511,7 +511,7 @@ test("deaths count toward the session and the level", function()
     h:Die()
     h:Revive()
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     truthy(CardText(h):find("2 trips to the spirit healer", 1, true), CardText(h))
 end)
 
@@ -519,7 +519,7 @@ test("cards queue, dismiss on click, and hide on their own", function()
     local h = Load()
     h:Slash("/tlk journal")
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     truthy(CardText(h):find("This session", 1, true), "first card stays up")
     local card = h.env.TheLanKrewToolKitCard
     h:Click(card)
@@ -532,7 +532,7 @@ test("card toggles and the module switch are honored", function()
     local h, addon = Load()
     addon.State:Set("Journal.ding", false)
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     eq(CardText(h), nil, "ding card off")
     addon.State:Set("Journal.enabled", false)
     falsy(Registered(addon, "QUEST_TURNED_IN"))
@@ -672,7 +672,7 @@ test("cards wait out combat", function()
     local h = Load()
     h:EnterCombat()
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     eq(CardText(h), nil, "not mid-fight")
     h:LeaveCombat()
     truthy(CardText(h):find("Ding!", 1, true))
@@ -691,20 +691,20 @@ test("a new character's 0 copper is a real baseline", function()
     h:Relog(600) -- short: no welcome card ahead of the Ding! card
     h.player.money = 6000
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     truthy(CardText(h):find("+60s", 1, true), CardText(h))
 end)
 
 test("the first ding after installing says so, and milestones are celebrated", function()
     local h = Load()
     h.player.level = 10
-    h:Fire("PLAYER_LEVEL_UP", 10)
+    h:LevelUp(10)
     local text = CardText(h)
     truthy(text:find("Since the journal started", 1, true), text)
     truthy(text:find("milestone", 1, true), text)
     h:Click(h.env.TheLanKrewToolKitCard)
     h.player.level = 60
-    h:Fire("PLAYER_LEVEL_UP", 60)
+    h:LevelUp(60)
     text = CardText(h)
     truthy(text:find("\nMax level. Legendary.", 1, true), text)
 end)

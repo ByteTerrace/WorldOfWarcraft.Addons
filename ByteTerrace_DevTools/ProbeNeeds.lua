@@ -6,8 +6,13 @@ local addonName, ns = ...
 -- the situation in the fake client from the harness's own scripting (h:SetTarget, h:MeterFight).
 -- NamePlateToken and FirstBagItem are shared with the probes that read the same things.
 
+-- The restrictions that make auras secret (SecretPredicatesDocumentation's
+-- SecretWhenAurasRestricted).
+local AuraRestrictions = { "Combat", "Encounter", "ChallengeMode", "PvPMatch" }
+
 local Probes = ns.Probes
 local UnitCombat, Kills, AfterDeath = Probes.UnitCombat, Probes.Kills, Probes.AfterDeath
+local Restricted, CombatEdges, AuraTokens = Probes.Restricted, Probes.CombatEdges, Probes.AuraTokens
 
 --- The nameplate token of a non-player unit on screen that the player can attack (enemy true) or
 --- can't (enemy false), or nil.
@@ -50,6 +55,19 @@ local function HasSources(meterType)
     -- secret: only the sources list is read, checked with issecretvalue
     local sources = C_DamageMeter.GetCombatSessionFromType(current, meterType).combatSources
     return not issecretvalue(sources) and type(sources) == "table" and sources[1] ~= nil
+end
+
+-- Whether a UNIT_AURA was heard while auras were restricted: a restriction text AuraTokens keys
+-- by names one of AuraRestrictions.
+local function HeardAuraRestricted()
+    for text in pairs(AuraTokens) do
+        for _, name in ipairs(AuraRestrictions) do
+            if ("," .. text .. ","):find("," .. name .. ",", 1, true) then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local Needs = {
@@ -205,6 +223,27 @@ local Needs = {
         check = function() return next(UnitCombat.units.player) ~= nil and next(UnitCombat.units.target) ~= nil end,
         harness = "the harness doesn't raise UNIT_COMBAT from fights, and which actions a fight shows varies",
     },
+    combatEdges = {
+        label = "in and out of combat",
+        text = "entered and left combat since DevTools loaded (pull a mob, kill it, and type it once the fight ends)",
+        step = 4,
+        check = function() return CombatEdges.enter[1] ~= nil and CombatEdges.leave[1] ~= nil end,
+        setup = function(h)
+            h:EnterCombat()
+            h:LeaveCombat()
+        end,
+    },
+    auraRestricted = {
+        label = "aura change in combat",
+        text = "an aura changed on you or your target in combat (a buff or debuff mid-fight; type it then or after)",
+        step = 4,
+        check = HeardAuraRestricted,
+        setup = function(h)
+            h:EnterCombat()
+            h:Fire("UNIT_AURA", "player", { isFullUpdate = true })
+            h:LeaveCombat()
+        end,
+    },
     killedMob = {
         label = "killed a mob",
         text = "a mob you targeted and killed yourself since logging in (type it after the kill)",
@@ -353,7 +392,7 @@ local Needs = {
         label = "heard chat",
         text = "someone spoke in say, a channel (General), your group or guild since you logged in",
         step = 1,
-        check = function() return next(Probes.Senders) ~= nil end,
+        check = function() return next(Probes.DiscordInfo.shapes) ~= nil end, -- any chat event but an addon message
         harness = "the harness doesn't raise chat from other players",
     },
     party = {
@@ -362,6 +401,33 @@ local Needs = {
         step = 6,
         check = function() return IsInGroup() and not IsInRaid() and UnitExists("party1") end,
         setup = function(h) h:JoinGroup("party", { "Friend" }) end,
+    },
+    messagingRestricted = {
+        label = "group through a restriction",
+        text = "in a party with a Krew member (The Lan Krew ToolKit), in a dungeon or boss fight since DevTools loaded",
+        step = 6,
+        check = function()
+            if not IsInGroup() then
+                return false
+            end
+            for name in pairs(Restricted.seen) do
+                if name ~= "Combat" then
+                    return true
+                end
+            end
+            return false
+        end,
+        setup = function(h)
+            h:JoinGroup("party", { "Friend" })
+            h:SetRestriction("Map", true)
+        end,
+    },
+    maxLevel = {
+        label = "max level",
+        text = "playing a character at the max level (GetMaxPlayerLevel)",
+        step = 6,
+        check = function() return UnitLevel("player") >= GetMaxPlayerLevel() end,
+        setup = function(h) h.player.level = h.maxLevel end,
     },
     guild = {
         label = "in a guild",

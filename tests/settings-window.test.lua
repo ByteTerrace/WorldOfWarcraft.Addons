@@ -19,7 +19,7 @@ local function NewAddOn()
         { name = "minutes", kind = "number", default = 30, min = 10, max = 120, step = 5, label = "Minutes",
             lockedBy = "Riddles.locked" },
     } })
-    h:Fire("ADDON_LOADED", "TestApp")
+    h:Fire("ADDON_LOADED", "TestApp", false)
     return h, addon
 end
 
@@ -230,7 +230,7 @@ test("number steppers stay on the row's grid and inside its bounds, whatever the
         { name = "share", kind = "number", default = 0.8, min = 0, max = 1, step = 0.4, label = "Share" },
         { name = "free", kind = "number", default = 2, min = 0.5, max = 2.5, label = "Free" },
     } })
-    h:Fire("ADDON_LOADED", "TestApp")
+    h:Fire("ADDON_LOADED", "TestApp", false)
     local window, state = addon.SettingsWindow, addon.State
     window:Show()
     window.Controls[state:Id("M.share")].Plus:Click()
@@ -251,6 +251,6 @@ test("a module whose page is the addon's own title joins the main page", functio
     h.declared.TestDB = true
     local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", title = "Test App", savedVariable = "TestDB", slash = { "/test" } })
     addon:Module("M", { label = "M", page = "Test App" })
-    h:Fire("ADDON_LOADED", "TestApp")
+    h:Fire("ADDON_LOADED", "TestApp", false)
     eq(#addon.SettingsWindow.Pages, 1)
 end)

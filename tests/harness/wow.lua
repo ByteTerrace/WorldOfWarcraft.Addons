@@ -51,7 +51,8 @@ local Addons = __addons -- set by tools/lib/harness.mjs: { [name] = { files, sou
 -- { functions, events, methods = { [api] = { [method] = entry } }, enums }. An entry holds secret
 -- (a set of flags), SecretArguments, IsProtectedFunction, HasRestrictions, Arguments and Payload
 -- (comma-separated types), the aspect sets SecretArgumentsAddAspect / SecretReturnsForAspect and
--- the Preconditions set (RequiresFontStringTextAccess, RestrictedForMacroChatMessages, ...).
+-- the Preconditions set (RequiresFontStringTextAccess, RestrictedForMacroChatMessages, ...), and
+-- ArgumentsNilable / PayloadNilable: the sets of positions that may be nil ({ [3] = true }).
 local function Set(list)
     if list == "" then
         return nil
@@ -59,6 +60,14 @@ local function Set(list)
     local set = {}
     for item in list:gmatch("[^,]+") do
         set[item] = true
+    end
+    return set
+end
+
+local function Positions(list)
+    local set = {}
+    for item in list:gmatch("[^,]+") do
+        set[tonumber(item)] = true
     end
     return set
 end
@@ -85,6 +94,7 @@ local function DecodeSnapshot(text)
                 Arguments = fields[7], Payload = fields[8],
                 SecretArgumentsAddAspect = Set(fields[9]), SecretReturnsForAspect = Set(fields[10]),
                 Preconditions = Set(fields[11] or ""),
+                ArgumentsNilable = Positions(fields[12] or ""), PayloadNilable = Positions(fields[13] or ""),
             }
             if kind == "F" then
                 snapshot.functions[name] = entry

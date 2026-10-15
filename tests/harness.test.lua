@@ -448,15 +448,33 @@ test("a dispatch goes to the frames registered when it starts, and handler error
     falsy(late.got, "created during the dispatch")
 end)
 
-test("a test fires only payloads the event documents: no extra values, secrets only where flagged, primitives of their type", function()
+test("a test fires only payloads the event documents: every value, no extras, secrets only where flagged, primitives of their type", function()
     local h = Harness.New()
+    local level = { 12, 0, 0, 0, 0, 0, 0, 0, 0 }
     throws(function() h:Fire("PLAYER_DEAD", 1) end, "PLAYER_DEAD documents 0 payload values, got 1")
-    throws(function() h:Fire("PLAYER_LEVEL_UP", "12") end, "PLAYER_LEVEL_UP payload #1 is a number %(number%), got a string")
-    throws(function() h:Fire("CHAT_MSG_ADDON", "TLK", "hi", "PARTY", 42) end, "payload #4 is a cstring %(string%), got a number")
-    throws(function() h:Fire("PLAYER_LEVEL_UP", Secret(12)) end, "PLAYER_LEVEL_UP has no secret flags, so payload #1 can't be secret")
-    h:Fire("PLAYER_LEVEL_UP", 12, nil, 3)
+    throws(function() h:Fire("PLAYER_LEVEL_UP", 12) end, "PLAYER_LEVEL_UP payload #2 %(number%) isn't nilable")
+    throws(function() h:Fire("PLAYER_LEVEL_UP", 12, nil, 0, 0, 0, 0, 0, 0, 0) end, "payload #2 %(number%) isn't nilable")
+    level[1] = "12"
+    throws(function() h:Fire("PLAYER_LEVEL_UP", unpack(level)) end, "PLAYER_LEVEL_UP payload #1 is a number %(number%), got a string")
+    level[1] = Secret(12)
+    throws(function() h:Fire("PLAYER_LEVEL_UP", unpack(level)) end, "PLAYER_LEVEL_UP has no secret flags, so payload #1 can't be secret")
+    throws(function() h:Fire("CHAT_MSG_ADDON", "TLK", "hi", "PARTY", 42, "", 0, 0, "", 0) end, "payload #4 is a cstring %(string%), got a number")
+    h:Fire("PLAYER_LEVEL_UP", 12, 0, 0, 0, 0, 0, 0, 0, 0)
     h:Fire("RUNE_POWER_UPDATE", Secret(1), true) -- SecretPayloads
+    h:FireChat("CHAT_MSG_SAY", "hi", "Bob Doe") -- discordInfo nil: NILABLE_IN_PRACTICE
     h:Fire("PLAYER_DEAD")
+end)
+
+test("a documented function's arguments that aren't nilable can't be nil; a Default or a reference may be", function()
+    local h = Harness.New()
+    local speak = h.env.C_VoiceChat.SpeakText
+    throws(function() speak(nil, "hi", 0, 100) end, "C_VoiceChat.SpeakText: argument #1 %(number%) isn't nilable")
+    throws(function() speak(0, "hi", 0) end, "argument #4 %(number%) isn't nilable")
+    speak(0, "hi", 0, 100) -- overlap has a Default
+    falsy(h.env.issecretvalue(nil), "issecretvalue takes any value, nil included")
+    local frame = h.env.CreateFrame("Frame")
+    frame:SetPoint("CENTER") -- widget methods have overloads the docs can't state
+    eq(#h.spoken, 1)
 end)
 
 test("ExpectErrors takes a count or patterns", function()

@@ -377,13 +377,26 @@ local PayloadLuaTypes = {
     cstring = "string", string = "string", WOWGUID = "string", bool = "boolean",
 }
 
+-- Payload types the harness sends as nil though the docs give them Nilable = false, each with why.
+Harness.NILABLE_IN_PRACTICE = {
+    -- [G] Every chat event documents discordInfo, but a message that isn't from Discord has no
+    -- Discord sender to describe. The names.chatDiscordInfo probe records what the client sends.
+    DiscordChatInfo = "a chat message not from Discord",
+}
+
 -- Errors (at Fire's caller) on a payload the client couldn't send: more values than the event
--- documents, a secret in an event without secret flags, or a primitive of another type than
--- documented. A nil passes: the snapshot doesn't record which fields are Nilable.
+-- documents, a nil where the docs say Nilable = false (missing trailing values included; see
+-- NILABLE_IN_PRACTICE), a secret in an event without secret flags, or a primitive of another type
+-- than documented.
 function Harness.CheckPayload(event, entry, payload)
     local types = Types(entry, "Payload")
     if payload.n > #types then
         error(("Fire: %s documents %d payload values, got %d"):format(event, #types, payload.n), 3)
+    end
+    for i = 1, #types do
+        if payload[i] == nil and not entry.PayloadNilable[i] and not Harness.NILABLE_IN_PRACTICE[types[i]] then
+            error(("Fire: %s payload #%d (%s) isn't nilable"):format(event, i, types[i]), 3)
+        end
     end
     for i = 1, payload.n do
         local value, want = payload[i], PayloadLuaTypes[types[i]]
@@ -553,6 +566,14 @@ function Harness:WrapApi(name, entry, fn, isMethod)
         end
         local receivedSecret = false
         local types = Types(entry, "Arguments")
+        local nilable = entry.ArgumentsNilable
+        if nilable and not isMethod then -- widget methods have overloads the docs can't state (SetPoint("CENTER"))
+            for i = 1, #types do
+                if args[first + i - 1] == nil and not nilable[i] and not PassThrough[types[i]] then -- a reference may be nil
+                    error(("%s: argument #%d (%s) isn't nilable"):format(name, i, types[i]), 2)
+                end
+            end
+        end
         for i = first, args.n do
             if not PassThrough[TypeAt(types, i - first + 1) or ""] and HoldsSecret(args[i]) then
                 if policy ~= "AllowedWhenTainted" then

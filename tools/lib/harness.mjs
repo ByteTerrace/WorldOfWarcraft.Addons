@@ -17,14 +17,15 @@ const HARNESS_FILES = [
 // Lua tables through wasmoon takes seconds; wow.lua decodes this in milliseconds):
 //   F|E|M <tab> name ("Api.Method" for M) <tab> secret flags <tab> SecretArguments <tab>
 //     IsProtectedFunction (1/0) <tab> HasRestrictions (1/0) <tab> Arguments <tab> Payload <tab>
-//     SecretArgumentsAddAspect <tab> SecretReturnsForAspect <tab> Preconditions
+//     SecretArgumentsAddAspect <tab> SecretReturnsForAspect <tab> Preconditions <tab>
+//     ArgumentsNilable <tab> PayloadNilable (the 1-based positions that may be nil)
 //                                                                     (lists comma-separated)
 //   N <tab> enum name <tab> Field=value,...
 function encodeEntry(kind, name, entry) {
     const list = (value) => (value ?? []).join(",");
     return [kind, name, list(entry.secret), entry.SecretArguments ?? "", entry.IsProtectedFunction ? 1 : 0,
         entry.HasRestrictions ? 1 : 0, list(entry.Arguments), list(entry.Payload), list(entry.SecretArgumentsAddAspect),
-        list(entry.SecretReturnsForAspect), list(entry.Preconditions)].join("\t");
+        list(entry.SecretReturnsForAspect), list(entry.Preconditions), list(entry.ArgumentsNilable), list(entry.PayloadNilable)].join("\t");
 }
 
 export function loadSnapshot() {

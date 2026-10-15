@@ -17,7 +17,12 @@ local addonName, ns = ...
 -- From load it also listens for UNIT_COMBAT on the player and the target, for the unitCombat.seen
 -- probe (Probes.NoteUnitCombat keeps the payloads' shapes), for the kill events, for
 -- kills.seen (Probes.NoteKill), and for chat events' senders, for names.chatSenders
--- (Probes.NoteSender keeps their shapes, never the names), and for your deaths and the damage
+-- (Probes.NoteSender keeps their shapes, never the names) and their discordInfo, for
+-- names.chatDiscordInfo (Probes.NoteDiscordInfo), for addon messages' field shapes, for
+-- comms.addonMessageInLockdown (Probes.NoteAddonMessage), for UNIT_AURA on the player and the
+-- target, for units.secretTokenInAuraEvent (Probes.NoteAuraToken), for the steps into and out of
+-- combat and every restriction change, for combat.edges and the restrictions the others key by
+-- (Probes.NoteCombatEdge, NoteRestriction, SyncRestrictions), and for your deaths and the damage
 -- meter's updates after them, for damageMeter.afterDeath (Probes.NoteDeath, NoteMeterUpdate).
 --
 -- Only the client's own names are dumped. A global or table member any addon set is tainted by
@@ -252,10 +257,40 @@ ChatListener:SetScript("OnEvent", function(_, event, ...)
     if event == "CHAT_MSG_ADDON" then
         local _, _, _, sender = ...
         Probes.NoteSender(event, sender)
+        Probes.NoteAddonMessage(...)
     else
         local _, author = ...
         Probes.NoteSender(event, author)
+        Probes.NoteDiscordInfo(event, (select(18, ...)))
     end
+end)
+
+-- The restrictions in force, kept from load for the listeners that key by them, and the steps
+-- into and out of combat for combat.edges.
+Probes.SyncRestrictions()
+local RestrictionListener = CreateFrame("Frame")
+RestrictionListener:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+RestrictionListener:RegisterEvent("PLAYER_REGEN_DISABLED")
+RestrictionListener:RegisterEvent("PLAYER_REGEN_ENABLED")
+RestrictionListener:RegisterEvent("PLAYER_ENTERING_WORLD")
+RestrictionListener:SetScript("OnEvent", function(_, event, kind, state)
+    if event == "PLAYER_ENTERING_WORLD" then
+        Probes.SyncRestrictions()
+    elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+        Probes.NoteRestriction(kind, state)
+        if kind == Enum.AddOnRestrictionType.Combat then
+            Probes.NoteCombatEdge(event, state)
+        end
+    else
+        Probes.NoteCombatEdge(event)
+    end
+end)
+
+-- UNIT_AURA's unit token for units.secretTokenInAuraEvent; RegisterUnitEvent keeps it to two units.
+local AuraListener = CreateFrame("Frame")
+AuraListener:RegisterUnitEvent("UNIT_AURA", "player", "target")
+AuraListener:SetScript("OnEvent", function(_, _, unit)
+    Probes.NoteAuraToken(unit)
 end)
 
 -- Your deaths and the damage meter's updates after them, for damageMeter.afterDeath, from load.

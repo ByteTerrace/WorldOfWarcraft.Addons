@@ -232,6 +232,13 @@ function Harness:MoveComboPoints(unit)
 end
 
 -- The player dies: PLAYER_DEAD (still in combat, if they were), then combat ends.
+-- The player reaches level: h.player.level, then PLAYER_LEVEL_UP with the documented payload
+-- (level, then eight deltas; [G] the deltas are 0).
+function Harness:LevelUp(level)
+    self.player.level = level
+    self:Fire("PLAYER_LEVEL_UP", level, 0, 0, 0, 0, 0, 0, 0, 0)
+end
+
 function Harness:Die()
     assert(not self.player.dead and not self.player.ghost, "Die: the player is already dead")
     self.player.dead, self.player.health = true, 0

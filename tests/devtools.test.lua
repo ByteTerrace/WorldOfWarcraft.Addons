@@ -1,6 +1,7 @@
 -- ByteTerrace_DevTools' probe commands: /btdev probe records the probes whose needs are met into
 -- ByteTerraceDevToolsDB.probes and lists what the rest need; /btdev probe list shows what's left,
--- in play-session order. DevTools also collects UNIT_COMBAT payloads for unitCombat.seen.
+-- in play-session order. DevTools also collects, from load, what the listening probes need: UNIT_COMBAT
+-- payloads, the steps into and out of combat, UNIT_AURA tokens, addon messages and chat payloads.
 
 local function Printed(h, from)
     return table.concat(h.printed, "\n", from or 1)
@@ -244,10 +245,12 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
         end
     end
     table.sort(registered)
-    eq(table.concat(registered, " "), "CHAT_MSG_ADDON() CHAT_MSG_CHANNEL() CHAT_MSG_GUILD() CHAT_MSG_PARTY() "
-        .. "CHAT_MSG_RAID() CHAT_MSG_SAY() CHAT_MSG_WHISPER() CHAT_MSG_YELL() DAMAGE_METER_COMBAT_SESSION_UPDATED() PARTY_KILL() "
-        .. "PLAYER_DEAD() PLAYER_TARGET_DIED() UNIT_COMBAT(player,target) UNIT_DIED()",
-        "the chat senders, UNIT_COMBAT for two units, the kill events, and deaths with the meter's updates")
+    eq(table.concat(registered, " "), "ADDON_RESTRICTION_STATE_CHANGED() CHAT_MSG_ADDON() CHAT_MSG_CHANNEL() "
+        .. "CHAT_MSG_GUILD() CHAT_MSG_PARTY() CHAT_MSG_RAID() CHAT_MSG_SAY() CHAT_MSG_WHISPER() CHAT_MSG_YELL() "
+        .. "DAMAGE_METER_COMBAT_SESSION_UPDATED() PARTY_KILL() PLAYER_DEAD() PLAYER_ENTERING_WORLD() PLAYER_REGEN_DISABLED() "
+        .. "PLAYER_REGEN_ENABLED() PLAYER_TARGET_DIED() UNIT_AURA(player,target) UNIT_COMBAT(player,target) UNIT_DIED()",
+        "the chat events, restriction changes and combat edges, UNIT_AURA and UNIT_COMBAT for two units, the kill "
+        .. "events, and deaths with the meter's updates")
     h:Fire("UNIT_COMBAT", "target", "WOUND", "CRITICAL", 42, 1)
     h:Fire("UNIT_COMBAT", "target", "DODGE", "", 0, 1)
     h:Slash("/btdev probe")
@@ -318,9 +321,9 @@ end)
 test("chat senders are kept as name shapes, never names", function()
     local h = Harness.New()
     local ns = h:LoadAddon("ByteTerrace_DevTools")
-    h:Fire("CHAT_MSG_SAY", "hello", "Dh Taketwo-Realm")
-    h:Fire("CHAT_MSG_CHANNEL", "hi", "Bob")
-    h:Fire("CHAT_MSG_ADDON", "TLK", "HELLO", "PARTY", "Cara Doe-Realm")
+    h:FireChat("CHAT_MSG_SAY", "hello", "Dh Taketwo-Realm")
+    h:FireChat("CHAT_MSG_CHANNEL", "hi", "Bob")
+    h:Fire("CHAT_MSG_ADDON", "TLK", "HELLO", "PARTY", "Cara Doe-Realm", "", 0, 0, "", 0)
     local senders = ns.Probes.ByName["names.chatSenders"].run()
     eq(senders.CHAT_MSG_SAY, "Aa Aa-Aa")
     eq(senders.CHAT_MSG_CHANNEL, "Aa")
@@ -343,14 +346,14 @@ test("an accumulating probe's record grows across sessions and reloads", functio
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["kills.seen"] = record } } })
     h:Fire("PARTY_KILL", h:GUID(h.player), h:GUID({ name = "Cara", isPlayer = true }))
     h:Fire("PLAYER_TARGET_DIED")
-    h:Fire("CHAT_MSG_SAY", "hi", "Bob")
+    h:FireChat("CHAT_MSG_SAY", "hi", "Bob")
     h:Slash("/btdev probe")
     local result = Records(h)["kills.seen"].result
     eq(result.partyKill.attacker, "pet,you")
     eq(result.partyKill.target, "Creature,Player")
     eq(result.targetDied, true, "kept from the earlier session")
     h:Reload()
-    h:Fire("CHAT_MSG_CHANNEL", "hi", "Dh Taketwo-Realm")
+    h:FireChat("CHAT_MSG_CHANNEL", "hi", "Dh Taketwo-Realm")
     h:Slash("/btdev probe")
     local senders = Records(h)["names.chatSenders"].result
     eq(senders.CHAT_MSG_SAY, "Aa", "a reload keeps what the last session heard")
@@ -375,9 +378,9 @@ test("a secret never erases what was seen before it, nor what's seen after", fun
     eq(Probes.Merge("Aa", marker), "Aa,secret")
     eq(Probes.Merge(marker, "Aa"), "Aa,secret")
     eq(Probes.Merge("Aa,Aa Aa", "Aa"), "Aa,Aa Aa")
-    h:Fire("CHAT_MSG_SAY", "hi", "Bob")
-    h:Fire("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
-    h:Fire("CHAT_MSG_SAY", "hi", "Dh Taketwo")
+    h:FireChat("CHAT_MSG_SAY", "hi", "Bob")
+    h:FireChat("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
+    h:FireChat("CHAT_MSG_SAY", "hi", "Dh Taketwo")
     eq(Probes.ByName["names.chatSenders"].run().CHAT_MSG_SAY, "Aa,Aa Aa,secret")
 end)
 
@@ -385,7 +388,7 @@ test("a saved accumulating record keeps its items when a session saw a secret", 
     local record = { build = Harness.BUILD, context = { combat = false, restrictions = "none" },
         result = { CHAT_MSG_SAY = "Aa,Aa Aa" } }
     local h = Load({ ByteTerraceDevToolsDB = { probes = { ["names.chatSenders"] = record } } })
-    h:Fire("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
+    h:FireChat("CHAT_MSG_SAY", "hi", Secret("Cara Doe"))
     h:Slash("/btdev probe")
     eq(Records(h)["names.chatSenders"].result.CHAT_MSG_SAY, "Aa,Aa Aa,secret")
 end)
@@ -548,4 +551,135 @@ test("/btdev probe list says so when every probe has a result for this build", f
     local from = #h.printed + 1
     h:Slash("/btdev probe list")
     eq(Printed(h, from), "ByteTerrace DevTools: every probe has a result for " .. Harness.BUILD .. ".")
+end)
+
+-- Every wrapped client call the harness counted so far.
+local function ApiCalls(h)
+    local total = 0
+    for _, count in pairs(h.apiCalls) do total = total + count end
+    return total
+end
+
+test("the steps into and out of combat are kept in order with what each signal said, for combat.edges", function()
+    local h = Load()
+    h:EnterCombat()
+    h:Slash("/btdev probe")
+    eq(Records(h)["combat.edges"], nil, "in combat: the leave edge is still to come")
+    h:LeaveCombat()
+    h:Slash("/btdev probe")
+    local result = Records(h)["combat.edges"].result
+    eq(result.enter, "Combat Activating[lockdown=false affecting=true restricted=false] > "
+        .. "Combat Active[lockdown=false affecting=true restricted=false] > "
+        .. "PLAYER_REGEN_DISABLED[lockdown=false affecting=true restricted=true]",
+        "the restriction reads inactive during both of its changes, then lockdown follows PLAYER_REGEN_DISABLED")
+    eq(result.leave, "Combat Inactive[lockdown=false affecting=false restricted=false] > "
+        .. "PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false]",
+        "the harness lifts the Combat restriction before PLAYER_REGEN_ENABLED")
+    h:EnterCombat()
+    h:LeaveCombat()
+    h:Slash("/btdev probe")
+    eq(#h.ns.Probes.Diff(Records(h)["combat.edges"].result, result), 0, "the same order again changes nothing")
+end)
+
+test("combat.edges keeps another order as it came, adds it to a saved record, and caps an edge's steps", function()
+    local h = Load()
+    local types, states = h.env.Enum.AddOnRestrictionType, h.env.Enum.AddOnRestrictionState
+    h:Fire("PLAYER_REGEN_DISABLED")
+    h:Fire("PLAYER_REGEN_ENABLED")
+    h:Fire("ADDON_RESTRICTION_STATE_CHANGED", types.Combat, states.Inactive)
+    h:Fire("ADDON_RESTRICTION_STATE_CHANGED", types.Map, states.Inactive) -- another restriction's change isn't a step
+    local leave = "PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false] > "
+        .. "Combat Inactive[lockdown=false affecting=false restricted=false]"
+    eq(h.ns.Probes.ByName["combat.edges"].run().leave, leave)
+    local record = { build = Harness.BUILD, context = { combat = false, restrictions = "none" },
+        result = { enter = "PLAYER_REGEN_DISABLED[lockdown=false affecting=false restricted=false]", leave = leave } }
+    local saved = Load({ ByteTerraceDevToolsDB = { probes = { ["combat.edges"] = record } } })
+    saved:EnterCombat()
+    saved:LeaveCombat()
+    saved:Slash("/btdev probe")
+    local merged = Records(saved)["combat.edges"].result.leave
+    local harnessOrder = "Combat Inactive[lockdown=false affecting=false restricted=false] > PLAYER_REGEN_ENABLED"
+    truthy(merged:find(leave, 1, true) and merged:find(harnessOrder, 1, true), "both orders are kept: " .. merged)
+    for _ = 1, 10 do h:Fire("PLAYER_REGEN_DISABLED") end
+    local _, separators = h.ns.Probes.ByName["combat.edges"].run().enter:gsub(" > ", "")
+    eq(separators + 1, 8, "an edge keeps at most eight steps")
+end)
+
+test("UNIT_AURA's token is kept per restriction for two units, asking the client nothing", function()
+    local h = Load()
+    h:Fire("UNIT_AURA", "player", { isFullUpdate = true })
+    h:Slash("/btdev probe")
+    eq(Records(h)["units.secretTokenInAuraEvent"], nil, "no aura restriction yet")
+    h:EnterCombat()
+    local before, checks = ApiCalls(h), h:CountApiCalls("issecretvalue")
+    h:Fire("UNIT_AURA", "target", { isFullUpdate = true })
+    h:Fire("UNIT_AURA", "party1", { isFullUpdate = true })
+    eq(h:CountApiCalls("issecretvalue") - checks, 1, "the one aura change delivered checks its token once")
+    eq(ApiCalls(h) - before, 1, "and asks the client nothing else, the restrictions included")
+    h.ns.Probes.NoteAuraToken(Secret("player"))
+    h:Slash("/btdev probe")
+    local result = Records(h)["units.secretTokenInAuraEvent"].result
+    eq(result.none, "player")
+    eq(result.Combat, "secret,target", "party1's aura never arrives; a secret token is kept as secret")
+end)
+
+test("a restriction in force when DevTools loads keys what the listeners hear", function()
+    local h = Harness.New()
+    h:SetRestriction("Map", true)
+    h:LoadAddon("ByteTerrace_DevTools")
+    h:Fire("UNIT_AURA", "player", { isFullUpdate = true })
+    eq(h.ns.Probes.ByName["units.secretTokenInAuraEvent"].run().Map, "player")
+end)
+
+test("addon messages are kept as field shapes per restriction, for comms.addonMessageInLockdown", function()
+    local h = Load()
+    local function Receive()
+        h:Fire("CHAT_MSG_ADDON", "TLK", "HELLO", "PARTY", "Cara Doe", "", 0, 0, "", 0)
+    end
+    Receive()
+    h:JoinGroup("party", { "Friend" })
+    h:EnterCombat()
+    h:LeaveCombat()
+    h:Slash("/btdev probe")
+    eq(Records(h)["comms.addonMessageInLockdown"], nil, "combat alone isn't a messaging restriction")
+    h:SetRestriction("Encounter", true)
+    Receive()
+    h.ns.Probes.NoteAddonMessage("TLK", Secret("HELLO"), "PARTY", "Cara Doe", "", 0, 0, "", 0)
+    h:SetRestriction("Encounter", false)
+    h:Slash("/btdev probe")
+    local result = Records(h)["comms.addonMessageInLockdown"].result
+    eq(result.restrictionsSeen, "Combat,Encounter")
+    eq(result.heard.none.sender, "text")
+    eq(result.heard.none.target, "empty")
+    eq(result.heard.none.zoneChannelID, "number")
+    eq(result.heard.Encounter.text, "secret,text")
+    eq(result.heard.Encounter.instanceID, "number")
+end)
+
+test("xp.atMaxLevel records the signs of UnitXP and UnitXPMax once you're at the max level", function()
+    local h = Load()
+    h:Slash("/btdev probe")
+    eq(Records(h)["xp.atMaxLevel"], nil, "level 1")
+    h.player.level, h.player.xp, h.player.xpMax = h.maxLevel, 0, 0
+    h:Slash("/btdev probe")
+    local result = Records(h)["xp.atMaxLevel"].result
+    eq(result.xp, "zero")
+    eq(result.xpMax, "zero")
+end)
+
+test("chat events' discordInfo is kept as shapes, with a table's fields, for names.chatDiscordInfo", function()
+    local h = Load()
+    h:Fire("CHAT_MSG_ADDON", "TLK", "HELLO", "PARTY", "Cara Doe", "", 0, 0, "", 0)
+    h:Slash("/btdev probe")
+    eq(Records(h)["names.chatDiscordInfo"], nil, "an addon message has no discordInfo and isn't chat heard")
+    h:FireChat("CHAT_MSG_SAY", "hi", "Bob")
+    h:Fire("CHAT_MSG_GUILD", "hi", "Bob", "", "", "", "", 0, 0, "", 0, 2, "", 0, false, false, false, false,
+        { userID = 7, globalName = "", hasPoll = false })
+    h:Slash("/btdev probe")
+    local result = Records(h)["names.chatDiscordInfo"].result
+    eq(result.shapes.CHAT_MSG_SAY, "nil")
+    eq(result.shapes.CHAT_MSG_GUILD, "table")
+    eq(result.fields.userID, "number")
+    eq(result.fields.globalName, "empty")
+    eq(result.fields.hasPoll, "false")
 end)

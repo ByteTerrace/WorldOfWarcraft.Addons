@@ -1,8 +1,9 @@
 local addonName, ns = ...
 
 -- Calibration probes about the client itself and the world around the player: chat colors and
--- strings, fonts, realm, faction, guild, map, quest dialogs and the quest log, text to speech, XP,
--- resting and flights, bags, vendors and trainers, the controller, and the textures the addons draw.
+-- strings, addon messages, fonts, realm, faction, guild, map, quest dialogs and the quest log, text
+-- to speech, XP, resting and flights, bags, vendors and trainers, the controller, and the textures
+-- the addons draw.
 -- Probes.lua's header is the contract; ProbeNeeds.lua defines the needs named here.
 
 -- Every texture the addons draw (TheLanKrewToolKit's views, cards and ScholarPictures' ItemIcons),
@@ -81,6 +82,17 @@ local function QuestIdentity()
         questID = Shape(questID), questNpcName = Shape(questNpc),
         hasQuestID = not issecretvalue(questID) and type(questID) == "number" and questID > 0,
     }
+end
+
+-- A number's sign ("positive", "zero", "negative"), its type when it isn't one, or the marker for
+-- a secret.
+local function Sign(value)
+    if issecretvalue(value) then
+        return Marker(value)
+    elseif type(value) ~= "number" then
+        return type(value)
+    end
+    return value > 0 and "positive" or value < 0 and "negative" or "zero"
 end
 
 -- What SetTexture answers for a path on a hidden texture of its own, and what the texture reports
@@ -207,6 +219,20 @@ Probes.Define({
         end,
     },
     {
+        -- Whether CHAT_MSG_ADDON arrives during a restriction, and whether any field is secret then
+        -- (its docs give it no secret flags; ByteTerrace_Core's Comms.lua guards it anyway): heard
+        -- holds each field's shapes per restriction text a message came under, and restrictionsSeen
+        -- every restriction active since load, so one seen with no messages heard under it says
+        -- none arrived.
+        name = "comms.addonMessageInLockdown",
+        needs = { "messagingRestricted" },
+        accumulates = true,
+        harness = "it asks whether others' addon messages arrive; h:ReceiveAddonMessage sends what a test says",
+        run = function()
+            return { heard = Probes.JoinSets(Probes.AddonMessages), restrictionsSeen = Joined(Probes.Restricted.seen) }
+        end,
+    },
+    {
         name = "tts.voices",
         needs = {},
         run = function()
@@ -226,6 +252,16 @@ Probes.Define({
             local exhaustionShape = issecretvalue(exhaustion) and Marker(exhaustion)
                 or ((exhaustion == nil or type(exhaustion) == "number") and "number or nil" or type(exhaustion))
             return { xp = Shape(UnitXP("player")), xpMax = Shape(UnitXPMax("player")), exhaustion = exhaustionShape }
+        end,
+    },
+    {
+        -- What UnitXP and UnitXPMax answer once there's no next level: TheLanKrewToolKit's
+        -- Journal.lua takes a UnitXPMax of 0 or less as no rested percentage.
+        name = "xp.atMaxLevel",
+        needs = { "maxLevel" },
+        harness = "the harness doesn't model XP at the max level (UnitXPMax answers whatever a test set)",
+        run = function()
+            return { xp = Sign(UnitXP("player")), xpMax = Sign(UnitXPMax("player")) }
         end,
     },
     {

@@ -15,7 +15,7 @@ local function NewAddOn(options)
 end
 
 local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp")
+    h:Fire("ADDON_LOADED", "TestApp", false)
 end
 
 -- Starts an addon whose declarations are invalid. Compile refuses; the refusal reaches the error

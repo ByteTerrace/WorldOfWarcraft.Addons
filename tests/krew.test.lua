@@ -29,7 +29,7 @@ end
 test("nothing is sent outside a group", function()
     local h = Load()
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     eq(#h.addonMessages, 0)
 end)
 
@@ -138,7 +138,7 @@ test("level-ups and flawless victories are shared; the Krew sees cards", functio
     local h = Load()
     h:JoinGroup("party", { "Bob" })
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     h:Advance(2)
     eq(Sent(h, "DING:" .. h.player.level), 1)
     h:ReceiveAddonMessage(Prefix, "DING:20", "PARTY", "Bob")
@@ -197,7 +197,7 @@ test("nothing is sent during chat messaging lockdown; stale celebrations are dro
     local before = #h.addonMessages
     h:SetRestriction("Encounter", true)
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     h:Advance(5)
     h:SetRestriction("Encounter", false)
     h:Advance(5)
@@ -209,7 +209,7 @@ test("sends are spaced out, never a burst", function()
     h:JoinGroup("party", { "Bob" })
     for _ = 1, 3 do
         h.player.level = h.player.level + 1
-        h:Fire("PLAYER_LEVEL_UP", h.player.level)
+        h:LevelUp(h.player.level)
     end
     eq(Sent(h, "DING"), 0, "the hello went first; dings wait their turn")
     h:Advance(1)
@@ -224,7 +224,7 @@ test("turning sharing off stops it", function()
     h:JoinGroup("party", { "Bob" })
     h:Advance(2)
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     h:Advance(2)
     eq(Sent(h, "DING"), 0)
 end)

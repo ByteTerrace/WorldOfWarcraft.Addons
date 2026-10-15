@@ -251,6 +251,36 @@ export const tests = [
         }),
     },
     {
+        // Nilable = true and a Default both mean the position may be nil; the rest may not.
+        name: "api-sync records which argument and payload positions may be nil",
+        run: async () => withTemp(async (dir) => {
+            const filler = Array.from({ length: MIN_DOC_FUNCTIONS }, (_, i) => `{ Name = "F${i}", Type = "Function" },`).join("\n");
+            writeFileSync(join(dir, "TestDocumentation.lua"), `APIDocumentation:AddDocumentationTable({
+                Name = "Test", Type = "System", Namespace = "C_Test",
+                Functions = {
+                    { Name = "Speak", Type = "Function", Arguments = {
+                        { Name = "voiceID", Type = "number", Nilable = false },
+                        { Name = "text", Type = "cstring", Nilable = true },
+                        { Name = "overlap", Type = "bool", Nilable = false, Default = false },
+                    } },
+                    ${filler}
+                },
+                Events = {
+                    { Name = "Said", Type = "Event", LiteralName = "TEST_SAID", Payload = {
+                        { Name = "text", Type = "cstring", Nilable = false },
+                        { Name = "guid", Type = "WOWGUID", Nilable = true },
+                    } },
+                },
+            })`);
+            const docs = await readDocs(dir);
+            const speak = docs.functions["C_Test.Speak"];
+            assert(JSON.stringify(speak.Arguments) === '["number","cstring","bool"]', JSON.stringify(speak));
+            assert(JSON.stringify(speak.ArgumentsNilable) === "[2,3]", JSON.stringify(speak));
+            assert(JSON.stringify(docs.events.TEST_SAID.PayloadNilable) === "[2]", JSON.stringify(docs.events.TEST_SAID));
+            assert(!("ArgumentsNilable" in docs.functions["C_Test.F0"]), "no arguments, no list");
+        }),
+    },
+    {
         name: "api-sync warns when the dump left out names another addon set",
         run: async () => withTemp(async (dir) => {
             const dump = join(dir, "dump.lua");

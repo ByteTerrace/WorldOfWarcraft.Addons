@@ -527,22 +527,34 @@ end
 -- Tables whose functions are Lua's own library: the runner doesn't ask whether an addon calls them.
 local LuaLibraries = { _G = true, math = true, string = true, table = true }
 
--- Every fake that's a function ("Name" or "Table.member"), for the test runner's check that an
+-- Every fake that's a function ("Name", or "Table.member" at any depth), for the test runner's check that an
 -- addon calls each one. Lua's functions (Harness.LUA_FAKES, Lua's libraries) and widgets'
 -- methods aren't listed.
 function Harness.FakeFunctionNames()
     local h = Harness.New()
     Harness.created = {}
-    local names = {}
+    local names, seen = {}, {}
+    -- The functions in a plain table, nested tables included (each table once; widgets aside).
+    local function Walk(path, t)
+        if seen[t] or Harness.State(t) then
+            return
+        end
+        seen[t] = true
+        for member, value in pairs(t) do
+            if type(member) == "string" then
+                if type(value) == "function" then
+                    names[#names + 1] = path .. "." .. member
+                elseif type(value) == "table" then
+                    Walk(path .. "." .. member, value)
+                end
+            end
+        end
+    end
     for name, value in pairs(h.env) do
         if type(value) == "function" and not Harness.LUA_FAKES[name] then
             names[#names + 1] = name
-        elseif type(value) == "table" and not LuaLibraries[name] and not Harness.State(value) then
-            for member, fn in pairs(value) do
-                if type(member) == "string" and type(fn) == "function" then
-                    names[#names + 1] = name .. "." .. member
-                end
-            end
+        elseif type(value) == "table" and not LuaLibraries[name] and name ~= "_G" then
+            Walk(name, value)
         end
     end
     table.sort(names)

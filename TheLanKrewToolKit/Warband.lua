@@ -429,7 +429,9 @@ local function Seen(unit, plate, suspect)
         return -- friendly strangers aren't rivals
     end
     local now = GetServerTime()
-    if not People:Has(key) or now - People:Field(key, "seen") >= SeenWriteInterval then
+    -- The first sighting always counts: a record a command or the Krew made has a seen time, but
+    -- no sighting yet. After it, one update per SeenWriteInterval.
+    if not People:Has(key) or People:Field(key, "sightings") == 0 or now - People:Field(key, "seen") >= SeenWriteInterval then
         Remember(key, info, { seen = now, zone = (Place()), sightings = People:Field(key, "sightings") + 1 })
     end
     if status then

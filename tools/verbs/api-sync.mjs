@@ -20,7 +20,8 @@
 //
 // An entry holds only what the docs state: `secret` (the Secret* predicate flags, sorted),
 // `SecretArguments` (verbatim), `IsProtectedFunction`, `HasRestrictions`, the argument (or event
-// payload) types as `Arguments` / `Payload`, and the aspect lists `SecretArgumentsAddAspect` /
+// payload) types as `Arguments` / `Payload`, the positions among them that may be nil (`Nilable`, or
+// a `Default`) as `ArgumentsNilable` / `PayloadNilable`, and the aspect lists `SecretArgumentsAddAspect` /
 // `SecretReturnsForAspect` (Enum.SecretAspect names), and `Preconditions`: the Requires* /
 // Restricted* precondition markers set on the entry (RequiresFontStringTextAccess,
 // RestrictedForMacroChatMessages, ...; SecretPredicatesDocumentation defines them). A nested
@@ -94,9 +95,13 @@ const ENCODE = `
         if t.HasRestrictions then parts[#parts + 1] = '"HasRestrictions":true' end
         for _, key in ipairs({ "Arguments", "Payload" }) do
             if type(t[key]) == "table" and #t[key] > 0 then
-                local types = {}
-                for i, argument in ipairs(t[key]) do types[i] = tostring(argument.Type) end
+                local types, nilable = {}, {}
+                for i, argument in ipairs(t[key]) do
+                    types[i] = tostring(argument.Type)
+                    if argument.Nilable or argument.Default ~= nil then nilable[#nilable + 1] = tostring(i) end
+                end
                 parts[#parts + 1] = quote(key) .. ":" .. list(types)
+                if #nilable > 0 then parts[#parts + 1] = quote(key .. "Nilable") .. ":[" .. table.concat(nilable, ",") .. "]" end
             end
         end
         for _, key in ipairs({ "SecretArgumentsAddAspect", "SecretReturnsForAspect" }) do

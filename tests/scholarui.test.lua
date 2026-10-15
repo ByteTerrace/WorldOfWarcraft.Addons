@@ -201,7 +201,7 @@ end)
 test("a level-up brings a riddle when that's on", function()
     local h = LoadKid()
     h.player.level = h.player.level + 1
-    h:Fire("PLAYER_LEVEL_UP", h.player.level)
+    h:LevelUp(h.player.level)
     truthy(Showing(h))
 end)
 

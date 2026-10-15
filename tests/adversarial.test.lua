@@ -9,7 +9,7 @@ local function NewAddOn()
 end
 
 local function Start(h)
-    h:Fire("ADDON_LOADED", "TestApp")
+    h:Fire("ADDON_LOADED", "TestApp", false)
 end
 
 test("record replacement publishes only the complete collection", function()

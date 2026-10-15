@@ -5,7 +5,7 @@ local addonName, ns = ...
 -- with Constants.CharacterNameSeparatorConsts' separator (Blizzard_FrameXMLUtil/Camelot/
 -- NameUtil.lua). These probes record which shape each source of names has: the unit APIs, the
 -- GUID lookup, and the senders of chat events (DevTools.lua passes those to Probes.NoteSender
--- from load).
+-- from load), with the shape of their discordInfo (Probes.NoteDiscordInfo).
 --
 -- Names are recorded as shapes, never as names (Probes.NameShape): each run of letters becomes
 -- "Aa", so "Dh Taketwo-Realm" records as "Aa Aa-Aa" and no character's name reaches the file.
@@ -83,5 +83,18 @@ Probes.Define({
         needs = { "heardChat" },
         accumulates = true,
         run = function() return JoinSets(Senders) end,
+    },
+    {
+        -- The shape of each chat event's 18th payload value, discordInfo, heard since load: the docs
+        -- say it's never nil, the harness sends nil for a message that isn't from Discord
+        -- (Harness.NILABLE_IN_PRACTICE, tests/harness/secrets.lua). fields holds each field's
+        -- shapes when it's a table. A message bridged from Discord would add its own shapes.
+        name = "names.chatDiscordInfo",
+        needs = { "heardChat" },
+        accumulates = true,
+        run = function()
+            local info = Probes.DiscordInfo
+            return { shapes = JoinSets(info.shapes), fields = JoinSets(info.fields) }
+        end,
     },
 })

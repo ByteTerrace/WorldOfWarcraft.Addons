@@ -21,11 +21,17 @@ local addonName, ns = ...
 --   Where    a riddle covers the screen and holds the mouse and keyboard until it's solved; in
 --            Gentle mode a Skip appears after one try. Never during combat: a riddle waits for the
 --            fight to end, and one on screen steps aside if a fight starts and comes back after.
+--            Never over Blizzard's windows either: one that comes due while a quest dialog,
+--            gossip, a vendor, the mailbox, a bank, the auction house, a trainer or the flight
+--            map is open waits for it to close (a quest chain's next offer included). One already
+--            on screen when such a window opens stays.
 --   How      answer with 1-4, a click, or the controller's face buttons; Need a hint? (the quest
 --            book, on a quest riddle) is H or the left shoulder, Read aloud is R or the right
 --            shoulder, Skip is Esc or Back. The open quest book scrolls with the wheel, the Up and
---            Down arrows or the D-pad.
---   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the grade.
+--            Down arrows or the D-pad. Read aloud reads what the screen shows: the riddle, the
+--            open quest book, or the feedback after an answer or a hint.
+--   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the
+--            grade (math and reading only: a quest riddle never changes it).
 --
 -- Limits, honestly: a controller's sticks still move the character, and a determined child can
 -- turn the addon off at character select. Blizzard's parental controls (play time limits) are the
@@ -48,13 +54,29 @@ local TurnInDelay = 1 -- seconds after a turn-in, once QuestBook has noted it an
 local LockedBy = "Scholar.locked"
 local MaxPinMisses = 3
 local PinWaitSeconds = 60
+-- The windows Blizzard's interaction manager opens that a riddle waits for (by
+-- Enum.PlayerInteractionType name); the quest dialog and gossip have their own events.
+local HeldInteractions = {}
+for _, name in ipairs({ "Merchant", "MailInfo", "Banker", "CharacterBanker", "AccountBanker", "GuildBanker",
+    "Auctioneer", "Trainer", "TaxiNode" }) do
+    HeldInteractions[Enum.PlayerInteractionType[name]] = true
+end
+local TaxiNode = Enum.PlayerInteractionType.TaxiNode -- its map also closes with TAXIMAP_CLOSED
+-- The events that open (true) and close (false) the quest dialog and gossip, as Blizzard's
+-- QuestFrame and gossip frame read them.
+local DialogEvents = {
+    QUEST_GREETING = { "quest", true }, QUEST_DETAIL = { "quest", true }, QUEST_PROGRESS = { "quest", true },
+    QUEST_COMPLETE = { "quest", true }, QUEST_FINISHED = { "quest", false },
+    GOSSIP_SHOW = { "gossip", true }, GOSSIP_CLOSED = { "gossip", false },
+}
 
 local ByteTerrace = ByteTerrace
 local C_Sound, C_TTSSettings, C_VoiceChat, GetMoney = C_Sound, C_TTSSettings, C_VoiceChat, GetMoney
-local GetRealZoneText, GetServerTime, GetTime, IsLoggedIn = GetRealZoneText, GetServerTime, GetTime, IsLoggedIn
-local UnitOnTaxi = UnitOnTaxi
+local GetLocale, GetRealZoneText, GetServerTime, GetTime = GetLocale, GetRealZoneText, GetServerTime, GetTime
+local IsLoggedIn, UnitFactionGroup, UnitOnTaxi = IsLoggedIn, UnitFactionGroup, UnitOnTaxi
 local SOUNDKIT, UnitClass, UnitLevel, UnitName = SOUNDKIT, UnitClass, UnitLevel, UnitName
 local issecretvalue, wipe, floor, max, min, random, byte = issecretvalue, wipe, math.floor, math.max, math.min, math.random, string.byte
+local next = next
 
 local Addon = ns.Addon
 local Puzzles = ns.Puzzles
@@ -74,6 +96,8 @@ local Current, Wrongs, Missed = nil, 0, {}
 local LastSubject
 local Counting = false -- the play clock runs: no riddle is due, you're not AFK, and a subject is on
 local SegmentStart     -- GetTime() the running stretch of play started at
+-- Blizzard's windows open now that a riddle waits for: "quest", "gossip" and interaction types.
+local Windows = {}
 local Scholar -- the module, declared at the end
 
 -- Kid-proofing, not security: a small hash so the PIN isn't sitting in the SavedVariables as-is.
@@ -191,12 +215,15 @@ local function Context()
     if not issecretvalue(rawClass) then
         class = rawClass
     end
+    local faction = UnitFactionGroup("player")
     return {
         name = name,
         class = class,
         level = UnitLevel("player"),
         zone = GetRealZoneText(),
         copper = GetMoney(),
+        faction = not issecretvalue(faction) and faction or nil,
+        locale = GetLocale(),
     }
 end
 
@@ -208,12 +235,13 @@ end
 -- A riddle about a quest the player was shown, in QuestBook's order (fresh ones first, then the
 -- rest for review), or nil when none is recorded. A quest no question fits counts as asked.
 local function QuestPuzzle()
-    local known, byKey = QuestBook.All(), {}
+    local known, byKey, context = QuestBook.All(), {}, Context()
     for _, record in ipairs(known) do
         byKey[record.key] = record
     end
     for _, key in ipairs(QuestBook.Order()) do
-        local puzzle = Puzzles.Generate({ subject = "quest", random = random, quest = byKey[key], known = known })
+        local puzzle = Puzzles.Generate({ subject = "quest", random = random, quest = byKey[key], known = known,
+            context = context })
         if puzzle then
             puzzle.questKey = key
             return puzzle
@@ -261,7 +289,7 @@ end
 local function Finish(solved)
     local before = Scholar:Get("stars")
     if Current and Current.questKey then
-        QuestBook.Asked(Current.questKey)
+        QuestBook.Asked(Current.questKey, Current.kind)
     end
     Current, Wrongs = nil, 0
     wipe(Missed)
@@ -282,6 +310,8 @@ local function Choose(i)
     if not Current or Scholar:Get("solved") or not buttons or (buttons[i] and not buttons[i]:IsEnabled()) then
         return
     end
+    -- level is the difficulty math and reading are written at: a quest riddle never changes it.
+    local adapts = Current.questKey == nil
     if i == Current.answer then
         -- The riddle stops being due now, so a /reload during the celebration doesn't ask another;
         -- solved holds the screen until Finish closes it.
@@ -289,12 +319,12 @@ local function Choose(i)
         Scholar:Set("pending", false)
         Scholar:Set("elapsed", 0)
         if Current.questKey then
-            QuestBook.Asked(Current.questKey) -- answered: a /reload in the celebration doesn't ask it again
+            QuestBook.Asked(Current.questKey, Current.kind) -- answered: a /reload in the celebration doesn't ask it again
         end
         local streak = Scholar:Get("streak") + 1
         Scholar:Set("streak", streak)
         Scholar:Set("stars", Scholar:Get("stars") + 1)
-        local levelUp = streak % 3 == 0 and Scholar:Get("level") < 3
+        local levelUp = adapts and streak % 3 == 0 and Scholar:Get("level") < 3
         if levelUp then
             Scholar:Set("level", Scholar:Get("level") + 1)
         end
@@ -305,7 +335,7 @@ local function Choose(i)
         Wrongs = Wrongs + 1
         Missed[i] = true
         Scholar:Set("streak", 0)
-        if Wrongs == 2 and Scholar:Get("level") > 1 then
+        if adapts and Wrongs == 2 and Scholar:Get("level") > 1 then
             Scholar:Set("level", Scholar:Get("level") - 1)
         end
         ScholarView.Wrong(i, Current.hint, Scholar:Get("mode") == "gentle")
@@ -318,12 +348,29 @@ local function Skip()
     end
 end
 
--- Reads the riddle aloud with the player's text-to-speech voice, rate and volume.
+-- Reads what the screen shows aloud (the riddle, the open quest book, or the feedback) with the
+-- player's text-to-speech voice, rate and volume.
 local function Speak()
-    if Current then
-        C_VoiceChat.SpeakText(C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard), ScholarView.Spoken(Current),
+    if Current and ScholarView.IsShown() then
+        C_VoiceChat.SpeakText(C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard), ScholarView.Speech(),
             C_TTSSettings.GetSpeechRate(), C_TTSSettings.GetSpeechVolume(), false)
     end
+end
+
+-- A Blizzard window opened (open) or closed: window is whether any a riddle waits for is open.
+local function SetWindow(name, open)
+    Windows[name] = open or nil
+    Scholar:Set("window", next(Windows) ~= nil)
+end
+
+local function OnInteractionShown(interaction)
+    if HeldInteractions[interaction] then
+        SetWindow(interaction, true)
+    end
+end
+
+local function OnInteractionHidden(interaction)
+    SetWindow(interaction, false)
 end
 
 -- Need a hint? shows the hint; on a quest riddle it opens (or closes) the quest book instead.
@@ -396,6 +443,8 @@ local Rows = {
     { name = "questRun", kind = "number", default = 0, min = 0, step = 1, scope = "character" },
     -- The riddle on screen was just solved: its celebration holds the screen until Finish.
     { name = "solved", kind = "boolean", default = false, persist = false },
+    -- One of Blizzard's windows a riddle waits for is open (Windows).
+    { name = "window", kind = "boolean", default = false, persist = false },
     -- The parent's PIN (a hash; 0 = none), account-wide, and whether settings are locked right now.
     { name = "pin", kind = "number", default = 0, lockedBy = LockedBy },
     { name = "locked", kind = "boolean", default = false, persist = false },
@@ -514,10 +563,20 @@ Scholar = Addon:Module("Scholar", {
                 module:Set("unlocked", false)
                 module:Set("locked", module:Get("pin") ~= 0)
             end
+            wipe(Windows) -- a loading screen closes them all
+            module:Set("window", false)
         end)
         local pending, solved, combat = module:Id("pending"), module:Id("solved"), module:Id("combat.active")
         local afk, mathOn, readingOn = module:Id("afk.active"), module:Id("math"), module:Id("reading")
-        local questsOn = module:Id("quests")
+        local questsOn, window = module:Id("quests"), module:Id("window")
+
+        -- Blizzard's windows a riddle waits for (see the header).
+        for event, dialog in pairs(DialogEvents) do
+            module:On(event, function() SetWindow(dialog[1], dialog[2]) end)
+        end
+        module:On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", OnInteractionShown)
+        module:On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", OnInteractionHidden)
+        module:On("TAXIMAP_CLOSED", function() SetWindow(TaxiNode, false) end)
 
         -- The play clock counts toward the next riddle while none is due, you're not AFK and a
         -- subject is on. It writes nothing while it runs: one timer fires when the interval is up,
@@ -574,24 +633,35 @@ Scholar = Addon:Module("Scholar", {
         end)
         module:On("PLAYER_DEAD", function() Moment("onDeath") end)
 
-        -- A riddle shows when one is due (or celebrating) and there's no fight; a fight sends it
-        -- away until it ends. A celebration a fight cut short doesn't come back: Finish ends it.
+        -- A riddle shows when one is due and there's no fight and none of Blizzard's windows is
+        -- open. A celebration a fight cut short doesn't come back: Finish ends it. One already on
+        -- screen stays when a window opens: only the rule below closes it.
         module:Rule({
-            reads = { pending, solved, combat }, initial = true,
+            reads = { pending, solved, combat, window }, initial = true,
+            when = function(state)
+                return (state.Values[pending] or state.Values[solved]) and not state.Values[combat]
+                    and not state.Values[window]
+            end,
+            changed = function(show, state)
+                if not show or state.Values[solved] or ScholarView.IsShown() then
+                    return
+                end
+                Current = Current or NextPuzzle()
+                if Current then
+                    Open()
+                elseif not HasSubject() then
+                    module:Set("pending", false)
+                end -- else it waits for a quest to ask about
+            end,
+        })
+        -- A fight sends the riddle away until it ends.
+        module:Rule({
+            reads = { pending, solved, combat },
             when = function(state)
                 return (state.Values[pending] or state.Values[solved]) and not state.Values[combat]
             end,
-            changed = function(show, state)
-                if show and state.Values[solved] then
-                    return
-                elseif show then
-                    Current = Current or NextPuzzle()
-                    if Current then
-                        Open()
-                    elseif not HasSubject() then
-                        module:Set("pending", false)
-                    end -- else it waits for a quest to ask about
-                else
+            changed = function(allowed)
+                if not allowed then
                     Close()
                 end
             end,
@@ -599,7 +669,8 @@ Scholar = Addon:Module("Scholar", {
         -- A riddle that came due with nothing to ask waits: a new quest, or a subject switched on,
         -- gives it one.
         module:Watch({ "QuestBook.quests", mathOn, readingOn, questsOn }, function(state)
-            if state.Values[pending] and not Current and not state.Values[solved] and not state.Values[combat] then
+            if state.Values[pending] and not Current and not state.Values[solved] and not state.Values[combat]
+                and not state.Values[window] then
                 Current = NextPuzzle()
                 if Current then
                     Open()
@@ -615,6 +686,7 @@ Scholar = Addon:Module("Scholar", {
         end
         Current, Wrongs = nil, 0
         wipe(Missed)
+        wipe(Windows)
         Close()
         Bank()
         Counting = false

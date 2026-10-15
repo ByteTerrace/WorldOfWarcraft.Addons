@@ -17,6 +17,7 @@ local addonName, ns = ...
 -- nothing but state.roll.
 
 local MaxPrompt, MaxChoice = 240, 40
+local Factions = { Alliance = true, Horde = true } -- UnitFactionGroup's factions a context may name
 
 local floor, max, min = math.floor, math.max, math.min
 local insert = table.insert
@@ -109,6 +110,8 @@ local function SafeContext(context)
         class = class and ScholarWords.classNouns[class] and class or nil,
         level = WholeNumber(context.level, 1, 100),
         copper = WholeNumber(context.copper, 0, 1e12),
+        faction = Factions[context.faction] and context.faction or nil,
+        locale = type(context.locale) == "string" and find(context.locale, "^%l%l%u%u$") and context.locale or nil,
     }
 end
 
@@ -256,8 +259,8 @@ end
 --- question fits the quest.
 ---@param options table subject ("math" | "reading" | "quest"), grade (0..6), level (1..3, easiest
 --- first), random (function(m, n) returning an integer from m to n), an optional context { name,
---- class, level, zone, copper } of plain values, and for "quest" the quest (a QuestBook record)
---- and known (every record)
+--- class, level, zone, copper, faction ("Alliance" or "Horde"), locale (GetLocale's "enUS") } of
+--- plain values, and for "quest" the quest (a QuestBook record) and known (every record)
 ---@return table? puzzle { subject, kind, title, prompt, choices (4 distinct strings), answer (1..4),
 --- hint, explanation }, plus value, expression, remainder and terms on math puzzles and book (the
 --- quest book's text) on quest puzzles

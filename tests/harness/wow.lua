@@ -279,6 +279,7 @@ function Harness.New(player)
     h.loaded = {}
     h.loadOrder = {}
     h.loggedIn = false        -- IsLoggedIn(): true from PLAYER_LOGIN on
+    h.locale = "enUS"         -- GetLocale(); the GlobalStrings stay enUS unless a test rawsets them
     h.saved = player.saved or {} -- [SavedVariable name] = value, as the client restores it
     h:InitWorld(player)       -- units, maps, waypoints, honor, raid notices (units.lua, world.lua)
     h:InitMeter()             -- damage meter sessions and death recaps (meter.lua)

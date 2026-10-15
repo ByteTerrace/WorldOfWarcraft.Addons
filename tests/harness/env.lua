@@ -188,8 +188,9 @@ function Harness:BuildEnvironment()
         InCombatLockdown = function() return h.lockdown end,
         IsLoggedIn = function() return h.loggedIn end,
         GetBuildInfo = function() return BuildVersion, BuildNumber, "Oct 1 2026", 16001 end,
-        -- The harness is an enUS client: its GlobalStrings (world.lua) are the enUS ones.
-        GetLocale = function() return "enUS" end,
+        -- The harness is an enUS client: its GlobalStrings (world.lua) are the enUS ones. A test of
+        -- another locale sets h.locale and rawsets the GlobalStrings it reads to that locale's.
+        GetLocale = function() return h.locale end,
 
         -- Frames.
         CreateFrame = function(widgetType, name, parent, template)

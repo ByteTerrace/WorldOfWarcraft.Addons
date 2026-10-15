@@ -5,7 +5,9 @@ local addonName, ns = ...
 --
 --   header    the Owl Sage's portrait and "The Owl Sage asks...", the subject and riddle title;
 --             on the right the stars, a bar filling toward the next rank, and the current streak
---   story     the setup; numbers and "quoted words" are highlighted; a Read aloud button beside it
+--   story     the setup; numbers and "quoted words" are highlighted; a Read aloud button beside it,
+--             which reads what the screen shows (Speech): the riddle, the open quest book, or the
+--             feedback
 --   picture   for small numbers in the early grades, the riddle drawn as icons: groups in bags,
 --             two piles to join, or a pile with some taken away
 --   question  the actual question, the largest text, on its own band
@@ -45,6 +47,8 @@ local SpeakerIcon = "Interface\\Common\\VoiceChat-Speaker"
 local NumberColor = "|cffffd100"
 local SubjectLabels = { math = "MATH", reading = "READING", quest = "QUEST" }
 local WordColor = "|cff7fe0ff"
+-- Riddles whose wrong choices are misspellings: Read aloud spells their choices.
+local SpelledKinds = { ["reading.spelling"] = true, ["reading.sight"] = true }
 
 local CreateFrame, UIParent = CreateFrame, UIParent
 local floor, max, min = math.floor, math.max, math.min
@@ -97,12 +101,35 @@ local function Split(prompt)
     return story, (prompt:sub(cut + 1):gsub("^%s+", ""))
 end
 
---- What a child hears when they press Read aloud: the story, the question, then the choices.
+-- Text as the voice should say it: a blank ("___", or a math riddle's "__") is "blank".
+local function Sayable(text)
+    return (text:gsub("_+", "blank"))
+end
+
+-- A word as its letters, for the voice to spell: "BELIEVE" is "B, E, L, I, E, V, E".
+local function Spelled(word)
+    local letters = {}
+    for letter in word:gmatch("%a") do
+        letters[#letters + 1] = letter:upper()
+    end
+    return concat(letters, ", ")
+end
+
+--- What a child hears when they press Read aloud: the story, the question, then the choices. A
+--- spelling riddle's choices are misspelled on purpose, so the voice spells each letter by letter
+--- rather than saying a wrong spelling as if it were the word.
 ---@param puzzle table
 ---@return string
 local function Spoken(puzzle)
-    local choices = puzzle.choices
-    return ("%s Is it %s, %s, %s, or %s?"):format(puzzle.prompt:gsub("\n", " "), choices[1], choices[2], choices[3], choices[4])
+    local prompt, choices = Sayable((puzzle.prompt:gsub("\n", " "))), puzzle.choices
+    if SpelledKinds[puzzle.kind] then
+        local spelled = {}
+        for i, choice in ipairs(choices) do
+            spelled[i] = ("Choice %d: %s."):format(i, Spelled(choice))
+        end
+        return prompt .. " " .. concat(spelled, " ")
+    end
+    return ("%s Is it %s, %s, %s, or %s?"):format(prompt, choices[1], choices[2], choices[3], choices[4])
 end
 
 -- The prompt as the screen shows it: a line the screen draws instead (the letters as tiles, a row
@@ -548,8 +575,10 @@ local function Layout(hasStory, puzzle)
     return height
 end
 
--- Shows a message in the footer's place: the hint (gold) or the working (green).
-local function ShowFeedback(text, good)
+-- Shows a message in the footer's place: the hint (gold) or the working (green); said is the
+-- message as plain text, for Read aloud.
+local function ShowFeedback(text, good, said)
+    Overlay.m_said = said
     local banner = Overlay.Feedback
     local tint = good and { 0.07, 0.19, 0.09 } or { 0.17, 0.13, 0.05 }
     local edge = good and { 0.2, 0.5, 0.26 } or { 0.48, 0.38, 0.13 }
@@ -611,7 +640,7 @@ function ScholarView.Show(puzzle, info)
     Overlay.Clue:SetText(clue and Emphasize(clue) or "")
     Overlay.Clue:SetShown(clue ~= nil)
     Overlay.Story:SetText(Emphasize(story))
-    Overlay.m_puzzle, Overlay.m_story, Overlay.m_bookOpen = puzzle, story, false
+    Overlay.m_puzzle, Overlay.m_story, Overlay.m_bookOpen, Overlay.m_said = puzzle, story, false, nil
     Overlay.Question:SetFontObject(#question <= 44 and "Game30Font" or "Game24Font")
     Overlay.Question:SetText(Emphasize(question))
     for i, button in ipairs(Overlay.Buttons) do
@@ -677,10 +706,20 @@ function ScholarView.BookOpen()
     return Overlay ~= nil and Overlay.m_bookOpen == true
 end
 
+--- What Read aloud says for what the screen shows now: the open quest book, else the feedback
+--- shown (the hint or the working), else the riddle (Spoken). Only while a riddle is on screen.
+---@return string
+function ScholarView.Speech()
+    if Overlay.m_bookOpen then
+        return Sayable(Overlay.m_puzzle.book)
+    end
+    return Overlay.m_said and Sayable(Overlay.m_said) or Spoken(Overlay.m_puzzle)
+end
+
 --- Shows the hint in the footer's place (no penalty; asking for help is part of learning).
 ---@param hint string
 function ScholarView.Hint(hint)
-    ShowFeedback(NumberColor .. "Hint:|r  " .. Emphasize(HintText(hint)), false)
+    ShowFeedback(NumberColor .. "Hint:|r  " .. Emphasize(HintText(hint)), false, "Hint: " .. HintText(hint))
 end
 
 --- Marks answer i right, dims the others, shows the working and celebrates the new star.
@@ -692,7 +731,7 @@ function ScholarView.Correct(i, explanation, info)
         button:Disable()
         Paint(button, j == i and "right" or "dim")
     end
-    ShowFeedback("|cff59f273Correct!|r  " .. Emphasize(explanation), true)
+    ShowFeedback("|cff59f273Correct!|r  " .. Emphasize(explanation), true, "Correct! " .. explanation)
     Overlay.Gain:SetText("+" .. max(info.earned or 1, 1))
     Overlay.Rise:Stop()
     Overlay.Rise:Play()
@@ -710,7 +749,8 @@ function ScholarView.Wrong(i, hint, canSkip)
     Paint(button, "wrong")
     button.Shake:Stop()
     button.Shake:Play()
-    ShowFeedback("|cffff665aNot quite.|r  " .. NumberColor .. "Hint:|r  " .. Emphasize(HintText(hint)), false)
+    ShowFeedback("|cffff665aNot quite.|r  " .. NumberColor .. "Hint:|r  " .. Emphasize(HintText(hint)), false,
+        "Not quite. Hint: " .. HintText(hint))
     if canSkip then
         Overlay.Skip:Show()
         PlaceFooter()

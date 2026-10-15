@@ -468,32 +468,70 @@ ns.ScholarWords = {
             hint = "Open the quest book and find that sentence.", explain = "The quest says: \"{filled}\"",
         },
     },
-    -- Plausible quest givers, quest titles, objectives and places (never a whole zone, which could be
-    -- true of the right place too) for wrong answers.
-    questPlaces = {
-        "Northshire Abbey", "Goldshire", "Fargodeep Mine", "Jasperlode Mine", "Eastvale Logging Camp",
-        "Valley of Trials", "Razor Hill", "Brill", "Kharanos", "Shadowglen", "Camp Narache", "Sentinel Hill",
-    },
-    questNames = {
-        "Marshal Dughan", "Deputy Willem", "Marshal McBride", "Brother Paxton", "Eagan Peltskinner",
-        "Innkeeper Farley", "Farmer Saldean", "Gryan Stoutmantle", "Captain Grayson", "Guard Thomas",
-    },
-    questTitles = {
-        "Kobold Camp Cleanup", "Wolves Across the Border", "The Fargodeep Mine", "Report to Goldshire",
-        "The Jasperlode Mine", "A Threat Within", "Lost Necklace", "Bounty on Murlocs",
-    },
-    -- Plausible objectives of each kind for wrong answers: items to bring, foes to defeat, tasks.
-    questItems = {
-        "Tough Wolf Meat", "Kobold Candle", "Gold Dust", "Murloc Fin", "Linen Cloth", "Red Burlap Bandana",
-        "Duskbat Pelt", "Embalming Ichor",
-    },
-    questFoes = {
-        "Kobold Vermin", "Young Wolf", "Defias Thug", "Murloc Forager", "Mangy Wolf", "Rot Hide Gnoll",
-        "Rattlecage Soldier", "Scarlet Convert",
-    },
-    questTasks = {
-        "Report to Marshal Dughan", "Sit near the campfire", "Speak with the innkeeper", "Light the signal fire",
-        "Search the old wagon", "Find the lost necklace",
+    -- Wrong answers for quest riddles, by the player's faction (Alliance when it's unknown): the
+    -- real givers, quests (each with its real giver, so one is never offered as another quest of the
+    -- riddle's own giver), places (never a whole zone, which could be true of the right place too)
+    -- and objectives of the lands a new character of that faction quests in.
+    questBanks = {
+        Alliance = {
+            names = {
+                "Marshal Dughan", "Deputy Willem", "Marshal McBride", "Brother Paxton", "Eagan Peltskinner",
+                "Innkeeper Farley", "Farmer Saldean", "Gryan Stoutmantle", "Captain Grayson", "Guard Thomas",
+            },
+            titles = {
+                { "Kobold Camp Cleanup", "Marshal McBride" }, { "Wolves Across the Border", "Eagan Peltskinner" },
+                { "The Fargodeep Mine", "Marshal Dughan" }, { "Report to Goldshire", "Marshal McBride" },
+                { "The Jasperlode Mine", "Marshal Dughan" }, { "A Threat Within", "Deputy Willem" },
+                { "Lost Necklace", "Billy Maclure" }, { "Bounty on Murlocs", "Guard Thomas" },
+            },
+            places = {
+                "Northshire Abbey", "Goldshire", "Fargodeep Mine", "Jasperlode Mine", "Eastvale Logging Camp",
+                "Kharanos", "Coldridge Valley", "Shadowglen", "Dolanaar", "Sentinel Hill",
+            },
+            -- Objectives of each kind: items to bring, foes to defeat, tasks.
+            items = {
+                "Tough Wolf Meat", "Kobold Candle", "Gold Dust", "Murloc Fin", "Linen Cloth", "Red Burlap Bandana",
+                "Milly's Harvest", "Wolf Fang",
+            },
+            foes = {
+                "Kobold Vermin", "Young Wolf", "Defias Thug", "Murloc Forager", "Mangy Wolf", "Kobold Worker",
+                "Kobold Laborer", "Frostmane Troll Whelp",
+            },
+            tasks = {
+                "Report to Marshal Dughan", "Sit near the campfire", "Speak with the innkeeper", "Light the signal fire",
+                "Search the old wagon", "Find the lost necklace",
+            },
+        },
+        Horde = {
+            names = {
+                "Gornek", "Kaltunk", "Hana'zua", "Zureetha Fargaze", "Foreman Thazz'ril", "Galgar", "Grull Hawkwind",
+                "Greatmother Hawkwind", "Shadow Priest Sarvis", "Executor Arren", "Gretchen Dedmar", "Innkeeper Renee",
+            },
+            titles = {
+                { "Your Place In The World", "Kaltunk" }, { "Cutting Teeth", "Gornek" },
+                { "Sting of the Scorpid", "Gornek" }, { "Sarkoth", "Hana'zua" }, { "Vile Familiars", "Zureetha Fargaze" },
+                { "Lazy Peons", "Foreman Thazz'ril" }, { "Galgar's Cactus Apple Surprise", "Galgar" },
+                { "The Hunt Begins", "Grull Hawkwind" }, { "A Humble Task", "Greatmother Hawkwind" },
+                { "Rattling the Rattlecages", "Shadow Priest Sarvis" }, { "Night Web's Hollow", "Executor Arren" },
+                { "The Chill of Death", "Gretchen Dedmar" },
+            },
+            places = {
+                "Valley of Trials", "Razor Hill", "Sen'jin Village", "Burning Blade Coven", "Camp Narache",
+                "Bloodhoof Village", "Red Cloud Mesa", "Deathknell", "Brill", "Night Web's Hollow",
+            },
+            items = {
+                "Scorpid Worker Tail", "Cactus Apple", "Plainstrider Meat", "Plainstrider Feather", "Duskbat Pelt",
+                "Coarse Thread", "Doom Weed", "Embalming Ichor",
+            },
+            foes = {
+                "Mottled Boar", "Scorpid Worker", "Vile Familiar", "Adult Plainstrider", "Battleboar",
+                "Rattlecage Soldier", "Mindless Zombie", "Scarlet Convert",
+            },
+            tasks = {
+                "Report to Gornek", "Sit near the campfire", "Speak with the innkeeper", "Light the signal fire",
+                "Search the old wagon", "Wake the lazy peons",
+            },
+        },
     },
     -- Words too plain to blank out of a quest's text.
     stopWords = {

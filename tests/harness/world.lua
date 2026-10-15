@@ -35,6 +35,9 @@
 --               (Ketho/BlizzardInterfaceResources, forever branch, 1.60.1 (70009); the two HONORGAIN
 --               strings also printed identically in game). [G] The other fields are as
 --               h:FireChat fills them.
+--   Quests      [D] QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED and QUEST_OBJECTS_FOUND are the same
+--               resources' enUS strings, with positional arguments (name, fulfilled, required);
+--               quests.lua writes the log's objective texts with them.
 --   Raid notice [D] RaidWarningUtil.AddMessage(text, colorInfo, displayTime) adds the message to
 --               RaidWarningFrame: SetText(text) takes a secret (the Text aspect
 --               turns secret), SetTextColor(colorInfo.r, .g, .b) takes secrets, and displayTime is
@@ -46,13 +49,16 @@
 --               r = 1, g = 0.282, b = 0 (printed in game); its other fields are
 --               ChatTypeInfoConstants.lua's.
 
--- The Forever client's enUS GlobalStrings for honor (see the header).
+-- The Forever client's enUS GlobalStrings for honor and quest objectives (see the header).
 Harness.GLOBAL_STRINGS = {
     COMBATLOG_HONORAWARD = "You have been awarded %d Honor.",
     COMBATLOG_HONORGAIN = "%s dies (Honorable Kill: %s). You gain %d Honor.",
     COMBATLOG_HONORGAIN_NO_RANK = "%s dies (Honorable Kill). You gain %d Honor.",
     FACTION_ALLIANCE = "Alliance",
     FACTION_HORDE = "Horde",
+    QUEST_ITEMS_NEEDED = "%2$d/%3$d %1$s",
+    QUEST_MONSTERS_KILLED = "%2$d/%3$d %1$s slain",
+    QUEST_OBJECTS_FOUND = "%2$d/%3$d %1$s",
 }
 
 local InstanceTypes = { party = true, raid = true, pvp = true, arena = true, scenario = true }

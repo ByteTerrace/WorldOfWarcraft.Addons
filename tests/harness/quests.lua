@@ -1,11 +1,14 @@
--- Quests in the fake client: the quest log and the quest giver's dialog (see wow.lua for the rest).
+-- Quests in the fake client: the quest log, the quest giver's dialog, and the other NPC windows
+-- (gossip, and those Blizzard's interaction manager opens). See wow.lua for the rest.
 --
 -- State: h.questLog (the quests in the log, in order: { id, title, text, goal, objectives, header,
 -- level }), h.questTitles ([questID] = title, for every quest the client has seen) and h.questDialog
 -- (nil, or { panel = "detail" | "reward", quest, reward }) with the giver as the "questnpc" and
 -- "npc" units while it's open. A quest spec is { id, title, text (the description), goal (the
--- objective summary), objectives = { { text, required, type ("item" unless given), uncached } },
--- header (the log's zone header), level }; missing fields get stand-ins.
+-- objective summary), objectives = { { text (what the objective names: an item, a creature, a
+-- task), required, type ("item" unless given), uncached } }, header (the log's zone header),
+-- level }; missing fields get stand-ins. h.gossip is the open gossip window's NPC (or nil), and
+-- h.interactions the open interaction manager windows ([Enum.PlayerInteractionType value] = true).
 --
 --   h:OfferQuest(spec, giver)     the giver's offer panel: QUEST_DETAIL(0)
 --   h:AcceptQuest()               accepts the offer: QUEST_ACCEPTED(id), QUEST_LOG_UPDATE, QUEST_FINISHED
@@ -15,6 +18,10 @@
 --                                 QUEST_REMOVED(id, false), QUEST_LOG_UPDATE, QUEST_FINISHED
 --   h:LoadQuestNames()            the client has loaded the names uncached objectives lacked:
 --                                 QUEST_LOG_UPDATE
+--   h:OpenGossip(npc) / h:CloseGossip()   an NPC's gossip window: GOSSIP_SHOW(nil), GOSSIP_CLOSED(false)
+--   h:OpenInteraction(name) / h:CloseInteraction(name)   a window the interaction manager opens, by
+--                                 its Enum.PlayerInteractionType name ("Merchant", "MailInfo", ...):
+--                                 PLAYER_INTERACTION_MANAGER_FRAME_SHOW / _HIDE(type)
 --
 -- Modeling decisions ([D] documented or seen in Blizzard's Forever UI source, [P] probed in game,
 -- [G] a guess where neither says):
@@ -36,11 +43,24 @@
 --               (questLog.text). [G] One header per header name, in first-seen order; a header's
 --               entry carries the same fields with questID 0. [G] An objective's text puts its
 --               count first ("0/8 Wolf Pelt"), as the Mainline tracker shows it; probe
---               questLog.countForm records which form the client uses. [E] An objective whose
---               item or creature the client hadn't loaded yet comes without its name: "0/5 " for
---               "0/5 Duskbat Pelt", "0/10  slain" for "0/10 Scarlet Warrior slain" (seen in a
---               player's saved quest book); an uncached objective reads so until h:LoadQuestNames. [G] A turned-in
---               quest's title stays known to GetTitleForQuestID.
+--               questLog.countForm records which forms the client uses (leading, and none).
+--               [G] The client writes an objective's text with its locale's GlobalStrings, as the
+--               harness does with the env's: QUEST_MONSTERS_KILLED for a monster, QUEST_OBJECTS_FOUND
+--               for an object, QUEST_ITEMS_NEEDED for the rest (the enUS forms, world.lua, put the
+--               count first); the "none" form, a text without its count, isn't modeled. [E] An
+--               objective whose item or creature the client hadn't loaded yet comes without its
+--               name: "0/5 " for "0/5 Duskbat Pelt", "0/10  slain" for "0/10 Scarlet Warrior
+--               slain" (seen in a player's saved quest book); an uncached objective reads so until
+--               h:LoadQuestNames. [G] A turned-in quest's title stays known to GetTitleForQuestID.
+--   Windows     [D] Blizzard's Forever UI shows the gossip frame on GOSSIP_SHOW(textureKit) and
+--               hides it on GOSSIP_CLOSED(interactionIsContinuing) (CustomGossipFrameBase.lua).
+--               The merchant, mailbox, bank, auction house, trainer and other windows register
+--               with PlayerInteractionFrameManager, which shows each on
+--               PLAYER_INTERACTION_MANAGER_FRAME_SHOW(type) and hides it on _HIDE(type).
+--               [G] The flight master's map (TaxiNode) is shown the same way: no Forever UI file
+--               handles TAXIMAP_OPENED, while TaxiFrame and FlightMapFrame hide on TAXIMAP_CLOSED,
+--               so closing it fires _HIDE(TaxiNode) and then TAXIMAP_CLOSED. The windows' frames
+--               and contents aren't modeled.
 
 local QuestInfoFields = {
     difficultyLevel = 0, frequency = 0, hasLocalPOI = false, isAbandonOnDisable = false, isAutoComplete = false,
@@ -55,6 +75,8 @@ function Harness:InitQuests()
     self.questLog = {}
     self.questTitles = {}
     self.questDialog = nil
+    self.gossip = nil
+    self.interactions = {}
 end
 
 -- A quest spec with its stand-ins filled in, as a fresh table.
@@ -114,15 +136,25 @@ local function Info(entry, index)
     return info
 end
 
-local function Objectives(quest)
+-- The GlobalString an objective's text is written with, by its type (see the header).
+local ObjectiveFormats = { monster = "QUEST_MONSTERS_KILLED", object = "QUEST_OBJECTS_FOUND" }
+
+-- format with its positional conversions ("%2$d/%3$d %1$s") filled from the arguments.
+local function FormatPositional(format, ...)
+    local args, position = { ... }, 0
+    return (format:gsub("%%(%d*)%$?([sd])", function(index)
+        position = position + 1
+        return tostring(args[tonumber(index) or position])
+    end))
+end
+
+local function Objectives(h, quest)
     local list = {}
     for i, objective in ipairs(quest.objectives) do
-        local text = objective.text
-        if objective.uncached then
-            text = text:sub(#text:gsub("%s+slain$", "") + 1) -- the name goes: "", or " slain"
-        end
+        local format = rawget(h.env, ObjectiveFormats[objective.type] or "QUEST_ITEMS_NEEDED")
+        local name = objective.uncached and "" or objective.text -- an unloaded name is empty
         list[i] = {
-            text = ("0/%d %s"):format(objective.required, text), type = objective.type,
+            text = FormatPositional(format, name, 0, objective.required), type = objective.type,
             finished = false, numFulfilled = 0, numRequired = objective.required,
         }
     end
@@ -205,7 +237,48 @@ function Harness:CompleteQuest(xp, money)
     CloseDialog(self)
 end
 
--- The quest fakes, merged into the env (env.lua) before it wraps them.
+--- Opens an NPC's gossip window; npc is a unit table or a name (the "npc" unit while it's open).
+function Harness:OpenGossip(npc)
+    assert(not self.gossip, "OpenGossip: a gossip window is already open")
+    self.gossip = Harness.FillUnit(type(npc) == "table" and npc or { name = npc or "Innkeeper Farley", level = 30 })
+    self.units.npc = self.gossip
+    self:Fire("GOSSIP_SHOW", nil)
+end
+
+--- Closes the open gossip window.
+function Harness:CloseGossip()
+    assert(self.gossip, "CloseGossip: no gossip window is open")
+    self.gossip = nil
+    self.units.npc = nil
+    self:Fire("GOSSIP_CLOSED", false)
+end
+
+-- An Enum.PlayerInteractionType value by name.
+local function InteractionType(name)
+    local value = __snapshot.enums.PlayerInteractionType[name]
+    assert(value, "unknown Enum.PlayerInteractionType " .. tostring(name))
+    return value
+end
+
+--- Opens a window the interaction manager shows, by its Enum.PlayerInteractionType name.
+function Harness:OpenInteraction(name)
+    local value = InteractionType(name)
+    assert(not self.interactions[value], "OpenInteraction: " .. name .. " is already open")
+    self.interactions[value] = true
+    self:Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", value)
+end
+
+--- Closes a window the interaction manager showed; the flight master's map also fires TAXIMAP_CLOSED.
+function Harness:CloseInteraction(name)
+    local value = InteractionType(name)
+    assert(self.interactions[value], "CloseInteraction: " .. name .. " isn't open")
+    self.interactions[value] = nil
+    self:Fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", value)
+    if name == "TaxiNode" then
+        self:Fire("TAXIMAP_CLOSED")
+    end
+end
+
 -- The client has loaded the item and creature names the log's objectives lacked: they read whole,
 -- and QUEST_LOG_UPDATE fires.
 function Harness:LoadQuestNames()
@@ -217,6 +290,7 @@ function Harness:LoadQuestNames()
     self:Fire("QUEST_LOG_UPDATE")
 end
 
+-- The quest fakes, merged into the env (env.lua) before it wraps them.
 function Harness:QuestFakes(uiParent)
     local h = self
     local function Dialog(panel)
@@ -261,7 +335,7 @@ function Harness:QuestFakes(uiParent)
             end,
             GetQuestObjectives = function(questID)
                 local quest = LogQuest(h, questID)
-                return quest and Objectives(quest) or {}
+                return quest and Objectives(h, quest) or {}
             end,
             GetTitleForQuestID = function(questID)
                 return h.questTitles[questID]

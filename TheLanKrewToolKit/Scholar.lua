@@ -60,9 +60,6 @@ local AnswerSources = { "gamepad.south", "gamepad.east", "gamepad.west", "gamepa
 local FinishDelay = 1.8
 -- How long, in seconds, after losing control to look for a flight path (UnitOnTaxi).
 local FlightCheck = 1
--- The windows Blizzard's interaction manager opens that a riddle waits for (by Enum.PlayerInteractionType name). The
--- quest dialog and gossip have their own events.
-local HeldInteractions = {}
 local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NUMPAD2 = 2, NUMPAD3 = 3, NUMPAD4 = 4 }
 -- How many quest riddles come in a row before math or reading takes a turn.
 local QuestShare = 2
@@ -78,22 +75,6 @@ local StretchOdds = 5
 local SubjectRows = { math = "math", quest = "quests", reading = "reading" }
 -- How long, in seconds, after a turn-in the onTurnIn moment waits, so QuestBook has noted it and the panel closed.
 local TurnInDelay = 1
-
-for _, name in ipairs({ "Merchant", "MailInfo", "Banker", "CharacterBanker", "AccountBanker", "GuildBanker",
-    "Auctioneer", "Trainer", "TaxiNode" }) do
-    HeldInteractions[Enum.PlayerInteractionType[name]] = true
-end
-
--- The events that open (true) and close (false) the quest dialog and gossip, as Blizzard's QuestFrame and gossip frame
--- read them.
-local DialogEvents = {
-    GOSSIP_CLOSED = { "gossip", false }, GOSSIP_SHOW = { "gossip", true }, QUEST_COMPLETE = { "quest", true },
-    QUEST_DETAIL = { "quest", true }, QUEST_FINISHED = { "quest", false }, QUEST_GREETING = { "quest", true },
-    QUEST_PROGRESS = { "quest", true },
-}
-
--- The taxi node's map also closes with TAXIMAP_CLOSED.
-local TaxiNode = Enum.PlayerInteractionType.TaxiNode
 
 local ByteTerrace = ByteTerrace
 local C_Sound = C_Sound
@@ -128,6 +109,7 @@ local ScholarSettings = ns.ScholarSettings
 local LockedBy = ScholarSettings.LockedBy
 local ScholarView = ns.ScholarView
 local Skills = ns.ScholarSkills
+local Windows = ns.ScholarWindows
 local Words = ns.ScholarWords
 
 -- Whether the play clock runs, which it does while no riddle is due, you're not AFK, and a subject is on.
@@ -147,8 +129,6 @@ local SegmentStart
 local Turns = 0
 -- The timer counting down the pause after a miss (the pauseLeft row) while the riddle shows.
 local WaitTimer
--- Blizzard's windows open now that a riddle waits for: "quest", "gossip", and interaction types.
-local Windows = {}
 local Wrongs = 0
 
 -- Saves the running stretch of play into elapsed, keeping its fraction of a second running.
@@ -375,22 +355,6 @@ local function Finish(solved)
         ns.Cards.Show({ body = (before .. " stars of wisdom. The Owl Sage is proud of you!"),
             icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.LFG_REWARDS,
             title = ("New rank: " .. Rank(before) .. "!") })
-    end
-end
-
--- A Blizzard window opened (open) or closed. The window row is whether any window a riddle waits for is open.
-local function SetWindow(name, open)
-    Windows[name] = (open or nil)
-    Scholar:Set("window", next(Windows) ~= nil)
-end
-
-local function OnInteractionHidden(interaction)
-    SetWindow(interaction, false)
-end
-
-local function OnInteractionShown(interaction)
-    if HeldInteractions[interaction] then
-        SetWindow(interaction, true)
     end
 end
 
@@ -796,7 +760,7 @@ Scholar = Addon:Module("Scholar", {
         -- itself comes back from the riddle row.
         Current, Wrongs, WaitTimer = nil, 0, nil
         wipe(Missed)
-        wipe(Windows)
+        Windows.Clear(module)
         Close()
         Later.Stop()
         module:Set("collapsed", false)
@@ -834,8 +798,7 @@ Scholar = Addon:Module("Scholar", {
             end
 
             -- A loading screen closes them all.
-            wipe(Windows)
-            module:Set("window", false)
+            Windows.Clear(module)
         end)
 
         local pending = module:Id("pending")
@@ -851,13 +814,7 @@ Scholar = Addon:Module("Scholar", {
         Later.Start(module)
 
         -- Blizzard's windows a riddle waits for (see the header).
-        for event, dialog in pairs(DialogEvents) do
-            module:On(event, function() SetWindow(dialog[1], dialog[2]) end)
-        end
-
-        module:On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", OnInteractionShown)
-        module:On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", OnInteractionHidden)
-        module:On("TAXIMAP_CLOSED", function() SetWindow(TaxiNode, false) end)
+        Windows.Start(module)
 
         -- The play clock counts toward the next riddle while none is due, you're not AFK, and a subject is on. It
         -- writes nothing while it runs: one timer fires when the interval is up, and play is saved when the clock

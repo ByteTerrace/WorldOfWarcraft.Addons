@@ -44,6 +44,7 @@ ScholarPictures.lua
 ScholarFrame.lua
 ScholarView.lua
 ScholarSettings.lua
+ScholarWindows.lua
 ScholarKeep.lua
 ScholarLater.lua
 ScholarLock.lua

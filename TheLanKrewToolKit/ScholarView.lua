@@ -499,6 +499,18 @@ local function PlaceThumb()
     end
 end
 
+-- Text as the voice says it: a blank ("___", or a math riddle's "__") is "blank".
+local function Sayable(text)
+    return (text:gsub("_+", "blank"))
+end
+
+-- The screen's height in the overlay's own units. The overlay has no parent (so hiding the UI doesn't hide a riddle),
+-- so the UI scale doesn't apply to it, while UIParent's height is in UIParent's units.
+local function ScreenHeight()
+    -- secret: UIParent is the client's own screen-sized frame, anchored to nothing an addon sets
+    return ((UIParent:GetHeight() * UIParent:GetEffectiveScale()) / Overlay:GetEffectiveScale())
+end
+
 -- Lays the panel out top to bottom from its content, so it's always exactly as tall as it needs to be, and centers it
 -- on screen (LiftUp above center when there's room). Returns its height.
 local function Layout(hasStory, puzzle)
@@ -578,18 +590,12 @@ local function Layout(hasStory, puzzle)
     local height = ((y + PlaceFooter()) + 18)
 
     panel:SetHeight(height)
-    -- secret: UIParent is the client's own screen-sized frame, anchored to nothing an addon sets
-    local room = (((UIParent:GetHeight() - height) / 2) - ScreenMargin)
+    local room = (((ScreenHeight() - height) / 2) - ScreenMargin)
 
     panel:ClearAllPoints()
     panel:SetPoint("CENTER", 0, max(0, min(LiftUp, room)))
 
     return height
-end
-
--- Text as the voice says it: a blank ("___", or a math riddle's "__") is "blank".
-local function Sayable(text)
-    return (text:gsub("_+", "blank"))
 end
 
 -- Shows a message in the footer's place: the hint (gold) or the working (green), and said is the message as plain text,
@@ -928,8 +934,7 @@ function ScholarView.ToggleBook()
         -- The room the book may take: the screen, less the margins and the rest of the riddle.
         local rest = Layout(false, puzzle)
 
-        -- secret: as in Layout
-        Overlay.m_bookRoom = max((((UIParent:GetHeight() - (2 * ScreenMargin)) - rest) - 14) - (2 * BookInset),
+        Overlay.m_bookRoom = max((((ScreenHeight() - (2 * ScreenMargin)) - rest) - 14) - (2 * BookInset),
             2 * ScrollStep)
 
         Overlay.BookText:SetText(Emphasize(puzzle.book))

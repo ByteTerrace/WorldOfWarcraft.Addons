@@ -1,4 +1,4 @@
--- Scholar's quest riddles: what the quest book records, what it asks, and the open book.
+-- Scholar's quest riddles: what the quest book records and what it asks. The open book is in scholarbook.test.lua.
 
 local Kit = use("scholar")
 
@@ -292,23 +292,6 @@ test("the quest book asks fresh quests newest first, then the rest, the one aske
     eq(table.concat(all, ","), "2,4,3,5,1", "every record, newest seen first; a tie goes by key")
 end)
 
-test("the quest book opens in the riddle's place with the quest's text, and closes the same way", function()
-    local h, _, ns = LoadKid()
-
-    Watch(ns)
-    Accept(h, Wolves)
-    h:Slash("/tlk puzzle")
-    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
-
-    truthy(Reveal(Harness.State(overlay.Hint.Label).text):find("Quest book", 1, true), "the hint is the book")
-    h:Key("H", true)
-    truthy(ns.ScholarView.BookOpen())
-    truthy(Reveal(Harness.State(overlay.BookText).text):find("Stonefield", 1, true), "the quest's text")
-    truthy(overlay.Book:IsShown())
-    h:Key("H", true)
-    falsy(ns.ScholarView.BookOpen())
-end)
-
 test("a long quest's text is kept whole, as the quest log shows it, through to the book", function()
     local h, addon, ns = LoadKid()
     local sentence = "The wolves grow bolder every night, and the farmers lie awake listening. "
@@ -322,132 +305,6 @@ test("a long quest's text is kept whole, as the quest log shows it, through to t
 
     h:Slash("/tlk puzzle")
     truthy(shown[1].book:find("Help us.", 1, true), "the book ends as the quest does")
-end)
-
-test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-pad, and the riddle fits", function()
-    local h, _, ns = LoadKid()
-
-    -- A controller is connected.
-    h.labelStyle = "Letters"
-    -- A short screen: the harness's 14 px lines are shorter than the real font's.
-    h.env.UIParent:SetSize(1366, 600)
-
-    local paragraph = ("Greetings, rogue. I can see you've got the look of an adventurer about you. This is good. "
-        .. "The world needs more of us restless souls, seeking fortune and glory. ")
-
-    local long = {
-        goal = "Sit near Eleanor's Basic Campfire and wait until you receive the Boosted Rest buff.",
-        header = "Tirisfal Glades", id = 34,
-        objectives = { { required = 1, text = "Sit near the campfire", type = "log" }, { required = 1, text = "Gain the Boosted Rest buff", type = "log" } },
-        text = (paragraph:rep(20) .. "Have a seat near the fire and get comfortable."), title = "The Great Outdoors",
-    }
-
-    Accept(h, long, "Eleanor Shackleton")
-    h:Slash("/tlk puzzle")
-    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
-    local book = overlay.Book
-    local screen = h.env.UIParent:GetHeight()
-
-    local function Fits(what)
-        truthy(overlay.Panel:GetHeight() <= (screen - 40), ("%s: the panel (%d) fits the screen (%d)"):format(what,
-            overlay.Panel:GetHeight(), screen))
-    end
-
-    Fits("the riddle")
-    falsy(book:IsShown(), "the book waits to be opened")
-    local hadStory = overlay.Story:IsShown()
-
-    h:Key("H", true)
-    truthy(ns.ScholarView.BookOpen())
-    truthy(book:IsShown() and not overlay.Story:IsShown(), "the book scrolls in the story's place")
-    Fits("the open book")
-    local text = Reveal(Harness.State(overlay.BookText).text)
-
-    truthy(text:find("Eleanor Shackleton", 1, true) and text:find("get comfortable.", 1, true), "the whole quest, scrolled")
-    truthy(Reveal(Harness.State(overlay.Hint.Label).text):find("Close book", 1, true), "the button closes it")
-    local range = book:GetVerticalScrollRange()
-
-    truthy(range > 0, "more text than room")
-    eq(book:GetVerticalScroll(), 0, "it opens at the top")
-
-    local function Offset() return book:GetVerticalScroll() end
-
-    truthy(h:MouseWheel(book, -1), "the book takes the wheel")
-    local step = Offset()
-
-    truthy(step > 0, "the wheel scrolls down")
-    h:MouseWheel(book, 1)
-    eq(Offset(), 0, "and back up")
-    h:MouseWheel(book, 1)
-    eq(Offset(), 0, "never above the top")
-    h:Key("DOWN", true)
-    eq(Offset(), step, "the Down arrow scrolls like a notch")
-    h:Key("UP", true)
-    eq(Offset(), 0)
-    h:Gamepad("PADDDOWN", true)
-    h:Gamepad("PADDDOWN", false)
-    eq(Offset(), step, "a D-pad press scrolls a notch")
-    h:Gamepad("PADDDOWN", true)
-    h:Advance(1)
-    truthy(Offset() > (2 * step), "held, it keeps scrolling")
-    h:Gamepad("PADDDOWN", false)
-    local held = Offset()
-
-    h:Advance(1)
-    eq(Offset(), held, "let go, it stops")
-
-    for _ = 1, 100 do h:MouseWheel(book, -1) end
-
-    eq(Offset(), range, "never below the end")
-    h:Key("H", true)
-    falsy(ns.ScholarView.BookOpen())
-    falsy(book:IsShown(), "closed")
-    eq(overlay.Story:IsShown(), hadStory, "the riddle is as it was")
-    Fits("the riddle again")
-    h:Key("H", true)
-    eq(Offset(), 0, "opened again, it starts at the top")
-end)
-
-test("on a tall screen the quest book is a page of at most BookHeight, scrolling the rest, not the screen's height", function()
-    local h, _, ns = LoadKid()
-
-    -- A small UI scale: far more room than the book needs.
-    h.env.UIParent:SetSize(2560, 1440)
-
-    Accept(h, { goal = "Read it all.", header = "Tirisfal Glades", id = 36, objectives = {},
-        text = ("The Scourge gathers in the north, and the Magistrate needs every agent he can find. "):rep(30), title = "Every Word" })
-
-    h:Slash("/tlk puzzle")
-    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
-    local closed = overlay.Panel:GetHeight()
-
-    h:Key("H", true)
-    eq(overlay.Book:GetHeight(), 240, "a page's worth in view")
-    truthy(overlay.BookCase:IsShown() and overlay.Book:IsShown(), "the book opens on its page")
-    truthy(overlay.Book:GetVerticalScrollRange() > 0, "and the rest scrolls")
-
-    truthy(overlay.Panel:GetHeight() < (closed + 300), ("the panel grows by about a page, not the screen: %d, then %d")
-        :format(closed, overlay.Panel:GetHeight()))
-end)
-
-test("feedback too long for its row grows the footer down to fit, and the panel with it", function()
-    local h, _, ns = LoadKid()
-    local shown = Watch(ns)
-
-    Accept(h, Wolves)
-    h:Slash("/tlk puzzle")
-    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
-    local before = overlay.Panel:GetHeight()
-
-    ns.ScholarView.Wrong(Kit.WrongAnswer(shown[1]), ('"details" is in the quest, but in another sentence. '):rep(3),
-        "Hint", "Open the quest book and find that sentence.", false)
-
-    local banner = overlay.Feedback
-    local text = banner.Text:GetStringHeight()
-
-    truthy(text > 44, "the message takes more than one row: " .. text)
-    eq(banner:GetHeight(), text + 20, "the banner fits it")
-    eq(overlay.Panel:GetHeight(), (before + (text + 20)) - 44, "and the panel grows by what the footer did")
 end)
 
 test("with only quest riddles on, a riddle that comes due waits for a quest", function()

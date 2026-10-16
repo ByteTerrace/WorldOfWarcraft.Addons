@@ -158,6 +158,16 @@ local Behaviors = {}
 
 function Behaviors.GetAttribute(s, _, name) return (s.attributes or {})[name] end
 
+function Behaviors.GetEffectiveScale(s)
+    local scale = (s.scale or 1)
+
+    if s.parent then
+        scale = (scale * Behaviors.GetEffectiveScale(Harness.State(s.parent)))
+    end
+
+    return scale
+end
+
 function Behaviors.GetMinMaxValues(s) return s.min, s.max end
 
 function Behaviors.GetName(s) return s.name end
@@ -167,6 +177,10 @@ function Behaviors.GetNumLines(s) return #Lines(s, Anchored(s, Axes.x, 0) or s.w
 function Behaviors.GetObjectType(s) return s.widgetType end
 
 function Behaviors.GetParent(s) return s.parent end
+
+-- [D] A widget's scale is its own (SetScale, 1 unless set), and its effective scale that times its parent's
+-- (SimpleFrameAPI). A parentless frame's effective scale is its own: the UI scale (UIParent's) doesn't reach it.
+function Behaviors.GetScale(s) return (s.scale or 1) end
 
 function Behaviors.GetScript(s, _, script) return s.scripts[script] end
 
@@ -465,6 +479,8 @@ function Behaviors.SetPropagateKeyboardInput(s, _, propagate) s.propagateKeyboar
 -- [D] SetRotation(radians, normalizedRotationPoint?) (SimpleTextureBaseAPI): the harness keeps both; drawing isn't
 -- modeled.
 function Behaviors.SetRotation(s, _, radians, point) s.rotation, s.rotationPoint = radians, point end
+
+function Behaviors.SetScale(s, _, scale) s.scale = scale end
 
 function Behaviors.SetScrollChild(s, _, child) s.scrollChild = child end
 

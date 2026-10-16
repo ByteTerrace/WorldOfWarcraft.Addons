@@ -93,6 +93,15 @@ function Commands:Define(spec)
     self.m_declared[spec.name] = own
 end
 
+--- Returns whether a command is held: it gets "up" and "cancel" as well as "down".
+---@param id integer
+---@return boolean
+function Commands:IsHeld(id)
+    local spec = self.m_specs[id]
+
+    return ((spec ~= nil) and (spec.held == true))
+end
+
 --- Returns the module a command belongs to, or nil for the addon's own (help, settings, debug, and so on).
 ---@param id integer
 ---@return table? module

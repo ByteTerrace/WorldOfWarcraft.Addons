@@ -96,6 +96,7 @@ local Refuse = ByteTerrace.Refuse
 local SetOverrideBindingClick = SetOverrideBindingClick
 local tostring = tostring
 local type = type
+local UnitAffectingCombat = UnitAffectingCombat
 local wipe = wipe
 
 local ApplySummons
@@ -486,14 +487,16 @@ function Input:SetActiveMaps(maps)
     end
 end
 
---- Binds one controller button to a command without capturing the rest (see the header).
+--- Binds one controller button to a command without capturing the rest (see the header). The command is the module's
+--- own and not held (a summon only presses): anything else is an error, as an unknown source or command is.
 ---@param module table the running module the summon belongs to
 ---@param source string e.g. "gamepad.back"
 ---@param command string the command's full name
----@return boolean took false in combat lockdown or for a module that isn't running
+---@return boolean took false in combat (from its first event, before lockdown) or for a module that isn't running
 function Input:Summon(module, source, command)
+    local commands = self.m_addon.Commands
     local key = KeyOf[source]
-    local id = self.m_addon.Commands.Ids[command]
+    local id = commands.Ids[command]
 
     if not key then
         error(self.m_addon.Name .. ": unknown source " .. tostring(source), 2)
@@ -503,7 +506,17 @@ function Input:Summon(module, source, command)
         error(self.m_addon.Name .. ": unknown command " .. tostring(command), 2)
     end
 
-    if InCombatLockdown() or not module:IsRunning() then
+    if commands:IsHeld(id) then
+        error(self.m_addon.Name .. ": a summon can't be held: " .. command, 2)
+    end
+
+    if commands:ModuleOf(id) ~= module then
+        error(self.m_addon.Name .. ": " .. module.Name .. " can't summon " .. command, 2)
+    end
+
+    -- Combat ends every summon as it starts (PLAYER_REGEN_DISABLED, before lockdown), so one asked for then wouldn't
+    -- last: UnitAffectingCombat is already true there.
+    if InCombatLockdown() or UnitAffectingCombat("player") or not module:IsRunning() then
         return false
     end
 

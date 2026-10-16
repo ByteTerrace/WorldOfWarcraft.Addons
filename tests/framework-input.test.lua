@@ -246,6 +246,45 @@ test("summons of one button stack: the latest wins, and dismissing it gives the 
     eq(ran[#ran], "focus", "a module that stops gives its buttons back to the ones before")
 end)
 
+test("a summon is for its own module's commands that only press: anything else is an error", function()
+    local h, addon = NewAddOn()
+
+    addon:Module("Note", {
+        commands = {
+            { label = "Focus", name = "focus", run = function() end },
+            { held = true, label = "Hold", name = "hold", run = function() end },
+        },
+        label = "Note",
+    })
+
+    addon:Module("Other", { commands = { { label = "Go", name = "go", run = function() end } }, label = "Other" })
+    Start(h)
+    local module = addon.Modules.Note
+
+    throws(function() addon.Input:Summon(module, "gamepad.back", "Note.nope") end, "unknown command Note.nope")
+    throws(function() addon.Input:Summon(module, "gamepad.back", "Note.hold") end, "a summon can't be held: Note.hold")
+    throws(function() addon.Input:Summon(module, "gamepad.back", "Other.go") end, "Note can't summon Other.go")
+    eq(next(h.overrideBindings), nil, "nothing was bound")
+end)
+
+test("a summon asked for as combat starts, before lockdown, is refused rather than outliving it", function()
+    local h, addon = NewAddOn()
+    local took
+
+    addon:Module("Note", {
+        commands = { { label = "Focus", name = "focus", run = function() end } },
+        label = "Note",
+        OnEnable = function(module)
+            module:On("PLAYER_REGEN_DISABLED", function() took = addon.Input:Summon(module, "gamepad.back", "Note.focus") end)
+        end,
+    })
+
+    Start(h)
+    h:EnterCombat()
+    eq(took, false)
+    eq(next(h.overrideBindings), nil)
+end)
+
 test("a summon ends as combat starts, before lockdown, is refused in combat, and ends with its module", function()
     local h, addon = NewAddOn()
 

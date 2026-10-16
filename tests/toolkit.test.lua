@@ -52,17 +52,19 @@ test("loads cleanly and builds its settings window, organized into pages and sec
     local expected = {
         (main .. ": [Fuck-o-meter] FuckOMeter.enabled"
             .. " [Session journal] Journal.enabled Journal.welcome Journal.ding [Advanced] addon.debug"),
-        ("Sounds: Sounds.enabled Sounds.channel Sounds.combatStart Sounds.stopOnCombatEnd"
+        ("Sounds: Sounds.enabled Sounds.channel Sounds.combatStart Sounds.stopOnCombatEnd Sounds.questReady"
             .. " [Mortal Kombat] Kombat.chooseYourDestiny Kombat.testYourMight Kombat.finishHim Kombat.comboPoints"
             .. " Kombat.flawlessVictory Kombat.fatality Kombat.superbVictory Kombat.deathTaunt"
             .. " [Kill streaks] Streaks.enabled Streaks.firstBlood Streaks.multiKills Streaks.sprees Streaks.share"),
-        "Controller: [Controller light bar] LightBar.enabled [Controller rumble] Rumble.enabled",
+        ("Controller: [Controller light bar] LightBar.enabled LightBar.questReady"
+            .. " [Controller rumble] Rumble.enabled Rumble.questReady"),
         "Krew: [Krew messages] Krew.enabled Krew.hello Krew.shareDings Krew.shareFlawless Krew.shareScholar",
         ("Warband: [Warband (world PvP)] Warband.enabled Warband.alerts Warband.shareSightings"
             .. " Warband.deathPrompt Warband.rallyWaypoint Warband.intel"
             .. " [Nameplate badges] Badges.enabled [Nearby enemies window] Radar.enabled Radar.share"),
         ("Scholar's challenge: Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading Scholar.quests"
-            .. " Scholar.readAloud [When] Scholar.interval Scholar.onLevelUp Scholar.onFlight Scholar.onTurnIn Scholar.onDeath Scholar.mode"),
+            .. " Scholar.readAloud [When] Scholar.interval Scholar.onLevelUp Scholar.onFlight Scholar.onTurnIn Scholar.onDeath Scholar.mode"
+            .. " [Count quest progress aloud] QuestCount.enabled"),
     }
 
     local window = addon.SettingsWindow

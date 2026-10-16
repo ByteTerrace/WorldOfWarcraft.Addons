@@ -396,16 +396,16 @@ local function Choose(i)
     end
 end
 
--- Whether riddles are said aloud as they appear: the readAloud setting ("young" means kindergarten and grade 1), when
--- the client has a voice.
+--- Returns whether riddles are said aloud as they appear: the readAloud setting ("young" means kindergarten and grade
+--- 1), when the client has a voice.
 local function ReadsAloud()
     local mode = Scholar:Get("readAloud")
 
     return (CanHear() and ((mode == "always") or ((mode == "young") and (tonumber(Scholar:Get("grade")) <= 1))))
 end
 
--- Says text aloud (what the screen shows: the riddle, the open quest book, or the feedback) with the player's
--- text-to-speech voice, rate, and volume.
+--- Says text aloud (what the screen shows: the riddle, the open quest book, or the feedback) with the player's
+--- text-to-speech voice, rate, and volume.
 local function Say(text)
     C_VoiceChat.SpeakText(C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard), text, C_TTSSettings.GetSpeechRate(),
         C_TTSSettings.GetSpeechVolume(), false)
@@ -962,3 +962,6 @@ Scholar = Addon:Module("Scholar", {
     state = Rows,
     uses = { "QuestBook" },
 })
+
+-- Scholar's voice, for the other features that speak to a young scholar (QuestProgress.lua's QuestCount).
+ns.ScholarVoice = { ReadsAloud = ReadsAloud, Say = Say }

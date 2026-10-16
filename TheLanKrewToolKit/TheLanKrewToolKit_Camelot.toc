@@ -43,3 +43,4 @@ Streaks.lua
 ScholarPictures.lua
 ScholarView.lua
 Scholar.lua
+QuestProgress.lua

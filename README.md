@@ -253,7 +253,7 @@ The fake is strict:
   - In combat, every damage-meter field is secret except the documented never-secret ones.
 - **Frames:** `OnShow` and `OnHide` run when visibility changes, children included. `h:Drag(frame, dx, dy)` runs `OnMouseDown`, `OnDragStart`, and `OnDragStop` for a movable, mouse-enabled frame registered for the button. Its anchors shift by the drag, where the client re-anchors to the nearest screen corner. A `ScrollFrame` scrolls its child: its range is the child's height less its own. `h:MouseWheel(frame, delta)` turns the wheel over a frame with the wheel enabled. `UIParent` is 1366 x 768, the screen at UI scale 1.
 - **Speech:** `C_VoiceChat.SpeakText` and `C_CombatAudioAlert.SpeakText` land in `h.spoken`. Combat audio alerts speak only when the player turned them on (`h.combatAudioAlerts`).
-- **Quests:** `h:OfferQuest(spec, giver)` opens a giver's offer panel, and `h:AcceptQuest()` accepts it. `h:AutoAcceptQuest(spec)` is an area trigger's quest, straight into the log with no dialog. `h:OpenTurnIn(id, ender, reward)` and `h:CompleteQuest()` turn one in. The dialog's texts, `GetQuestID`, the `questnpc` unit, and the quest log (`C_QuestLog`, `GetQuestLogQuestText`) answer as the quest probes recorded in game. An accumulating probe matches when the harness shows nothing the client's sessions didn't.
+- **Quests:** `h:OfferQuest(spec, giver)` opens a giver's offer panel, and `h:AcceptQuest()` accepts it. `h:AutoAcceptQuest(spec)` is an area trigger's quest, straight into the log with no dialog. `h:OpenTurnIn(id, ender, reward)` and `h:CompleteQuest()` turn one in. `h:ProgressObjective(id, index, have)` sets how many of an objective are done, as killing or looting does. The dialog's texts, `GetQuestID`, the `questnpc` unit, and the quest log (`C_QuestLog`, `GetQuestLogQuestText`) answer as the quest probes recorded in game. An accumulating probe matches when the harness shows nothing the client's sessions didn't.
 - **World PvP:**
   - `h:AddNamePlate(unit)` and `h:RemoveNamePlate(token)` fire the nameplate events. A plate shows before `NAME_PLATE_UNIT_ADDED` and hides after `NAME_PLATE_UNIT_REMOVED`, with any frames parented to it.
   - `h:SetMouseover(unit)` fires `UPDATE_MOUSEOVER_UNIT`. Clearing it fires nothing, like the client.
@@ -470,6 +470,7 @@ The settings have a toggle per sound (or per family, like the combo points), a v
 | File | Plays when | Test |
 | --- | --- | --- |
 | `CombatStart` | You enter combat | `start` |
+| `QuestReady` | One of your quests is ready to turn in | `quest` |
 
 #### Mortal Kombat
 
@@ -517,6 +518,9 @@ A kill announces one moment: a spree it reaches, else a multi kill, else first b
 
 - **Light bar:** red in combat, yellow when AFK, and green otherwise. It's cleared on logout or when the feature is disabled.
 - **Rumble:** strong when combat starts, and light when it ends. It's stopped on logout or when the feature is disabled.
+- **Quest ready:** when one of your quests is ready to turn in, the light bar turns gold for three seconds and the controller rumbles lightly. Each has its own setting under the light bar and the rumble. Combat's red wins over the gold.
+
+The addon reads your quest log's objectives once for each burst of quest log updates, and never in combat: progress made in a fight is read when the fight ends. Quests already in your log when the addon starts, or after a `/reload`, count from where they are.
 
 ### Cards
 
@@ -716,6 +720,14 @@ Kindergarten and grade 1 also get riddles that are heard, not read:
 - They also hear short stories, and answer who did something, what happened, how someone felt, or what came first. Each choice is said with its key after the story.
 
 The word or story never appears on screen, and **Read aloud** becomes **Hear it again**. Speech uses the player's text-to-speech voice, rate, and volume. With no voice, nothing is said, and no heard riddle is asked.
+
+The Owl also counts quest progress aloud, following **Read riddles aloud**:
+
+- When an objective goes up: "Tough Wolf Meat: 3 of 8. 5 more to go!" The last one is "all 8. Done!", and a one-step task is "done!"
+- After a fight, it sums up what the fight got: "That fight got you 2 more! Tough Wolf Meat: 2 of 8. 6 more to go!" It keeps quiet during the fight.
+- When a quest is ready to turn in: "Wolves Across the Border is ready to turn in!"
+
+It keeps quiet while a riddle is on screen. **Count quest progress aloud**, at the end of the **Scholar's challenge** page, turns it off. It's behind the parent lock like the other challenge settings.
 
 #### Controllers and keyboards
 

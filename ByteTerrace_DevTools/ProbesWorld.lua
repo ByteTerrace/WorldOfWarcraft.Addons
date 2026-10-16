@@ -429,6 +429,41 @@ Probes.Define({
         end,
     },
     {
+        accumulates = true,
+        -- What C_QuestLog.ReadyForTurnIn answers for each quest in the log, by its objectives: "finished" (all done),
+        -- "unfinished", "none" (a quest without objectives), or "secret", then a colon and the answer's shape ("true",
+        -- "false", "nil", or "secret"). QuestProgress.lua's ready quests rest on the harness's guess that it's true
+        -- exactly when every objective is finished.
+        name = "questLog.readyForTurnIn",
+        needs = { "questLog" },
+        run = function()
+            local answers = {}
+
+            for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+                local info = C_QuestLog.GetInfo(i)
+
+                if info and not info.isHeader then
+                    local objectives = (C_QuestLog.GetQuestObjectives(info.questID) or {})
+                    local done = (((#objectives == 0) and "none") or "finished")
+
+                    for _, objective in ipairs(objectives) do
+                        if issecretvalue(objective.finished) then
+                            done = "secret"
+                        elseif (done ~= "secret") and not objective.finished then
+                            done = "unfinished"
+                        end
+                    end
+
+                    local ready = C_QuestLog.ReadyForTurnIn(info.questID)
+
+                    answers[done .. ":" .. ((issecretvalue(ready) and "secret") or tostring(ready))] = true
+                end
+            end
+
+            return { answers = Joined(answers) }
+        end,
+    },
+    {
         name = "questLog.text",
         needs = { "questLog" },
         run = function()

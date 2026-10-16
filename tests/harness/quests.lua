@@ -2,12 +2,13 @@
 -- Blizzard's interaction manager opens). See wow.lua for the rest.
 --
 -- State: h.questLog (the quests in the log, in order: { id, title, text, goal, objectives, header, level }),
--- h.questTitles ([questID] = title, for every quest the client has seen), and h.questDialog (nil, or { panel = "detail"
--- | "reward", quest, reward }) with the giver as the "questnpc" and "npc" units while it's open. A quest spec is { id,
--- title, text (the description), goal (the objective summary), objectives = { { text (what the objective names: an
--- item, a creature, a task), required, type ("item" unless given), uncached } }, header (the log's zone header), level
--- }. Missing fields get stand-ins. h.gossip is the open gossip window's NPC (or nil), and h.interactions the open
--- interaction manager windows ([Enum.PlayerInteractionType value] = true).
+-- h.objectiveHave ([questID] = { [objective index] = how many are done }, from h:ProgressObjective), h.questTitles
+-- ([questID] = title, for every quest the client has seen), and h.questDialog (nil, or { panel = "detail" | "reward",
+-- quest, reward }) with the giver as the "questnpc" and "npc" units while it's open. A quest spec is { id, title, text
+-- (the description), goal (the objective summary), objectives = { { text (what the objective names: an item, a
+-- creature, a task), required, have (how many are done, 0 unless given), type ("item" unless given), uncached } },
+-- header (the log's zone header), level }. Missing fields get stand-ins. h.gossip is the open gossip window's NPC (or
+-- nil), and h.interactions the open interaction manager windows ([Enum.PlayerInteractionType value] = true).
 --
 --   h:OfferQuest(spec, giver)     the giver's offer panel: QUEST_DETAIL(0)
 --   h:AcceptQuest()               accepts the offer: QUEST_ACCEPTED(id), QUEST_LOG_UPDATE, QUEST_FINISHED
@@ -17,6 +18,8 @@
 --                                 QUEST_REMOVED(id, false), QUEST_LOG_UPDATE, QUEST_FINISHED
 --   h:LoadQuestNames()            the client has loaded the names uncached objectives lacked:
 --                                 QUEST_LOG_UPDATE
+--   h:ProgressObjective(id, i, have)  objective i of a quest in the log now has have done:
+--                                 QUEST_WATCH_UPDATE(id), QUEST_LOG_UPDATE
 --   h:OpenGossip(npc) / h:CloseGossip()   an NPC's gossip window: GOSSIP_SHOW(nil), GOSSIP_CLOSED(false)
 --   h:OpenInteraction(name) / h:CloseInteraction(name)   a window the interaction manager opens, by
 --                                 its Enum.PlayerInteractionType name ("Merchant", "MailInfo", ...):
@@ -51,6 +54,13 @@
 --               name: "0/5 " for "0/5 Duskbat Pelt", "0/10  slain" for "0/10 Scarlet Warrior
 --               slain" (seen in a player's saved quest book); an uncached objective reads so until
 --               h:LoadQuestNames. [G] A turned-in quest's title stays known to GetTitleForQuestID (questLog.titleAfterTurnIn asks the client).
+--   Progress    [D] An objective's numFulfilled is how many are done, and finished whether that
+--               reaches numRequired; its text shows the new count. Blizzard's Forever objective
+--               tracker redraws on QUEST_LOG_UPDATE (Blizzard_QuestObjectiveTracker.lua).
+--               [G] Progress fires QUEST_WATCH_UPDATE(questID), then QUEST_LOG_UPDATE, and no
+--               UNIT_QUEST_LOG_CHANGED. [G] ReadyForTurnIn is true when every objective is finished,
+--               a quest without objectives included, and nil for a quest not in the log
+--               (questLog.readyForTurnIn asks the client).
 --   Windows     [D] Blizzard's Forever UI shows the gossip frame on GOSSIP_SHOW(textureKit) and
 --               hides it on GOSSIP_CLOSED(interactionIsContinuing) (CustomGossipFrameBase.lua).
 --               The merchant, mailbox, bank, auction house, trainer, and other windows register
@@ -144,6 +154,7 @@ end
 
 function Harness:InitQuests()
     self.questLog = {}
+    self.objectiveHave = {}
     self.questTitles = {}
     self.questDialog = nil
     self.gossip = nil
@@ -173,6 +184,13 @@ local function FormatPositional(format, ...)
     end))
 end
 
+-- How many of objective i of quest are done: h:ProgressObjective's count, else the spec's have, else 0.
+local function Have(h, quest, i)
+    local progress = h.objectiveHave[quest.id]
+
+    return ((progress and progress[i]) or quest.objectives[i].have or 0)
+end
+
 -- An Enum.PlayerInteractionType value by name.
 local function InteractionType(name)
     local value = __snapshot.enums.PlayerInteractionType[name]
@@ -190,9 +208,11 @@ local function Objectives(h, quest)
         -- An uncached objective's name is empty.
         local name = ((objective.uncached and "") or objective.text)
 
+        local have = Have(h, quest, i)
+
         list[i] = {
-            finished = false, numFulfilled = 0, numRequired = objective.required,
-            text = FormatPositional(format, name, 0, objective.required), type = objective.type,
+            finished = (have >= objective.required), numFulfilled = have, numRequired = objective.required,
+            text = FormatPositional(format, name, have, objective.required), type = objective.type,
         }
     end
 
@@ -327,6 +347,17 @@ function Harness:OpenTurnIn(questID, ender, reward)
     self:Fire("QUEST_COMPLETE")
 end
 
+--- Objective index of the quest in the log with questID now has have done, and the client says so.
+function Harness:ProgressObjective(questID, index, have)
+    local quest = LogQuest(self, questID)
+
+    assert(quest and quest.objectives[index], "ProgressObjective: no such objective in the log")
+    self.objectiveHave[questID] = (self.objectiveHave[questID] or {})
+    self.objectiveHave[questID][index] = have
+    self:Fire("QUEST_WATCH_UPDATE", questID)
+    self:Fire("QUEST_LOG_UPDATE")
+end
+
 -- The quest fakes, merged into the env (env.lua) before it wraps them.
 function Harness:QuestFakes(uiParent)
     local h = self
@@ -366,6 +397,21 @@ function Harness:QuestFakes(uiParent)
             end,
             GetTitleForQuestID = function(questID)
                 return h.questTitles[questID]
+            end,
+            ReadyForTurnIn = function(questID)
+                local quest = LogQuest(h, questID)
+
+                if not quest then
+                    return nil
+                end
+
+                for i, objective in ipairs(quest.objectives) do
+                    if Have(h, quest, i) < objective.required then
+                        return false
+                    end
+                end
+
+                return true
             end,
         },
         GetObjectiveText = function()

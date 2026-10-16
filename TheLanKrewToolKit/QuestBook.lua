@@ -29,6 +29,7 @@ local addonName, ns = ...
 --   ns.QuestBook.Asked(key, kind)   the quest has been asked about (now) since its last exposure,
 --                                   with a riddle of kind (askedKind, "" for none)
 --   ns.QuestBook.All()              every record, as copies with their key, newest first
+--   ns.QuestBook.ObjectiveName(text, kind)  what an objective's text names ("Wolf Pelt")
 --
 -- Records are QuestBook.quests, keyed by the quest ID as text, up to Limit of them (the oldest seen go first). Texts
 -- are whole, keep their line breaks, and lose the client's escape codes (a link keeps its text, a texture goes). An
@@ -222,8 +223,11 @@ local function NameOf(unit)
     return Plain(name, MaxLine)
 end
 
--- What an objective names (its item, creature, or task), from the log's text in the client's own forms. A text without
--- a count is its own name. It's "" while the client hasn't loaded the name.
+--- Returns what an objective names (its item, creature, or task), from the log's text in the client's own forms. A text
+--- without a count is its own name. It's "" while the client hasn't loaded the name.
+---@param text string the objective's text, as C_QuestLog.GetQuestObjectives gives it
+---@param kind string? its type ("item", "monster", "object", and so on)
+---@return string
 local function ObjectiveName(text, kind)
     text = Plain(text, MaxLine)
 
@@ -468,4 +472,4 @@ QuestBookModule = Addon:Module("QuestBook", {
     toggle = false,
 })
 
-ns.QuestBook = { All = All, Asked = Asked, MaxObjectives = MaxObjectives, Order = Order }
+ns.QuestBook = { All = All, Asked = Asked, MaxObjectives = MaxObjectives, ObjectiveName = ObjectiveName, Order = Order }

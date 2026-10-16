@@ -10,6 +10,7 @@ local addonName, ns = ...
 -- Modules:
 --   Sounds            the master switch, the channel, and the combat start sound's settings.
 --   CombatStartSound  plays CombatStart when combat starts. Its variants make a battle playlist.
+--   QuestReadySound   plays QuestReady when one of your quests is ready to turn in (QuestProgress.lua).
 --
 -- Test a sound with /tlk sound <word> [variant] (always available, even with the master switch off).
 
@@ -29,6 +30,7 @@ local function StopCombatStart()
 end
 
 SoundBank:Define("combatStart", { file = "CombatStart", label = "Combat start", row = "Sounds.combatStart", word = "start" })
+SoundBank:Define("questReady", { file = "QuestReady", label = "Quest ready", row = "Sounds.questReady", word = "quest" })
 
 Addon:Module("Sounds", {
     commands = {
@@ -48,6 +50,7 @@ Addon:Module("Sounds", {
             "When you enter combat. Give it variants for a battle playlist: each fight picks one.", { "combatStart" }),
         { default = true, description = "Fade out the combat start sound when you leave combat.", kind = "boolean",
             label = "Stop combat start sound when combat ends", name = "stopOnCombatEnd" },
+        SoundBank:Row("questReady", "Quest ready sound", "When one of your quests is ready to turn in.", { "questReady" }),
     },
 })
 
@@ -71,4 +74,13 @@ Addon:Module("CombatStartSound", {
         })
     end,
     toggle = false,
+})
+
+Addon:Module("QuestReadySound", {
+    active = SoundBank:WhileOn("questReady"),
+    OnEnable = function(module)
+        module:OnIncrease("QuestProgress.ready", function() SoundBank:Play("questReady") end)
+    end,
+    toggle = false,
+    uses = { "QuestProgress" },
 })

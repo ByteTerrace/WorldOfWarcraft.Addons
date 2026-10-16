@@ -12,6 +12,7 @@ and list them all with /tlk sound.
 
   File               Word        Plays when
   CombatStart        start       you enter combat
+  QuestReady         quest       one of your quests is ready to turn in
 
 Mortal Kombat:
   ChooseYourDestiny  destiny     a living enemy player becomes your target

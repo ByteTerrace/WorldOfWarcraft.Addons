@@ -22,7 +22,7 @@ local addonName, ns = ...
 --     run compares with any other's. The exceptions are the accumulating probes below, which list
 --     what sessions happened to show (unitCombat.seen, kills.seen, names.chatSenders, names.chatDiscordInfo,
 --     combat.edges, comms.addonMessageInLockdown, units.secretTokenInAuraEvent, questLog.objectives,
---     questLog.countForm, damageMeter.pvpSecrecy, encounterWarning.seen, input.events, death.combatState,
+--     questLog.countForm, questLog.readyForTurnIn, damageMeter.pvpSecrecy, encounterWarning.seen, input.events, death.combatState,
 --     damageMeter.currentSession, namePlates.events): that's their point.
 --   * harness (optional) is the reason the harness can't run this probe at all.
 --   * accumulates (optional) marks a probe whose result lists what sessions happened to show. Its

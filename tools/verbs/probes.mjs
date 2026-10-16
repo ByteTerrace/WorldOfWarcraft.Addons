@@ -24,7 +24,9 @@
 // build replaces the record, contexts and all, and an accumulating probe's result merges into the
 // saved record from the same build, so a fresh session never shrinks it. It keeps the others, and
 // drops records of probes that no longer exist or were made by another version of their probe. A
-// record that isn't { build, contexts = { ["idle/none"] = true, ... }, result } is refused.
+// record saved in the old one-context format ({ build, context = {...}, result }) is skipped, in one
+// line for them all, since the next run of its probe replaces it; any other record that isn't
+// { build, contexts = { ["idle/none"] = true, ... }, result } is refused.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -195,9 +197,15 @@ async function importRecords(values, positionals, definitions) {
     const snapshot = readProbes(values.out);
     const versionNote = (name, record) => `made by version ${record.version ?? 1} of the probe, which is now version ${defined.get(name).version}`;
     const counts = { new: 0, changed: 0, unchanged: 0 };
+    // Records saved before records held a set of contexts, which the next run of their probe replaces.
+    const oneContext = [];
     for (const [name, record] of Object.entries(imported)) {
         if (!defined.has(name)) {
             console.log(`Skipped ${name}: ByteTerrace_DevTools no longer defines it`);
+            continue;
+        }
+        if (record && typeof record === "object" && record.contexts === undefined && record.context && typeof record.context === "object") {
+            oneContext.push(name);
             continue;
         }
         const problem = recordProblem(record);
@@ -232,6 +240,10 @@ async function importRecords(values, positionals, definitions) {
             console.log(`Dropped ${name}: the record was ${versionNote(name, snapshot.probes[name])}`);
             delete snapshot.probes[name];
         }
+    }
+    if (oneContext.length) {
+        console.log(`Skipped ${oneContext.length} record${oneContext.length === 1 ? "" : "s"} saved in the old one-context format (${oneContext.sort().join(", ")}): `
+            + "DevTools replaces each the next time its probe runs.");
     }
     const builds = [...new Set(Object.values(snapshot.probes).map((record) => record.build))].sort((a, b) => buildNumber(a) - buildNumber(b));
     if (builds.length > 1) {

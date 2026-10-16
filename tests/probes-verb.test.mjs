@@ -115,7 +115,8 @@ export const tests = [
             assert(run.status === 0, `import exits 0 (got ${run.status}): ${run.stdout}${run.stderr}`);
             assert(run.stdout.includes("Skipped unknown.probe") && run.stdout.includes("Dropped no.longerDefined"), run.stdout);
             assert(run.stderr.includes("Refused tts.voices: the record has no contexts"), run.stderr);
-            assert(run.stderr.includes("Refused chat.lockdownIdle: the record has no contexts"), `a lone context isn't read: ${run.stderr}`);
+            assert(run.stdout.includes("Skipped 1 record saved in the old one-context format (chat.lockdownIdle): DevTools replaces each the next time its probe runs."), `a lone context isn't read: ${run.stdout}`);
+            assert(!run.stderr.includes("chat.lockdownIdle"), `nor refused one by one: ${run.stderr}`);
             assert(run.stderr.includes('Refused chatTypeInfo.raidWarning: the record has a bad context "asleep/none"'), run.stderr);
             assert(run.stderr.includes("records come from 1.60.1 (69000), 1.60.1 (70009)"), run.stderr);
             const text = readFileSync(out, "utf8");

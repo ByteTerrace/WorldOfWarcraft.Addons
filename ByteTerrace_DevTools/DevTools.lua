@@ -14,6 +14,13 @@ local addonName, ns = ...
 --                      skips are printed with what they need.
 --   /btdev probe list  the probes with no result for this build yet, grouped by what they need,
 --                      in the order one play session in a starting zone reaches them (Probes.Steps).
+--   /btdev probe auto  on or off: whether probes record themselves as you play (on unless turned
+--                      off; the setting is saved). Every SweepSeconds a sweep records each probe
+--                      whose needs are met and that has no result for this build in this context
+--                      yet, the same way /btdev probe does, and names the new and changed ones.
+--                      An accumulating probe runs in every sweep its needs are met, merging
+--                      quietly. A probe that fails in a sweep is printed once and not retried
+--                      until the next /reload.
 --   /btdev rumble      plays four vibration types in turn (ProbesInput.lua), for gamePad.vibration;
 --                      /btdev rumble <type> [intensity] [seconds] plays one, and stop stops it.
 --                      What a vibration feels like is for the player to say.
@@ -31,6 +38,9 @@ local addonName, ns = ...
 -- encounterWarning.seen (Probes.NoteEncounterStart, NoteEncounterWarning), and for controller and interface events, for
 -- input.events (Probes.NoteInputEvent).
 --
+-- On entering the world it says, in a line each, when the dump is from another build than the client's, and how many
+-- probes have no result for this build yet.
+--
 -- Only the client's own names are dumped. A global or table member any addon set is tainted by that addon
 -- (issecurevariable), so it's counted under `skipped` instead, per addon: other addons' keys in Blizzard tables
 -- (SlashCmdList.MYADDON) never reach the snapshot.
@@ -44,9 +54,13 @@ local addonName, ns = ...
 local Nested = { Enum = true }
 local Prefix = "ByteTerrace DevTools: "
 local Probes = ns.Probes
+-- Seconds between the sweeps that record probes as you play.
+local SweepSeconds = 5
 
 -- [addon name] = tainted keys skipped, for the dump in progress.
 local Skipped
+-- [probe name] = true for each probe that failed in a sweep this session.
+local SweepFailed = {}
 
 -- Files a probe under the play-session step that meets all its needs, and a text.
 local function AddToGroup(groups, probe, text)
@@ -66,6 +80,11 @@ local function Database()
     ByteTerraceDevToolsDB = (((type(ByteTerraceDevToolsDB) == "table") and ByteTerraceDevToolsDB) or {})
 
     return ByteTerraceDevToolsDB
+end
+
+-- Whether the saved record holds this build's result from this version of the probe.
+local function HasBuildResult(probe, saved, build)
+    return (Probes.IsCurrent(probe, saved) and (saved.build == build))
 end
 
 -- Prints groups ({ [step] = { [text] = { probe name, ... } } }) as "     text: name, name" under
@@ -94,10 +113,29 @@ local function Say(text)
     print(Prefix .. text)
 end
 
+-- /btdev probe auto, with "on", "off" or nothing (which says the setting).
+local function AutoCommand(args)
+    local db = Database()
+
+    if args == "on" then
+        db.autoProbe = true
+    elseif args == "off" then
+        db.autoProbe = false
+    elseif args ~= "" then
+        Say("usage: /btdev probe auto [on|off]")
+
+        return
+    end
+
+    Say(("probes %s as you play."):format(((db.autoProbe == false) and "don't record themselves")
+        or "record themselves"))
+end
+
 local function Help()
     Say("commands:")
     print("  /btdev probe - record calibration probes for the test harness, then /reload")
     print("  /btdev probe list - the probes that still need a result, and what each needs, in play-session order")
+    print("  /btdev probe auto [on|off] - whether probes record themselves as you play (on unless turned off)")
     print("  /btdev dump - record the client's globals for tlk api-sync, then /reload")
     print("  /btdev rumble - play four vibration types in turn, for gamePad.vibration")
     print("  /btdev rumble <type> [intensity 0-1] [seconds] - one vibration; without seconds it plays until it stops by itself")
@@ -113,7 +151,7 @@ local function ListProbes()
     for _, probe in ipairs(Probes.List) do
         local record = probes[probe.name]
 
-        if not Probes.IsCurrent(probe, record) or (record.build ~= build) then
+        if not HasBuildResult(probe, record, build) then
             count = (count + 1)
             AddToGroup(missing, probe, Probes.NeedsText(probe))
         end
@@ -168,6 +206,28 @@ local function RumbleCommand(args)
     end
 end
 
+-- Prints how a changed record differs from the saved one: each result field that changed, and the contexts the new
+-- result replaced.
+local function SayChanges(probe, saved, kept, differences)
+    for _, difference in ipairs(differences) do
+        Say(("probe %s changed at result.%s: was %s, now %s"):format(probe.name, difference.path,
+            Probes.Show(difference.a), Probes.Show(difference.b)))
+    end
+
+    local dropped = {}
+
+    for context in pairs(((type(saved.contexts) == "table") and saved.contexts) or {}) do
+        if not kept.contexts[context] then
+            dropped[context] = true
+        end
+    end
+
+    if next(dropped) then
+        Say(("probe %s now holds only %s; the new result replaced %s"):format(probe.name, ContextList(kept.contexts),
+            ContextList(dropped)))
+    end
+end
+
 local function RunProbes()
     local db = Database()
 
@@ -181,7 +241,7 @@ local function RunProbes()
 
         if not met then
             -- Only probes still without a result for this build are left to do.
-            if not (Probes.IsCurrent(probe, saved) and (saved.build == build)) then
+            if not HasBuildResult(probe, saved, build) then
                 AddToGroup(skipped, probe, unmet)
             end
         else
@@ -201,24 +261,7 @@ local function RunProbes()
                     confirmed = (confirmed + 1)
                 elseif outcome == "changed" then
                     changed = (changed + 1)
-
-                    for _, difference in ipairs(differences) do
-                        Say(("probe %s changed at result.%s: was %s, now %s"):format(probe.name, difference.path,
-                            Probes.Show(difference.a), Probes.Show(difference.b)))
-                    end
-
-                    local dropped = {}
-
-                    for context in pairs(((type(saved.contexts) == "table") and saved.contexts) or {}) do
-                        if not kept.contexts[context] then
-                            dropped[context] = true
-                        end
-                    end
-
-                    if next(dropped) then
-                        Say(("probe %s now holds only %s; the new result replaced %s"):format(probe.name,
-                            ContextList(kept.contexts), ContextList(dropped)))
-                    end
+                    SayChanges(probe, saved, kept, differences)
                 end
 
                 db.probes[probe.name] = kept
@@ -327,6 +370,84 @@ local function Dump()
     Say(("recorded %d client globals from %s (%s). /reload to write them."):format(count, version, build))
 end
 
+-- One sweep of /btdev probe auto: records each probe whose needs are met and that has no result for this build in this
+-- context (or accumulates), and names the new and changed ones.
+local function Sweep()
+    local db = Database()
+
+    if db.autoProbe == false then
+        return
+    end
+
+    db.probes = (((type(db.probes) == "table") and db.probes) or {})
+    local build, context, named = Probes.Build(), Probes.Context(), {}
+
+    for _, probe in ipairs(Probes.List) do
+        local saved = db.probes[probe.name]
+        local known = (HasBuildResult(probe, saved, build) and (type(saved.contexts) == "table") and saved.contexts[context])
+
+        if (probe.accumulates or not known) and not SweepFailed[probe.name] and Probes.Check(probe) then
+            local record, problem = Probes.Record(probe)
+
+            if not record then
+                SweepFailed[probe.name] = true
+                Say(("probe %s failed: %s"):format(probe.name, problem))
+            else
+                local kept, outcome, differences = Probes.Keep(probe, saved, record)
+
+                if (outcome == "new") or ((outcome == "changed") and not probe.accumulates) then
+                    named[#named + 1] = probe.name
+                end
+
+                if (outcome == "changed") and not probe.accumulates then
+                    SayChanges(probe, saved, kept, differences)
+                end
+
+                db.probes[probe.name] = kept
+            end
+        end
+    end
+
+    if #named > 0 then
+        Say(("recorded %s as you played. /reload to write them."):format(table.concat(named, ", ")))
+    end
+end
+
+-- How many probes have no result for build.
+local function Unrecorded(build)
+    local probes = (((type(ByteTerraceDevToolsDB) == "table") and (type(ByteTerraceDevToolsDB.probes) == "table")
+        and ByteTerraceDevToolsDB.probes) or {})
+
+    local count = 0
+
+    for _, probe in ipairs(Probes.List) do
+        if not HasBuildResult(probe, probes[probe.name], build) then
+            count = (count + 1)
+        end
+    end
+
+    return count
+end
+
+-- Says what's stale on entering the world: a dump from another build, and the probes without a result for this one.
+local function Greet()
+    local db, build = Database(), Probes.Build()
+    local _, number = GetBuildInfo()
+
+    if (type(db.build) == "table") and (db.build.build ~= number) then
+        Say(("the globals dump is from %s (%s), the client is %s: open the achievement window, /btdev dump, /reload, then tlk api-sync --globals."):format(
+            tostring(db.build.version), tostring(db.build.build), build))
+    end
+
+    local count = Unrecorded(build)
+
+    if count > 0 then
+        Say(("%d of %d probes have no result for %s yet. %s; /btdev probe list says what each needs."):format(count,
+            #Probes.List, build, (((db.autoProbe == false) and "Type /btdev probe in each situation")
+            or "They record themselves as you play")))
+    end
+end
+
 SLASH_BYTETERRACEDEVTOOLS1 = "/btdev"
 
 SlashCmdList.BYTETERRACEDEVTOOLS = function(input)
@@ -341,6 +462,8 @@ SlashCmdList.BYTETERRACEDEVTOOLS = function(input)
         RunProbes()
     elseif command == "probe list" then
         ListProbes()
+    elseif (command == "probe auto") or (command:sub(1, 11) == "probe auto ") then
+        AutoCommand(strtrim(command:sub(11)))
     else
         Help()
     end
@@ -470,4 +593,15 @@ EncounterListener:SetScript("OnEvent", function(_, event, info)
     else
         Probes.NoteEncounterWarning(info)
     end
+end)
+
+-- On entering the world: what's stale, then the sweeps of /btdev probe auto, once.
+local SweepListener = CreateFrame("Frame")
+
+SweepListener:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+SweepListener:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    Greet()
+    C_Timer.NewTicker(SweepSeconds, Sweep)
 end)

@@ -258,6 +258,28 @@ async function checkLatest(values) {
     return 1;
 }
 
+// Groups global names by their first word, case aside ("AchievementFrame" and "ACHIEVEMENT_TITLE" are both one
+// group), largest first: [{ group, count }]. A group is named by what its names share, spelled as the last of them
+// sorted (mixed case sorts after capitals), without trailing digits or underscores: Achievement, NamePlate.
+export function missingGroups(names) {
+    const groups = new Map();
+    for (const name of [...names].sort()) {
+        const word = name.match(/^[A-Z][a-z0-9]+|^[A-Z0-9]+?(?=[A-Z][a-z]|_|$)|^[a-z0-9]+|^[^A-Za-z0-9]+/)?.[0] ?? name;
+        const key = word.toLowerCase();
+        groups.set(key, [...(groups.get(key) ?? []), name]);
+    }
+    return [...groups.values()].map((list) => {
+        const last = list[list.length - 1];
+        let shared = last.length;
+        for (const name of list) {
+            let i = 0;
+            while (i < shared && i < name.length && name[i].toLowerCase() === last[i].toLowerCase()) i++;
+            shared = i;
+        }
+        return { group: last.slice(0, shared).replace(/[0-9_]+$/, "") || last, count: list.length };
+    }).sort((a, b) => (b.count - a.count) || a.group.localeCompare(b.group));
+}
+
 // Reads ByteTerrace_DevTools SavedVariables:
 //   ByteTerraceDevToolsDB = { build = {...}, globals = { [name] = { type =, members =, tables = } } }
 // where `tables` (optional) maps a member name to that nested table's member names. Rows cross
@@ -441,6 +463,13 @@ export async function run(values) {
                 console.log(`Dropped ${list.length - kept.length} member(s) of ${table} owned by this repository's addons`);
                 dump.members[table] = kept;
             }
+        }
+        const gone = Object.keys(snapshot.globals).filter((name) => !(name in dump.globals));
+        if (gone.length) {
+            const groups = missingGroups(gone).slice(0, 5).map(({ group, count }) => `${group} (${count})`).join(", ");
+            console.warn(`api-sync: ${gone.length} globals the last snapshot had aren't in this dump, most from ${groups}. `
+                + "A load-on-demand Blizzard window (achievements, collections, talents) open for the last dump and not "
+                + "for this one takes its globals with it: if they should stay, open it and dump again.");
         }
         snapshot.globals = sortKeys(dump.globals);
         snapshot.members = sortKeys(dump.members);

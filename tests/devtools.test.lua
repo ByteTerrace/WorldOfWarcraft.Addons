@@ -905,7 +905,8 @@ test("chat events' discordInfo is kept as shapes, with a table's fields, for nam
 end)
 
 test("leaving combat in a PvP match keeps the meter's totals' shapes then and later, for damageMeter.pvpSecrecy", function()
-    local h = Load()
+    -- The sweeps' probes read the meter too; this counts the listener's reads alone.
+    local h = Load({ ByteTerraceDevToolsDB = { autoProbe = false } })
     local Probes, probe = h.ns.Probes, h.ns.Probes.ByName["damageMeter.pvpSecrecy"]
 
     local function Reads() return h:CountApiCalls("C_DamageMeter.GetCombatSessionFromType") end

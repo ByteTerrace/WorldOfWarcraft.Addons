@@ -115,6 +115,24 @@ export const tests = [
         }),
     },
     {
+        // A load-on-demand Blizzard window that was open for the last dump and closed for this one takes its globals
+        // with it.
+        name: "api-sync says which groups of globals the last snapshot had and this dump doesn't",
+        run: async () => withTemp(async (dir) => {
+            const dump = join(dir, "dump.lua");
+            const out = join(dir, "forever.json");
+            writeDump(dump, MIN_GLOBALS);
+            const previous = { AchievementFrame: "table", AchievementFrameHeader: "table", ACHIEVEMENT_TITLE: "string", NamePlate9: "table", Global0: "function" };
+            writeFileSync(out, JSON.stringify({ globals: previous }));
+            const result = tlk(["api-sync", "--globals", dump, "--out", out]);
+            assert(result.status === 0, result.stderr);
+            assert(result.stderr.includes("4 globals the last snapshot had aren't in this dump, most from Achievement (3), NamePlate (1)"), result.stderr);
+            assert(result.stderr.includes("open it and dump again"), result.stderr);
+            const again = tlk(["api-sync", "--globals", dump, "--out", out]);
+            assert(!again.stderr.includes("the last snapshot had"), "nothing missing, nothing said: " + again.stderr);
+        }),
+    },
+    {
         name: "api-sync reads a build from wow-ui-source's version.txt or a commit title",
         run() {
             assert(sourceBuild("1.60.1.70374\n") === "1.60.1 (70374)", sourceBuild("1.60.1.70374\n"));

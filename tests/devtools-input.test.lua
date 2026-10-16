@@ -46,6 +46,20 @@ test("/btdev rumble plays each candidate for half a second, a second and a half 
     eq(record.result.refused, "none")
 end)
 
+test("/btdev rumble stop, or another rumble, ends the candidates still to come", function()
+    local h = Load()
+
+    h:Slash("/btdev rumble")
+    h:Slash("/btdev rumble stop")
+    h:Advance(6)
+    eq(Played(h), "High@1", "stopping ends the run")
+    h:Slash("/btdev rumble")
+    h:Advance(0.5)
+    h:Slash("/btdev rumble LTrigger 0.3")
+    h:Advance(6)
+    eq(Played(h), "High@1 High@1 LTrigger@0.3", "the vibration typed isn't cut short by a candidate")
+end)
+
 test("/btdev rumble <type> keeps the type's case, and plays until stopped unless given seconds", function()
     local h = Load()
 

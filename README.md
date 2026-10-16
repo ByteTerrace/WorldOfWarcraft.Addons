@@ -411,7 +411,7 @@ DevTools keeps only the set of shapes each has shown, so a shape seen before cos
 
 #### Probe what can't be read
 
-What a vibration feels like can't be probed, so `/btdev rumble` is a tester as well. `/btdev rumble <type> [intensity 0-1] [seconds]` plays one vibration, exactly as typed, and stops it after the seconds. Without the seconds, it plays until it stops by itself, which answers whether the client stops a vibration on its own. `/btdev rumble stop` stops it.
+What a vibration feels like can't be probed, so `/btdev rumble` is a tester as well. `/btdev rumble <type> [intensity 0-1] [seconds]` plays one vibration, exactly as typed, and stops it after the seconds. Without the seconds, it plays until it stops by itself, which answers whether the client stops a vibration on its own. `/btdev rumble stop` stops it. Stopping, or typing another rumble, also ends any of the four candidates still to come.
 
 `input.events` hears switching the interface style (**Options** > **Gamepad**), unplugging and replugging a controller, and a battery change.
 

@@ -7,8 +7,10 @@ local addonName, ns = ...
 --
 --   Probes.Rumble(kind, intensity, seconds?) -> ok, error   one vibration; with seconds, stopped
 --                                                           that long after (without, it plays
---                                                           until it stops by itself or StopRumble)
---   Probes.StopRumble()                                     stops any vibration
+--                                                           until it stops by itself or StopRumble),
+--                                                           ending any candidates still to come
+--   Probes.StopRumble()                                     stops any vibration, and the candidates
+--                                                           still to come
 --   Probes.RumbleCandidates(say)                            plays each of Candidates for
 --                                                           CandidateSeconds, CandidateGap apart,
 --                                                           saying each one's name as it plays, for
@@ -46,13 +48,21 @@ local Fields = Probes.Fields
 local Joined = Probes.Joined
 local Shape = Probes.Shape
 
+-- Bumped by every Rumble, StopRumble, and RumbleCandidates, so a run of candidates plays on only while it's the last.
+local CandidateRun = 0
 -- [event] = { payloads = { [shape] = true }, beforeWorld = whether it fired before the first PLAYER_ENTERING_WORLD }.
 local Heard = {}
--- Bumped by every Rumble, so a stop scheduled for an earlier one doesn't cut a later one short.
+-- Bumped by every vibration played, so a stop scheduled for an earlier one doesn't cut a later one short.
 local RumbleSerial = 0
 -- The candidates' answers: [kind] = true for each SetVibration took, and what each refused said.
 local Vibration = { accepted = {}, refused = {}, tried = false }
 local WorldEntered = false
+
+-- Stops the vibration playing.
+local function Halt()
+    RumbleSerial = (RumbleSerial + 1)
+    C_GamePad.StopVibration()
+end
 
 -- Returns the active controller's label style as a value when it's one Blizzard's UI knows, or "other" otherwise.
 local function LabelStyle(state)
@@ -104,11 +114,12 @@ local function NoteInputEvent(event, ...)
 end
 
 local function StopRumble()
-    RumbleSerial = (RumbleSerial + 1)
-    C_GamePad.StopVibration()
+    CandidateRun = (CandidateRun + 1)
+    Halt()
 end
 
-local function Rumble(kind, intensity, seconds)
+-- Plays one vibration, stopped after seconds unless a later one started.
+local function Vibrate(kind, intensity, seconds)
     RumbleSerial = (RumbleSerial + 1)
     local serial = RumbleSerial
     local ok, problem = pcall(C_GamePad.SetVibration, kind, intensity)
@@ -116,7 +127,7 @@ local function Rumble(kind, intensity, seconds)
     if ok and seconds then
         C_Timer.After(seconds, function()
             if serial == RumbleSerial then
-                StopRumble()
+                Halt()
             end
         end)
     end
@@ -124,10 +135,19 @@ local function Rumble(kind, intensity, seconds)
     return ok, problem
 end
 
+local function Rumble(kind, intensity, seconds)
+    CandidateRun = (CandidateRun + 1)
+
+    return Vibrate(kind, intensity, seconds)
+end
+
 local function RumbleCandidates(say)
+    CandidateRun = (CandidateRun + 1)
+    local run = CandidateRun
+
     local function Play(i)
         local kind = Candidates[i]
-        local ok, problem = Rumble(kind, 1, CandidateSeconds)
+        local ok, problem = Vibrate(kind, 1, CandidateSeconds)
 
         if ok then
             Vibration.accepted[kind] = true
@@ -145,7 +165,11 @@ local function RumbleCandidates(say)
     Play(1)
 
     for i = 2, #Candidates do
-        C_Timer.After(((i - 1) * CandidateGap), function() Play(i) end)
+        C_Timer.After(((i - 1) * CandidateGap), function()
+            if run == CandidateRun then
+                Play(i)
+            end
+        end)
     end
 end
 

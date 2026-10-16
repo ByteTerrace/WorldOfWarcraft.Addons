@@ -45,6 +45,20 @@ test("a /reload brings back the same riddle, with its missed answer out and its 
     truthy(h.ns.Addon.State:Get("Scholar.solved"), "and its right answer solves it")
 end)
 
+test("the Owl winks at a riddle a /reload or relog brought back, and H still shows its hint", function()
+    local h, _, puzzle = Riddle()
+
+    h:Key(tostring(WrongAnswer(puzzle)), true)
+    h:Reload()
+    local winked = {}
+
+    for _, line in ipairs(h.ns.ScholarKeep.Winks) do winked[line] = true end
+
+    truthy(winked[Kit.Banner(h)], "the Owl says one of its winks: " .. Kit.Banner(h))
+    h:Key("H", true)
+    falsy(winked[Kit.Banner(h)], "then H shows the hint: " .. Kit.Banner(h))
+end)
+
 test("a relog, or switching the challenge off and on, brings back the same riddle too", function()
     for _, way in ipairs({ "relog", "switch" }) do
         local h, addon, puzzle = Riddle()

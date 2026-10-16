@@ -10,12 +10,20 @@ local addonName, ns = ...
 --   ns.ScholarKeep.Save(module, puzzle, wrongs, missed)
 --                                                    keeps the riddle, its miss count, and its missed answers
 --                                                    (a set of indices), or clears the row if it can't be written
+--   ns.ScholarKeep.Winks                             what the Owl says, playfully, to a riddle a /reload or relog
+--                                                    brought back: it noticed, and it's glad to see you
 --   ns.ScholarKeep.Take(module) -> puzzle, wrongs, missed or nil
 --                                                    the kept riddle, or nil (clearing the row) when there's none
 --                                                    or it isn't a riddle Save wrote
 
 -- How deep tables nest before Decode refuses the text.
 local MaxDepth = 12
+
+local Winks = {
+    "Hoo! You vanished and came back, but so did I. Same riddle, little wizard!",
+    "Poof, you're back! I kept your riddle warm for you.",
+    "Whooo's that sneaking back in? It's you! Your riddle missed you.",
+}
 
 local concat = table.concat
 local format = string.format
@@ -234,4 +242,4 @@ local function Save(module, puzzle, wrongs, missed)
     module:Set("riddle", (Encode({ missed = list, puzzle = puzzle, wrongs = wrongs }) or ""))
 end
 
-ns.ScholarKeep = { Decode = Decode, Encode = Encode, Save = Save, Take = Take }
+ns.ScholarKeep = { Decode = Decode, Encode = Encode, Save = Save, Take = Take, Winks = Winks }

@@ -129,6 +129,8 @@ local SegmentStart
 local Turns = 0
 -- The timer counting down the pause after a miss (the pauseLeft row) while the riddle shows.
 local WaitTimer
+-- What the Owl says as the riddle opens, once: a wink at a riddle a /reload or relog brought back (ScholarKeep.Winks).
+local Wink = nil
 local Wrongs = 0
 
 -- Saves the running stretch of play into elapsed, keeping its fraction of a second running.
@@ -520,6 +522,12 @@ local function Open()
         ScholarView.Hint(Help())
     end
 
+    -- The Owl's wink takes the banner. The hint is one press of H away.
+    if Wink then
+        ScholarView.Note(Wink)
+        Wink = nil
+    end
+
     if Scholar:Get("pauseLeft") > 0 then
         Wait(Scholar:Get("pauseLeft"))
     end
@@ -786,6 +794,7 @@ Scholar = Addon:Module("Scholar", {
             -- Before login is a /reload or a relog. After it, the challenge was switched back on.
             if not IsLoggedIn() then
                 module:Set("returnCount", module:Get("returnCount") + 1)
+                Wink = Keep.Winks[random(1, #Keep.Winks)]
             end
         elseif kept then
             module:Set("riddle", "")

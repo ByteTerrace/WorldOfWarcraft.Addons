@@ -538,6 +538,12 @@ function ScholarView.IsShown()
     return ((Overlay ~= nil) and Overlay:IsShown())
 end
 
+--- Shows text in the feedback banner as the Owl's own words, the way a hint shows, and Read aloud says it.
+---@param text string
+function ScholarView.Note(text)
+    ShowFeedback(text, "hint", text)
+end
+
 --- Scrolls the open quest book by notches (positive is down, two lines each), never past the top or the end of its
 --- text.
 ---@param notches number

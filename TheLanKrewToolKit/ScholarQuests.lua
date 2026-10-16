@@ -650,8 +650,11 @@ Generators["quest.title"] = function(state)
             -- The giver's other quests are right answers too.
             theirs[lower(other.title)] = true
         elseif (other.key ~= quest.key) and (other.giver ~= "") then
-            -- A quest nobody saw given might be the giver's too, so it isn't offered.
-            others[#others + 1] = { other.title, why = Fill(from, { choice = other.title, other = other.giver }) }
+            -- A quest nobody saw given might be the giver's too, so it isn't offered. One whose giver is its own name
+            -- began from an item, which isn't who gave it.
+            local why = (((lower(other.giver) == lower(other.title)) and Words.quest.from.titleAlone) or from)
+
+            others[#others + 1] = { other.title, why = Fill(why, { choice = other.title, other = other.giver }) }
         end
     end
 

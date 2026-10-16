@@ -15,7 +15,7 @@ local addonName, ns = ...
 --             raised keycap at its edge; hover glows, a wrong answer turns red and shakes, the right
 --             one turns green, and a "+1" rises from the star counter
 --   book      on a quest riddle, Need a hint? is the quest book: it puts the quest's whole text, as
---             the player saw it, on a page in the story's place, and closes again the same way. The
+--             the player saw it, on a page below the riddle's story, and closes again the same way. The
 --             page is at most BookHeight tall (less on a screen without the room), and longer text
 --             scrolls, like the quest log: the mouse wheel, the Up and Down arrows, or the D-pad
 --             (held, it keeps going), with a slim bar showing where you are
@@ -30,6 +30,8 @@ local addonName, ns = ...
 
 local AnswerGap = 14
 local AnswerHeight = 72
+-- The least of the open quest book shown, in pixels, however little room the rest of the riddle leaves: about a line.
+local BookFloor = 24
 -- The most of the open quest book shown at once, in pixels. The rest scrolls.
 local BookHeight = 240
 -- The room between the quest book's page and its text.
@@ -386,8 +388,8 @@ local function CreateBody(frame, panel)
     frame.Story:SetWordWrap(true)
     frame.Story:SetSpacing(4)
     TextColor(frame.Story, Palette.story)
-    -- The quest book: a page in the story's place, holding the quest's text in a scroll frame, the wheel scrolling it,
-    -- and a slim bar on its right showing where in the text you are.
+    -- The quest book: a page below the story, holding the quest's text in a scroll frame, the wheel scrolling it, and a
+    -- slim bar on its right showing where in the text you are.
     local case = CreateFrame("Frame", nil, panel, "BackdropTemplate")
 
     Backdrop(case, 10)
@@ -520,6 +522,16 @@ local function Layout(hasStory, puzzle)
     Overlay.Book:SetShown(Overlay.m_bookOpen == true)
     Overlay.BookCase:SetShown(Overlay.m_bookOpen == true)
 
+    if hasStory then
+        Overlay.Story:ClearAllPoints()
+        Overlay.Story:SetPoint("TOPLEFT", Pad, -y)
+        Overlay.Story:Show()
+        -- secret: riddle text is built from plain strings, so its fontstrings hold no secret aspect
+        y = ((y + max(Overlay.Story:GetStringHeight(), 24)) + 14)
+    else
+        Overlay.Story:Hide()
+    end
+
     if Overlay.m_bookOpen then
         local case = Overlay.BookCase
         -- secret: the book's text is built from plain strings, as the story's is
@@ -532,17 +544,11 @@ local function Layout(hasStory, puzzle)
         case:ClearAllPoints()
         case:SetPoint("TOPLEFT", Pad, -y)
         case:SetSize(Width - (2 * Pad), view + (2 * BookInset))
-        Overlay.Story:Hide()
+        -- A smaller book can't be scrolled as far.
+        Overlay.m_bookOffset = min(Overlay.m_bookOffset, Overlay.m_bookRange)
+        Overlay.Book:SetVerticalScroll(Overlay.m_bookOffset)
         PlaceThumb()
         y = (((y + view) + (2 * BookInset)) + 14)
-    elseif hasStory then
-        Overlay.Story:ClearAllPoints()
-        Overlay.Story:SetPoint("TOPLEFT", Pad, -y)
-        Overlay.Story:Show()
-        -- secret: riddle text is built from plain strings, so its fontstrings hold no secret aspect
-        y = ((y + max(Overlay.Story:GetStringHeight(), 24)) + 14)
-    else
-        Overlay.Story:Hide()
     end
 
     local pictureHeight = ns.ScholarPictures.Draw(Overlay.Pictures, puzzle.picture, puzzle.tiles)
@@ -598,6 +604,23 @@ local function Layout(hasStory, puzzle)
     return height
 end
 
+-- Lays the panel out with the open book in the room the rest of the riddle leaves: the screen, less the margins and the
+-- rest. Feedback that grows the footer shrinks the book, so the panel always fits.
+local function Refit()
+    local puzzle = Overlay.m_puzzle
+    local hasStory = (Overlay.m_story ~= "")
+
+    if Overlay.m_bookOpen then
+        Overlay.m_bookOpen = false
+        local rest = Layout(hasStory, puzzle)
+
+        Overlay.m_bookRoom = max((((ScreenHeight() - (2 * ScreenMargin)) - rest) - 14) - (2 * BookInset), BookFloor)
+        Overlay.m_bookOpen = true
+    end
+
+    Layout(hasStory, puzzle)
+end
+
 -- Shows a message in the footer's place: the hint (gold) or the working (green), and said is the message as plain text,
 -- for Read aloud.
 local function ShowFeedback(text, good, said)
@@ -616,7 +639,7 @@ local function ShowFeedback(text, good, said)
     local book = (Overlay.m_puzzle and Overlay.m_puzzle.book)
 
     Overlay.Hint:SetShown(book ~= nil)
-    Layout(Overlay.m_story ~= "", Overlay.m_puzzle)
+    Refit()
 end
 
 local function ShowProgress(info)
@@ -921,30 +944,22 @@ function ScholarView.SpokenChoice(i)
     return SpokenChoice(Overlay.m_puzzle, i)
 end
 
---- Opens the quest book in the story's place, or closes it again: the quest's text, as the player saw it, holds every
---- answer to a quest riddle. It opens at the top, as tall as its text, BookHeight, or the room the screen leaves,
+--- Opens the quest book below the riddle's story, or closes it again: the quest's text, as the player saw it, holds
+--- every answer to a quest riddle. It opens at the top, as tall as its text, BookHeight, or the room the screen leaves,
 --- whichever is least, and scrolls the rest (ScrollBook). Call it only while a puzzle with a book is on screen.
 function ScholarView.ToggleBook()
-    local puzzle = Overlay.m_puzzle
     local open = not Overlay.m_bookOpen
 
-    Overlay.m_bookOpen = false
-
     if open then
-        -- The room the book may take: the screen, less the margins and the rest of the riddle.
-        local rest = Layout(false, puzzle)
-
-        Overlay.m_bookRoom = max((((ScreenHeight() - (2 * ScreenMargin)) - rest) - 14) - (2 * BookInset),
-            2 * ScrollStep)
-
-        Overlay.BookText:SetText(Emphasize(puzzle.book))
+        Overlay.BookText:SetText(Emphasize(Overlay.m_puzzle.book))
         Overlay.Book:SetVerticalScroll(0)
-        Overlay.m_bookOpen, Overlay.m_bookOffset = true, 0
+        Overlay.m_bookOffset = 0
     end
 
+    Overlay.m_bookOpen = open
     Overlay.Hint.m_text = ((open and "Close book") or "Quest book")
     LabelPill(Overlay.Hint, Overlay.Hint.m_key)
-    Layout(Overlay.m_story ~= "", puzzle)
+    Refit()
 end
 
 --- Marks answer i wrong (it shakes and can't be picked again), shows the hint, and offers Skip when canSkip.
@@ -970,6 +985,6 @@ function ScholarView.Wrong(i, why, label, hint, canSkip, reveal)
 
     if canSkip then
         Overlay.Skip:Show()
-        Layout(Overlay.m_story ~= "", Overlay.m_puzzle)
+        Refit()
     end
 end

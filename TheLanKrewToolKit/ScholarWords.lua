@@ -222,6 +222,8 @@ ns.ScholarWords = {
             objective = "{choice} was for a different quest: \"{other}\".",
             place = "You took a different quest in {choice}: \"{other}\".",
             title = "\"{choice}\" is a quest from {other}.",
+            -- A quest whose giver is its own name began from an item (QuestBook records the item as its giver).
+            titleAlone = "\"{choice}\" is a different quest in your quest book.",
         },
         giver = {
             bare = "Who gave you the quest in your quest book?",

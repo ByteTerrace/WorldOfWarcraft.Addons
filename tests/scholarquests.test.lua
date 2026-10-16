@@ -847,3 +847,25 @@ test("quests already in the log are recorded when the challenge starts, for revi
     h:Slash("/tlk puzzle")
     eq(shown[1].subject, "quest", "something to ask about straight away")
 end)
+
+test("a quest that began from an item of its own name isn't said to be a quest from itself", function()
+    local h, _, ns = LoadKid()
+    local mine = { giver = "Magistrate Sevren", key = "1", seen = 2, title = "The Prodigal Lich" }
+    local residue = { giver = "Whispering Horror Residue", key = "2", seen = 1, title = "Whispering Horror Residue" }
+    local said = nil
+
+    for seed = 1, 300 do
+        h:SeedRandom(seed)
+        local puzzle = Ask(h, ns, mine, { mine, residue })
+
+        if puzzle.kind == "quest.title" then
+            for i, choice in ipairs(puzzle.choices) do
+                if choice == residue.title then said = puzzle.whys[i] end
+            end
+        end
+
+        if said then break end
+    end
+
+    eq(said, "\"Whispering Horror Residue\" is a different quest in your quest book.")
+end)

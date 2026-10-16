@@ -14,7 +14,7 @@ local Wolves = {
     title = "Wolves Across the Border",
 }
 
-test("the quest book opens in the riddle's place with the quest's text, and closes the same way", function()
+test("the quest book opens below the riddle with the quest's text, and closes the same way", function()
     local h, _, ns = LoadKid()
 
     Watch(ns)
@@ -66,7 +66,8 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
 
     h:Key("H", true)
     truthy(ns.ScholarView.BookOpen())
-    truthy(book:IsShown() and not overlay.Story:IsShown(), "the book scrolls in the story's place")
+    truthy(book:IsShown(), "the book opens")
+    eq(overlay.Story:IsShown(), hadStory, "and the riddle's story stays as it was, above it")
     Fits("the open book")
     local text = Reveal(Harness.State(overlay.BookText).text)
 
@@ -176,4 +177,52 @@ test("feedback too long for its row grows the footer down to fit, and the panel 
     truthy(text > 44, "the message takes more than one row: " .. text)
     eq(banner:GetHeight(), text + 20, "the banner fits it")
     eq(overlay.Panel:GetHeight(), (before + (text + 20)) - 44, "and the panel grows by what the footer did")
+end)
+
+-- A quest riddle with a story above its question, and a book long enough to scroll.
+local function BookRiddle(h, ns)
+    local giver = "Magistrate Sevren"
+
+    local book = ('"The Prodigal Lich"\nFrom ' .. giver .. ", in Brill Town Hall.\n\n"
+        .. ("Bethor Iceshard, a high-ranking and powerful mage in the Undercity, sends word. "):rep(30))
+
+    ns.ScholarView.Show({
+        answer = 4, book = book, choices = { "The Cult of the Damned", "Delivery to Silverpine Forest",
+            "Whispering Horror Residue", "The Prodigal Lich" },
+        explanation = "The name at the top of the quest book is \"The Prodigal Lich\".", hint = "Open the quest book.",
+        kind = "quest.title", prompt = (giver .. " gave you a quest. Which one?"), subject = "quest",
+        title = "Quest Log Quiz",
+    }, { actions = {}, book = true, keys = { "1", "2", "3", "4" }, rank = "Adept", stars = 25 })
+
+    ns.ScholarView.ToggleBook()
+
+    return rawget(h.env, "TheLanKrewToolKitScholar")
+end
+
+test("the riddle's story stays above the open book, so the question still says what to pick", function()
+    local h, _, ns = LoadKid()
+    local overlay = BookRiddle(h, ns)
+
+    truthy(overlay.Book:IsShown(), "the book is open")
+    truthy(overlay.Story:IsShown(), "and the story is still there")
+    truthy(Reveal(Harness.State(overlay.Story).text):find("Magistrate Sevren gave you a quest.", 1, true))
+
+    truthy(select(5, overlay.Story:GetPoint(1)) > select(5, overlay.BookCase:GetPoint(1)), "the story is above the book")
+end)
+
+test("long feedback with the book open shrinks the book, so the panel still fits the screen", function()
+    local h, _, ns = LoadKid()
+
+    h.env.UIParent:SetSize(1366, 600)
+    local overlay = BookRiddle(h, ns)
+    local before = overlay.Book:GetHeight()
+
+    for i = 1, 3 do
+        ns.ScholarView.Wrong(i, ('"Choice" is a different quest in your quest book. '):rep(3), "Here's how",
+            "The name at the top of the quest book is the answer, and it says who it's from.", false, ((i == 3) and 4) or nil)
+    end
+
+    truthy(overlay.Panel:GetHeight() <= (600 - 40), ("the panel (%d) fits the screen (%d)"):format(overlay.Panel:GetHeight(), 560))
+    truthy(overlay.Book:GetHeight() < before, "the book gave up the room")
+    eq(overlay.Book:GetVerticalScroll() <= overlay.Book:GetVerticalScrollRange(), true, "and its scroll stays in range")
 end)

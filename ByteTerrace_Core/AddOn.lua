@@ -29,8 +29,9 @@
 -- module.Records.<name>, usable once the addon has loaded. A module's uses must name demand modules and can't form a
 -- cycle. Start refuses anything else.
 --
--- Settings pages (Settings.lua): modules without a page share the main page, in declaration order, and addon.debug
--- closes it under an "Advanced" header.
+-- Settings pages (Settings.lua): modules without a page share the main page, which comes first, and addon.debug closes
+-- it under an "Advanced" header. Everything else is alphabetical: pages, sections, and settings, each section led by
+-- its on/off switch.
 --
 -- Built-in commands: bare slash (the settings window, SettingsWindow.lua), help, version, debug [status | events | work
 -- | rows | trace | cpu | profile | reset] (Diagnostics.lua), set <row> <value>, and toggle <row>.

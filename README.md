@@ -424,7 +424,7 @@ A probe is pending when it has no answer, or when the harness can't run it (bags
 
 Type `/tlk` (or `/lankrew`) to show or hide the settings window. The addon-menu button does too.
 
-The main page holds the Fuck-o-meter, the session journal, and debug output. The **Sounds**, **Controller**, **Krew**, **Warband**, and **Scholar's challenge** pages sit under it. The same settings sit in Blizzard's settings, under Esc > **Options** > **AddOns** > **The Lan Krew ToolKit**.
+The main page holds the Fuck-o-meter, the session journal, and debug output. The **Controller**, **Krew**, **Scholar's challenge**, **Sounds**, and **Warband** pages sit under it. Every page lists its settings alphabetically, in sections, each led by the switch that turns its feature on. The same settings sit in Blizzard's settings, under Esc > **Options** > **AddOns** > **The Lan Krew ToolKit**.
 
 > [!WARNING]
 > With a controller, use `/tlk`. The controller can't reach the settings in Blizzard's panel: controller focus on an addon's controls there freezes the game.
@@ -515,6 +515,8 @@ Kill streaks are an Unreal Tournament announcer for your world PvP killing blows
 A kill announces one moment: a spree it reaches, else a multi kill, else first blood. The Krew sees a raid warning for your first blood and each spree. It hears when a spree of five or more ends, and who ended it when the client says. Kill streaks can be switched off, and so can sharing them.
 
 ### Controller light bar and rumble
+
+On the **Controller** page, under **Light bar** and **Rumble**:
 
 - **Light bar:** red in combat, yellow when AFK, and green otherwise. It's cleared on logout or when the feature is disabled.
 - **Rumble:** strong when combat starts, and light when it ends. It's stopped on logout or when the feature is disabled.
@@ -668,7 +670,7 @@ Every riddle teaches. A wrong pick says why that answer is tempting but not it (
 
 **Need a hint?** gives the rung the riddle is on. A right answer always shows the working, with praise for the strategy used, or for sticking with it after a miss. It never praises being smart.
 
-After a miss, the answers left wait a moment before they can be picked, so trying every answer in a row doesn't work and the hint gets read. Each waiting answer's keycap counts the seconds down, and the wait grows with each miss on the riddle. **Need a hint?**, **Read aloud**, the quest book, and **Skip** still work while the answers wait. **Pause after a wrong answer**, on the **Scholar's challenge** page, sets it:
+After a miss, the answers left wait a moment before they can be picked, so trying every answer in a row doesn't work and the hint gets read. Each waiting answer's keycap counts the seconds down, and the wait grows with each miss on the riddle. **Need a hint?**, **Read aloud**, the quest book, and **Skip** still work while the answers wait. **Pause after a wrong answer**, under **Answers** on the **Scholar's challenge** page, sets it:
 
 | Setting | After the first, second, and third miss |
 | --- | --- |
@@ -736,7 +738,7 @@ Kindergarten and grade 1 also get riddles that are heard, not read:
 
 The word or story never appears on screen, and **Read aloud** becomes **Hear it again**. Speech uses the player's text-to-speech voice, rate, and volume. With no voice, nothing is said, and no heard riddle is asked.
 
-The Owl reads quests aloud too, following **Read riddles aloud**. When a quest dialog opens, it says who's speaking and the quest's name, then reads the offer's story and what to do, the turn-in's question, or the words when it's turned in ("Eagan Peltskinner says: Wolves Across the Border. ..."). Closing the dialog stops it. Type `/tlk read` to hear the open quest again, whatever the setting says. **Read quests aloud**, at the end of the **Scholar's challenge** page, turns it off.
+The Owl reads quests aloud too, following **Read riddles aloud**. When a quest dialog opens, it says who's speaking and the quest's name, then reads the offer's story and what to do, the turn-in's question, or the words when it's turned in ("Eagan Peltskinner says: Wolves Across the Border. ..."). Closing the dialog stops it. Type `/tlk read` to hear the open quest again, whatever the setting says. **Read quests aloud**, under **Reading aloud** on the **Scholar's challenge** page, turns it off.
 
 The Owl also counts quest progress aloud, following **Read riddles aloud**:
 
@@ -744,7 +746,7 @@ The Owl also counts quest progress aloud, following **Read riddles aloud**:
 - After a fight, it sums up what the fight got: "That fight got you 2 more! Tough Wolf Meat: 2 of 8. 6 more to go!" It keeps quiet during the fight.
 - When a quest is ready to turn in: "Wolves Across the Border is ready to turn in!"
 
-It keeps quiet while a riddle is on screen. **Count quest progress aloud**, at the end of the **Scholar's challenge** page, turns it off. It's behind the parent lock like the other challenge settings.
+It keeps quiet while a riddle is on screen. **Count quest progress aloud**, under **Reading aloud** on the **Scholar's challenge** page, turns it off. It's behind the parent lock like the other challenge settings.
 
 #### Controllers and keyboards
 

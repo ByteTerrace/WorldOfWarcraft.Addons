@@ -49,7 +49,7 @@ Addon:Module("Sounds", {
         SoundBank:Row("combatStart", "Combat start sound",
             "When you enter combat. Give it variants for a battle playlist: each fight picks one.", { "combatStart" }),
         { default = true, description = "Fade out the combat start sound when you leave combat.", kind = "boolean",
-            label = "Stop combat start sound when combat ends", name = "stopOnCombatEnd" },
+            label = "Combat start sound: fade out when combat ends", name = "stopOnCombatEnd" },
         SoundBank:Row("questReady", "Quest ready sound", "When one of your quests is ready to turn in.", { "questReady" }),
     },
 })

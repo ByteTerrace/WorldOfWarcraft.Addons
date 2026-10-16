@@ -968,6 +968,8 @@ WarbandModule = Addon:Module("Warband", {
             },
             keep = function(key) return Ledger:Has(key) end, limit = PeopleLimit, name = "people" },
     },
+    -- The page's own: no header repeats it.
+    section = "Warband",
     state = {
         { default = true,
             description = "A raid warning when someone on the ledger, or a member of a guild at war, shows up: a nameplate, your target or mouseover.",

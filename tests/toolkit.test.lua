@@ -49,22 +49,23 @@ test("loads cleanly and builds its settings window, organized into pages and sec
     local h, addon = Load()
     local main = "The Lan Krew ToolKit"
 
+    -- The main page first, then the rest alphabetically. On each, the top, then sections alphabetically (the addon's
+    -- own last), each led by its on/off switch, then its settings by name.
     local expected = {
         (main .. ": [Fuck-o-meter] FuckOMeter.enabled"
-            .. " [Session journal] Journal.enabled Journal.welcome Journal.ding [Advanced] addon.debug"),
-        ("Sounds: Sounds.enabled Sounds.channel Sounds.combatStart Sounds.stopOnCombatEnd Sounds.questReady"
-            .. " [Mortal Kombat] Kombat.chooseYourDestiny Kombat.testYourMight Kombat.finishHim Kombat.comboPoints"
-            .. " Kombat.flawlessVictory Kombat.fatality Kombat.superbVictory Kombat.deathTaunt"
-            .. " [Kill streaks] Streaks.enabled Streaks.firstBlood Streaks.multiKills Streaks.sprees Streaks.share"),
-        ("Controller: [Controller light bar] LightBar.enabled LightBar.questReady"
-            .. " [Controller rumble] Rumble.enabled Rumble.questReady"),
-        "Krew: [Krew messages] Krew.enabled Krew.hello Krew.shareDings Krew.shareFlawless Krew.shareScholar",
-        ("Warband: [Warband (world PvP)] Warband.enabled Warband.alerts Warband.shareSightings"
-            .. " Warband.deathPrompt Warband.rallyWaypoint Warband.intel"
-            .. " [Nameplate badges] Badges.enabled [Nearby enemies window] Radar.enabled Radar.share"),
-        ("Scholar's challenge: Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading Scholar.quests"
-            .. " Scholar.readAloud [When] Scholar.interval Scholar.onLevelUp Scholar.onFlight Scholar.onTurnIn Scholar.onDeath Scholar.missPause Scholar.mode"
-            .. " [Count quest progress aloud] QuestCount.enabled [Read quests aloud] QuestReader.enabled"),
+            .. " [Session journal] Journal.enabled Journal.ding Journal.welcome [Advanced] addon.debug"),
+        "Controller: [Light bar] LightBar.enabled LightBar.questReady [Rumble] Rumble.enabled Rumble.questReady",
+        "Krew: Krew.enabled Krew.shareFlawless Krew.shareDings Krew.shareScholar Krew.hello",
+        ("Scholar's challenge: Scholar.enabled [Answers] Scholar.missPause Scholar.mode"
+            .. " [Reading aloud] QuestCount.enabled QuestReader.enabled Scholar.readAloud"
+            .. " [Riddles] Scholar.grade Scholar.math Scholar.quests Scholar.reading"
+            .. " [When riddles come] Scholar.onLevelUp Scholar.interval Scholar.onFlight Scholar.onTurnIn Scholar.onDeath"),
+        ("Sounds: Sounds.enabled Sounds.combatStart Sounds.stopOnCombatEnd Sounds.questReady Sounds.channel"
+            .. " [Kill streaks] Streaks.enabled Streaks.firstBlood Streaks.sprees Streaks.multiKills Streaks.share"
+            .. " [Mortal Kombat] Kombat.chooseYourDestiny Kombat.comboPoints Kombat.deathTaunt Kombat.fatality"
+            .. " Kombat.finishHim Kombat.flawlessVictory Kombat.superbVictory Kombat.testYourMight"),
+        ("Warband: Warband.enabled Warband.deathPrompt Warband.intel Warband.alerts Warband.shareSightings"
+            .. " Warband.rallyWaypoint [Nameplate badges] Badges.enabled [Nearby enemies window] Radar.enabled Radar.share"),
     }
 
     local window = addon.SettingsWindow
@@ -76,7 +77,10 @@ test("loads cleanly and builds its settings window, organized into pages and sec
         eq(schema[i], expected[i], "schema page " .. i)
     end
 
-    window:Show(2)
+    for i, page in ipairs(window.Pages) do
+        if page.name == "Sounds" then window:Show(i) end
+    end
+
     local channel = window.Controls[addon.State:Id("Sounds.channel")]
 
     eq(channel.Label:GetText(), "Master")

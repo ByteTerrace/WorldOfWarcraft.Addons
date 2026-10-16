@@ -402,6 +402,8 @@ Krew = Addon:Module("Krew", {
         end
     end,
     page = "Krew",
+    -- The page's own: no header repeats it.
+    section = "Krew",
     state = {
         { default = true, description = "When you group up, a card shows which friends run the toolkit too.",
             kind = "boolean", label = "Show who's in the Krew", name = "hello" },
@@ -411,7 +413,7 @@ Krew = Addon:Module("Krew", {
             description = "Your Krew sees a card when you win a flawless victory (needs the Flawless victory sound on).",
             kind = "boolean", label = "Share my flawless victories", name = "shareFlawless" },
         { default = true, description = "Your Krew sees a card when you solve a Scholar's challenge riddle.",
-            kind = "boolean", label = "Share solved riddles", name = "shareScholar" },
+            kind = "boolean", label = "Share my solved riddles", name = "shareScholar" },
     },
 })
 

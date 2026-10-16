@@ -23,7 +23,7 @@ local QuestColor = CreateColor(1, 0.82, 0)
 
 ns.Addon:Module("LightBar", {
     description = "Color your controller's light bar by state: red in combat, yellow when AFK, green otherwise.",
-    label = "Controller light bar",
+    label = "Light bar",
     OnDisable = function()
         C_GamePad.ClearLedColor()
     end,
@@ -58,7 +58,7 @@ ns.Addon:Module("LightBar", {
 
 ns.Addon:Module("Rumble", {
     description = "Rumble your controller strongly when combat starts and lightly when it ends.",
-    label = "Controller rumble",
+    label = "Rumble",
     OnDisable = function()
         C_GamePad.StopVibration()
     end,

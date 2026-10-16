@@ -405,7 +405,7 @@ test("a release goes to its press's command; a held command whose map goes away 
     eq(table.concat(log, ","), "a:down,a:cancel,b:down,b:up")
 end)
 
-test("the settings window is generated from labeled persisted rows, in declaration order", function()
+test("the settings window is generated from labeled persisted rows", function()
     local h, addon = NewAddOn()
 
     addon:Module("M", { label = "Module M", state = {
@@ -481,15 +481,44 @@ test("module pages and sections organize the window; debug closes the main page"
     local window = addon.SettingsWindow
 
     eq(Pages(h.env.ByteTerrace.SettingsPages(addon)), table.concat({
-        "Test AddOn: [Alpha] Alpha.enabled Alpha.size [Noise] Alpha.loud Echo.enabled Quiet.on [Advanced] addon.debug",
-        "Extras: [Beta] Beta.enabled Delta.enabled",
+        "Test AddOn: Echo.enabled Quiet.on [Alpha] Alpha.enabled Alpha.size [Noise] Alpha.loud [Advanced] addon.debug",
+        "Extras: Delta.enabled [Beta] Beta.enabled",
         "Other: [Gamma things] Gamma.n",
-    }, " | "), "a header that repeats its page's name is left out, and a module with no label has none")
+    }, " | "), "a header that repeats its page's name, or a module with no label, puts settings at the page's top")
 
     eq(Pages(window.Pages), Pages(h.env.ByteTerrace.SettingsPages(addon)), "the window draws the schema's pages")
     window:Show(3)
     window.Controls[addon.State:Id("Gamma.n")].Plus:Click()
     eq(addon.State:Get("Gamma.n"), 2, "a control on a subpage writes through state too")
+end)
+
+test("after the main page, pages, sections, and settings are alphabetical, and a section's on/off switch leads it", function()
+    local h, addon = NewAddOn()
+
+    addon:Module("Zulu", { label = "Zulu", page = "Zebra", state = {
+        { default = false, kind = "boolean", label = "b setting", name = "b" },
+        { default = false, kind = "boolean", label = "A setting", name = "a" },
+    } })
+
+    addon:Module("Mike", { label = "Mike", state = {
+        { default = false, kind = "boolean", label = "Zed", name = "zed" },
+        { default = false, kind = "boolean", label = "alpha", name = "alpha" },
+        { default = false, kind = "boolean", label = "Yes", name = "yes", section = "Choices" },
+        { default = false, kind = "boolean", label = "No", name = "no" },
+    } })
+
+    addon:Module("Kilo", { label = "Kilo" })
+    addon:Module("Yankee", { label = "Yankee", page = "Apple" })
+    -- Shares Mike's Choices section, so its switch is one setting among the others there.
+    addon:Module("Lima", { label = "Lima", section = "Choices" })
+    Start(h)
+
+    eq(Pages(h.env.ByteTerrace.SettingsPages(addon)), table.concat({
+        ("Test AddOn: [Choices] Lima.enabled Mike.no Mike.yes [Kilo] Kilo.enabled [Mike] Mike.enabled Mike.alpha Mike.zed"
+            .. " [Advanced] addon.debug"),
+        "Apple: [Yankee] Yankee.enabled",
+        "Zebra: [Zulu] Zulu.enabled Zulu.a Zulu.b",
+    }, " | "))
 end)
 
 test("page and section must be strings", function()

@@ -32,7 +32,7 @@ State lives in declared rows: `{ name, kind = "boolean" | "number" | "string", d
 
 ### Settings
 
-The settings window is generated from labeled persisted rows, in declaration order. Compile refuses a labeled row with no fitting control. The controls are:
+The settings window is generated from labeled persisted rows, and organized so a player finds a setting by name. Compile refuses a labeled row with no fitting control. The controls are:
 
 - a checkbox for a boolean
 - a dropdown listing an enum's values (the view's own, not Blizzard's menu, which takes controller focus as it opens)
@@ -40,8 +40,9 @@ The settings window is generated from labeled persisted rows, in declaration ord
 
 The window is laid out like this:
 
-- **Pages.** The main page is named by the addon's title, and a module whose `page` is that title joins it. A module with `page = "<name>"` puts its settings on a page of that name. Pages appear in the order their first settings are declared, listed down the window's left side.
-- **Sections.** On its page, a module's settings sit under a header: the module's `section`, or else its `label`. A row with `section = "<text>"` starts a new header before that row. A header that would repeat its page's name is left out. `addon.debug` is declared last, under an "Advanced" header, so it closes the main page.
+- **Pages.** The main page is named by the addon's title, and a module whose `page` is that title joins it. A module with `page = "<name>"` puts its settings on a page of that name. The main page comes first, and the others follow alphabetically, listed down the window's left side.
+- **Sections.** A setting's section is its row's `section`, else the last section an earlier row of its module named, else the module's `section`, else its `label`. Modules can share a section by naming the same one. A section that repeats its page's name, or a module with neither, puts its settings at the top of the page, under no header. On a page, the top comes first, then the sections alphabetically, and the addon's own (`addon.debug`'s "Advanced") last.
+- **Settings.** Within a section, settings are alphabetical by label. A section's first-declared setting stays first when it's a module's on/off switch, so the switch leads what it turns on. Names sort ignoring case.
 - **Hosts.** One view draws the pages, and it moves to whichever host shows it. In Blizzard's settings panel (Esc > **Options** > **AddOns**), it's the addon's canvas page. The bare slash command toggles the addon's own window, an ordinary frame, so it opens in combat too, and addon code never opens Blizzard's panel. In either host:
   - Every change goes through `State:Set`, and a locked row is refused with a message.
   - A change made elsewhere refreshes the page that shows.

@@ -109,4 +109,6 @@ Addon:Module("QuestReader", {
     end,
     page = "Scholar's challenge",
     scope = "character",
+    -- With Read riddles aloud: it follows that setting.
+    section = "Reading aloud",
 })

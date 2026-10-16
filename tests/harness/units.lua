@@ -39,9 +39,11 @@
 --               nil"). h:SetMouseover models a 3D unit in the world.
 --   Death       [D] PLAYER_DEAD on death; releasing fires PLAYER_ALIVE (the player is a ghost);
 --               coming back to life as a ghost fires PLAYER_UNGHOST, and a resurrection before
---               releasing fires PLAYER_ALIVE (warcraft.wiki.gg event pages). [G] PLAYER_DEAD
---               dispatches while combat lockdown still holds, then combat ends like h:LeaveCombat;
---               a revive restores full health (death.combatState asks the client).
+--               releasing fires PLAYER_ALIVE (warcraft.wiki.gg event pages). [E] PLAYER_DEAD
+--               dispatches while combat lockdown and the restrictions still hold, with
+--               UnitAffectingCombat("player") already false for the dead player
+--               (death.combatState), then combat ends like h:LeaveCombat. [G] A revive restores
+--               full health.
 --   Flights     [D] Taking a flight path takes the character's control (PLAYER_CONTROL_LOST) and
 --               landing gives it back (PLAYER_CONTROL_GAINED); UnitOnTaxi("player") is true in
 --               between. [G] Control goes before UnitOnTaxi turns true, and comes back after it
@@ -401,7 +403,8 @@ function Harness:UnitFakes()
         UnitAffectingCombat = function(u)
             local unit = Unit(u)
 
-            if unit == h.player then return h.inCombat end
+            -- The dead aren't affecting combat (see Death in the header).
+            if unit == h.player then return (h.inCombat and not h.player.dead) end
 
             return ((unit ~= nil) and (unit.inCombat == true))
         end,

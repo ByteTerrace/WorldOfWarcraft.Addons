@@ -59,8 +59,7 @@
     },
     "damageMeter.afterDeath": {
       "result": { "types": "DamageTaken,Deaths" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "damageMeter.afterFight": {
       "result": {
@@ -79,8 +78,7 @@
           "totalAmount": "number"
         }
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "damageMeter.available": {
       "result": { "failureReason": "", "isAvailable": true },
@@ -94,11 +92,12 @@
         "maxAmount": { "secret": true, "type": "number" },
         "totalAmount": { "secret": true, "type": "number" }
       },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "damageMeter.currentSession": {
-      "result": { "updatedIn": "lockdown=true affecting=true restricted=true" },
+      "result": {
+        "updatedIn": "lockdown=false affecting=false restricted=false,lockdown=true affecting=true restricted=true"
+      },
       "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "damageMeter.death": {
@@ -109,8 +108,7 @@
         "hasRecapID": true,
         "localPlayer": true
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "damageMeter.enemySource": {
       "result": {
@@ -124,8 +122,7 @@
         "sourceDisplayType": 0,
         "sourceGUID": "nil"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "damageMeter.playerDamageTaken": {
       "result": {
@@ -146,8 +143,7 @@
         },
         "totalAmount": "number"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "damageMeter.sessions": {
       "result": {
@@ -157,8 +153,7 @@
         "oldestFirst": true,
         "sessionID": "number"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "damageMeter.typesIdle": {
       "result": {
@@ -179,13 +174,51 @@
           "totalAmount": "number"
         }
       },
+      "contexts": { "idle/none": true }
+    },
+    "death.combatState": {
+      "result": { "atDeath": "lockdown=true affecting=false restricted=true" },
+      "contexts": { "idle/none": true }
+    },
+    "deathRecap.events": {
+      "result": {
+        "events": "table",
+        "fieldsByKind": {
+          "SPELL_DAMAGE": "amount,critical,crushing,currentHP,destFlags,destGUID,destName,destRaidFlags,event,glancing,hideCaster,isOffHand,overkill,school,sourceFlags,sourceGUID,sourceName,sourceRaidFlags,timestamp",
+          "SWING_DAMAGE": "amount,critical,crushing,currentHP,destFlags,destGUID,destName,destRaidFlags,event,glancing,hideCaster,isOffHand,overkill,school,sourceFlags,sourceGUID,sourceName,sourceRaidFlags,timestamp"
+        },
+        "hasRecapEvents": true,
+        "killingBlow": {
+          "amount": "number",
+          "critical": "boolean",
+          "crushing": "boolean",
+          "currentHP": "number",
+          "destFlags": "number",
+          "destGUID": "string",
+          "destName": "string",
+          "destRaidFlags": "number",
+          "event": "string",
+          "glancing": "boolean",
+          "hideCaster": "boolean",
+          "isOffHand": "boolean",
+          "overkill": "number",
+          "school": "number",
+          "sourceFlags": "number",
+          "sourceGUID": "string",
+          "sourceName": "string",
+          "sourceRaidFlags": "number",
+          "timestamp": "number"
+        },
+        "maxHealth": "number",
+        "recapID": "number",
+        "sourceName": "text"
+      },
       "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "version": 3
     },
     "deathRecap.latest": {
       "result": { "hasLatest": true, "latest": "table", "sameAsMeter": true },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "deathRecap.spellFields": {
       "result": {
@@ -195,13 +228,11 @@
         "spellName": "string",
         "spellSchool": "number"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "deathRecap.swingFields": {
       "result": { "avoidable": "nil", "deadly": "nil", "spellId": "nil", "spellName": "nil", "spellSchool": "nil" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "faction.player": {
       "result": { "group": "string", "isAllianceOrHorde": true, "localized": "string", "localizedIsGlobalString": true },
@@ -256,10 +287,9 @@
       "result": {
         "partyKill": { "attacker": "other,you", "attackerKind": "Player", "target": "Creature" },
         "targetDied": true,
-        "unitDied": { "unit": "Creature,Pet,Player" }
+        "unitDied": { "unit": "Creature,Player" }
       },
-      "contexts": { "combat/Combat": true, "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "map.player": {
       "result": {
@@ -324,17 +354,22 @@
       "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.chatSenders": {
-      "result": { "CHAT_MSG_CHANNEL": "Aa Aa", "CHAT_MSG_GUILD": "Aa Aa", "CHAT_MSG_SAY": "Aa Aa" },
+      "result": {
+        "CHAT_MSG_ADDON": "Aa Aa",
+        "CHAT_MSG_CHANNEL": "Aa Aa",
+        "CHAT_MSG_GUILD": "Aa Aa",
+        "CHAT_MSG_SAY": "Aa Aa"
+      },
       "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.otherPlayer": {
       "result": {
-        "byGUID": { "name": "Aa Aa", "realm": "Aa0" },
+        "byGUID": { "name": "Aa Aa", "realm": "Aa0,empty" },
         "unitFullName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.player": {
       "result": {
@@ -574,7 +609,7 @@
         "flagTexts": "BLOCK_REDUCED,CRITICAL,GLANCING",
         "player": {
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
-          "HEAL": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" },
+          "HEAL": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "MISS": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "WOUND": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" }
         },
@@ -586,8 +621,7 @@
           "WOUND": { "action": "text", "amount": "number", "flagText": "empty,text", "schoolMask": "number" }
         }
       },
-      "contexts": { "combat/Combat": true, "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "unitHealth.enemyPlayer": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
@@ -669,13 +703,11 @@
         "guid": "string",
         "name": "string"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "units.secretTokenInAuraEvent": {
       "result": { "Combat": "player,target", "none": "player,target" },
-      "contexts": { "combat/Combat": true, "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "xp.player": {
       "result": { "exhaustion": "number or nil", "xp": "number", "xpMax": "number" },

@@ -58,6 +58,27 @@ test("while a riddle shows, only its panel takes the mouse, so the world can sti
     truthy(frame.Panel:IsMouseEnabled(), "the panel takes them")
 end)
 
+test("Esc puts the riddle away and still reaches the game, so it opens the game menu as it always does", function()
+    local h, _, _, frame = Riddle()
+
+    truthy(Reaches(h, "ESCAPE"), "the game gets Esc")
+    falsy(frame:IsShown(), "and the riddle is out of the menu's way")
+    truthy(Pill(h):IsShown(), "waiting in its pill")
+    truthy(Reaches(h, "ESCAPE"), "and every Esc after is the game's")
+end)
+
+test("Start on a controller puts the riddle away, and the next press of Start is the game's", function()
+    local h, _, _, frame = Riddle()
+
+    h:Gamepad("PADFORWARD", true)
+    h:Gamepad("PADFORWARD", false)
+    falsy(frame:IsShown(), "the riddle steps aside, as a window does")
+    local before = #h.propagated
+
+    h:Gamepad("PADFORWARD", true)
+    eq(h.propagated[before + 1], "PADFORWARD", "Start reaches the game, for its menu")
+end)
+
 test("Later puts the riddle away into a pill, gives the keyboard and controller back, and keeps it due", function()
     for _, way in ipairs({ "key", "button", "pad" }) do
         local h, addon, _, frame = Riddle()

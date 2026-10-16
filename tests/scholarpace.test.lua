@@ -224,7 +224,7 @@ test("solving or skipping ends the growing wait: after a /reload, the next riddl
             h:Key(tostring(puzzle.answer), true)
             truthy(addon.State:Get("Scholar.solved"))
         else
-            h:Key("ESCAPE", true)
+            h:Key("BACKSPACE", true)
         end
 
         h:Reload()

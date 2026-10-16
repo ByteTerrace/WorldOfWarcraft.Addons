@@ -763,8 +763,12 @@ Every button shows its key for the device you're using.
 | Answer | Face buttons | 1-4 |
 | Ask for the hint | Left shoulder | H |
 | Read aloud | Right shoulder | R |
-| Skip (Gentle mode, after a try) | Back | Esc |
+| Skip (Gentle mode, after a try) | Back | Backspace |
+| Put the riddle off (Later) | D-pad left | L |
 | Scroll an open quest book | D-pad | Up and Down arrows |
+| Game menu | Start, twice | Esc |
+
+Esc and Start work as they do for any window. The riddle steps aside into its pill, as **Later** does. Esc still reaches the game, so it opens the game menu with the same press. A controller's buttons can't be passed on while the riddle has the controller, so the next Start opens the menu.
 
 #### Difficulty and practice
 

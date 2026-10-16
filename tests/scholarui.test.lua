@@ -160,19 +160,19 @@ test("relogging doesn't skip a riddle", function()
     truthy(Showing(h))
 end)
 
-test("the gate mode offers no skip; gentle mode does after one try", function()
+test("the gate mode offers no skip; gentle mode does after one try, on Backspace", function()
     local h = LoadKid({ ["Scholar.pending"] = true })
 
-    h:Key("ESCAPE", true)
-    truthy(Showing(h), "gate: escape does nothing")
+    h:Key("BACKSPACE", true)
+    truthy(Showing(h), "gate: Backspace does nothing")
     local h2, addon = LoadKid({ ["Scholar.style"] = "gentle" })
     local watched = Watch(h2)
 
     h2:Slash("/tlk puzzle")
-    h2:Key("ESCAPE", true)
+    h2:Key("BACKSPACE", true)
     truthy(Showing(h2), "no skip before a try")
     h2:Key(tostring(WrongAnswer(watched.puzzle)), true)
-    h2:Key("ESCAPE", true)
+    h2:Key("BACKSPACE", true)
     falsy(Showing(h2), "skipped after a try")
     eq(addon.State:Get("Scholar.stars"), 0, "a skip earns no star")
     eq(addon.State:Get("Scholar.pending"), false, "and isn't due again")
@@ -807,7 +807,7 @@ test("Read aloud and Skip live in the footer, never over the question", function
 
     view.Show({ answer = 1, choices = { "hat", "dog", "sun", "cup" }, explanation = "", hint = "",
         kind = "reading.rhyme", prompt = "Which word rhymes with \"cat\"?", subject = "reading", title = "Rhyme Time" },
-        { actions = { hint = "H", skip = "Esc", speak = "R" }, canSpeak = true, keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 1 })
+        { actions = { hint = "H", skip = "Backspace", speak = "R" }, canSpeak = true, keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 1 })
 
     local speak = Point(frame.Speak)
     local hint = Point(frame.Hint)

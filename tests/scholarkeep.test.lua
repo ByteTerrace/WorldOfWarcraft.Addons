@@ -103,7 +103,7 @@ test("solving or skipping ends the riddle: the next one after a /reload is a new
             h:Key(tostring(puzzle.answer), true)
             h:Advance(5)
         else
-            h:Key("ESCAPE", true)
+            h:Key("BACKSPACE", true)
         end
 
         eq(h.ns.Addon.State:Get("Scholar.riddle"), "", style .. ": nothing is kept")

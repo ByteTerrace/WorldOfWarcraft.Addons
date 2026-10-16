@@ -27,7 +27,10 @@ local addonName, ns = ...
 --            on screen when such a window opens stays.
 --   How      answer with 1-4, the mouse, or the controller's face buttons. Need a hint? (the
 --            quest book, on a quest riddle) is H or the left shoulder, Read aloud is R or the right
---            shoulder, Later is L or D-pad left, and Skip is Esc or Back. The open quest book scrolls
+--            shoulder, Later is L or D-pad left, and Skip is Backspace or Back. Esc and Start work as
+--            they do for any window: the riddle steps aside into its pill, and Esc still reaches the
+--            game, so it opens the game menu (a captured controller can't pass Start on, so the next
+--            Start does). The open quest book scrolls
 --            with the wheel, the Up and Down arrows, or the D-pad. Read aloud reads what the screen
 --            shows: the riddle, the open quest book, or the feedback after an answer or a hint.
 --   Aloud    the readAloud setting says riddles as they appear (kindergarten and grade 1 by
@@ -51,7 +54,7 @@ local addonName, ns = ...
 -- limits. This is meant to be fun.
 
 -- The screen's other actions: their controller buttons and keyboard keys.
-local ActionKeys = { hint = "H", later = "L", skip = "Esc", speak = "R" }
+local ActionKeys = { hint = "H", later = "L", skip = "Backspace", speak = "R" }
 
 local ActionSources = { hint = "gamepad.leftShoulder", later = "gamepad.dpadLeft", skip = "gamepad.back",
     speak = "gamepad.rightShoulder" }
@@ -650,8 +653,13 @@ ScholarView.Init({
     key = function(key)
         if KeyAnswers[key] then
             Addon:Batch(Choose, KeyAnswers[key])
-        elseif key == "ESCAPE" then
+        elseif key == "BACKSPACE" then
             Addon:Batch(Skip)
+        elseif key == "ESCAPE" then
+            -- Esc is the game's: the riddle steps out of the game menu's way, and the key goes on to open it.
+            Addon.Commands:Run("Scholar.later")
+
+            return false
         elseif key == "H" then
             Hint()
         elseif key == "L" then
@@ -749,6 +757,9 @@ end
 for command, source in pairs(ScrollSources) do
     Bindings[#Bindings + 1] = { command = ("Scholar." .. command), map = "scholar", source = source }
 end
+
+-- Start opens the game menu. The riddle has the controller, so it steps aside, and the next Start is the game's.
+Bindings[#Bindings + 1] = { command = "Scholar.later", map = "scholar", source = "gamepad.start" }
 
 Scholar = Addon:Module("Scholar", {
     bindings = Bindings,

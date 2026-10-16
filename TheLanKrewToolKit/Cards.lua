@@ -5,6 +5,7 @@ local addonName, ns = ...
 --
 --   ns.Cards.Show(entry)         queues a card: { icon, title, body, sound, onClick }.
 --   ns.Cards.Alert(text, sound)  a raid warning on your own screen, now, in combat too.
+--   ns.Cards.Unfocus()           gives up the controller, if a question card holds it. The card stays up.
 --
 -- The queue holds at most MaxQueued cards. Beyond that, it drops new cards, so a chatty group can't bury the screen.
 -- Cards never interrupt a fight: during combat they wait in the queue and appear when it ends, and a card showing when
@@ -237,7 +238,7 @@ end
 function ShowNext()
     HoldTimer()
     Unfocus()
-    Addon.Input:Dismiss(AnswerSources.focus)
+    Addon.Input:Dismiss(Cards, AnswerSources.focus, "Cards.focus")
     local entry = (not InCombat and remove(Queue, 1))
 
     Current = (entry or nil)
@@ -308,4 +309,4 @@ Cards = Addon:Module("Cards", {
     toggle = false,
 })
 
-ns.Cards = { Alert = Alert, Show = Show }
+ns.Cards = { Alert = Alert, Show = Show, Unfocus = Unfocus }

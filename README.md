@@ -642,7 +642,7 @@ Wrong answers come from your child's other quests first, then from the starting 
 
 Quests count from the moment they're shown. That includes ones an area trigger accepts without showing their text: those are in the quest log, so open it and read. Quests already in the log when the challenge is turned on are remembered too, for review. The last 30 quests are remembered, per character, while the challenge is on. With only quest riddles on, every riddle is about a quest, and one that comes due before any quest waits for the first.
 
-It's an open-book test. **Quest book** (H, or the left shoulder) shows the quest on the riddle screen, as your child saw it, on a page below the riddle, which stays in view. The page scrolls when the quest is long. A quest too long for the screen scrolls like the quest log: with the mouse wheel, the Up and Down arrows, or the D-pad (hold it to keep going). A slim bar shows where you are, and the riddle never grows taller than the screen: when a long hint appears, the page gets shorter to make room. A quest's text is kept whole, as the quest log shows it. A quest that started from an item or an object (a wanted poster, say) reads "Started from" it, and one turned in at an object reads "Turned in at" it: riddles that ask who gave a quest, or who took it in, only ever ask about people.
+It's an open-book test. **Quest book** (H, or the left shoulder) shows the quest on the riddle screen, as your child saw it, on a page below the riddle, which stays in view. The page scrolls when the quest is long. A quest too long for the screen scrolls like the quest log: with the mouse wheel, the Up and Down arrows, or the D-pad, a notch a press. A slim bar shows where you are, and the riddle never grows taller than the screen: when a long hint appears, the page gets shorter to make room. A quest's text is kept whole, as the quest log shows it. A quest that started from an item or an object (a wanted poster, say) reads "Started from" it, and one turned in at an object reads "Turned in at" it: riddles that ask who gave a quest, or who took it in, only ever ask about people.
 
 Each wrong answer says why. One from another quest names it ("Marshal Dughan gave you a different quest: "The Fargodeep Mine"."). Who took a quest is always a choice for who gave it, and where it ended for where it began: the mix-up a reader makes. The hint says where in the quest book to look, a second miss walks to the line, and the answer comes with the line it's on.
 
@@ -766,9 +766,9 @@ Every button shows its key for the device you're using.
 | Skip (Gentle mode, after a try) | Back | Backspace |
 | Put the riddle off (Later) | D-pad left | L |
 | Scroll an open quest book | D-pad | Up and Down arrows |
-| Game menu | Start, twice | Esc |
+| Game menu | Start | Esc |
 
-Esc and Start work as they do for any window. The riddle steps aside into its pill, as **Later** does. Esc still reaches the game, so it opens the game menu with the same press. A controller's buttons can't be passed on while the riddle has the controller, so the next Start opens the menu.
+The riddle takes only its own buttons, so every other button and key works as it would without the addon. Start and Esc open the game menu with one press, over the riddle. Esc also steps the riddle aside into its pill, as **Later** does. A question card you focused with Select lets go when a riddle appears. The card stays up, and Back focuses it again once the riddle is done.
 
 #### Difficulty and practice
 

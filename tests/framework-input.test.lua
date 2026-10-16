@@ -179,11 +179,57 @@ test("a summon binds one controller button to a command without capturing the re
     eq(focused, 1, "the press runs the command, once")
     h:Gamepad("PAD1", true)
     eq(h.propagated[1], "PAD1", "every other button is still the player's")
-    addon.Input:Dismiss("gamepad.back")
+    addon.Input:Dismiss(module, "gamepad.back", "Note.focus")
     h:Gamepad("PADBACK", true)
     eq(focused, 1, "dismissed, the button is the game's again")
     eq(h.propagated[2], "PADBACK")
     throws(function() addon.Input:Summon(module, "gamepad.nope", "Note.focus") end, "unknown source gamepad.nope")
+end)
+
+test("summons of one button stack: the latest wins, and dismissing it gives the button back to the one before", function()
+    local h, addon = NewAddOn()
+    local ran = {}
+
+    local function Run(name) return function() ran[#ran + 1] = name end end
+
+    addon:Module("Card", { commands = { { label = "Focus", name = "focus", run = Run("focus") } }, label = "Card" })
+
+    addon:Module("Riddle", {
+        commands = {
+            { label = "Skip", name = "skip", run = Run("skip") }, { label = "Later", name = "later", run = Run("later") },
+            { label = "Reopen", name = "reopen", run = Run("reopen") },
+        },
+        label = "Riddle",
+    })
+
+    Start(h)
+    local card = addon.Modules.Card
+    local riddle = addon.Modules.Riddle
+
+    local function Press(key)
+        h:Gamepad(key, true)
+        h:Gamepad(key, false)
+    end
+
+    addon.Input:Summon(card, "gamepad.back", "Card.focus")
+    addon.Input:Summon(riddle, "gamepad.back", "Riddle.skip")
+    Press("PADBACK")
+    addon.Input:Dismiss(riddle, "gamepad.back", "Riddle.skip")
+    Press("PADBACK")
+    eq(table.concat(ran, " "), "skip focus", "the riddle's Back wins, and the card's comes back after it")
+    addon.Input:Summon(riddle, "gamepad.dpadLeft", "Riddle.reopen")
+    addon.Input:Summon(riddle, "gamepad.dpadLeft", "Riddle.later")
+    addon.Input:Dismiss(riddle, "gamepad.dpadLeft", "Riddle.reopen")
+    Press("PADDLEFT")
+    eq(ran[#ran], "later", "dismissing a summon under the top one leaves the top one")
+    addon.Input:Dismiss(riddle, "gamepad.dpadLeft", "Riddle.later")
+    addon.Input:Dismiss(riddle, "gamepad.dpadLeft", "Riddle.later")
+    Press("PADDLEFT")
+    eq(h.propagated[#h.propagated], "PADDLEFT", "with none left, the button is the game's, and a second dismiss is harmless")
+    addon.Input:Summon(riddle, "gamepad.back", "Riddle.skip")
+    addon.State:Set("Riddle.enabled", false)
+    Press("PADBACK")
+    eq(ran[#ran], "focus", "a module that stops gives its buttons back to the ones before")
 end)
 
 test("a summon ends as combat starts, before lockdown, is refused in combat, and ends with its module", function()

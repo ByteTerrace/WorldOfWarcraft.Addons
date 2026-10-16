@@ -24,8 +24,12 @@
 --                               win over. Only for a running module, and only out of combat
 --                               lockdown: it returns false otherwise. Combat starting ends every
 --                               summon, during PLAYER_REGEN_DISABLED, before lockdown (probe
---                               combat.edges). Returns whether it took.
---   Dismiss(source)             ends a source's summon.
+--                               combat.edges). Returns whether it took. Summons of one button
+--                               stack: the latest wins, and the same module and command summoned
+--                               again moves back to the top. A summon runs its command on the
+--                               press only: whether the client clicks on a release is unknown.
+--   Dismiss(module, source, command)  ends that summon. The button goes to the summon below it,
+--                               or back to the game.
 --
 -- A release always goes to the command its press went to, even if the maps changed in between. A held command whose map
 -- is deactivated while its button is down receives "cancel". When its own press is what changed the maps, the cancel
@@ -133,7 +137,8 @@ local function SummonButton(self)
     button:EnableMouse(false)
 
     button:SetScript("OnClick", function(_, key)
-        local summon = self.m_summons[key]
+        local stack = self.m_summons[key]
+        local summon = (stack and stack[#stack])
 
         if summon then
             self.m_addon.Commands:Run(summon.id, nil, "down", "gamepad")
@@ -148,6 +153,22 @@ local function SummonButton(self)
     self.m_summonButton = button
 
     return button
+end
+
+-- Takes the summons drop matches out of key's stack, returning whether any went.
+local function Unstack(self, key, drop)
+    local stack = self.m_summons[key]
+    local kept = {}
+
+    for _, summon in ipairs(stack) do
+        if not drop(summon) then
+            kept[#kept + 1] = summon
+        end
+    end
+
+    self.m_summons[key] = (((#kept > 0) and kept) or nil)
+
+    return (#kept < #stack)
 end
 
 -- A button release: it goes to the command its press went to.
@@ -235,7 +256,7 @@ function ByteTerrace.NewInput(addon)
         m_pendingCancel = nil,
         -- The key whose press is running its command.
         m_pressing = nil,
-        -- Maps each summoned key to { id, module }.
+        -- Maps each summoned key to its stack of { id, module }, the latest last.
         m_summons = {},
     }, Input)
 end
@@ -337,13 +358,17 @@ function Input:Compile()
     self.m_declared = nil
 end
 
---- Ends a source's summon, if it has one.
+--- Ends a module's summon of a source to a command, if it has one. The button goes to the summon below it, or back to
+--- the game.
+---@param module table the module that summoned it
 ---@param source string e.g. "gamepad.back"
-function Input:Dismiss(source)
+---@param command string the command's full name
+function Input:Dismiss(module, source, command)
     local key = KeyOf[source]
+    local id = self.m_addon.Commands.Ids[command]
 
-    if key and self.m_summons[key] then
-        self.m_summons[key] = nil
+    if key and self.m_summons[key]
+        and Unstack(self, key, function(summon) return ((summon.module == module) and (summon.id == id)) end) then
         ApplySummons(self)
     end
 end
@@ -355,9 +380,8 @@ function Input:Release(module)
     local dropped = false
     local dismissed = false
 
-    for key, summon in pairs(self.m_summons) do
-        if summon.module == module then
-            self.m_summons[key] = nil
+    for _, key in ipairs(ByteTerrace.SortedKeys(self.m_summons)) do
+        if Unstack(self, key, function(summon) return (summon.module == module) end) then
             dismissed = true
         end
     end
@@ -447,7 +471,14 @@ function Input:Summon(module, source, command)
         return false
     end
 
-    self.m_summons[key] = { id = id, module = module }
+    if self.m_summons[key] then
+        Unstack(self, key, function(summon) return ((summon.module == module) and (summon.id == id)) end)
+    end
+
+    local stack = (self.m_summons[key] or {})
+
+    stack[#stack + 1] = { id = id, module = module }
+    self.m_summons[key] = stack
     ApplySummons(self)
 
     return true

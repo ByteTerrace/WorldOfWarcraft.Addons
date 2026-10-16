@@ -67,16 +67,30 @@ test("Esc puts the riddle away and still reaches the game, so it opens the game 
     truthy(Reaches(h, "ESCAPE"), "and every Esc after is the game's")
 end)
 
-test("Start on a controller puts the riddle away, and the next press of Start is the game's", function()
+test("Start on a controller is the game's, as it would be without the addon, and its menu shows over the riddle", function()
     local h, _, _, frame = Riddle()
-
-    h:Gamepad("PADFORWARD", true)
-    h:Gamepad("PADFORWARD", false)
-    falsy(frame:IsShown(), "the riddle steps aside, as a window does")
     local before = #h.propagated
 
     h:Gamepad("PADFORWARD", true)
-    eq(h.propagated[before + 1], "PADFORWARD", "Start reaches the game, for its menu")
+    eq(h.propagated[before + 1], "PADFORWARD", "the first press of Start reaches the game, for its menu")
+    truthy(frame:IsShown(), "the riddle stays")
+    eq(frame:GetFrameStrata(), "HIGH", "under the game menu's DIALOG strata, so the menu shows over it")
+end)
+
+test("while a riddle shows, it takes only its own controller buttons, and every other one is the game's", function()
+    local h, addon, puzzle, frame = Riddle()
+
+    for _, key in ipairs({ "PADLTRIGGER", "PADRTRIGGER", "PADDRIGHT", "PADLSTICK", "PADRSTICK" }) do
+        local before = #h.propagated
+
+        h:Gamepad(key, true)
+        eq(h.propagated[before + 1], key, key .. " reaches the game")
+    end
+
+    eq(table.concat(addon.Input:ActiveMaps(), ","), "", "nothing captures the controller")
+    h:Gamepad(({ "PAD1", "PAD2", "PAD3", "PAD4" })[puzzle.answer], true)
+    truthy(addon.State:Get("Scholar.solved"), "a face button still answers")
+    truthy(frame:IsShown())
 end)
 
 test("Later puts the riddle away into a pill, gives the keyboard and controller back, and keeps it due", function()

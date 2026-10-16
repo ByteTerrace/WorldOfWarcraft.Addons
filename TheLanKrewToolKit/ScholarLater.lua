@@ -88,7 +88,7 @@ local function Start(module)
         if state.Values[collapsed] and not state.Values[combat] then
             Addon.Input:Summon(module, ReopenSource, "Scholar.reopen")
         else
-            Addon.Input:Dismiss(ReopenSource)
+            Addon.Input:Dismiss(module, ReopenSource, "Scholar.reopen")
         end
     end, true)
 end

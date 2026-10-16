@@ -377,7 +377,8 @@ local function Create(callbacks)
     -- Parentless, so hiding the UI (Alt+Z) doesn't hide the riddle.
     local frame = CreateFrame("Frame", addonName .. "Scholar")
 
-    frame:SetFrameStrata("FULLSCREEN_DIALOG")
+    -- Under the game menu's DIALOG strata, so Esc and Start open it over the riddle as they always do.
+    frame:SetFrameStrata("HIGH")
     frame:SetAllPoints(UIParent)
     -- Only the panel takes the mouse: the world around it can still be clicked, through a shade light enough to see by.
     frame:EnableMouse(false)

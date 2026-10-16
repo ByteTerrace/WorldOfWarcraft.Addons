@@ -27,12 +27,13 @@ local addonName, ns = ...
 --            on screen when such a window opens stays.
 --   How      answer with 1-4, the mouse, or the controller's face buttons. Need a hint? (the
 --            quest book, on a quest riddle) is H or the left shoulder, Read aloud is R or the right
---            shoulder, Later is L or D-pad left, and Skip is Backspace or Back. Esc and Start work as
---            they do for any window: the riddle steps aside into its pill, and Esc still reaches the
---            game, so it opens the game menu (a captured controller can't pass Start on, so the next
---            Start does). The open quest book scrolls
---            with the wheel, the Up and Down arrows, or the D-pad. Read aloud reads what the screen
---            shows: the riddle, the open quest book, or the feedback after an answer or a hint.
+--            shoulder, Later is L or D-pad left, and Skip is Backspace or Back. The riddle's buttons
+--            are summons, so nothing captures the controller: every other button, Start included, is
+--            the game's, as it would be without the addon. Esc steps the riddle aside into its pill
+--            and still reaches the game, and the riddle sits under the game menu's strata, so Esc and
+--            Start open the menu with one press. The open quest book scrolls with the wheel, the Up
+--            and Down arrows, or the D-pad, a notch a press. Read aloud reads what the screen shows:
+--            the riddle, the open quest book, or the feedback after an answer or a hint.
 --   Aloud    the readAloud setting says riddles as they appear (kindergarten and grade 1 by
 --            default), each choice with the key that picks it, and a hovered choice again. A heard
 --            riddle (ScholarWords.heard) always says its word, and its button is Hear it again.
@@ -67,10 +68,8 @@ local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NU
 -- How many quest riddles come in a row before math or reading takes a turn.
 local QuestShare = 2
 local Ranks = { { 0, "Apprentice" }, { 10, "Journeyman" }, { 25, "Adept" }, { 50, "Sage" }, { 100, "Archmage" } }
--- The open quest book scrolls with the arrow keys and the D-pad. Held, the D-pad keeps going.
+-- The open quest book scrolls with the arrow keys and the D-pad, a notch a press.
 local ScrollKeys = { DOWN = 1, UP = -1 }
--- How long, in seconds, between notches while a D-pad direction is held.
-local ScrollRepeat = 0.12
 local ScrollSources = { scrollDown = "gamepad.dpadDown", scrollUp = "gamepad.dpadUp" }
 -- One math or reading riddle in StretchOdds is a stretch: a kind from a grade or two above, with extra help.
 local StretchOdds = 5
@@ -304,22 +303,34 @@ local function Say(text)
     return Turns
 end
 
--- Activates or deactivates the riddle's controller map, keeping any other feature's (a focused question card's). The
--- riddle's map comes last, so its buttons win the ones both bind.
-local function SetMap(active)
-    local maps = {}
-
-    for _, name in ipairs(Addon.Input:ActiveMaps()) do
-        if name ~= "scholar" then
-            maps[#maps + 1] = name
-        end
-    end
-
+-- Summons one of the riddle's buttons, or dismisses it.
+local function SetButton(active, source, command)
     if active then
-        maps[#maps + 1] = "scholar"
+        Addon.Input:Summon(Scholar, source, command)
+    else
+        Addon.Input:Dismiss(Scholar, source, command)
+    end
+end
+
+-- Summons the riddle's own controller buttons (Input:Summon), or dismisses them. Nothing captures the controller, so
+-- every other button, Start included, stays the game's, as it would without the addon. A focused question card would
+-- capture them all, so the riddle lets go of it first: the card stays up, and Back focuses it again after.
+local function SetButtons(active)
+    if active then
+        ns.Cards.Unfocus()
     end
 
-    Addon.Input:SetActiveMaps(maps)
+    for i, source in ipairs(AnswerSources) do
+        SetButton(active, source, "Scholar.answer" .. i)
+    end
+
+    for action, source in pairs(ActionSources) do
+        SetButton(active, source, "Scholar." .. action)
+    end
+
+    for command, source in pairs(ScrollSources) do
+        SetButton(active, source, "Scholar." .. command)
+    end
 end
 
 -- Hides the riddle and gives input back, stopping the pause's count where it is. The riddle stays current until it's
@@ -330,7 +341,7 @@ local function Close()
         WaitTimer = nil
         ScholarView.Frame():EnableKeyboard(false)
         ScholarView.Hide()
-        SetMap(false)
+        SetButtons(false)
     end
 end
 
@@ -518,7 +529,7 @@ local function Open()
     frame:EnableKeyboard(true)
     -- protected: Open only runs out of combat (see the combat rule)
     frame:SetPropagateKeyboardInput(false)
-    SetMap(true)
+    SetButtons(true)
     C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN)
 
     if Wrongs > 0 then
@@ -724,45 +735,13 @@ Commands[#Commands + 1] = { label = "Show the riddle's hint", name = "hint", run
 Commands[#Commands + 1] = { label = "Read the riddle aloud", name = "speak", run = function() Speak() end }
 Commands[#Commands + 1] = { label = "Skip the riddle (Gentle mode, after a try)", name = "skip", run = function() Skip() end }
 
--- A held D-pad direction scrolls the open quest book a notch, then a notch every ScrollRepeat seconds until it's let
--- go.
-local Scrolling
+Commands[#Commands + 1] = { label = "Scroll the quest book up", name = "scrollUp",
+    run = function() ScholarView.ScrollBook(-1) end }
 
-local function ScrollHeld(notches, phase)
-    Scholar:Cancel(Scrolling)
-    Scrolling = nil
-
-    if phase == "down" then
-        ScholarView.ScrollBook(notches)
-        Scrolling = Scholar:Every(ScrollRepeat, function() ScholarView.ScrollBook(notches) end)
-    end
-end
-
-Commands[#Commands + 1] = { held = true, label = "Scroll the quest book up", name = "scrollUp",
-    run = function(_, phase) ScrollHeld(-1, phase) end }
-
-Commands[#Commands + 1] = { held = true, label = "Scroll the quest book down", name = "scrollDown",
-    run = function(_, phase) ScrollHeld(1, phase) end }
-
-local Bindings = {}
-
-for i, source in ipairs(AnswerSources) do
-    Bindings[i] = { command = ("Scholar.answer" .. i), map = "scholar", source = source }
-end
-
-for action, source in pairs(ActionSources) do
-    Bindings[#Bindings + 1] = { command = ("Scholar." .. action), map = "scholar", source = source }
-end
-
-for command, source in pairs(ScrollSources) do
-    Bindings[#Bindings + 1] = { command = ("Scholar." .. command), map = "scholar", source = source }
-end
-
--- Start opens the game menu. The riddle has the controller, so it steps aside, and the next Start is the game's.
-Bindings[#Bindings + 1] = { command = "Scholar.later", map = "scholar", source = "gamepad.start" }
+Commands[#Commands + 1] = { label = "Scroll the quest book down", name = "scrollDown",
+    run = function() ScholarView.ScrollBook(1) end }
 
 Scholar = Addon:Module("Scholar", {
-    bindings = Bindings,
     commands = Commands,
     default = false,
     description = ("Riddles for young players about their own quests, and math and reading, every so often and "

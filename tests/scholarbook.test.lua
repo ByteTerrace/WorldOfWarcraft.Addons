@@ -97,12 +97,8 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
     eq(Offset(), step, "a D-pad press scrolls a notch")
     h:Gamepad("PADDDOWN", true)
     h:Advance(1)
-    truthy(Offset() > (2 * step), "held, it keeps scrolling")
+    eq(Offset(), (2 * step), "held, it doesn't repeat: one press, one notch")
     h:Gamepad("PADDDOWN", false)
-    local held = Offset()
-
-    h:Advance(1)
-    eq(Offset(), held, "let go, it stops")
 
     for _ = 1, 100 do h:MouseWheel(book, -1) end
 

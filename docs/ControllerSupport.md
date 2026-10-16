@@ -101,6 +101,8 @@ footer:Finalize(); footer:ShowAndActivateBindings()
 > [!IMPORTANT]
 > The whole stack is built on `SetOverrideBinding(UIParent, ...)`, so activate groups only out of combat. Never call `ClearOverrideBindings(UIParent)`: it wipes Blizzard's entire controller stack.
 
+An addon can bind a single button without Blizzard's binding groups: `SetOverrideBindingClick(ownFrame, false, key, buttonName, mouseButton)` on its own frame, cleared with `ClearOverrideBindings(ownFrame)`. A non-priority override wins over the button's normal binding (Select's `TOGGLEUIFOCUS`, for example), and Blizzard's priority overrides still win over it. ByteTerrace_Core's `Input:Summon` does this out of combat only, and clears it during `PLAYER_REGEN_DISABLED`, while combat lockdown is still off. Whether the client blocks an addon's override binding change in combat isn't documented, so it's never tried.
+
 ### Add a radial menu page
 
 - `GamepadRadial:ActivateRadial({ header = ..., buttons = { handler, ... } })` shows a custom page.

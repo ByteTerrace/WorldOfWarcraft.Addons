@@ -253,3 +253,15 @@ test("the recap is read again shortly after the death, even without a meter upda
     h:Advance(1)
     eq(addon.State:Get("death.killer"), "Bob Doe")
 end)
+
+test("a controller holds the grudge too: Select, then A", function()
+    local h, addon = Grouped()
+
+    h.labelStyle = "Letters"
+    h:MeterFight({ duration = 5, sources = { KilledBy(Enemy("Bob", { race = "Human" }), { name = "Ambush" }) } })
+    truthy(Card(h), "the grudge card shows")
+    h:Gamepad("PADBACK", true)
+    h:Gamepad("PAD1", true)
+    eq(addon.Modules.Warband.Records.ledger:Field(Key(h, "Bob"), "kind"), "grudge")
+    eq(Card(h), nil)
+end)

@@ -530,6 +530,13 @@ The journal, the Krew, Warband, and the Scholar's challenge celebrate (and ask q
 - **Hover over a card to keep it.** Select it to dismiss it and see the next. Otherwise, it hides after 12 seconds.
 - **At most six wait in line.** Beyond that, new ones are dropped.
 
+Some cards ask a question, like Warband's grudge card. Select the card to answer yes, or right-click it to answer no. With a controller, the card says how:
+
+1. Press Select (**View** on Xbox, **Create** on PlayStation) while the question shows. The card holds still and takes the controller.
+2. Press A (Cross on PlayStation) for yes, or B (Circle) for no. Press Select again to let go without answering.
+
+Until you press Select, every button does what it always does. A fight takes the card away, and it comes back, unanswered, when the fight ends.
+
 ### Session journal
 
 The journal celebrates your play, per character, with cards.

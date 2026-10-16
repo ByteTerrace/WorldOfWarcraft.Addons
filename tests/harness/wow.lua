@@ -347,6 +347,8 @@ function Harness.New(player)
     -- Each vibration's { type, intensity }.
     h.vibrations = {}
     h.vibrationsStopped = 0
+    -- The override bindings, as [key] = { owner, button (a frame's name), mouseButton, priority }.
+    h.overrideBindings = {}
     -- The settings panel openings (C_SettingsUtil.OpenSettingsPanel ids).
     h.opened = {}
     -- The Settings fake's registered categories (env.lua).
@@ -848,7 +850,9 @@ end
 -- Presses (down = true) or releases a controller key like "PAD1". The newest visible frame (every ancestor shown) with
 -- controller buttons enabled and a script for it takes the key, whatever the script returns [E]: while Scholar's riddle
 -- had its buttons enabled, the d-pad, which the riddle doesn't bind and whose script returned true, never reached the
--- game (client 1.60.1 (70009)). Only a key no such frame takes lands in h.propagated.
+-- game (client 1.60.1 (70009)). [G] Otherwise, an override click binding for the key takes it: its press runs the named
+-- button's OnClick(button, mouseButton or "LeftButton", true), shown or hidden, and its release does nothing. Only a
+-- key neither takes lands in h.propagated.
 function Harness:Gamepad(key, down)
     local script = ((down and "OnGamePadButtonDown") or "OnGamePadButtonUp")
 
@@ -862,6 +866,19 @@ function Harness:Gamepad(key, down)
 
             return
         end
+    end
+
+    local binding = self.overrideBindings[key]
+
+    if binding then
+        local button = rawget(self.env, binding.button)
+        local state = (button and Harness.State(button))
+
+        if down and state and state.scripts.OnClick and (state.enabled ~= false) then
+            self:Protect(state.scripts.OnClick, button, binding.mouseButton or "LeftButton", true)
+        end
+
+        return
     end
 
     self.propagated[#self.propagated + 1] = key

@@ -13,9 +13,19 @@
 --                               client ignores a controller button script's return value, so capture can't
 --                               pass a button on (seen in game: the d-pad never reached the game
 --                               under Scholar's riddle). Any active map is modal for the controller.
---   Release(module)             deactivates the maps of a stopping module. Module.lua calls it, so
---                               a stopped feature never keeps the controller, even when its own
---                               OnDisable fails.
+--   ActiveMaps()                the active maps' names, in order (a copy).
+--   Release(module)             deactivates the maps and ends the summons of a stopping module.
+--                               Module.lua calls it, so a stopped feature never keeps the
+--                               controller, even when its own OnDisable fails.
+--   Summon(module, source, command)  binds one button to a command without capture, so every other
+--                               button stays the player's: a non-priority override binding
+--                               (SetOverrideBindingClick) to the addon's summon button, which
+--                               Blizzard's own priority bindings (an open panel's buttons) still
+--                               win over. Only for a running module, and only out of combat
+--                               lockdown: it returns false otherwise. Combat starting ends every
+--                               summon, during PLAYER_REGEN_DISABLED, before lockdown (probe
+--                               combat.edges). Returns whether it took.
+--   Dismiss(source)             ends a source's summon.
 --
 -- A release always goes to the command its press went to, even if the maps changed in between. A held command whose map
 -- is deactivated while its button is down receives "cancel". When its own press is what changed the maps, the cancel
@@ -68,15 +78,20 @@ end
 
 local ByteTerrace = ByteTerrace
 local C_GamePad = C_GamePad
+local ClearOverrideBindings = ClearOverrideBindings
 local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
 local ipairs = ipairs
 local next = next
 local pairs = pairs
 local pcall = pcall
 local Refuse = ByteTerrace.Refuse
+local SetOverrideBindingClick = SetOverrideBindingClick
 local tostring = tostring
 local type = type
+local wipe = wipe
 
+local ApplySummons
 local Input = {}
 
 ByteTerrace.Input = Input
@@ -103,6 +118,36 @@ local function Down(self, key)
         self.m_pendingCancel = nil
         commands:Run(canceled, nil, "cancel", "gamepad")
     end
+end
+
+-- The button a summon's binding clicks, created on first use and named so a binding can name it. A binding passes its
+-- key as the mouse button, so one button serves every summon. It's shown but sizeless and takes no mouse, so nothing
+-- but a binding reaches it. While a summon holds, it hears combat start and ends them all.
+local function SummonButton(self)
+    if self.m_summonButton then
+        return self.m_summonButton
+    end
+
+    local button = CreateFrame("Button", self.m_addon.Name .. "Summon")
+
+    button:EnableMouse(false)
+
+    button:SetScript("OnClick", function(_, key)
+        local summon = self.m_summons[key]
+
+        if summon then
+            self.m_addon.Commands:Run(summon.id, nil, "down", "gamepad")
+        end
+    end)
+
+    button:SetScript("OnEvent", function()
+        wipe(self.m_summons)
+        ApplySummons(self)
+    end)
+
+    self.m_summonButton = button
+
+    return button
 end
 
 -- A button release: it goes to the command its press went to.
@@ -148,6 +193,27 @@ local function ApplyCapture(self)
     end
 end
 
+-- Sets the override bindings to the summons. Combat lockdown would block it, but by then combat's start has ended them.
+function ApplySummons(self)
+    if InCombatLockdown() then
+        return
+    end
+
+    local button = SummonButton(self)
+
+    ClearOverrideBindings(button)
+
+    for key in pairs(self.m_summons) do
+        SetOverrideBindingClick(button, false, key, self.m_addon.Name .. "Summon", key)
+    end
+
+    if next(self.m_summons) then
+        button:RegisterEvent("PLAYER_REGEN_DISABLED")
+    else
+        button:UnregisterEvent("PLAYER_REGEN_DISABLED")
+    end
+end
+
 --- Creates an addon's input router, with no bindings and no capture frame yet.
 ---@param addon table the owning AddOn, whose commands bindings run
 function ByteTerrace.NewInput(addon)
@@ -169,6 +235,8 @@ function ByteTerrace.NewInput(addon)
         m_pendingCancel = nil,
         -- The key whose press is running its command.
         m_pressing = nil,
+        -- Maps each summoned key to { id, module }.
+        m_summons = {},
     }, Input)
 end
 
@@ -194,6 +262,19 @@ function Input.LabelStyle()
     local style = (ok and mapped and mapped.labelStyle)
 
     return ((Labels[style] and style) or "Generic")
+end
+
+--- Returns the active maps' names, in order, as a new table, so a feature can add or remove its own map and keep the
+--- rest.
+---@return string[]
+function Input:ActiveMaps()
+    local names = {}
+
+    for i, name in ipairs(self.m_activeMaps) do
+        names[i] = name
+    end
+
+    return names
 end
 
 --- Binds a source to a command in a map, before compile. AddOn:Module checks each binding with CheckDeclaration first.
@@ -256,11 +337,34 @@ function Input:Compile()
     self.m_declared = nil
 end
 
+--- Ends a source's summon, if it has one.
+---@param source string e.g. "gamepad.back"
+function Input:Dismiss(source)
+    local key = KeyOf[source]
+
+    if key and self.m_summons[key] then
+        self.m_summons[key] = nil
+        ApplySummons(self)
+    end
+end
+
 --- Deactivates the active maps that bind a stopping module's commands, keeping the rest active.
 ---@param module table
 function Input:Release(module)
     local kept = {}
     local dropped = false
+    local dismissed = false
+
+    for key, summon in pairs(self.m_summons) do
+        if summon.module == module then
+            self.m_summons[key] = nil
+            dismissed = true
+        end
+    end
+
+    if dismissed then
+        ApplySummons(self)
+    end
 
     for _, name in ipairs(self.m_activeMaps) do
         if self.m_owners[name] == module then
@@ -320,4 +424,31 @@ function Input:SetActiveMaps(maps)
             self.m_addon.Commands:Run(id, nil, "cancel", "gamepad")
         end
     end
+end
+
+--- Binds one controller button to a command without capturing the rest (see the header).
+---@param module table the running module the summon belongs to
+---@param source string e.g. "gamepad.back"
+---@param command string the command's full name
+---@return boolean took false in combat lockdown or for a module that isn't running
+function Input:Summon(module, source, command)
+    local key = KeyOf[source]
+    local id = self.m_addon.Commands.Ids[command]
+
+    if not key then
+        error(self.m_addon.Name .. ": unknown source " .. tostring(source), 2)
+    end
+
+    if not id then
+        error(self.m_addon.Name .. ": unknown command " .. tostring(command), 2)
+    end
+
+    if InCombatLockdown() or not module:IsRunning() then
+        return false
+    end
+
+    self.m_summons[key] = { id = id, module = module }
+    ApplySummons(self)
+
+    return true
 end

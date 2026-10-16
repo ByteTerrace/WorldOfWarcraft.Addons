@@ -12,9 +12,17 @@ local addonName, ns = ...
 -- shows the next. Otherwise, it hides after CardSeconds. A card with onClick is a question: a left-click runs onClick()
 -- in a state batch and dismisses it, and a right-click (or the timeout) dismisses it without acting.
 --
+-- A question card answers to a controller too. While it shows, Select is summoned to focus it (ByteTerrace_Core's
+-- Input:Summon), so every other button stays the player's. Focused, the card holds (no timeout) and its card map has
+-- the controller: A answers yes (as a left-click), B answers no (as a right-click), and Select lets go. With a
+-- controller connected, the card's Prompt line says which buttons do what. A fight ends the focus and the summon with
+-- the card, before combat lockdown, and the card comes back after.
+--
 -- The card frame is the global TheLanKrewToolKitCard, created with the first card. Its Icon, Title, and Body regions
 -- show the current entry.
 
+-- The controller buttons a question card answers to.
+local AnswerSources = { focus = "gamepad.back", no = "gamepad.east", yes = "gamepad.south" }
 local CardSeconds = 12
 local CardWidth = 440
 local MaxQueued = 6
@@ -32,8 +40,11 @@ local Card
 -- The module is assigned at the end of the file, and it always runs.
 local Cards
 local Current
+-- Whether the question card showing has the controller.
+local Focused = false
 local HideTimer
 local InCombat = false
+local Input = ByteTerrace.Input
 local Queue = {}
 
 local function CreateCard()
@@ -75,6 +86,11 @@ local function CreateCard()
     body:SetJustifyH("LEFT")
     body:SetWordWrap(true)
     frame.Body = body
+    local prompt = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+
+    prompt:SetPoint("TOPLEFT", body, "BOTTOMLEFT", 0, -8)
+    prompt:Hide()
+    frame.Prompt = prompt
 
     return frame
 end
@@ -92,9 +108,38 @@ local function Alert(text, sound)
     end
 end
 
+-- A or B on a focused question card: yes runs its answer, and both dismiss it.
+local function Answer(yes)
+    local onClick = (Current and Current.onClick)
+
+    if not (Focused and onClick) then
+        return
+    end
+
+    ShowNext()
+
+    if yes then
+        Addon:Batch(onClick)
+    end
+end
+
 local function HoldTimer()
     Cards:Cancel(HideTimer)
     HideTimer = nil
+end
+
+-- The card's Prompt line for the controller: how to focus a question card, or, focused, how to answer it. Hidden
+-- without a controller, and on a card that isn't a question.
+local function SetPrompt()
+    local question = (Current and Current.onClick and (Input.LabelStyle() ~= "Generic"))
+
+    if question and Focused then
+        Card.Prompt:SetText(("%s: yes    %s: no"):format(Input.Label(AnswerSources.yes), Input.Label(AnswerSources.no)))
+    elseif question then
+        Card.Prompt:SetText(Input.Label(AnswerSources.focus) .. ": answer")
+    end
+
+    Card.Prompt:SetShown((question and true) or false)
 end
 
 local function StartTimer()
@@ -135,6 +180,45 @@ local function Show(entry)
     end
 end
 
+-- Gives the controller back from a focused card, keeping any other feature's map.
+local function Unfocus()
+    if not Focused then
+        return
+    end
+
+    Focused = false
+    local kept = {}
+
+    for _, name in ipairs(Addon.Input:ActiveMaps()) do
+        if name ~= "card" then
+            kept[#kept + 1] = name
+        end
+    end
+
+    Addon.Input:SetActiveMaps(kept)
+end
+
+-- Select on a question card: focus it, or let go of it.
+local function Focus()
+    if not (Current and Current.onClick) then
+        return
+    end
+
+    if Focused then
+        Unfocus()
+        StartTimer()
+    else
+        Focused = true
+        HoldTimer()
+        local maps = Addon.Input:ActiveMaps()
+
+        maps[#maps + 1] = "card"
+        Addon.Input:SetActiveMaps(maps)
+    end
+
+    SetPrompt()
+end
+
 -- Combat started: the card showing goes back to the front of the queue until combat ends.
 local function Withdraw()
     if Current then
@@ -146,6 +230,8 @@ end
 -- Shows the next queued card, or hides when there's none (always, in combat).
 function ShowNext()
     HoldTimer()
+    Unfocus()
+    Addon.Input:Dismiss(AnswerSources.focus)
     local entry = (not InCombat and remove(Queue, 1))
 
     Current = (entry or nil)
@@ -159,9 +245,16 @@ function ShowNext()
     Card.Icon:SetTexture(entry.icon)
     Card.Title:SetText(entry.title)
     Card.Body:SetText(entry.body)
-    -- Fit the text: 20px top, the title, 6px, the body, and 18px bottom, never shorter than the icon.
+    SetPrompt()
+    -- Fit the text: 20px top, the title, 6px, the body, the prompt line and 8px above it when it shows, and 18px
+    -- bottom, never shorter than the icon.
     -- secret: card text is built from plain strings, so its fontstrings hold no secret aspect
     local height = ((((20 + Card.Title:GetStringHeight()) + 6) + Card.Body:GetStringHeight()) + 18)
+
+    if Card.Prompt:IsShown() then
+        -- secret: plain, as above
+        height = ((height + 8) + Card.Prompt:GetStringHeight())
+    end
 
     Card:SetHeight(((height > MinCardHeight) and height) or MinCardHeight)
     Card:Show()
@@ -171,9 +264,23 @@ function ShowNext()
     end
 
     StartTimer()
+
+    if entry.onClick then
+        Addon.Input:Summon(Cards, AnswerSources.focus, "Cards.focus")
+    end
 end
 
 Cards = Addon:Module("Cards", {
+    bindings = {
+        { command = "Cards.focus", map = "card", source = AnswerSources.focus },
+        { command = "Cards.no", map = "card", source = AnswerSources.no },
+        { command = "Cards.yes", map = "card", source = AnswerSources.yes },
+    },
+    commands = {
+        { label = "Focus or let go of a question card", name = "focus", run = Focus },
+        { label = "Answer a question card no", name = "no", run = function() Answer(false) end },
+        { label = "Answer a question card yes", name = "yes", run = function() Answer(true) end },
+    },
     OnEnable = function(module)
         local combat = module:Id("combat.active")
 

@@ -457,6 +457,20 @@ function Harness:BuildEnvironment()
             __index = function(_, key) error("SOUNDKIT." .. tostring(key) .. " isn't modeled by the harness", 2) end,
         }),
 
+        -- Override bindings, as Blizzard_GamepadSharedUtility's InputBindingStack uses them. [G] One binding per key,
+        -- the last set: the harness doesn't model priority against Blizzard's own. Combat lockdown blocks both
+        -- (secrets.lua's LockedUndocumented).
+        ClearOverrideBindings = function(owner)
+            for key, binding in pairs(h.overrideBindings) do
+                if binding.owner == owner then
+                    h.overrideBindings[key] = nil
+                end
+            end
+        end,
+        SetOverrideBindingClick = function(owner, isPriority, key, buttonName, mouseButton)
+            h.overrideBindings[key] = { button = buttonName, mouseButton = mouseButton, owner = owner, priority = isPriority }
+        end,
+
         -- Controller.
         C_GamePad = {
             ClearLedColor = function() h.led = nil end,

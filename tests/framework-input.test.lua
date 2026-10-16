@@ -162,3 +162,45 @@ test("bindings to unknown sources or commands, or a source bound twice in a map,
     truthy(tostring(err):find("unknown command M.missing", 1, true))
     truthy(tostring(err):find("menu: gamepad.south is bound twice", 1, true), tostring(err))
 end)
+
+test("a summon binds one controller button to a command without capturing the rest", function()
+    local h, addon = NewAddOn()
+    local focused = 0
+
+    addon:Module("Note", { commands = { { label = "Focus", name = "focus", run = function() focused = (focused + 1) end } },
+        label = "Note" })
+
+    Start(h)
+    local module = addon.Modules.Note
+
+    truthy(addon.Input:Summon(module, "gamepad.back", "Note.focus"))
+    h:Gamepad("PADBACK", true)
+    h:Gamepad("PADBACK", false)
+    eq(focused, 1, "the press runs the command, once")
+    h:Gamepad("PAD1", true)
+    eq(h.propagated[1], "PAD1", "every other button is still the player's")
+    addon.Input:Dismiss("gamepad.back")
+    h:Gamepad("PADBACK", true)
+    eq(focused, 1, "dismissed, the button is the game's again")
+    eq(h.propagated[2], "PADBACK")
+    throws(function() addon.Input:Summon(module, "gamepad.nope", "Note.focus") end, "unknown source gamepad.nope")
+end)
+
+test("a summon ends as combat starts, before lockdown, is refused in combat, and ends with its module", function()
+    local h, addon = NewAddOn()
+
+    addon:Module("Note", { commands = { { label = "Focus", name = "focus", run = function() end } }, label = "Note" })
+    Start(h)
+    local module = addon.Modules.Note
+
+    addon.Input:Summon(module, "gamepad.back", "Note.focus")
+    h:EnterCombat()
+    eq(next(h.overrideBindings), nil, "combat starting ends it")
+    falsy(addon.Input:Summon(module, "gamepad.back", "Note.focus"), "refused in combat")
+    eq(#h.blocked, 0, "and nothing was blocked: it never tried")
+    h:LeaveCombat()
+    truthy(addon.Input:Summon(module, "gamepad.back", "Note.focus"))
+    addon.State:Set("Note.enabled", false)
+    eq(next(h.overrideBindings), nil, "a stopped feature never keeps a summon")
+    falsy(addon.Input:Summon(module, "gamepad.back", "Note.focus"), "and a stopped module can't summon")
+end)

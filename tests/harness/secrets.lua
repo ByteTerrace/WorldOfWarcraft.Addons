@@ -547,6 +547,14 @@ Harness.LUA_FAKES = {
 -- An undocumented C API fake gets the default policy: no secret arguments.
 local Undocumented = { SecretArguments = "undocumented, so the default NotAllowed" }
 
+-- Undocumented globals that combat lockdown blocks, through the generic HasRestrictions rule. [G] The override binding
+-- functions: Blizzard's Forever controller UI calls them only from its own secure code (InputBindingStack), so the docs
+-- and Blizzard's code don't say what the client does with an addon's call in combat.
+local LockedUndocumented = {
+    ClearOverrideBindings = { HasRestrictions = true, SecretArguments = Undocumented.SecretArguments },
+    SetOverrideBindingClick = { HasRestrictions = true, SecretArguments = Undocumented.SecretArguments },
+}
+
 -- Markers that say what an API's restriction is, replacing the generic HasRestrictions rule.
 local SpecificRestrictions = { RestrictedForMacroChatMessages = true }
 
@@ -708,5 +716,5 @@ end
 
 -- Wraps a global (or Namespace.member) fake by its snapshot entry.
 function Harness:WrapFunction(name, fn)
-    return self:WrapApi(name, Snapshot.functions[name], fn, false)
+    return self:WrapApi(name, Snapshot.functions[name] or LockedUndocumented[name], fn, false)
 end

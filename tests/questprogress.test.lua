@@ -48,6 +48,29 @@ local function Said(h, from)
     return table.concat(texts, " | ")
 end
 
+test("a count that wouldn't be read aloud doesn't keep the quest log read", function()
+    -- Grade 2 with Read riddles aloud for kindergarten and grade 1: nothing is read aloud. With the QuestReady sound,
+    -- flash and rumble off too, nothing needs the log's progress.
+    local h, addon = LoadKid({ ["Scholar.grade"] = "2" })
+
+    for _, row in ipairs({ "Sounds.questReady", "LightBar.questReady", "Rumble.questReady" }) do
+        addon.State:Set(row, false)
+    end
+
+    Accept(h, Wolves)
+    h:Advance(1)
+    h.apiCalls = {}
+    h:ProgressObjective(33, 1, 3)
+    h:Advance(1)
+    eq(h:CountApiCalls("C_QuestLog.GetQuestObjectives"), 0)
+    addon.State:Set("Scholar.readAloud", "always")
+    h.apiCalls = {}
+    h:ProgressObjective(33, 1, 4)
+    h:Advance(1)
+    truthy(h:CountApiCalls("C_QuestLog.GetQuestObjectives") > 0, "read aloud always, the count is read again")
+    truthy(Said(h):find("Tough Wolf Meat: 4 of 8.", 1, true), Said(h))
+end)
+
 test("the Owl counts a quest objective as it goes up, and says when the quest is ready to turn in", function()
     local h = KidWithWolves()
     local from = #h.spoken

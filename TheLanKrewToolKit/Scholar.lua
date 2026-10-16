@@ -870,25 +870,40 @@ Scholar = Addon:Module("Scholar", {
             end
         end)
 
-        -- A good moment brings the next riddle forward once it's half due: the play clock counting, and half the
-        -- interval played.
+        -- A good moment brings the next riddle forward once it's half due: its row on, the play clock counting, and
+        -- half the interval played. Checked first, so a moment that can't bring one costs nothing more.
+        local function HalfDue(row)
+            return (module:Get(row) and Counting and ((Elapsed() * 2) >= (module:Get("interval") * 60)))
+        end
+
         local function Moment(row)
-            if module:Get(row) and Counting and ((Elapsed() * 2) >= (module:Get("interval") * 60)) then
+            if HalfDue(row) then
                 Bank()
                 module:Set("pending", true)
             end
         end
 
+        -- A loss of control is a flight once you're on the taxi, a moment after it.
+        local function AfterControlLost()
+            if UnitOnTaxi("player") then
+                Moment("onFlight")
+            end
+        end
+
+        local function AfterTurnIn()
+            Moment("onTurnIn")
+        end
+
         module:On("PLAYER_CONTROL_LOST", function()
-            module:After(FlightCheck, function()
-                if UnitOnTaxi("player") then
-                    Moment("onFlight")
-                end
-            end)
+            if HalfDue("onFlight") then
+                module:After(FlightCheck, AfterControlLost)
+            end
         end)
 
         module:On("QUEST_TURNED_IN", function()
-            module:After(TurnInDelay, function() Moment("onTurnIn") end)
+            if HalfDue("onTurnIn") then
+                module:After(TurnInDelay, AfterTurnIn)
+            end
         end)
 
         module:On("PLAYER_DEAD", function() Moment("onDeath") end)

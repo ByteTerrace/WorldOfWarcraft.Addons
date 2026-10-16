@@ -208,7 +208,17 @@ ns.Addon:Module("QuestProgress", {
 })
 
 ns.Addon:Module("QuestCount", {
-    active = { reads = { "Scholar.enabled" }, when = function(state) return state:Get("Scholar.enabled") end },
+    -- It runs, and so keeps QuestProgress reading the log, only while Read riddles aloud would say its counts: always,
+    -- or for kindergarten and grade 1 at those grades. Whether there's a voice is asked as it speaks.
+    active = {
+        reads = { "Scholar.enabled", "Scholar.grade", "Scholar.readAloud" },
+        when = function(state)
+            local mode = state:Get("Scholar.readAloud")
+
+            return (state:Get("Scholar.enabled")
+                and ((mode == "always") or ((mode == "young") and (tonumber(state:Get("Scholar.grade")) <= 1))))
+        end,
+    },
     description = ("When your child's quest objectives go up, the Owl says the new count and how many are left, and "
         .. "when a quest is ready to turn in. It follows Read riddles aloud."),
     label = "Count quest progress aloud",

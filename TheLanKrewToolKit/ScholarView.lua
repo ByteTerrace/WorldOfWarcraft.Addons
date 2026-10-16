@@ -531,8 +531,8 @@ function ScholarView.IsShown()
     return ((Overlay ~= nil) and Overlay:IsShown())
 end
 
---- Scrolls the open quest book by notches (positive is down, two lines each), never past the top or the end of
---- its text.
+--- Scrolls the open quest book by notches (positive is down, two lines each), never past the top or the end of its
+--- text.
 ---@param notches number
 function ScholarView.ScrollBook(notches)
     if not ScholarView.BookOpen() then

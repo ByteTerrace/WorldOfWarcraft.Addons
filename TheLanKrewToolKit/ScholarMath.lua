@@ -1,54 +1,178 @@
 local addonName, ns = ...
 
 -- The math generators: one function per math kind in ScholarWords.kinds, registered in Kit.Generators for Generate
--- (ScholarPuzzles.lua, which loads first). Pure like ScholarPuzzles.lua.
+-- (ScholarPuzzles.lua, which loads first). Pure like ScholarPuzzles.lua. Their text and banks are ns.ScholarMathWords
+-- (ScholarMathWords.lua, which loads right before this file).
 --
 -- Every puzzle here is numeric: it carries value (the answer as a number; copper for money, tenths as a decimal) and,
 -- for calculations, expression (ASCII: + - x / and parentheses), so callers and tests can recompute it.
+--
+-- Each riddle lists the mistakes its kind invites, most telling first, as { n, why = name }: name is one of its text's
+-- whys. The first that fits is required, so the mistake the riddle exists to catch is always a choice; the others are
+-- kept, with their whys, when WrongNumbers draws them. Plain numbers are near misses.
+
+-- The factors multiplication's first level mixes in: the rules for 0, 1 and 10, and the doubles and fives.
+local EasyFactors = { 0, 1, 2, 5, 10 }
 
 -- Times-table factor ranges per level: { first from, first to, second from, second to }.
 local FactRanges = { { 2, 5, 2, 5 }, { 2, 10, 2, 5 }, { 3, 10, 3, 10 } }
 
--- Order of operations, per level: forms returning the text, its value and the classic slips (working left to right, or
--- ignoring the parentheses). Every form stays positive.
-local OrderForms = {
-    {
-        function(a, b, c) return ((a + 4) .. " + " .. b .. " x " .. c), ((a + 4) + (b * c)), (((a + 4) + b) * c) end,
-        function(a, b, c) return (((b * c) + a) .. " - " .. b .. " x " .. c), a, ((((b * c) + a) - b) * c) end,
-    },
-    {
-        function(a, b, c) return ("(" .. a .. " + " .. b .. ") x " .. c), ((a + b) * c), (a + (b * c)) end,
-        function(a, b, c, d)
-            return ((a + 5) .. " + " .. b .. " x " .. c .. " - " .. d), (((a + 5) + (b * c)) - d), ((((a + 5) + b) * c) - d)
-        end,
-        function(a, b, _, d) return (a .. " x (" .. (b + d) .. " - " .. d .. ")"), (a * b), ((a * (b + d)) - d) end,
-    },
-    {
-        function(a, b, c, d)
-            return (a .. " + " .. b .. " x (" .. (c + d) .. " - " .. d .. ")"), (a + (b * c)), ((a + b) * c), ((a + (b * (c + d))) - d)
-        end,
-        function(a, b, c, d)
-            return ("(" .. a .. " + " .. b .. ") x (" .. (c + d) .. " - " .. c .. ")"), ((a + b) * d), ((a + (b * (c + d))) - c)
-        end,
-        function(_, b, c, d)
-            return ((c + d) .. " x " .. (b + 1) .. " - " .. c .. " x " .. b), (((c + d) * (b + 1)) - (c * b)),
-                ((((c + d) * (b + 1)) - c) * b)
-        end,
-    },
-}
+-- What a price must divide by for a percent's steps (a tenth, a twentieth, a quarter, a half) to stay whole.
+local PercentDivisors = { [10] = 10, [15] = 20, [20] = 10, [25] = 4, [30] = 10, [40] = 10, [50] = 2, [60] = 10, [75] = 4 }
+
+-- A count of tens or tenths, as Count names it: "1 ten", "3 tenths".
+local Tens, TenthWords = { "ten", "tens" }, { "tenth", "tenths" }
 
 -- The largest sum or starting number, per grade (0 and 1) and level.
 local SmallCap = { [0] = { 5, 7, 10 }, { 12, 16, 20 } }
 
-local concat = table.concat
+local concat, insert, sort = table.concat, table.insert, table.sort
 local floor, max, min = math.floor, math.max, math.min
-local ipairs, tostring = ipairs, tostring
+local ipairs, pairs, setmetatable, tostring, type = ipairs, pairs, setmetatable, tostring, type
 local rep = string.rep
 
 local Kit = ns.Puzzles.Kit
 local Chance, Fill, Pick, Shuffle, Trim = Kit.Chance, Kit.Fill, Kit.Pick, Kit.Shuffle, Kit.Trim
 local Coins, Count, Finish, Vars, WrongNumbers = Kit.Coins, Kit.Count, Kit.Finish, Kit.Vars, Kit.WrongNumbers
-local Generators, Words = Kit.Generators, Kit.Words
+local Generators = Kit.Generators
+local MathWords = ns.ScholarMathWords
+
+-- One step of a calculation, as the working shows it: "4 x 3 = 12".
+local function Op(x, op, y, z)
+    return (x .. " " .. op .. " " .. y .. " = " .. z)
+end
+
+-- Order of operations, per level: forms returning the text, its value, the working step by step, the first operation,
+-- whether it has parentheses, and the slips it invites ({ value, why }: working left to right, or skipping the
+-- parentheses). Every form and slip stays positive.
+local OrderForms = {
+    {
+        function(a, b, c)
+            local first = (a + 4)
+
+            return {
+                first = (b .. " x " .. c), parens = false, slips = { { ((first + b) * c), "leftToRight" } },
+                text = (first .. " + " .. b .. " x " .. c), v = (first + (b * c)),
+                work = { Op(b, "x", c, b * c), Op(first, "+", b * c, first + (b * c)) },
+            }
+        end,
+        function(a, b, c)
+            local first = ((b * c) + a)
+
+            return {
+                first = (b .. " x " .. c), parens = false, slips = { { ((first - b) * c), "leftToRight" } },
+                text = (first .. " - " .. b .. " x " .. c), v = a, work = { Op(b, "x", c, b * c), Op(first, "-", b * c, a) },
+            }
+        end,
+    },
+    {
+        function(a, b, c)
+            return {
+                first = (a .. " + " .. b), parens = true, slips = { { (a + (b * c)), "parens" } },
+                text = ("(" .. a .. " + " .. b .. ") x " .. c), v = ((a + b) * c),
+                work = { Op(a, "+", b, a + b), Op(a + b, "x", c, (a + b) * c) },
+            }
+        end,
+        function(a, b, c, d)
+            local first = (a + 5)
+            local sum = (first + (b * c))
+
+            return {
+                first = (b .. " x " .. c), parens = false, slips = { { (((first + b) * c) - d), "leftToRight" } },
+                text = (first .. " + " .. b .. " x " .. c .. " - " .. d), v = (sum - d),
+                work = { Op(b, "x", c, b * c), Op(first, "+", b * c, sum), Op(sum, "-", d, sum - d) },
+            }
+        end,
+        function(a, b, _, d)
+            return {
+                first = ((b + d) .. " - " .. d), parens = true, slips = { { ((a * (b + d)) - d), "parens" } },
+                text = (a .. " x (" .. (b + d) .. " - " .. d .. ")"), v = (a * b), work = { Op(b + d, "-", d, b), Op(a, "x", b, a * b) },
+            }
+        end,
+    },
+    {
+        function(a, b, c, d)
+            return {
+                first = ((c + d) .. " - " .. d), parens = true,
+                slips = { { ((a + b) * c), "leftToRight" }, { ((a + (b * (c + d))) - d), "parens" } },
+                text = (a .. " + " .. b .. " x (" .. (c + d) .. " - " .. d .. ")"), v = (a + (b * c)),
+                work = { Op(c + d, "-", d, c), Op(b, "x", c, b * c), Op(a, "+", b * c, a + (b * c)) },
+            }
+        end,
+        function(a, b, c, d)
+            return {
+                first = (a .. " + " .. b), parens = true,
+                slips = { { ((a + (b * (c + d))) - c), "parens" }, { (((a + b) * (c + d)) - c), "parens" } },
+                text = ("(" .. a .. " + " .. b .. ") x (" .. (c + d) .. " - " .. c .. ")"), v = ((a + b) * d),
+                work = { Op(a, "+", b, a + b), Op(c + d, "-", c, d), Op(a + b, "x", d, (a + b) * d) },
+            }
+        end,
+        function(_, b, c, d)
+            local left, right = ((c + d) * (b + 1)), (c * b)
+
+            return {
+                first = ((c + d) .. " x " .. (b + 1)), parens = false, slips = { { ((left - c) * b), "leftToRight" } },
+                text = ((c + d) .. " x " .. (b + 1) .. " - " .. c .. " x " .. b), v = (left - right),
+                work = { Op(c + d, "x", b + 1, left), Op(c, "x", b, right), Op(left, "-", right, left - right) },
+            }
+        end,
+    },
+}
+
+-- The mistakes two-digit addition invites, most telling first: leaving out the carry, adding only the tens, or adding
+-- the tens as if they were ones.
+local function AddMistakes(parts)
+    local mistakes = { { (10 * (parts.ta + parts.tb)), why = "tens" }, { (parts.ta + parts.tb), why = "digits" } }
+
+    if parts.ones >= 10 then
+        insert(mistakes, 1, { (parts.v - 10), why = "carry" })
+    end
+
+    return mistakes
+end
+
+-- The place-value parts the addition texts name: each number's ones and tens, the ones' sum and its last digit, and the
+-- answer's tens.
+local function AddParts(a, b)
+    local oa, ob = (a % 10), (b % 10)
+
+    return {
+        a = a, b = b, oa = oa, ob = ob, od = ((oa + ob) % 10), ones = (oa + ob), ta = floor(a / 10), tb = floor(b / 10),
+        tens = floor((a + b) / 10), tensA = Count(floor(a / 10), Tens), tensB = Count(floor(b / 10), Tens), v = (a + b),
+    }
+end
+
+-- Change from a round price: if the change came out equal to the cost, stopping after the first step would be right, so
+-- the coins paid go up by 50.
+local function Change(state)
+    local n = state.roll(2, 5)
+
+    local p = (((state.level == 1) and (5 * state.roll(1, 4)))
+        or state.roll(((state.level == 2) and 6) or 11, ((state.level == 2) and 25) or 45))
+
+    local m = (50 * (floor((n * p) / 50) + 1))
+
+    if (m - (n * p)) == (n * p) then
+        m = (m + 50)
+    end
+
+    local v = (m - (n * p))
+
+    return "change", { m = m, n = n, np = (n * p), p = p, v = v },
+        { { (n * p), why = "cost" }, { (m - p), why = "one" }, (v + 10), (v - 10), (v + p) }
+end
+
+-- Times-table factors from FactRanges, in either order.
+local function Factors(state)
+    local range = FactRanges[state.level]
+    local a, b = state.roll(range[1], range[2]), state.roll(range[3], range[4])
+
+    if Chance(state, 2) then
+        return b, a
+    end
+
+    return a, b
+end
 
 -- Four distinct numbers from lo to hi.
 local function FourOf(state, lo, hi)
@@ -63,20 +187,246 @@ local function FourOf(state, lo, hi)
     return { pool[1], pool[2], pool[3], pool[4] }
 end
 
--- A math puzzle whose choices are numbers. vars.v is the answer; Words.math[key] is the text; options = { lo, hi,
--- format } bounds and formats the distractors.
-local function Numeric(state, kind, key, vars, wrong, options)
-    options = (options or {})
-    local format = (options.format or tostring)
-    local wrongs = {}
+local function Packs(state)
+    local a, b, c = state.roll(5, (10 * state.level) + 10), state.roll(2, 6), state.roll(4, 4 + (3 * state.level))
+    local v = (a + (b * c))
 
-    local numbers, whys = WrongNumbers(state, vars.v, wrong, options.lo, options.hi)
+    return "packs", { a = a, b = b, bc = (b * c), c = c, v = v },
+        { { (b * c), why = "packs" }, { ((a + b) * c), why = "leftToRight" }, { ((a + b) + c), why = "allAdded" }, (v + c), (v - c) }
+end
 
-    for i, n in ipairs(numbers) do
-        wrongs[i] = { format(n), why = whys[i] }
+-- A price and a percent whose steps stay whole; sometimes the player's own gold.
+local function PercentPlan(state)
+    local mine = (state.context.copper and floor(state.context.copper / 10000))
+
+    if mine and (mine >= 10) and (mine <= 1000) and Chance(state, 2) then
+        for _, percent in ipairs(Shuffle(state, { 10, 20, 25, 50 })) do
+            if (mine % PercentDivisors[percent]) == 0 then
+                return mine, percent, true
+            end
+        end
     end
 
-    return Finish(state, kind, Words.math[key], Vars(state, vars), format(vars.v), wrongs)
+    local percent = Pick(state, ({ { 10, 50 }, { 10, 20, 25, 50 }, { 15, 30, 40, 60, 75 } })[state.level])
+
+    return (({ 10, 20, 20 })[state.level] * state.roll(2, ({ 20, 10, 15 })[state.level])), percent, false
+end
+
+local function Share(state)
+    local n, q, e = state.roll(2, 6), state.roll(2, 3 + (2 * state.level)), state.roll(2, 9)
+    local v = (q + e)
+
+    return "share", { e = e, n = n, q = q, t = (n * q), v = v },
+        { { q, why = "shareOnly" }, { ((n * q) + e), why = "notShared" }, (v + 1), (v - 1), (((n * q) - n) + e) }
+end
+
+-- Skip counting by step, times times: "3, 6, 9, 12".
+local function Skips(step, times)
+    local out = {}
+
+    for i = 1, times do
+        out[i] = (step * i)
+    end
+
+    return concat(out, ", ")
+end
+
+-- A number of tenths as a decimal: 35 is "3.5".
+local function Tenths(tenths)
+    return (floor(tenths / 10) .. "." .. (tenths % 10))
+end
+
+-- MathWords[key] with each case named in cases laid over it, in order: a case's fields replace the text's, and its whys
+-- add to the text's.
+local function Text(key, cases)
+    local base = MathWords[key]
+    local layers, text, whys = { base }, {}, {}
+
+    for _, name in ipairs(cases or {}) do
+        layers[#layers + 1] = base.cases[name]
+    end
+
+    for _, layer in ipairs(layers) do
+        for field, value in pairs(layer) do
+            text[field] = value
+        end
+
+        for mistake, why in pairs(layer.whys or {}) do
+            whys[mistake] = why
+        end
+    end
+
+    text.whys = whys
+
+    return text
+end
+
+-- A number of hundredths with both decimal places: 340 is "3.40", 305 is "3.05".
+local function TwoPlaces(hundredths)
+    return (floor(hundredths / 100) .. "." .. ((((hundredths % 100) < 10) and "0") or "") .. (hundredths % 100))
+end
+
+-- A number of hundredths as a decimal with the places it needs: 340 is "3.4", 312 is "3.12".
+local function Hundredths(hundredths)
+    if (hundredths % 10) == 0 then
+        return Tenths(hundredths / 10)
+    end
+
+    return TwoPlaces(hundredths)
+end
+
+-- A why template filled with the riddle's variables and extra (choice: the wrong answer it's about).
+local function Why(template, vars, extra)
+    return Fill(template, setmetatable(extra, { __index = vars }))
+end
+
+-- Which of four numbers is biggest or smallest. options: format (a number's text), places (its text with every decimal
+-- place, for the working), scale (the terms are n / scale), trap (the number with the longer-is-bigger why), and x and
+-- y (the two numbers the step compares; by default, the first two that aren't the answer). The opposite extreme always
+-- gets its why.
+local function Extreme(state, kind, key, four, biggest, options)
+    local format, scale = (options.format or tostring), (options.scale or 1)
+    local sorted = { four[1], four[2], four[3], four[4] }
+
+    sort(sorted)
+    local best, opposite = ((biggest and sorted[4]) or sorted[1]), ((biggest and sorted[1]) or sorted[4])
+    local listed, others, terms = {}, {}, {}
+
+    for i, n in ipairs(four) do
+        terms[i] = (n / scale)
+
+        if n ~= best then
+            others[#others + 1] = n
+        end
+    end
+
+    for i, n in ipairs(sorted) do
+        listed[i] = (options.places or format)(n)
+    end
+
+    local x, y = (options.x or others[1]), (options.y or others[2])
+
+    local vars = {
+        listed = concat(listed, ", "), opposite = ((biggest and "smallest") or "biggest"),
+        other = ((biggest and "smaller") or "bigger"), out = format((biggest and min(x, y)) or max(x, y)), report = (best / scale),
+        terms = terms, v = format(best), when = ((biggest and "last") or "first"), word = ((biggest and "biggest") or "smallest"),
+        x = format(x), y = format(y),
+    }
+
+    local text, wrongs = Text(key), {}
+
+    for _, n in ipairs(four) do
+        if n ~= best then
+            local why = (((n == options.trap) and text.whys.longer) or ((n == opposite) and text.whys.opposite) or nil)
+
+            wrongs[#wrongs + 1] = { format(n), why = (why and Why(why, vars, { choice = format(n) })) }
+        end
+    end
+
+    return Finish(state, kind, text, vars, format(best), wrongs)
+end
+
+-- Hundredths that end in a tenth, beside the trap that's longer but smaller ("3.12" against "3.4"), the tenth below and
+-- a number with a smaller whole part. The step compares the trap with the tenth below.
+local function DecimalCompare(state)
+    local whole, tenth = state.roll(1, 5), state.roll(2, 9)
+    local best = ((100 * whole) + (10 * tenth))
+    local trap = (((100 * whole) + (10 * state.roll(1, tenth - 1))) + state.roll(1, 9))
+    local four = { best, trap, (best - 10), ((100 * (whole - 1)) + (10 * state.roll(5, 9))) }
+
+    return Extreme(state, "math.decimal", "decimalCompare", four, true,
+        { format = Hundredths, places = TwoPlaces, scale = 100, trap = trap, x = trap, y = (best - 10) })
+end
+
+-- A math puzzle whose choices are numbers. vars.v is the answer and MathWords[key] the text, with the cases in
+-- options.cases laid over it. candidates are the riddle's named mistakes and near misses (see the header). options = {
+-- lo, hi, format, cases } bounds and formats the wrong answers. hi defaults to 10 past the biggest candidate:
+-- WrongNumbers walks every number from lo to hi, so a far bound costs time.
+local function Numeric(state, kind, key, vars, candidates, options)
+    local format, lo = (options.format or tostring), (options.lo or (((vars.v > 0) and 1) or 0))
+    local hi = options.hi
+
+    if not hi then
+        hi = vars.v
+
+        for _, candidate in ipairs(candidates) do
+            hi = max(hi, (((type(candidate) == "table") and candidate[1]) or candidate))
+        end
+
+        hi = (hi + 10)
+    end
+
+    local text, filled = Text(key, options.cases), Vars(state, vars)
+    local marked, required = {}, false
+
+    for i, candidate in ipairs(candidates) do
+        local named = (type(candidate) == "table")
+        local n = ((named and candidate[1]) or candidate)
+
+        if named and not required and (n == floor(n)) and (n ~= vars.v) and (n >= lo) and (n <= hi) then
+            marked[i], required = { n, required = true, why = candidate.why }, true
+        else
+            marked[i] = candidate
+        end
+    end
+
+    local numbers, whys = WrongNumbers(state, vars.v, marked, options.lo, hi)
+    local wrongs = {}
+
+    for i, n in ipairs(numbers) do
+        wrongs[i] = { format(n), why = (whys[i] and Why(text.whys[whys[i]], filled, { choice = format(n) })) }
+    end
+
+    return Finish(state, kind, text, filled, format(vars.v), wrongs)
+end
+
+-- Grade 1 and 2 subtraction sometimes counts the player's levels to a milestone.
+local function LevelsToGo(state, goal)
+    local level = state.context.level
+
+    if level and (level < goal) and Chance(state, 6) then
+        local v = (goal - level)
+
+        return Numeric(state, "math.subtract", "levels", { a = goal, b = level, b1 = (level + 1), v = v },
+            { { (goal + level), why = "added" }, { goal, why = "goal" }, (v + 1), (v - 1), (v + 10), (v - 10) },
+            {})
+    end
+end
+
+-- Subtraction within the grade's cap: counting back a few, counting up a short gap, or thinking of the addition.
+local function SubtractSmall(state)
+    local cap = SmallCap[state.grade][state.level]
+    local a = state.roll(((state.grade == 0) and 2) or 5, cap)
+    local b = state.roll(1, (((state.grade == 0) and (state.level == 3)) and a) or (a - 1))
+    local v = (a - b)
+    local counts, case = {}, nil
+
+    if (b <= 5) or (v == 0) then
+        for n = a - 1, v, -1 do
+            counts[#counts + 1] = n
+        end
+    elseif v <= 5 then
+        case = "up"
+
+        for n = b + 1, a do
+            counts[#counts + 1] = n
+        end
+    else
+        case = "think"
+    end
+
+    return Numeric(state, "math.subtract", "subtractSmall", { a = a, b = b, counts = concat(counts, ", "), v = v },
+        { { (a + b), why = "added" }, { (v + 1), why = "start" }, (v - 1), (v + 2), b },
+        { cases = ((case and { case }) or nil) })
+end
+
+-- Appends each of ... to list, the near misses after a riddle's named mistakes, and returns list.
+local function With(list, ...)
+    for _, n in ipairs({ ... }) do
+        list[#list + 1] = n
+    end
+
+    return list
 end
 
 -- Two-digit addition: level 1 never regroups, level 3 always does.
@@ -94,41 +444,107 @@ local function AddBig(state)
         a, b = ((10 * tensA) + onesA), ((10 * tensB) + onesB)
     end
 
-    local v = (a + b)
+    local parts = AddParts(a, b)
+    local v = parts.v
 
-    return Numeric(state, "math.add", "addBig", { a = a, b = b, v = v },
-        { (v + 10), (v - 10), (v + 1), (v - 1), (v + 11) }, { hi = 110 })
+    return Numeric(state, "math.add", "addBig", parts, With(AddMistakes(parts), (v + 10), (v + 1), (v - 1), (v + 11)),
+        { cases = (((parts.ones >= 10) and { "carry" }) or nil) })
 end
 
+-- Addition within the grade's cap: the sum is rolled first and then split, so every sum and split is as likely. A sum
+-- past 10 from two numbers under 10 makes a ten first; the rest count on from the bigger number.
 local function AddSmall(state)
     local cap, low = SmallCap[state.grade][state.level], (((state.grade == 0) and 1) or 2)
-    local a = state.roll(low, cap - low)
-    local b = state.roll(low, cap - a)
-    local v = (a + b)
+    local v = state.roll(2 * low, cap)
+    local a = state.roll(low, v - low)
+    local b = (v - a)
+    local big, small = max(a, b), min(a, b)
+    local ten = ((big < 10) and (v > 10))
+    local counts = {}
 
-    return Numeric(state, "math.add", "addSmall", { a = a, b = b, v = v },
-        { (v + 1), (v - 1), (v + 2), (v - 2), (a - b), (b - a) }, { hi = (cap + 2) })
-end
-
--- Grade 1 and 2 subtraction sometimes counts the player's levels to a milestone.
-local function LevelsToGo(state, goal)
-    local level = state.context.level
-
-    if level and (level < goal) and Chance(state, 3) then
-        local v = (goal - level)
-
-        return Numeric(state, "math.subtract", "levels", { a = goal, b = level, v = v },
-            { (v + 1), (v - 1), (v + 10), (v - 10), goal }, { hi = goal })
+    for n = big + 1, v do
+        counts[#counts + 1] = n
     end
+
+    local vars = { a = a, b = b, big = big, counts = concat(counts, ", "), fill = (10 - big), rest = (v - 10), small = small, v = v }
+    local named = { { (v - 1), why = "start" }, { (big - small), why = "takeAway" } }
+
+    if ten then
+        insert(named, 1, { 10, why = "ten" })
+    end
+
+    return Numeric(state, "math.add", "addSmall", vars, With(named, (v + 1), (v + 2), (v - 2)),
+        { cases = ((ten and { "ten" }) or nil), hi = (cap + 2) })
 end
 
--- Two-digit subtraction: level 1 never borrows, level 3 always does.
+-- Two-digit times one-digit, worked as partial products; the classic slip is leaving out the carry.
+local function MultiplyBig(state)
+    local range = ({ { 11, 25, 2, 5 }, { 12, 60, 3, 9 }, { 25, 99, 6, 9 } })[state.level]
+    local a, b = state.roll(range[1], range[2]), state.roll(range[3], range[4])
+    local v, ones, tens = (a * b), (a % 10), floor(a / 10)
+    local carry = floor((ones * b) / 10)
+
+    local vars = {
+        a = a, b = b, carried = Count(carry, Tens), o = ones, po = (ones * b), pt = ((10 * tens) * b), t0 = (10 * tens),
+        ta = tens, tensA = Count(tens, Tens), v = v,
+    }
+
+    local named = {
+        { (a + b), why = "added" }, { ((tens * b) + (ones * b)), why = "tensAsOnes" }, { (v + a), why = "more" },
+        { (v - a), why = "fewer" },
+    }
+
+    if carry > 0 then
+        insert(named, 1, { (v - (10 * carry)), why = "noCarry" })
+    end
+
+    return Numeric(state, "math.multiply", "bigMultiply", vars, With(named, (v + 10), (v - 10), (v + b), (v - b)),
+        { cases = (((carry > 0) and { "carry" }) or nil) })
+end
+
+-- Times-table facts. Level 1 mixes the rules for 0, 1 and 10 with the doubles and fives, either factor first.
+local function MultiplyFacts(state)
+    local a, b
+
+    if state.level == 1 then
+        a, b = Pick(state, EasyFactors), state.roll(1, 10)
+
+        if Chance(state, 2) then
+            a, b = b, a
+        end
+    else
+        a, b = Factors(state)
+    end
+
+    local v, big, small = (a * b), max(a, b), min(a, b)
+    local case = ((((small == 0) and "zero") or ((small == 1) and "one") or ((big == 10) and "ten")) or nil)
+    local other = (((case == "ten") and small) or big)
+    local named
+
+    if case == "zero" then
+        named = { { other, why = "kept" } }
+    elseif case == "one" then
+        named = { { (other + 1), why = "added" }, { 1, why = "one" } }
+    elseif case == "ten" then
+        named = { { (other + 10), why = "added" } }
+    else
+        named = { { (a + b), why = "added" }, { (v + big), why = "more" }, { (v - big), why = "fewer" } }
+    end
+
+    local vars = { a = a, b = b, big = big, other = other, skips = Skips(big, small), small = small, v = v }
+
+    return Numeric(state, "math.multiply", "multiply", vars, With(named, (v + small), (v - small), (v + 1), (v - 1)),
+        { cases = ((case and { case }) or nil) })
+end
+
+-- Two-digit subtraction: level 1 never trades a ten, level 3 always does.
 local function SubtractBig(state)
     local a, b
 
     if state.level == 2 then
         a = state.roll(20, 99)
-        b = state.roll(5, a - 1)
+        -- The tens of b stay below a's, so the tens never cancel out.
+        b = state.roll(5, (10 * floor(a / 10)) - 1)
     else
         local tensA = state.roll(2, 9)
         local tensB, onesB = state.roll(1, tensA - 1), state.roll(((state.level == 3) and 1) or 0, 9)
@@ -137,78 +553,176 @@ local function SubtractBig(state)
         a, b = ((10 * tensA) + onesA), ((10 * tensB) + onesB)
     end
 
-    local v = (a - b)
-    local noBorrow = (((floor(a / 10) - floor(b / 10)) * 10) + ((b % 10) - (a % 10)))
+    local v, oa, ob, ta, tb = (a - b), (a % 10), (b % 10), floor(a / 10), floor(b / 10)
+    local trade = (ob > oa)
 
-    return Numeric(state, "math.subtract", "subtractBig", { a = a, b = b, v = v },
-        { noBorrow, (v + 10), (v - 10), (v + 1), (v - 1) }, { hi = 100 })
-end
+    local vars = {
+        a = a, b = b, oa = oa, oa10 = (oa + 10), ob = ob, od = (v % 10), ta = ta, ta1 = (ta - 1), tb = tb, td = floor(v / 10),
+        v = v,
+    }
 
-local function SubtractSmall(state)
-    local cap = SmallCap[state.grade][state.level]
-    local a = state.roll(((state.grade == 0) and 2) or 5, cap)
-    local b = state.roll(1, (((state.grade == 0) and (state.level == 3)) and a) or (a - 1))
-    local v = (a - b)
+    local named = { { (a + b), why = "added" } }
 
-    return Numeric(state, "math.subtract", "subtractSmall", { a = a, b = b, v = v },
-        { (v + 1), (v - 1), (a + b), (v + 2), b }, { hi = (cap + 2) })
-end
-
--- A number of tenths as a decimal: 35 is "3.5".
-local function Tenths(tenths)
-    return (floor(tenths / 10) .. "." .. (tenths % 10))
-end
-
--- Which of four numbers is biggest or smallest; decimals come in tenths.
-local function Extreme(state, kind, key, four, biggest, tenths)
-    local best = ((biggest and max(four[1], four[2], four[3], four[4])) or min(four[1], four[2], four[3], four[4]))
-    local format, wrongs, terms = ((tenths and Tenths) or tostring), {}, {}
-
-    for i, n in ipairs(four) do
-        terms[i] = ((tenths and (n / 10)) or n)
-
-        if n ~= best then
-            wrongs[#wrongs + 1] = format(n)
-        end
+    if trade then
+        insert(named, 1, { (((ta - tb) * 10) + (ob - oa)), why = "noTrade" })
     end
 
-    local vars = { report = ((tenths and (best / 10)) or best), terms = terms, v = format(best),
-        when = ((biggest and "last") or "first"), word = ((biggest and "biggest") or "smallest") }
-
-    return Finish(state, kind, Words.math[key], vars, format(best), wrongs)
+    return Numeric(state, "math.subtract", "subtractBig", vars, With(named, (v + 10), (v - 10), (v + 1), (v - 1)),
+        { cases = ((trade and { "trade" }) or nil) })
 end
 
 Generators["math.add"] = function(state)
     return (((state.grade >= 2) and AddBig(state)) or AddSmall(state))
 end
 
-Generators["math.subtract"] = function(state)
-    if state.grade == 0 then
-        return SubtractSmall(state)
+-- Copper within 100; sometimes the player's own copper when they have less than 90.
+Generators["math.coins"] = function(state)
+    local mine, a, b = state.context.copper, nil, nil
+    local change = false
+
+    if mine and (mine >= 1) and (mine <= 90) and Chance(state, 2) then
+        a = mine
+        b = state.roll(1, min(50, 100 - a))
+    elseif state.level < 3 then
+        a = (((state.level == 1) and (10 * state.roll(1, 5))) or state.roll(11, 60))
+        b = (((state.level == 1) and (10 * state.roll(1, 9 - (a / 10)))) or state.roll(5, 100 - a))
+        mine = nil
+    else
+        a, b, change, mine = 100, state.roll(5, 95), true, nil
     end
 
-    return (LevelsToGo(state, ((state.grade == 1) and 20) or 60)
-        or (((state.grade == 1) and SubtractSmall(state)) or SubtractBig(state)))
+    local options = { format = function(n) return (n .. " copper") end, lo = 1 }
+
+    if change then
+        local v, ob, ten = (a - b), (b % 10), (10 * (floor(b / 10) + 1))
+        local vars = { a = a, b = b, b10 = (b + 10), ob = ob, rest = (100 - ten), tb = floor(b / 10), ten = ten, up = (ten - b), v = v }
+        local named = { { b, why = "price" }, { (a + b), why = "added" } }
+
+        if ob > 0 then
+            insert(named, 1, { (v + 10), why = "borrow" })
+        end
+
+        options.cases = ((((ob == 0) and { "tens" }) or ((b > 90) and { "near" })) or nil)
+
+        return Numeric(state, "math.coins", "coinsChange", vars, With(named, (v + 1), (v - 1), (v - 10)), options)
+    end
+
+    local parts = AddParts(a, b)
+    local v = parts.v
+
+    options.cases = {}
+
+    if parts.ones >= 10 then
+        options.cases[#options.cases + 1] = "carry"
+    end
+
+    if mine then
+        options.cases[#options.cases + 1] = "mine"
+    end
+
+    return Numeric(state, "math.coins", "coinsAdd", parts, With(AddMistakes(parts), (v + 10), (v - 10), (v + 1), (v - 1)),
+        options)
+end
+
+Generators["math.compare"] = function(state)
+    local lo = (((state.level == 3) and state.roll(1, 5)) or 1)
+
+    return Extreme(state, "math.compare", "compare", FourOf(state, lo, ((state.level == 3) and (lo + 5)) or 10), Chance(state, 2), {})
 end
 
 Generators["math.count"] = function(state)
-    local n = state.roll(({ 1, 3, 5 })[state.level], ({ 5, 8, 10 })[state.level])
-    local thing = Pick(state, Words.countables)
+    local n = state.roll(({ 2, 3, 5 })[state.level], ({ 5, 8, 10 })[state.level])
+    local thing = Pick(state, MathWords.countables)
+    local counting = {}
 
-    local vars = { counted = Count(n, { thing[2], thing[3] }), row = Trim(rep(thing[1] .. " ", n)), things = thing[3],
-        v = n }
+    for i = 1, n do
+        counting[i] = i
+    end
 
-    local puzzle = Numeric(state, "math.count", "count", vars, { (n + 1), (n - 1), (n + 2), (n - 2) }, { hi = 12 })
+    local vars = {
+        counted = Count(n, { thing[2], thing[3] }), counting = concat(counting, ", "), row = Trim(rep(thing[1] .. " ", n)),
+        thing = thing[2], things = thing[3], v = n,
+    }
+
+    local named = { { (n + 1), why = "extra" }, { (n - 1), why = "missed" } }
+
+    if Chance(state, 2) then
+        named[1], named[2] = named[2], named[1]
+    end
+
+    local puzzle = Numeric(state, "math.count", "count", vars, With(named, (n + 2), (n - 2)), { hi = 12 })
     -- vars.row is the prompt's text version of the picture.
     puzzle.picture = { item = thing[2], kind = "count", n = n, row = vars.row }
 
     return puzzle
 end
 
-Generators["math.compare"] = function(state)
-    local lo = (((state.level == 3) and state.roll(1, 5)) or 1)
+-- Tenths: adding (level 1 stays under 1), subtracting at level 3, comparing at level 2.
+Generators["math.decimal"] = function(state)
+    if (state.level == 2) and Chance(state, 2) then
+        return DecimalCompare(state)
+    end
 
-    return Extreme(state, "math.compare", "compare", FourOf(state, lo, ((state.level == 3) and (lo + 5)) or 10), Chance(state, 2))
+    local a = (((state.level == 1) and state.roll(1, 8)) or state.roll(11, 59))
+    local b = (((state.level == 1) and state.roll(1, 9 - a)) or state.roll(11, 49))
+    local subtract = ((state.level == 3) and Chance(state, 2))
+
+    if subtract then
+        a, b = (max(a, b) + (((a == b) and 11) or 0)), min(a, b)
+    end
+
+    local v = ((subtract and (a - b)) or (a + b))
+    local unit = ((subtract and " cups") or " miles")
+    local named = { { (10 * v), why = "point" } }
+
+    if subtract and ((b % 10) > (a % 10)) then
+        insert(named, 1, { (((floor(a / 10) - floor(b / 10)) * 10) + ((b % 10) - (a % 10))), why = "noTrade" })
+    elseif not subtract and (((a % 10) + (b % 10)) >= 10) then
+        named[#named + 1] = { (v - 10), why = "carry" }
+    end
+
+    With(named, (v + 1), (v - 1), (v + 2))
+
+    -- A whole one off is a slip worth showing only once the numbers pass 1.
+    if state.level > 1 then
+        With(named, (v + 10))
+    end
+
+    return Numeric(state, "math.decimal", (subtract and "decimalSubtract") or "decimalAdd",
+        {
+            a = a, b = b, da = Tenths(a), db = Tenths(b), dv = Tenths(v), report = (v / 10), tenthsA = Count(a, TenthWords),
+            tenthsB = Count(b, TenthWords), tenthsV = Count(v, TenthWords), v = v,
+        }, named,
+        { format = function(tenths) return (Tenths(tenths) .. unit) end, lo = 1 })
+end
+
+Generators["math.divide"] = function(state)
+    local b, q = Factors(state)
+    local a = (b * q)
+
+    return Numeric(state, "math.divide", "divide", { a = a, b = b, skips = Skips(b, q), v = q },
+        { { (a * b), why = "multiplied" }, { (a - b), why = "subtracted" }, (q + 1), (q - 1), (q + 2), (q - 2), (b + q) },
+        {})
+end
+
+Generators["math.fraction"] = function(state)
+    local d = state.roll(({ 2, 2, 3 })[state.level], ({ 4, 10, 8 })[state.level])
+    local n = (((state.level == 3) and state.roll(2, d - 1)) or 1)
+    local t = (d * state.roll(2, ({ 6, 6, 12 })[state.level]))
+    local part = (t / d)
+    local v = (part * n)
+    local named = { { d, why = "bottom" }, { n, why = "top" }, { part, why = "onePart" }, { (t - v), why = "rest" } }
+
+    return Numeric(state, "math.fraction", "fraction", { d = d, n = n, part = part, t = t, v = v },
+        With(named, (v + d), (v * 2), (v + 1), (v - 1)), { cases = (((n == 1) and { "unit" }) or nil), hi = (t + d) })
+end
+
+Generators["math.groups"] = function(state)
+    local a, b = Factors(state)
+    local v = (a * b)
+
+    return Numeric(state, "math.groups", "groups", { a = a, b = b, skips = Skips(b, a), v = v },
+        { { (a + b), why = "added" }, { b, why = "oneGroup" }, (v + a), (v - a), (v + b), (v - b), (v + 1), (v - 1) }, {})
 end
 
 Generators["math.missing"] = function(state)
@@ -216,7 +730,187 @@ Generators["math.missing"] = function(state)
     local a = state.roll(1, c - 1)
     local v = (c - a)
 
-    return Numeric(state, "math.missing", "missing", { a = a, c = c, v = v }, { (v + 1), (v - 1), (c + a), c, (v + 2) }, { hi = 22 })
+    return Numeric(state, "math.missing", "missing", { a = a, c = c, v = v },
+        { { (c + a), why = "added" }, { (v + 1), why = "start" }, (v - 1), (v + 2), (v - 2) }, {})
+end
+
+-- Silver and copper; sometimes the player's own purse when it's under 100 silver.
+Generators["math.money"] = function(state)
+    local mine = state.context.copper
+
+    mine = ((mine and (mine >= 100) and (mine <= 9999) and Chance(state, 2) and mine) or nil)
+    local cases, key, a, b, v, named = {}, nil, nil, nil, nil, nil
+
+    if (state.level == 3) or (mine and (mine > 9000)) then
+        a = (mine or ((100 * state.roll(3, 9)) + state.roll(0, 49)))
+        local copper = ((((a % 100) < 99) and state.roll((a % 100) + 1, 99)) or state.roll(0, 98))
+
+        b = ((100 * state.roll(1, max(1, floor(a / 100) - 1))) + copper)
+        b = (((b < a) and b) or state.roll(1, a - 1))
+        key, v, named = "moneySubtract", (a - b), { { (a + b), why = "added" } }
+
+        if (b % 100) > (a % 100) then
+            insert(named, 1, { (((floor(a / 100) - floor(b / 100)) * 100) + ((b % 100) - (a % 100))), why = "noTrade" })
+        else
+            cases[#cases + 1] = "even"
+        end
+
+        With(named, (v + 100), (v - 100), (v + 10), (v - 10))
+    elseif (state.level == 2) or mine then
+        a, b = (mine or state.roll(101, 599)), state.roll(101, 599)
+        key, v = "moneyAdd", (a + b)
+
+        if ((a % 100) + (b % 100)) >= 100 then
+            cases[#cases + 1], named = "trade", { { (v - 100), why = "lost" } }
+        else
+            named = { { ((floor(a / 100) + floor(b / 100)) * 100), why = "silverOnly" }, { (v + 100), why = "extra" } }
+        end
+
+        With(named, (v - 100), (v + 100), (v + 10), (v - 10), (v - (v % 100)))
+    else
+        a = state.roll(101, 999)
+        key, v = "moneyConvert", a
+
+        named = {
+            { ((floor(a / 10) * 100) + (a % 10)), why = "tens" }, { ((floor(a / 100) * 100) + floor((a % 100) / 10)), why = "ones" },
+            (a + 100), (a - 100), (a + 1),
+        }
+    end
+
+    if mine then
+        cases[#cases + 1] = "mine"
+    end
+
+    local pa, pb = (a % 100), ((b or 0) % 100)
+
+    local vars = {
+        a = a, b = b, ca = Coins(a), cb = (b and Coins(b)), cr = (v % 100), cs = (pa + pb), cv = Coins(v), h = (100 * floor(a / 100)),
+        pa = pa, pb = pb, px = (pa + 100), sa = floor(a / 100), sa1 = (floor(a / 100) - 1), sb = floor((b or 0) / 100),
+        ss = floor(v / 100), tens = floor(a / 10), v = v,
+    }
+
+    return Numeric(state, "math.money", key, vars, named, { cases = cases, format = Coins, lo = 1 })
+end
+
+Generators["math.multiply"] = function(state)
+    return (((state.grade >= 4) and MultiplyBig(state)) or MultiplyFacts(state))
+end
+
+Generators["math.multistep"] = function(state)
+    local key, vars, wrong = Pick(state, { Change, Packs, Share })(state)
+
+    return Numeric(state, "math.multistep", key, vars, wrong, {})
+end
+
+Generators["math.order"] = function(state)
+    local form = Pick(state, OrderForms[state.level])
+    local a, b, c, d = state.roll(2, 6), state.roll(2, 6), state.roll(2, 6), state.roll(2, 6)
+    local riddle = form(a, b, c, d)
+    local v, named = riddle.v, {}
+
+    for i, slip in ipairs(riddle.slips) do
+        named[i] = { slip[1], why = slip[2] }
+    end
+
+    return Numeric(state, "math.order", "order", { first = riddle.first, text = riddle.text, v = v, work = concat(riddle.work, ", then ") },
+        With(named, (v + 3), (v + 1), (v - 1), (v + 2)), { cases = ((riddle.parens and { "parens" }) or nil), lo = 1 })
+end
+
+-- Of a price, or off it; the steps build the percent from a tenth, a half or a quarter.
+Generators["math.percent"] = function(state)
+    local n, p, mine = PercentPlan(state)
+    local off = ((n * p) / 100)
+    local sale = (not mine and (state.level > 1))
+    local v = ((sale and (n - off)) or off)
+    local named
+
+    local vars = {
+        five = (n / 20), gear = Pick(state, MathWords.gear), half = (n / 2), n = n, off = off, p = p, quarter = (n / 4),
+        ten = (n / 10), v = v,
+    }
+
+    local way = MathWords.percent.ways[p]
+
+    vars.how, vars.strategy, vars.way, vars.work = Fill(way.how, vars), Fill(way.strategy, vars), Fill(way.way, vars), Fill(way.work, vars)
+
+    if sale then
+        named = { { off, why = "discount" }, { (n - p), why = "gold" } }
+
+        if p ~= 10 then
+            named[#named + 1] = { (n - (n / 10)), why = "tenth" }
+        end
+
+        With(named, (v + 5), (v - 5), (n + off))
+    else
+        named = { { p, why = "percent" } }
+
+        if p ~= 10 then
+            named[#named + 1] = { (n / 10), why = "tenth" }
+        end
+
+        With(named, { (n - off), why = "rest" }, { n, why = "whole" }, (off + 10), (off + 5))
+    end
+
+    return Numeric(state, "math.percent", "percent", vars, named, {
+        cases = (((mine and { "mine" }) or (sale and { "sale" })) or nil), format = function(gold) return (gold .. " gold") end,
+        hi = max(n * 2, p + 10),
+    })
+end
+
+Generators["math.ratio"] = function(state)
+    local x = (((state.level == 1) and 1) or state.roll(2, 4))
+    local y, m = state.roll(x + 1, ((x == 1) and 5) or 7), state.roll(2, 6)
+    local v = (y * m)
+
+    if state.level == 3 then
+        local group, t = Pick(state, MathWords.ratioGroups), ((x + y) * m)
+        local vars = { first = group[1], m = m, second = group[2], t = t, v = v, x = x, xy = (x + y), y = y }
+
+        return Numeric(state, "math.ratio", "ratioPart", vars,
+            { { (x * m), why = "other" }, { (t - y), why = "takeAway" }, { m, why = "groups" }, (v + y), (v - y), (t / y) }, { hi = t })
+    end
+
+    local pair, h = Pick(state, MathWords.ratios), (x * m)
+
+    local vars = {
+        d = (y - x), firstMany = pair[1][2], firstOne = pair[1][1], h = h, have = Count(h, pair[1]), m = m, second = pair[2][2],
+        sentence = Fill(pair[3], { X = Count(x, pair[1]), Y = Count(y, pair[2]) }), v = v, x = x, y = y,
+    }
+
+    return Numeric(state, "math.ratio", "ratio", vars,
+        { { (h + (y - x)), why = "added" }, { (h * y), why = "multiplied" }, (h + y), (v + y), (v - y) },
+        { cases = (((x == 1) and { "one" }) or nil), hi = ((h * y) + 10) })
+end
+
+-- The mistakes are one group short (always a choice), then two of the others, so neither number of the answer repeats
+-- among the choices: it can't be found as the most common one.
+Generators["math.remainder"] = function(state)
+    local d = state.roll(({ 2, 3, 6 })[state.level], ({ 5, 9, 9 })[state.level])
+    local q = state.roll(({ 2, 3, 5 })[state.level], ({ 9, 12, 15 })[state.level])
+    local r = state.roll(1, d - 1)
+    local a = ((q * d) + r)
+    local Say = function(quotient, remainder) return (quotient .. ", with " .. remainder .. " left over") end
+    local text = Text("remainder")
+    local vars = Vars(state, { a = a, b = d, bq = (d * (q + 1)), bv = (q * d), q1 = (q + 1), r = r, terms = { a, d }, v = q })
+    local short = Say(q - 1, r + d)
+    local wrongs = { { short, why = Why(text.whys.short, vars, { choice = short, left = (r + d) }) } }
+    local seen = { [Say(q, r)] = true, [short] = true }
+
+    local others = {
+        { (q + 1), (d - r), "over" }, { r, q, "swapped" }, { (q + r), 0, "leftovers" }, { (q + 1), 0, "roundedUp" },
+        { (q - 2), (r + (2 * d)), "shortTwo" },
+    }
+
+    for _, mistake in ipairs(Shuffle(state, others)) do
+        local said = Say(mistake[1], mistake[2])
+
+        if (#wrongs < 3) and (mistake[1] >= 1) and (mistake[1] ~= q) and (mistake[2] ~= r) and not seen[said] then
+            seen[said] = true
+            wrongs[#wrongs + 1] = { said, why = Why(text.whys[mistake[3]], vars, { choice = said, left = mistake[2] }) }
+        end
+    end
+
+    return Finish(state, "math.remainder", text, vars, Say(q, r), wrongs)
 end
 
 Generators["math.skip"] = function(state)
@@ -236,249 +930,21 @@ Generators["math.skip"] = function(state)
     local shown = { start, (start + step), (start + (2 * step)), (start + (3 * step)) }
     local v = (start + (4 * step))
 
-    local vars = { n = (((step < 0) and -step) or step), shown = concat(shown, ", "), start = start,
-        terms = { start, step }, v = v }
-
-    return Numeric(state, "math.skip", ((step < 0) and "skipBack") or "skip", vars,
-        { (v + 1), (v - 1), (v + step), (v - (2 * step)), (v + 10), (v - 10) }, { hi = 110, lo = 1 })
-end
-
--- Copper within 100; sometimes the player's own copper when they have less than 90.
-Generators["math.coins"] = function(state)
-    local mine, key, a, b = state.context.copper, nil, nil, nil
-
-    if mine and (mine >= 1) and (mine <= 90) and Chance(state, 2) then
-        key, a = "coinsMine", mine
-        b = state.roll(1, min(50, 100 - a))
-    elseif state.level < 3 then
-        key = "coinsAdd"
-        a = (((state.level == 1) and (10 * state.roll(1, 5))) or state.roll(11, 60))
-        b = (((state.level == 1) and (10 * state.roll(1, 9 - (a / 10)))) or state.roll(5, 100 - a))
-    else
-        key, a, b = "coinsChange", 100, state.roll(5, 95)
-    end
-
-    local v = (((key == "coinsChange") and (a - b)) or (a + b))
-
-    return Numeric(state, "math.coins", key, { a = a, b = b, v = v }, { (v + 10), (v - 10), (v + 1), (v - 1), (100 - v) },
-        { format = function(n) return (n .. " copper") end, hi = 100, lo = 1 })
-end
-
-local function Factors(state)
-    local range = FactRanges[state.level]
-    local a, b = state.roll(range[1], range[2]), state.roll(range[3], range[4])
-
-    if Chance(state, 2) then
-        return b, a
-    end
-
-    return a, b
-end
-
-local function Facts(state, kind, key)
-    local a, b = Factors(state)
-    local v = (a * b)
-
-    return Numeric(state, kind, key, { a = a, b = b, v = v },
-        { (v + a), (v - a), (v + b), (v - b), (a + b), (v + 1), (v - 1) }, { hi = 110 })
-end
-
--- Two digits times one digit; a classic slip is forgetting to carry.
-local function MultiplyBig(state)
-    local range = ({ { 11, 25, 2, 5 }, { 12, 60, 3, 9 }, { 25, 99, 6, 9 } })[state.level]
-    local a, b = state.roll(range[1], range[2]), state.roll(range[3], range[4])
-    local v = (a * b)
-    local noCarry = (((floor(a / 10) * b) * 10) + (((a % 10) * b) % 10))
-
-    return Numeric(state, "math.multiply", "bigMultiply", { a = a, b = b, v = v },
-        { noCarry, (v + 10), (v - 10), (v + b), (v - b), (a * (b + 1)) }, { hi = 1000 })
-end
-
-Generators["math.multiply"] = function(state)
-    return (((state.grade >= 4) and MultiplyBig(state)) or Facts(state, "math.multiply", "multiply"))
-end
-
-Generators["math.groups"] = function(state)
-    return Facts(state, "math.groups", "groups")
-end
-
-Generators["math.divide"] = function(state)
-    local b, q = Factors(state)
-
-    return Numeric(state, "math.divide", "divide", { a = (b * q), b = b, v = q },
-        { (q + 1), (q - 1), (q + 2), (q - 2), (b + q) }, { hi = 20 })
-end
-
-Generators["math.remainder"] = function(state)
-    local d = state.roll(({ 2, 3, 6 })[state.level], ({ 5, 9, 9 })[state.level])
-    local q = state.roll(({ 2, 3, 5 })[state.level], ({ 9, 12, 15 })[state.level])
-    local r = state.roll(1, d - 1)
-    local Say = function(quotient, remainder) return (quotient .. ", with " .. remainder .. " left over") end
-    local wrongs = {}
-
-    for _, wrong in ipairs({ { (q + 1), r }, { (q - 1), r }, { q, (r + 1) }, { q, (r - 1) }, { r, q }, { q, 0 } }) do
-        if (wrong[1] >= 1) and (wrong[2] >= 0) and ((wrong[1] ~= q) or (wrong[2] ~= r)) then
-            wrongs[#wrongs + 1] = Say(wrong[1], wrong[2])
-        end
-    end
-
-    local vars = Vars(state, { a = ((q * d) + r), b = d, bv = (q * d), r = r, terms = { ((q * d) + r), d }, v = q })
-
-    return Finish(state, "math.remainder", Words.math.remainder, vars, Say(q, r), wrongs)
-end
-
--- Silver and copper; sometimes the player's own purse when it's under 100 silver.
-Generators["math.money"] = function(state)
-    local mine = state.context.copper
-
-    mine = ((mine and (mine >= 100) and (mine <= 9999) and Chance(state, 2) and mine) or nil)
-    local key, a, b, v, wrong
-
-    if (state.level == 3) or (mine and (mine > 9000)) then
-        a = (mine or ((100 * state.roll(3, 9)) + state.roll(0, 49)))
-        local copper = ((((a % 100) < 99) and state.roll((a % 100) + 1, 99)) or state.roll(0, 98))
-
-        b = ((100 * state.roll(1, max(1, floor(a / 100) - 1))) + copper)
-        b = (((b < a) and b) or state.roll(1, a - 1))
-        key, v = "moneySubtract", (a - b)
-        wrong = { (((floor(a / 100) - floor(b / 100)) * 100) + ((b % 100) - (a % 100))), (v + 100), (v - 100), (v + 10), (v - 10) }
-    elseif (state.level == 2) or mine then
-        a, b = (mine or state.roll(101, 599)), state.roll(101, 599)
-        key, v = "moneyAdd", (a + b)
-        wrong = { (v - 100), (v + 100), (v + 10), (v - 10), (v - (v % 100)) }
-    else
-        a = state.roll(101, 999)
-        key, v = "moneyConvert", a
-        wrong = { ((floor(a / 10) * 100) + (a % 10)), (a + 100), (a - 100), ((floor(a / 100) * 100) + floor((a % 100) / 10)), (a + 1) }
-    end
-
-    local vars = { a = a, b = b, ca = Coins(a), cb = (b and Coins(b)), cv = Coins(v), v = v }
-
-    return Numeric(state, "math.money", (mine and (key .. "Mine")) or key, vars, wrong, { format = Coins, hi = 9999, lo = 1 })
-end
-
-Generators["math.fraction"] = function(state)
-    local d = state.roll(({ 2, 2, 3 })[state.level], ({ 4, 10, 8 })[state.level])
-    local n = (((state.level == 3) and state.roll(2, d - 1)) or 1)
-    local t = (d * state.roll(2, ({ 6, 6, 12 })[state.level]))
-    local v = ((t / d) * n)
-
-    return Numeric(state, "math.fraction", "fraction", { d = d, n = n, part = (t / d), t = t, v = v },
-        { (t - v), (t / d), (v + d), (v * 2), (t - d), (v - 1) }, { hi = t })
-end
-
-local function Change(state)
-    local n = state.roll(2, 5)
-
-    local p = (((state.level == 1) and (5 * state.roll(1, 4)))
-        or state.roll(((state.level == 2) and 6) or 11, ((state.level == 2) and 25) or 45))
-
-    local m = (50 * (floor((n * p) / 50) + 1))
-    local v = (m - (n * p))
-
-    return "change", { m = m, n = n, np = (n * p), p = p, v = v }, { (n * p), (m - p), (v + 10), (v - 10), (v + p) }
-end
-
-local function Packs(state)
-    local a, b, c = state.roll(5, (10 * state.level) + 10), state.roll(2, 6), state.roll(4, 4 + (3 * state.level))
-    local v = (a + (b * c))
-
-    return "packs", { a = a, b = b, bc = (b * c), c = c, v = v }, { ((a + b) * c), ((a + b) + c), (b * c), (v + c), (v - c) }
-end
-
-local function Share(state)
-    local n, q, e = state.roll(2, 6), state.roll(2, 3 + (2 * state.level)), state.roll(2, 9)
-    local v = (q + e)
-
-    return "share", { e = e, n = n, q = q, t = (n * q), v = v }, { q, ((n * q) + e), (v + 1), (v - 1), (((n * q) - n) + e) }
-end
-
-Generators["math.multistep"] = function(state)
-    local key, vars, wrong = Pick(state, { Change, Packs, Share })(state)
-
-    return Numeric(state, "math.multistep", key, vars, wrong, { hi = 1000 })
-end
-
--- Tenths: adding (level 1 stays under 1), subtracting at level 3, comparing at level 2.
-Generators["math.decimal"] = function(state)
-    if (state.level == 2) and Chance(state, 2) then
-        local base = (10 * state.roll(1, 5))
-
-        return Extreme(state, "math.decimal", "decimalCompare", FourOf(state, base, base + 19), true, true)
-    end
-
-    local a = (((state.level == 1) and state.roll(1, 8)) or state.roll(11, 59))
-    local b = (((state.level == 1) and state.roll(1, 9 - a)) or state.roll(11, 49))
-    local subtract = ((state.level == 3) and Chance(state, 2))
-
-    if subtract then
-        a, b = (max(a, b) + (((a == b) and 11) or 0)), min(a, b)
-    end
-
-    local v = ((subtract and (a - b)) or (a + b))
-    local unit = ((subtract and " cups") or " miles")
-
-    return Numeric(state, "math.decimal", (subtract and "decimalSubtract") or "decimalAdd",
-        { da = Tenths(a), db = Tenths(b), dv = Tenths(v), report = (v / 10), v = v }, { (v + 1), (v - 1), (v + 10), (v - 10), (v + 2) },
-        { format = function(tenths) return (Tenths(tenths) .. unit) end, hi = 200, lo = 1 })
-end
-
--- A price and a percent that divide evenly; sometimes the player's own gold.
-local function PercentPlan(state)
-    local mine = (state.context.copper and floor(state.context.copper / 10000))
-
-    if mine and (mine >= 10) and (mine <= 1000) and Chance(state, 2) then
-        for _, percent in ipairs(Shuffle(state, { 10, 20, 25, 50 })) do
-            if ((mine * percent) % 100) == 0 then
-                return mine, percent, true
-            end
-        end
-    end
-
-    local percent = Pick(state, ({ { 10, 50 }, { 10, 20, 25, 50 }, { 15, 30, 40, 60, 75 } })[state.level])
-
-    return (({ 10, 20, 20 })[state.level] * state.roll(2, ({ 20, 10, 15 })[state.level])), percent, false
-end
-
-Generators["math.percent"] = function(state)
-    local n, p, mine = PercentPlan(state)
-    local off = ((n * p) / 100)
-    local key = ((mine and "percentMine") or ((state.level == 1) and "percentOf") or "percentSale")
-    local sale = (key == "percentSale")
-    local v = ((sale and (n - off)) or off)
-    local wrong = ((sale and { off, (n - p), (n + off), (v + 5), (v - 5) }) or { (n - off), p, (off * 2), (off + 10), (n / 5) })
-
-    return Numeric(state, "math.percent", key, { gear = Pick(state, Words.gear), n = n, off = off, p = p, v = v }, wrong,
-        { format = function(gold) return (gold .. " gold") end, hi = (n * 2) })
-end
-
-Generators["math.ratio"] = function(state)
-    local x = (((state.level == 1) and 1) or state.roll(2, 4))
-    local y, m = state.roll(x + 1, ((x == 1) and 5) or 7), state.roll(2, 6)
-    local v = (y * m)
-
-    if state.level == 3 then
-        local group, t = Pick(state, Words.ratioGroups), ((x + y) * m)
-        local vars = { first = group[1], m = m, second = group[2], t = t, v = v, x = x, xy = (x + y), y = y }
-
-        return Numeric(state, "math.ratio", "ratioPart", vars, { (x * m), (t - y), (t / y), (v + y), (v - y) }, { hi = t })
-    end
-
-    local pair, h = Pick(state, Words.ratios), (x * m)
-
     local vars = {
-        h = h, have = Count(h, pair[1]), m = m, second = pair[2][2],
-        sentence = Fill(pair[3], { X = Count(x, pair[1]), Y = Count(y, pair[2]) }), v = v, x = x, y = y,
+        last = shown[4], n = (((step < 0) and -step) or step), shown = concat(shown, ", "), start = start, terms = { start, step },
+        v = v,
     }
 
-    return Numeric(state, "math.ratio", "ratio", vars, { ((h + y) - x), (h * y), (h + y), (v + y), (v - y) }, { hi = ((h * y) + 10) })
+    return Numeric(state, "math.skip", "skip", vars,
+        { { (shown[4] + (((step < 0) and -1) or 1)), why = "ones" }, { (v + step), why = "twice" }, (v + 1), (v - 1), (v - (2 * step)),
+            (v + 10), (v - 10) }, { cases = (((step < 0) and { "back" }) or nil), hi = 110, lo = 1 })
 end
 
-Generators["math.order"] = function(state)
-    local form = Pick(state, OrderForms[state.level])
-    local a, b, c, d = state.roll(2, 6), state.roll(2, 6), state.roll(2, 6), state.roll(2, 6)
-    local text, v, slip, other = form(a, b, c, d)
+Generators["math.subtract"] = function(state)
+    if state.grade == 0 then
+        return SubtractSmall(state)
+    end
 
-    return Numeric(state, "math.order", "order", { text = text, v = v },
-        { slip, (other or (v + 3)), (v + 1), (v - 1), (v + 2) }, { hi = 10000, lo = 1 })
+    return (LevelsToGo(state, ((state.grade == 1) and 20) or 60)
+        or (((state.grade == 1) and SubtractSmall(state)) or SubtractBig(state)))
 end

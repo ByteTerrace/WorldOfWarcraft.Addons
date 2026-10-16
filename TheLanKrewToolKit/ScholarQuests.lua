@@ -9,12 +9,20 @@ local addonName, ns = ...
 --                                      fits. The puzzle's book is the quest as the player saw it.
 --
 -- It's an open-book test: every answer is in the quest's text, its objectives, or who and where, and the book shows
--- them all. Kinds: who gave it, who took it (turned in), where it began, where it ended, how many an objective asked
--- for, what it asked, which quest a giver gave, and a word missing from its text (enUS clients only: the words are
--- split as English letters, and the plain words left out are English ones). A kind runs only when the record holds its
--- answer, and its three wrong answers come from the player's other quests first, then from ScholarWords' banks for the
--- player's faction (state.context.faction), never one that is also true (the zone around the place it began, another
--- quest the same giver gave, a bank quest that giver really gives).
+-- them all, so every riddle teaches looking it up: its hint says where in the book to look, its step walks to the line,
+-- its explanation quotes it, and its praise names that. Kinds: who gave it, who took it (turned in), where it began,
+-- where it ended, how many an objective asked for, what it asked, which quest a giver gave, and a word missing from its
+-- text (enUS clients only: the words are split as English letters, the plain words left out are English ones, and the
+-- missing word's wrong answers are words of its own kind by English endings and neighbors, from ScholarWords'
+-- questWords). A kind runs only when the record holds its answer, and its three wrong answers come from the player's
+-- other quests first (each saying which quest it's from), then from ScholarWords' banks for the player's faction
+-- (state.context.faction), never one that is also true (the zone around the place it began, another quest the same
+-- giver gave or might have, a bank quest that giver really gives). Who gave it and who took it, and where it began and
+-- where it ended, are each other's first wrong answer, the mix-up a reader makes.
+--
+-- A title can give its answer away ("Wolves Across the Border", asking for Tough Wolf Meat): then the wrong answers
+-- share the title's words too, or the riddle names the quest as the one in the quest book instead. Which quest a giver
+-- gave isn't asked when the giver's name is in its title.
 --
 -- Which kind: what the quest asked for (how many, what, a missing word) before who and where, and not the kind last
 -- asked about this quest (its askedKind; who gave it and which quest a giver gave are one kind) unless no other fits.
@@ -23,23 +31,34 @@ local addonName, ns = ...
 local ContentKinds = { ["quest.count"] = true, ["quest.objective"] = true, ["quest.blank"] = true }
 -- Kinds that ask the same thing another way, by the kind they count as.
 local Families = { ["quest.title"] = "quest.giver" }
+-- How many words before a missing word its step quotes.
+local LeadWords = 3
 -- The longest choice a riddle may offer, which ScholarPuzzles enforces.
 local MaxLine = ns.Puzzles.MaxChoice
 local MaxSentence, MinSentence = 140, 30
 local MaxTitle = 60
 local MaxWord, MinWord = 12, 5
+-- The field of this quest a riddle about each is mixed up with: who took it for who gave it, where it ended for where
+-- it began, and the other way round.
+local Mixups = { ender = "giver", endPlace = "place", giver = "ender", place = "endPlace" }
+
+-- Words of four letters or more too plain to tie a choice to a title.
+local PlainWords = { from = true, have = true, into = true, that = true, them = true, they = true, this = true,
+    what = true, will = true, with = true, your = true }
 
 local concat = table.concat
-local find, gmatch, gsub, lower = string.find, string.gmatch, string.gsub, string.lower
-local ipairs, pairs, select, tostring, type = ipairs, pairs, select, tostring, type
+local find, gmatch, gsub, lower, sub = string.find, string.gmatch, string.gsub, string.lower, string.sub
+local ipairs, next, pairs, select, tostring, type = ipairs, next, pairs, select, tostring, type
+local max, min = math.max, math.min
 
 local Kit = ns.Puzzles.Kit
 
-local Generators, Pick, Shuffle, Finish, WrongNumbers, Fits = Kit.Generators, Kit.Pick, Kit.Shuffle, Kit.Finish,
-    Kit.WrongNumbers, Kit.Fits
+local Fill, Finish, Fits, Generators, Pick, Shuffle, WrongNumbers = Kit.Fill, Kit.Finish, Kit.Fits, Kit.Generators,
+    Kit.Pick, Kit.Shuffle, Kit.WrongNumbers
 
 local MaxObjectives = ns.QuestBook.MaxObjectives
 local Words = Kit.Words
+local QuestWords = Words.questWords
 
 -- A quest's text from a record: line breaks kept, nothing that could be an escape or template.
 local function Body(text)
@@ -48,6 +67,29 @@ local function Body(text)
     end
 
     return (gsub(gsub(text, "[|{}\\]", ""), "[%z\1-\9\11-\31]", ""))
+end
+
+-- Whether word, lowercase, is a comparable word plus -er: "bolder", "easier", "braver", "bigger".
+local function Comparative(word)
+    if not find(word, "er$") then
+        return false
+    end
+
+    local stem, comparable = sub(word, 1, -3), QuestWords.comparable
+
+    return ((comparable[stem] or comparable[stem .. "e"] or comparable[(gsub(stem, "i$", "y"))]
+        or (find(stem, "(%a)%1$") and comparable[sub(stem, 1, -2)])) == true)
+end
+
+-- Whether hits holds every stem of wanted.
+local function Covers(hits, wanted)
+    for stem in pairs(wanted) do
+        if not hits[stem] then
+            return false
+        end
+    end
+
+    return true
 end
 
 -- A one-line text from a record: no control characters, escape or template characters, trimmed, at most length; ""
@@ -62,6 +104,86 @@ local function Line(text, length)
     return (((#text <= length) and text) or "")
 end
 
+-- A set of the lowercase forms of the given values ("" left out).
+local function Lowered(...)
+    local set = {}
+
+    for i = 1, select("#", ...) do
+        local value = select(i, ...)
+
+        if value ~= "" then
+            set[lower(value)] = true
+        end
+    end
+
+    return set
+end
+
+-- The riddle's text with the bare prompt (naming the quest as the one in the book) unless titled.
+local function Prompted(text, titled)
+    if titled or not text.bare then
+        return text
+    end
+
+    local copy = {}
+
+    for key, value in pairs(text) do
+        copy[key] = value
+    end
+
+    copy.prompt, copy.prompts = text.bare, nil
+
+    return copy
+end
+
+-- A word's stem, for matching it to a title's words: "wolves" and "wolf" are one, as are "kobolds" and "kobold".
+local function Stem(word)
+    word = gsub(gsub(lower(word), "ves$", "f"), "ies$", "y")
+
+    return (gsub(word, "s$", ""))
+end
+
+-- The stems of title's words (four letters or more, not plain) that text has too, as a set: empty without a title.
+local function TitleHits(text, title)
+    local hits, stems = {}, {}
+
+    for word in gmatch(title or "", "%a+") do
+        if (#word >= 4) and not PlainWords[lower(word)] then
+            stems[Stem(word)] = true
+        end
+    end
+
+    for word in gmatch(text, "%a+") do
+        if (#word >= 4) and stems[Stem(word)] then
+            hits[Stem(word)] = true
+        end
+    end
+
+    return hits
+end
+
+-- A sentence's words, each { word, s, e (where it starts and ends), joined (part of a longer word, by an apostrophe or
+-- hyphen), spaced (only spaces since the word before), ends (punctuation or the sentence's end right after it) }.
+local function Tokens(sentence)
+    local tokens = {}
+
+    for s, word, e in gmatch(sentence, "()(%a+)()") do
+        local after, before, previous = sub(sentence, e, e), sub(sentence, s - 1, s - 1), tokens[#tokens]
+
+        tokens[#tokens + 1] = {
+            e = e,
+            ends = (after ~= " "),
+            joined = ((before == "'") or (before == "-") or (after == "-")
+                or ((after == "'") and (sub(sentence, e + 1, e + 1) ~= "s"))),
+            s = s,
+            spaced = ((previous == nil) or (find(sub(sentence, previous.e, s - 1), "^ +$") ~= nil)),
+            word = word,
+        }
+    end
+
+    return tokens
+end
+
 -- An objective's kind as the riddles ask about it, by the log's type: an item to bring, a foe to defeat, anything else
 -- a task to do.
 local ObjectiveKinds = { item = "item", monster = "foe" }
@@ -72,67 +194,78 @@ local function Bank(state)
     return (Words.questBanks[state.context.faction] or Words.questBanks.Alliance)
 end
 
--- A sentence of the quest's text with one word to blank out, and three other words from the text like it (as long,
--- capitalized the same) as wrong answers; nil when the text has none.
-local function BlankCandidate(state)
-    local text = state.quest.text
-    local pool = {}
+-- The words of a kind of missing word that aren't from the quest: the faction's names or places for a name or place,
+-- else questWords' kinds.
+local function BlankBank(state, kind)
+    if kind == "name" then
+        return Bank(state).nameWords
+    elseif kind == "place" then
+        return Bank(state).placeWords
+    end
 
-    for word in gmatch(text, "%a+") do
-        if (#word >= MinWord) and not Words.stopWords[lower(word)] then
-            pool[#pool + 1] = word
+    return QuestWords.kinds[kind]
+end
+
+-- The missing word at sentence's token i, with three wrong answers of its kind (as long, give or take three letters,
+-- and not in the sentence): words of that kind from the rest of the quest's text first, then the bank's; nil when there
+-- are too few, or the word is in the sentence twice (it would show through its blank).
+local function Blank(state, sentence, i, pool)
+    local token, kind, text = sentence.tokens[i], sentence.kinds[i], sentence.text
+    local word = token.word
+    local _, uses = gsub(text, "%f[%a]" .. word .. "%f[%A]", "")
+
+    if uses ~= 1 then
+        return nil
+    end
+
+    local wrongs, seen = {}, {}
+
+    for _, other in ipairs(sentence.tokens) do
+        seen[lower(other.word)] = true
+    end
+
+    local function Add(other, why)
+        local key = lower(other)
+
+        if (#wrongs < 3) and not seen[key] and (#other >= (#word - 3)) and (#other <= (#word + 3)) then
+            seen[key] = true
+            wrongs[#wrongs + 1] = { other, why = why }
         end
     end
 
-    local sentences = {}
-
-    for sentence in gmatch(gsub(text, "\n", " ") .. " ", "%s*([^%.!?]+[%.!?])") do
-        if (#sentence >= MinSentence) and (#sentence <= MaxSentence) and not find(sentence, "\"", 1, true) then
-            sentences[#sentences + 1] = sentence
-        end
+    for _, other in ipairs(Shuffle(state, pool[kind] or {})) do
+        Add(other, Fill(Words.quest.blank.other, { choice = other }))
     end
 
-    for _, sentence in ipairs(Shuffle(state, sentences)) do
-        local candidates, inSentence = {}, {}
-
-        for word in gmatch(sentence, "%a+") do
-            inSentence[lower(word)] = true
-
-            if (#word >= MinWord) and (#word <= MaxWord) and not Words.stopWords[lower(word)] then
-                candidates[#candidates + 1] = word
-            end
-        end
-
-        for _, word in ipairs(Shuffle(state, candidates)) do
-            local capital = (find(word, "^%u") ~= nil)
-            local _, uses = gsub(sentence, "%f[%a]" .. word .. "%f[%A]", "")
-            -- Wrong answers come from the rest of the text: a word the sentence already has would read oddly in its own
-            -- blank.
-            local wrongs, seen = {}, {}
-
-            for key in pairs(inSentence) do
-                seen[key] = true
-            end
-
-            for _, other in ipairs(Shuffle(state, pool)) do
-                local key = lower(other)
-
-                if not seen[key] and ((find(other, "^%u") ~= nil) == capital) and (#other >= (#word - 3)) and (#other <= (#word + 3)) then
-                    seen[key] = true
-                    wrongs[#wrongs + 1] = other
-                end
-            end
-
-            -- A word used twice would show through its blank.
-            if (#wrongs >= 3) and (uses == 1) then
-                local blanked = gsub(sentence, "%f[%a]" .. word .. "%f[%A]", "___", 1)
-
-                return { filled = sentence, sentence = blanked, word = word, wrongs = wrongs }
-            end
-        end
+    for _, other in ipairs(Shuffle(state, BlankBank(state, kind))) do
+        Add(other)
     end
 
-    return nil
+    if #wrongs < 3 then
+        return nil
+    end
+
+    local before, after = {}, {}
+
+    for chunk in gmatch(sub(text, 1, token.s - 1), "%S+") do
+        before[#before + 1] = chunk
+    end
+
+    for chunk in gmatch((gsub(sub(text, token.e), "^[%p%s]+", "")), "%S+") do
+        after[#after + 1] = chunk
+    end
+
+    -- The words just before the blank, or just after it when one word before it is all there is ("The ___ of").
+    local lead, side = concat(before, " ", max(1, (#before - LeadWords) + 1)), "after"
+
+    if (#before < 2) and (#after >= 2) then
+        lead, side = concat(after, " ", 1, min(#after, LeadWords)), "before"
+    end
+
+    return {
+        filled = text, lead = lead, sentence = (sub(text, 1, token.s - 1) .. "___" .. sub(text, token.e)), side = side,
+        word = word, wrongs = wrongs,
+    }
 end
 
 -- What the quest book shows: the quest as the player saw it, every answer in it.
@@ -180,51 +313,58 @@ local function Book(quest)
     return concat(lines, "\n")
 end
 
--- Every value of the named fields across the other known quests.
-local function Gather(state, ...)
-    local values = {}
+-- Wrong answers from the other known quests: each value of the named fields, with the why of the field it came from
+-- (Words.quest.from), which names that quest.
+local function FromOthers(state, fields)
+    local entries = {}
 
     for _, other in ipairs(state.known) do
         if other.key ~= state.quest.key then
-            for i = 1, select("#", ...) do
-                values[#values + 1] = other[select(i, ...)]
-            end
-        end
-    end
+            for _, field in ipairs(fields) do
+                local value = other[field]
 
-    return values
-end
-
--- A set of the lowercase forms of the given values ("" left out).
-local function Lowered(...)
-    local set = {}
-
-    for i = 1, select("#", ...) do
-        local value = select(i, ...)
-
-        if value ~= "" then
-            set[lower(value)] = true
-        end
-    end
-
-    return set
-end
-
--- The other known quests' objectives of a kind, by name.
-local function OtherObjectives(state, kind)
-    local values = {}
-
-    for _, other in ipairs(state.known) do
-        if other.key ~= state.quest.key then
-            for _, objective in ipairs(other.objectives) do
-                if objective.kind == kind then
-                    values[#values + 1] = objective.name
+                if value ~= "" then
+                    entries[#entries + 1] = { value, why = Fill(Words.quest.from[field], { choice = value, other = other.title }) }
                 end
             end
         end
     end
 
-    return values
+    return entries
+end
+
+-- The other known quests' objectives of a kind, by name, each saying which quest it was for.
+local function OtherObjectives(state, kind)
+    local entries = {}
+
+    for _, other in ipairs(state.known) do
+        if other.key ~= state.quest.key then
+            for _, objective in ipairs(other.objectives) do
+                if objective.kind == kind then
+                    local vars = { choice = objective.name, other = other.title }
+
+                    entries[#entries + 1] = { objective.name, why = Fill(Words.quest.from.objective, vars) }
+                end
+            end
+        end
+    end
+
+    return entries
+end
+
+-- The capitalized words a missing word can be, lowercase, by kind: "place" or "name".
+local function ProperWords(state)
+    local proper = {}
+
+    for _, word in ipairs(Bank(state).nameWords) do
+        proper[lower(word)] = "name"
+    end
+
+    for _, word in ipairs(Bank(state).placeWords) do
+        proper[lower(word)] = "place"
+    end
+
+    return proper
 end
 
 -- A record's objective i, or nil: what it names, its count and its kind. One without a name, or without the kind the
@@ -257,48 +397,148 @@ local function Clean(record)
     return (((quest.title ~= "") and quest) or nil)
 end
 
--- Three wrong answers: values from the other known quests first, shuffled, then the bank's, shuffled, each distinct,
--- not the answer and (with excluded, a set of lowercase values that are also true) not excluded. Finish shuffles where
--- they sit among the choices.
-local function Wrongs(state, answer, values, bank, excluded)
-    local out, seen = {}, { [lower(answer)] = true }
+-- The kind of tokens[i] as a missing word (see ScholarWords' questWords): "place" or "name" (a capitalized word of the
+-- faction's lists, not starting the sentence), "noun", "nouns", "ed", "ing", "ly" or "er"; nil for any other word,
+-- which isn't asked or offered.
+local function WordKind(tokens, i, proper)
+    local token, previous, following = tokens[i], tokens[i - 1], tokens[i + 1]
+    local word = token.word
+
+    if token.joined or (#word < MinWord) or Words.stopWords[lower(word)] then
+        return nil
+    elseif find(word, "^%u") then
+        return (((i > 1) and not find(word, "^%u%u") and proper[lower(word)]) or nil)
+    elseif previous and token.spaced and QuestWords.nounStarts[lower(previous.word)] then
+        if token.ends or (following and QuestWords.nounEnds[lower(following.word)]) then
+            return ((find(word, "[^isu]s$") and "nouns") or "noun")
+        end
+
+        return nil
+    elseif (#word >= 6) and find(word, "ly$") then
+        return "ly"
+    elseif (#word >= 6) and find(word, "ing$") then
+        return "ing"
+    elseif find(word, "[^e]ed$") then
+        return "ed"
+    elseif Comparative(word) then
+        return "er"
+    end
+
+    return nil
+end
+
+-- A sentence of the quest's text with one word to blank out and three wrong answers of its kind; nil when the text has
+-- none.
+local function BlankCandidate(state)
+    local proper, sentences, pool = ProperWords(state), {}, {}
+
+    for text in gmatch(gsub(state.quest.text, "\n", " ") .. " ", "%s*([^%.!?]+[%.!?])") do
+        local tokens = Tokens(text)
+        local sentence = { kinds = {}, text = text, tokens = tokens }
+
+        for i, token in ipairs(tokens) do
+            local kind = WordKind(tokens, i, proper)
+
+            sentence.kinds[i] = kind
+
+            if kind then
+                pool[kind] = (pool[kind] or {})
+                pool[kind][#pool[kind] + 1] = token.word
+            end
+        end
+
+        if (#text >= MinSentence) and (#text <= MaxSentence) and not find(text, "\"", 1, true) then
+            sentences[#sentences + 1] = sentence
+        end
+    end
+
+    for _, sentence in ipairs(Shuffle(state, sentences)) do
+        local candidates = {}
+
+        for i, token in ipairs(sentence.tokens) do
+            if sentence.kinds[i] and (#token.word <= MaxWord) then
+                candidates[#candidates + 1] = i
+            end
+        end
+
+        for _, i in ipairs(Shuffle(state, candidates)) do
+            local blank = Blank(state, sentence, i, pool)
+
+            if blank then
+                return blank
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Three wrong answers, and whether the riddle may show the title: from lists in order (each shuffled; an entry is a
+-- value or { value, why }), each distinct, not the answer and (with excluded, a set of lowercase values that are also
+-- true) not excluded. When the answer shares a word with title, the wrong answers must share it too or the title would
+-- give the answer away: three that do are taken when there are three, and otherwise the riddle leaves the title out.
+-- Finish shuffles where they sit among the choices.
+local function Wrongs(state, answer, lists, excluded, title)
+    local entries, seen = {}, { [lower(answer)] = true }
 
     for key in pairs(excluded or {}) do
         seen[key] = true
     end
 
-    local function Add(value)
-        local key = lower(value)
+    for _, list in ipairs(lists) do
+        for _, value in ipairs(Shuffle(state, list)) do
+            local entry = (((type(value) == "table") and value) or { value })
+            local key = lower(entry[1])
 
-        if (#out < 3) and (value ~= "") and (#value <= MaxLine) and not seen[key] then
-            seen[key] = true
-            out[#out + 1] = value
+            if (entry[1] ~= "") and (#entry[1] <= MaxLine) and not seen[key] then
+                seen[key] = true
+                entries[#entries + 1] = entry
+            end
         end
     end
 
-    for _, value in ipairs(Shuffle(state, values)) do
-        Add(value)
+    local hits = TitleHits(answer, title)
+
+    if next(hits) == nil then
+        return { entries[1], entries[2], entries[3] }, true
     end
 
-    for _, value in ipairs(Shuffle(state, bank)) do
-        Add(value)
+    local sharing = {}
+
+    for _, entry in ipairs(entries) do
+        if (#sharing < 3) and Covers(TitleHits(entry[1], title), hits) then
+            sharing[#sharing + 1] = entry
+        end
     end
 
-    return out
+    if #sharing == 3 then
+        return sharing, true
+    end
+
+    return { entries[1], entries[2], entries[3] }, false
 end
 
--- A generator asking for the quest's field: wrong answers come from the same pair of fields in other quests, then the
--- faction bank's bankKey list, and never name the field's own zone.
+-- A generator asking for the quest's field: its first wrong answer is the field it's mixed up with, when the book shows
+-- it; then the same pair of fields in other quests, then the faction bank's bankKey list, never naming the field's own
+-- zone.
 local function AskFor(field, pair, bankKey, zoneField)
     local kind = ("quest." .. field)
 
     return function(state)
-        local quest = state.quest
-        local answer = quest[field]
-        local excluded = (zoneField and Lowered(quest[zoneField]))
-        local wrongs = Wrongs(state, answer, Gather(state, pair[1], pair[2]), Bank(state)[bankKey], excluded)
+        local quest, text = state.quest, Words.quest[field]
+        local answer, mixed = quest[field], Mixups[field]
+        local mixups = {}
 
-        return Finish(state, kind, Words.quest[field], { answer = answer, title = quest.title }, answer, wrongs)
+        -- Who took it and where it ended are in the book once it's turned in.
+        if (quest[mixed] ~= "") and (quest.turnedIn or (mixed == "giver") or (mixed == "place")) then
+            mixups[1] = { quest[mixed], why = Fill(text.mixup, { choice = quest[mixed] }) }
+        end
+
+        local excluded = (zoneField and Lowered(quest[zoneField]))
+        local lists = { mixups, FromOthers(state, pair), Bank(state)[bankKey] }
+        local wrongs, titled = Wrongs(state, answer, lists, excluded, quest.title)
+
+        return Finish(state, kind, Prompted(text, titled), { answer = answer, title = quest.title }, answer, wrongs)
     end
 end
 
@@ -307,10 +547,13 @@ Generators["quest.ender"] = AskFor("ender", { "giver", "ender" }, "names")
 Generators["quest.giver"] = AskFor("giver", { "giver", "ender" }, "names")
 Generators["quest.place"] = AskFor("place", { "place", "endPlace" }, "places", "zone")
 
+-- How many an objective asked for. Another objective's number, beside its own name in the book, is always a wrong
+-- answer, the mix-up to catch; every other wrong number says which way the book's is.
 Generators["quest.count"] = function(state)
+    local quest, whys = state.quest, Words.quest.count.whys
     local counted = {}
 
-    for _, objective in ipairs(state.quest.objectives) do
+    for _, objective in ipairs(quest.objectives) do
         if objective.required > 1 then
             counted[#counted + 1] = objective
         end
@@ -318,13 +561,27 @@ Generators["quest.count"] = function(state)
 
     local objective = Pick(state, counted)
     local n = objective.required
-    local wrongs = {}
+    local candidates, hi = { (n - 1), (n + 1), (n + 2), (n * 2) }, max(n * 2, n + 10)
 
-    for i, value in ipairs(WrongNumbers(state, n, { (n - 1), (n + 1), (n + 2), (n * 2) })) do
-        wrongs[i] = tostring(value)
+    for _, other in ipairs(quest.objectives) do
+        if (other ~= objective) and (other.required > 1) and (other.required ~= n) then
+            local why = Fill(whys.other, { objective = objective.name, other = other.name })
+
+            candidates[#candidates + 1] = { other.required, required = true, why = why }
+            hi = max(hi, other.required)
+        end
     end
 
-    local vars = { answer = n, objective = objective.name, title = state.quest.title, v = n }
+    local numbers, numberWhys = WrongNumbers(state, n, candidates, 1, hi)
+    local wrongs = {}
+
+    for i, value in ipairs(numbers) do
+        local way = (((value < n) and whys.fewer) or whys.more)
+
+        wrongs[i] = { tostring(value), why = (numberWhys[i] or Fill(way, { objective = objective.name })) }
+    end
+
+    local vars = { answer = n, objective = objective.name, title = quest.title, v = n }
 
     return Finish(state, "quest.count", Words.quest.count[objective.kind], vars, tostring(n), wrongs)
 end
@@ -343,22 +600,24 @@ Generators["quest.objective"] = function(state)
 
     local objective = Pick(state, quest.objectives)
     local answer = objective.name
-    local wrongs = Wrongs(state, answer, OtherObjectives(state, objective.kind), Bank(state)[ObjectiveBanks[objective.kind]], own)
+    local lists = { OtherObjectives(state, objective.kind), Bank(state)[ObjectiveBanks[objective.kind]] }
+    local wrongs, titled = Wrongs(state, answer, lists, own, quest.title)
+    local text = Prompted(Words.quest.objective[objective.kind], titled)
 
-    return Finish(state, "quest.objective", Words.quest.objective[objective.kind], { answer = answer, title = quest.title },
-        answer, wrongs)
+    return Finish(state, "quest.objective", text, { answer = answer, title = quest.title }, answer, wrongs)
 end
 
 Generators["quest.title"] = function(state)
-    local quest = state.quest
+    local quest, from = state.quest, Words.quest.from.title
     local others, theirs = {}, {}
 
     for _, other in ipairs(state.known) do
         if lower(other.giver) == lower(quest.giver) then
             -- The giver's other quests are right answers too.
             theirs[lower(other.title)] = true
-        elseif other.key ~= quest.key then
-            others[#others + 1] = other.title
+        elseif (other.key ~= quest.key) and (other.giver ~= "") then
+            -- A quest nobody saw given might be the giver's too, so it isn't offered.
+            others[#others + 1] = { other.title, why = Fill(from, { choice = other.title, other = other.giver }) }
         end
     end
 
@@ -369,20 +628,21 @@ Generators["quest.title"] = function(state)
             -- The giver really gives that one.
             theirs[lower(entry[1])] = true
         else
-            bank[#bank + 1] = entry[1]
+            bank[#bank + 1] = { entry[1], why = Fill(from, { choice = entry[1], other = entry[2] }) }
         end
     end
 
-    local wrongs = Wrongs(state, quest.title, others, bank, theirs)
+    local wrongs = Wrongs(state, quest.title, { others, bank }, theirs)
 
     return Finish(state, "quest.title", Words.quest.title, { answer = quest.title, giver = quest.giver }, quest.title, wrongs)
 end
 
 Generators["quest.blank"] = function(state)
-    local blank = state.blank
-    local vars = { filled = blank.filled, sentence = blank.sentence, title = state.quest.title }
+    local blank, title = state.blank, state.quest.title
+    local vars = { filled = blank.filled, lead = blank.lead, sentence = blank.sentence, side = blank.side, title = title }
+    local text = Prompted(Words.quest.blank, next(TitleHits(blank.word, title)) == nil)
 
-    return Finish(state, "quest.blank", Words.quest.blank, vars, blank.word, blank.wrongs)
+    return Finish(state, "quest.blank", text, vars, blank.word, blank.wrongs)
 end
 
 local function Family(kind)
@@ -411,7 +671,8 @@ local function Kinds(state)
     Add("quest.endPlace", quest.turnedIn and (quest.endPlace ~= ""))
     Add("quest.count", counted)
     Add("quest.objective", #quest.objectives > 0)
-    Add("quest.title", (quest.giver ~= "") and (#quest.title <= MaxLine))
+    -- A giver named in the title ("Galgar's Cactus Apple Surprise") would give it away.
+    Add("quest.title", (quest.giver ~= "") and (#quest.title <= MaxLine) and (next(TitleHits(quest.giver, quest.title)) == nil))
     state.blank = (((state.context.locale == "enUS") and BlankCandidate(state)) or nil)
     Add("quest.blank", state.blank ~= nil)
 

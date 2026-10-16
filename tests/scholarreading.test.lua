@@ -1,0 +1,480 @@
+-- Scholar's reading riddles (TheLanKrewToolKit/ScholarReadingWords.lua and ScholarReading.lua): the banks' answer keys
+-- and shapes, and gates over many generated riddles of each kind. The answer is never findable by its length, no one
+-- answer crowds a kind, and the real confusions (a word that starts like the target, a close sound, a near word) turn
+-- up. Like scholar.test.lua, the puzzle files load on their own with a seeded LCG as the only randomness.
+
+local Files = { "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarReadingWords.lua", "ScholarReading.lua" }
+-- Words a vocab meaning may share with its sentence.
+local Plain = { about = true, from = true, have = true, that = true, their = true, them = true, they = true, very = true, with = true }
+local Types = { inference = true, literal = true, main = true, sequence = true, vocab = true }
+
+local function Fold(s)
+    return (s:gsub("^%s+", ""):gsub("%s+$", ""):lower())
+end
+
+local function Load()
+    local addon = assert(__addons.TheLanKrewToolKit, "TheLanKrewToolKit isn't an addon")
+    local sources = {}
+
+    for i, name in ipairs(Files) do
+        for j, file in ipairs(addon.files) do
+            if file == name then
+                sources[i] = addon.sources[j]
+            end
+        end
+
+        assert(sources[i], name .. " isn't listed in TheLanKrewToolKit_Camelot.toc")
+    end
+
+    Harness.DefineAddOn("ScholarReadingOnly", { as = "TheLanKrewToolKit", files = Files, sources = sources })
+
+    return Harness.New():LoadFiles("ScholarReadingOnly")
+end
+
+-- Every reading kind, in the order the grades list them.
+local function ReadingKinds(ns)
+    local out, seen = {}, {}
+
+    for grade = 0, 6 do
+        for _, kind in ipairs(ns.ScholarWords.kinds.reading[grade]) do
+            if not seen[kind] then
+                seen[kind], out[#out + 1] = true, kind
+            end
+        end
+    end
+
+    return out
+end
+
+-- Park and Miller's minimal standard LCG.
+local function Rng(seed)
+    local state = ((seed % 2147483646) + 1)
+
+    return function(m, n)
+        state = ((state * 48271) % 2147483647)
+
+        return (m + (state % ((n - m) + 1)))
+    end
+end
+
+-- Calls fn(puzzle) for seeds riddles of kind at each grade that asks it and each level.
+local function EachOfKind(ns, kind, seeds, fn)
+    for grade = 0, 6 do
+        for _, listed in ipairs(ns.ScholarWords.kinds.reading[grade]) do
+            if listed == kind then
+                for level = 1, 3 do
+                    for seed = 1, seeds do
+                        local random = Rng(((seed * 7919) + (grade * 104729)) + (level * 1299709))
+
+                        fn(ns.Puzzles.Generate({ grade = grade, kind = kind, level = level, random = random, subject = "reading" }))
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- How many letters two words share, counting repeats.
+local function Shared(a, b)
+    local counts, n = {}, 0
+
+    for letter in a:gmatch(".") do
+        counts[letter] = ((counts[letter] or 0) + 1)
+    end
+
+    for letter in b:gmatch(".") do
+        if (counts[letter] or 0) > 0 then
+            counts[letter], n = (counts[letter] - 1), (n + 1)
+        end
+    end
+
+    return n
+end
+
+local function Sorted(word)
+    local letters = {}
+
+    for letter in word:gmatch(".") do
+        letters[#letters + 1] = letter
+    end
+
+    table.sort(letters)
+
+    return table.concat(letters)
+end
+
+-- The text of a wrong choice in a bank: a word, or { word, why = ... }.
+local function TextOf(wrong)
+    return (((type(wrong) == "table") and wrong[1]) or wrong)
+end
+
+test("the reading banks are big enough to keep riddles fresh", function()
+    local banks = Load().ScholarReadingWords
+
+    local least = {
+        blanks = 36, cvc = 100, rhymes = 24, sight = 35, sounds = 24, spelling = 45, stories = 30, synonyms = 60,
+        unscramble = 40, vocab = 36,
+    }
+
+    for name, size in pairs(least) do
+        truthy(#banks[name] >= size, ("%s has %d entries, at least %d"):format(name, #banks[name], size))
+    end
+end)
+
+test("the reading banks' wrong choices are distinct, plain, short and never the answer", function()
+    local banks = Load().ScholarReadingWords
+
+    local function Check(entry, answer, wrongs)
+        local seen = { [Fold(answer)] = true }
+
+        for _, wrong in ipairs(wrongs) do
+            local text = TextOf(wrong)
+
+            truthy(text:match("^[ -~]+$") and not text:find("[{}|]"), "plain option " .. text)
+            truthy(#text <= 40, text .. " fits a choice")
+            falsy(seen[Fold(text)], ("distinct option %q for %s"):format(text, entry))
+            seen[Fold(text)] = true
+
+            if type(wrong) == "table" then
+                truthy(wrong.why:match("^[ -~]+$"), "plain why " .. wrong.why)
+            end
+        end
+
+        truthy(#answer <= 40, answer .. " fits a choice")
+    end
+
+    for _, bank in ipairs({ banks.sight, banks.spelling }) do
+        for _, entry in ipairs(bank) do
+            Check(entry[1], entry[1], { entry[3], entry[4], entry[5] })
+            truthy(entry[2]:find("___", 1, true), "a blank in " .. entry[2])
+        end
+    end
+
+    for _, entry in ipairs(banks.vocab) do
+        Check(entry[1], entry[3], { entry[4], entry[5], entry[6] })
+    end
+
+    for _, entry in ipairs(banks.blanks) do
+        Check(entry[2], entry[2], { entry[3], entry[4], entry[5] })
+        truthy(entry[1]:find("___", 1, true), "a blank in " .. entry[1])
+    end
+
+    for _, entry in ipairs(banks.unscramble) do
+        Check(entry[1], entry[1], { entry[3], entry[4], entry[5] })
+    end
+
+    for _, entry in ipairs(banks.synonyms) do
+        Check(entry[1], entry[1], { entry[2], (entry[3] or (entry[2] .. "?")), entry.near[1], entry.near[2] })
+    end
+
+    for _, story in ipairs(banks.stories) do
+        for q = 2, #story do
+            Check(story[q][1], story[q][2], { story[q][3], story[q][4], story[q][5] })
+        end
+    end
+end)
+
+test("each story has 2 to 4 sentences and 1 to 3 questions, each typed, with a clue from the story", function()
+    local banks = Load().ScholarReadingWords
+
+    for _, story in ipairs(banks.stories) do
+        local function Named(text)
+            return (text:gsub("{hero}", story.hero or "Pip"):gsub("{place}", story.place or "Goldshire"))
+        end
+
+        local text = Named(story[1])
+        local sentences = select(2, (text .. " "):gsub("[%.!%?]\"? ", ""))
+
+        truthy((sentences >= 2) and (sentences <= 4), ("2 to 4 sentences (%d): %s"):format(sentences, text))
+        truthy((#story >= 2) and (#story <= 4), "1 to 3 questions: " .. text)
+        eq(story[2].type, "literal", "the first question is literal: " .. story[2][1])
+
+        for q = 2, #story do
+            local question = story[q]
+            local prompt = (text .. "\n" .. Named(question[1]))
+
+            truthy(Types[question.type], "a known type for " .. question[1])
+            truthy(text:find(Named(question.clue), 1, true), ("the clue %q is in the story"):format(question.clue))
+            -- A step that equals the answer is dropped, so a clue never is the answer.
+            truthy(Fold(question.clue) ~= Fold(question[2]), ("the clue %q isn't the answer"):format(question.clue))
+            truthy(#prompt <= 240, ("fits the prompt limit (%d): %s"):format(#prompt, prompt))
+        end
+    end
+end)
+
+test("misspellings are never real words, and sight words' confusables are other real words", function()
+    local banks = Load().ScholarReadingWords
+    local real = {}
+
+    local function Add(word)
+        real[word:lower()] = true
+    end
+
+    for _, family in ipairs(banks.rhymes) do
+        for _, word in ipairs(family) do
+            Add(word)
+        end
+    end
+
+    for _, group in ipairs(banks.sounds) do
+        for i = 2, #group do
+            Add(group[i])
+        end
+    end
+
+    for _, word in ipairs(banks.cvc) do
+        Add(word)
+    end
+
+    for _, entry in ipairs(banks.synonyms) do
+        for _, word in ipairs(entry) do
+            Add(word)
+        end
+    end
+
+    for _, bank in ipairs({ banks.sight, banks.spelling }) do
+        for _, entry in ipairs(bank) do
+            Add(entry[1])
+        end
+    end
+
+    for _, entry in ipairs(banks.sight) do
+        for i = 3, 5 do
+            Add(TextOf(entry[i]))
+        end
+    end
+
+    for _, entry in ipairs(banks.spelling) do
+        for i = 3, 5 do
+            falsy(real[entry[i]], entry[i] .. " is not a real word")
+        end
+
+        truthy(entry.part and entry.tip, "the tricky part of " .. entry[1] .. " is named")
+    end
+
+    for _, entry in ipairs(banks.sight) do
+        for i = 3, 5 do
+            truthy(TextOf(entry[i]):match("^%l+$") and (TextOf(entry[i]) ~= entry[1]), "a real word other than " .. entry[1])
+        end
+    end
+end)
+
+test("a vocab meaning never repeats its sentence, and every clue comes from its sentence", function()
+    local banks = Load().ScholarReadingWords
+
+    for _, entry in ipairs(banks.vocab) do
+        local sentence = entry[2]:lower()
+
+        truthy(entry[2]:find(entry.clue, 1, true), ("the clue %q is in the sentence"):format(entry.clue))
+        truthy(sentence:find("%f[%a]" .. entry[1] .. "%f[%A]"), "the sentence uses " .. entry[1])
+
+        for word in entry[3]:lower():gmatch("%a+") do
+            falsy((#word >= 4) and not Plain[word] and sentence:find("%f[%a]" .. word .. "%f[%A]"),
+                ("%q in the meaning of %s gives it away"):format(word, entry[1]))
+        end
+    end
+
+    for _, entry in ipairs(banks.blanks) do
+        truthy(entry[1]:find(entry.clue, 1, true), ("the clue %q is in the sentence"):format(entry.clue))
+    end
+end)
+
+test("an unscramble's near misses are its length, share all but a letter or two, and none is an anagram", function()
+    local banks = Load().ScholarReadingWords
+
+    for _, entry in ipairs(banks.unscramble) do
+        local word = entry[1]
+        local slack = (((#word >= 6) and 2) or 1)
+
+        truthy(word:match("^%u+$"), word .. " is capitals")
+
+        for i = 3, 5 do
+            local miss = entry[i]
+
+            eq(#miss, #word, miss .. " is as long as " .. word)
+            truthy(Shared(miss, word) >= (#word - slack), ("%s shares all but %d letters with %s"):format(miss, slack, word))
+            truthy(Sorted(miss) ~= Sorted(word), miss .. " isn't an anagram of " .. word)
+        end
+    end
+end)
+
+test("synonym entries never share a word, and near words are neither the meaning nor the opposite", function()
+    local banks = Load().ScholarReadingWords
+    local owner = {}
+
+    for _, entry in ipairs(banks.synonyms) do
+        for _, word in ipairs(entry) do
+            falsy(owner[word], word .. " belongs to one synonym entry only")
+            owner[word] = true
+        end
+
+        eq(#entry.near, 2, "two near words for " .. entry[1])
+
+        for _, near in ipairs(entry.near) do
+            truthy((near ~= entry[1]) and (near ~= entry[2]) and (near ~= entry[3]), near .. " is a near word of " .. entry[1])
+        end
+    end
+end)
+
+test("rhyme families don't overlap, short words are three letters, and sounds start with their letter", function()
+    local banks = Load().ScholarReadingWords
+    local family, letters, vowels = {}, {}, 0
+
+    for i, words in ipairs(banks.rhymes) do
+        for _, word in ipairs(words) do
+            falsy(family[word], word .. " belongs to one rhyme family only")
+            eq(word:sub(-2), words[1]:sub(-2), word .. " rhymes with " .. words[1])
+            family[word] = i
+        end
+    end
+
+    for _, word in ipairs(banks.cvc) do
+        eq(#word, 3, word .. " is three letters")
+        falsy(word:match("(%a).*%1"), word .. " has no repeated letter")
+    end
+
+    for _, group in ipairs(banks.sounds) do
+        letters[group[1]] = group
+        vowels = (vowels + (((group.name ~= nil) and 1) or 0))
+        truthy(#group >= 5, "at least four words for " .. group[1])
+
+        for i = 2, #group do
+            eq(group[i]:sub(1, 1), group[1], group[i] .. " starts with " .. group[1])
+        end
+    end
+
+    eq(vowels, 5, "every short vowel")
+
+    for _, group in ipairs(banks.sounds) do
+        for near in (group.near or ""):gmatch(".") do
+            truthy(letters[near], ("%s's close sound %s has words"):format(group[1], near))
+        end
+    end
+
+    eq(letters.c.like, "k")
+    eq(letters.k.like, "c")
+end)
+
+test("the answer is the longest choice, or the shortest, in at most 35% of each kind's riddles", function()
+    local ns = Load()
+
+    for _, kind in ipairs(ReadingKinds(ns)) do
+        local longest, shortest, total = 0, 0, 0
+
+        EachOfKind(ns, kind, 60, function(p)
+            local size, longer, shorter = #p.choices[p.answer], true, true
+
+            for i, choice in ipairs(p.choices) do
+                if i ~= p.answer then
+                    longer, shorter = (longer and (size > #choice)), (shorter and (size < #choice))
+                end
+            end
+
+            total = (total + 1)
+            longest = (longest + ((longer and 1) or 0))
+            shortest = (shortest + ((shorter and 1) or 0))
+        end)
+
+        truthy(longest <= (total * 0.35), ("%s: the answer is the longest in %d of %d"):format(kind, longest, total))
+        truthy(shortest <= (total * 0.35), ("%s: the answer is the shortest in %d of %d"):format(kind, shortest, total))
+    end
+end)
+
+test("no one answer crowds a kind", function()
+    local ns = Load()
+
+    for _, kind in ipairs(ReadingKinds(ns)) do
+        local counts, total, top, most = {}, 0, 0, nil
+
+        EachOfKind(ns, kind, 60, function(p)
+            local answer = p.choices[p.answer]
+
+            counts[answer], total = ((counts[answer] or 0) + 1), (total + 1)
+
+            if counts[answer] > top then
+                top, most = counts[answer], answer
+            end
+        end)
+
+        -- A letter answer (listenSound) has 24 to come from; every other kind has dozens.
+        truthy(top <= (total * 0.1), ("%s: %q is the answer %d times in %d"):format(kind, tostring(most), top, total))
+    end
+end)
+
+test("the real confusions turn up: a word that starts alike, a close sound, near words, a letter in the wrong place", function()
+    local ns = Load()
+
+    -- How many of kind's riddles have a why that finds pattern.
+    local function Share(kind, pattern)
+        local found, total = 0, 0
+
+        EachOfKind(ns, kind, 40, function(p)
+            local any = false
+
+            for i = 1, 4 do
+                any = (any or ((i ~= p.answer) and (p.whys[i]:find(pattern) ~= nil)))
+            end
+
+            found, total = (found + ((any and 1) or 0)), (total + 1)
+        end)
+
+        return found, total
+    end
+
+    for _, case in ipairs({
+        { "reading.rhyme", "starts like", 0.4 }, { "reading.sound", "It's close to", 0.6 },
+        { "reading.listenSound", "It's close", 0.6 }, { "reading.synonym", "goes with", 0.9 },
+        { "reading.antonym", "means almost the same", 0.9 }, { "reading.sight", "sounds the same", 0.1 },
+        { "reading.sight", "same letters", 0.05 }, { "reading.cvc", "has the \"", 0.2 },
+        { "reading.spelling", "sounds right", 0.5 },
+    }) do
+        local found, total = Share(case[1], case[2])
+
+        truthy(found >= (total * case[3]), ("%s: %q in %d of %d"):format(case[1], case[2], found, total))
+    end
+end)
+
+test("a heard riddle's prompt and speech vary, and the speech always ends with the word", function()
+    local ns = Load()
+
+    for _, kind in ipairs({ "reading.listen", "reading.listenSound" }) do
+        local prompts, speeches = {}, {}
+
+        EachOfKind(ns, kind, 30, function(p)
+            local word = p.speech:match("(%a+)%.$")
+
+            prompts[p.prompt] = true
+            speeches[p.speech:gsub(word, "")] = true
+        end)
+
+        local promptCount, speechCount = 0, 0
+
+        for _ in pairs(prompts) do
+            promptCount = (promptCount + 1)
+        end
+
+        for _ in pairs(speeches) do
+            speechCount = (speechCount + 1)
+        end
+
+        truthy(promptCount >= 3, kind .. " has varied prompts")
+        truthy(speechCount >= 3, kind .. " has varied speech")
+    end
+end)
+
+test("a story asks more than what the story says outright", function()
+    local ns = Load()
+    local found = {}
+
+    for _, story in ipairs(ns.ScholarReadingWords.stories) do
+        for q = 2, #story do
+            found[story[q].type] = ((found[story[q].type] or 0) + 1)
+        end
+    end
+
+    for kind in pairs(Types) do
+        truthy((found[kind] or 0) >= 4, ("at least 4 %s questions (%d)"):format(kind, found[kind] or 0))
+    end
+
+    truthy(found.literal < ((found.inference + found.main) + (found.sequence + found.vocab)), "fewer literal questions than the rest")
+end)

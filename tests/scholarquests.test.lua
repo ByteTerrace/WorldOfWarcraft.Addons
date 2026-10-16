@@ -655,7 +655,8 @@ test("an objective riddle asks about one kind of objective, with wrong answers o
     falsy(choices["Scarlet Warrior"] or choices["Sit near the campfire"], "no foes or tasks among items")
     truthy(answers["Duskbat Pelt"] or answers["Coarse Thread"])
     prompts, choices, answers = ObjectivePuzzles(h, ns, warriors, known)
-    truthy(prompts['Which enemy did the quest "At War With The Scarlet Crusade" ask you to defeat?'], "foes are defeated")
+    -- "Scarlet" in the title would give Scarlet Warrior away, so the riddle names the quest as the book's.
+    truthy(prompts["Which enemy did the quest in your quest book ask you to defeat?"], "foes are defeated")
     truthy(answers["Scarlet Warrior"], "the foe by name, without \"slain\"")
 
     for choice in pairs(choices) do

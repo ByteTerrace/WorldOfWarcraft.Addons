@@ -13,7 +13,9 @@
 AddOn.lua
 ScholarWords.lua
 ScholarPuzzles.lua
+ScholarMathWords.lua
 ScholarMath.lua
+ScholarReadingWords.lua
 ScholarReading.lua
 QuestBook.lua
 ScholarQuests.lua

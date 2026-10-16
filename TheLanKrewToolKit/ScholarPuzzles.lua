@@ -2,10 +2,11 @@ local addonName, ns = ...
 
 -- Scholar puzzles: math and reading questions for kids, kindergarten to grade 6, and questions about their own quests.
 -- Pure: no UI, no WoW API, and no randomness but options.random, so the same options and random sequence give the same
--- puzzle. Every puzzle's text and the word banks live in ScholarWords.lua (ns.ScholarWords), which loads first. The
--- generators live in ScholarMath.lua, ScholarReading.lua and ScholarQuests.lua, which load after this file and register
--- themselves in Kit.Generators; the "quest" subject asks through Kit.AskQuest (ScholarQuests.lua) about one of the
--- player's quests.
+-- puzzle. The shared text (kinds by grade, titles, praise, and the quest riddles' text and banks) lives in
+-- ScholarWords.lua (ns.ScholarWords), which loads first; each subject's own text and banks live in ScholarMathWords.lua
+-- and ScholarReadingWords.lua, which load before the generators that read them. The generators live in ScholarMath.lua,
+-- ScholarReading.lua and ScholarQuests.lua, which load after this file and register themselves in Kit.Generators; the
+-- "quest" subject asks through Kit.AskQuest (ScholarQuests.lua) about one of the player's quests.
 --
 --   ns.Puzzles.Grades     { id, label } from { 0, "Kindergarten" } to { 6, "Grade 6" }, in order.
 --   ns.Puzzles.Generate   see Generate below.
@@ -78,18 +79,19 @@ local function Hero(state)
     if name and Chance(state, 2) then
         local noun = (state.context.class and ScholarWords.classNouns[state.context.class])
 
-        return { ((noun and (name .. " the " .. noun)) or name), name }
+        return { ((noun and (name .. " the " .. noun)) or name), name, mine = true }
     end
 
     return Pick(state, ScholarWords.heroes)
 end
 
-local function Item(state)
+-- An item for the riddle: the player's class item now and then when the hero is the player (mine), never a stock hero.
+local function Item(state, mine)
     local items = ScholarWords.items
 
     if state.grade == 0 then
         return Pick(state, items.small)
-    elseif state.context.class and Chance(state, 3) then
+    elseif mine and state.context.class and Chance(state, 3) then
         return ScholarWords.classItems[state.context.class]
     end
 
@@ -178,11 +180,11 @@ local function GivesAway(template, prompt, vars, correct)
     local shown = {}
 
     for name in gmatch(prompt, "{(%w+)}") do
-        shown[name] = true
+        shown[lower(name)] = true
     end
 
     for name in gmatch(template, "{(%w+)}") do
-        if not shown[name] and (vars[name] ~= nil) and (lower(Trim(tostring(vars[name]))) == lower(Trim(correct))) then
+        if not shown[lower(name)] and (vars[name] ~= nil) and (lower(Trim(tostring(vars[name]))) == lower(Trim(correct))) then
             return true
         end
     end
@@ -193,7 +195,8 @@ end
 --- Word problem variables: a copy of vars plus {Hero} (first mention), {hero}, {place}, {item} and {items}. Each number
 --- {a} also comes counted with the item as {A} ("3 apples").
 local function Vars(state, vars)
-    local hero, item = Hero(state), Item(state)
+    local hero = Hero(state)
+    local item = Item(state, hero.mine)
     local out = { Hero = hero[1], hero = hero[2], item = item[1], items = item[2], place = Place(state) }
 
     for key, value in pairs(vars) do
@@ -432,7 +435,7 @@ local function WrongNumbers(state, value, candidates, lo, hi)
         if n < value then below = (below + 1) else above = (above + 1) end
     end
 
-    local wantBelow = max(state.roll(0, 3), below)
+    local wantBelow = state.roll(below, 3 - above)
 
     if (wantBelow - below) > max(0, value - lo) then
         wantBelow = (below + max(0, value - lo))
@@ -459,12 +462,20 @@ local function WrongNumbers(state, value, candidates, lo, hi)
     end
 
     for step = 1, (hi - lo) + 1 do
+        if #out >= 3 then
+            break
+        end
+
         Take(value - step)
         Take(value + step)
     end
 
     -- The bounds left too little room on one side: any fitting near miss.
     for step = 1, (hi - lo) + 1 do
+        if #out >= 3 then
+            break
+        end
+
         Add(value - step)
         Add(value + step)
     end

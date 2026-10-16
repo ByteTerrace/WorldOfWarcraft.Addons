@@ -8,6 +8,13 @@ local function Accept(h, spec, giver)
     h:AcceptQuest()
 end
 
+--- The riddle screen's feedback banner text, without its colors.
+local function Banner(h)
+    local text = Harness.State(rawget(h.env, "TheLanKrewToolKitScholar").Feedback.Text).text
+
+    return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
+
 --- A harness with The Lan Krew ToolKit loaded from saved (SavedVariables by name).
 ---@return table h, table addon, table ns
 local function Load(saved)
@@ -27,6 +34,17 @@ local function LoadKid(extra)
     for key, value in pairs(extra or {}) do char[key] = value end
 
     return Load({ TheLanKrewToolKitCharDB = char })
+end
+
+--- Every number in text, in order.
+local function Numbers(text)
+    local out = {}
+
+    for number in text:gmatch("%d+%.?%d*") do
+        out[#out + 1] = tonumber(number)
+    end
+
+    return out
 end
 
 --- Whether the riddle screen is up.
@@ -70,6 +88,6 @@ local function WrongAnswer(puzzle, except)
 end
 
 return {
-    Accept = Accept, Load = Load, LoadKid = LoadKid, Showing = Showing, Solve = Solve, Watch = Watch,
-    WrongAnswer = WrongAnswer,
+    Accept = Accept, Banner = Banner, Load = Load, LoadKid = LoadKid, Numbers = Numbers, Showing = Showing, Solve = Solve,
+    Watch = Watch, WrongAnswer = WrongAnswer,
 }

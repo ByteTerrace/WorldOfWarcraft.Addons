@@ -4,14 +4,7 @@
 -- persistence.
 
 local Kit = use("scholar")
-local LoadKid, Watch = Kit.LoadKid, Kit.Watch
-
--- The riddle screen's feedback banner text, without its colors.
-local function Banner(h)
-    local text = Harness.State(rawget(h.env, "TheLanKrewToolKitScholar").Feedback.Text).text
-
-    return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
-end
+local Banner, LoadKid, Watch = Kit.Banner, Kit.LoadKid, Kit.Watch
 
 -- Wrong answers, in order, that aren't puzzle's answer.
 local function Wrongs(puzzle)

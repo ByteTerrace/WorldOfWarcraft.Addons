@@ -1,5 +1,6 @@
--- Scholar puzzles (TheLanKrewToolKit/ScholarWords.lua, ScholarPuzzles.lua, ScholarMath.lua and ScholarReading.lua):
--- property tests across seeds, every grade, every level and both subjects.
+-- Scholar puzzles (TheLanKrewToolKit/ScholarWords.lua, ScholarPuzzles.lua, ScholarMathWords.lua, ScholarMath.lua,
+-- ScholarReadingWords.lua and ScholarReading.lua): property tests across seeds, every grade, every level and both
+-- subjects. The reading banks' own checks are in scholarreading.test.lua.
 --
 -- The puzzle files load on their own, not with the whole addon, so concurrent edits to other files can't break these
 -- tests. Their sources come from the runner (tools/lib/test-worker.mjs passes every TOC-listed file's source as
@@ -9,7 +10,11 @@
 -- The largest number a grade's math may use, in its answers and calculations (copper for money).
 local Band = { [0] = 10, 20, 100, 100, 9999, 1000, 1000 }
 local Context = { class = "MAGE", copper = 4567, level = 12, name = "Tessa", zone = "Duskwood" }
-local Files = { "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarMath.lua", "ScholarReading.lua" }
+
+local Files = {
+    "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarMathWords.lua", "ScholarMath.lua", "ScholarReadingWords.lua",
+    "ScholarReading.lua",
+}
 
 local Kinds = {
     math = {
@@ -212,15 +217,7 @@ local function Evaluate(text)
     return v
 end
 
-local function Numbers(text)
-    local out = {}
-
-    for number in text:gmatch("%d+%.?%d*") do
-        out[#out + 1] = tonumber(number)
-    end
-
-    return out
-end
+local Numbers = use("scholar").Numbers
 
 -- A choice's value: copper for money, { quotient, remainder } for remainders, else its number.
 local function ChoiceValue(kind, choice)
@@ -413,37 +410,85 @@ local function Sorted(word)
     return table.concat(letters)
 end
 
+-- The stock careful-work praise, which a reading riddle never falls back to: each kind praises its own strategy.
+local StockPraise
+
+-- Every reading riddle teaches: each wrong choice has a why that never names the answer (a single letter aside), there
+-- is a worked step, and the praise names the kind's strategy. A heard riddle's help never names its word.
+local function CheckTeaching(p, options, heard)
+    local correct = p.choices[p.answer]
+
+    if not StockPraise then
+        StockPraise = {}
+
+        for _, line in ipairs(Load().ScholarWords.praise) do
+            StockPraise[line] = true
+        end
+    end
+
+    for i = 1, 4 do
+        if i ~= p.answer then
+            ExpectPlain(p.whys[i], false, p, options)
+            Expect((#correct == 1) or not HasWord(p.whys[i], correct), p, options, "why %q doesn't name %q", p.whys[i], correct)
+            Expect(not (heard and HasWord(p.whys[i], heard)), p, options, "why %q doesn't name the heard word", p.whys[i])
+        end
+    end
+
+    ExpectPlain(p.step, false, p, options)
+    ExpectPlain(p.praise, false, p, options)
+    Expect(not StockPraise[p.praise], p, options, "praise %q names the strategy", p.praise)
+    Expect(not (heard and (HasWord(p.hint, heard) or HasWord(p.step, heard))), p, options, "the help doesn't name %q", tostring(heard))
+end
+
 local function CheckReading(p, options)
     local correct = p.choices[p.answer]
+    -- A heard riddle's speech ends with its word.
+    local heard = (p.speech and p.speech:match("(%a+)%.$"))
+
+    CheckTeaching(p, options, heard)
 
     if p.kind == "reading.rhyme" then
         local target = p.prompt:match("rhymes with \"(%a+)\"")
+        local rime = p.explanation:match("end with \"(%a+)\"")
 
         Expect((correct ~= target) and (correct:sub(-2) == target:sub(-2)), p, options, "the answer rhymes")
+        Expect((correct:sub(-#rime) == rime) and (target:sub(-#rime) == rime), p, options, "both end with %q", rime)
 
         for i, choice in ipairs(p.choices) do
             Expect((i == p.answer) or (choice:sub(-2) ~= target:sub(-2)), p, options, "distractor %q doesn't look like a rhyme", choice)
         end
     elseif p.kind == "reading.sound" then
         local target = p.prompt:match("same sound as \"(%a+)\"")
+        -- C and k spell one sound, so neither is ever the other's wrong choice.
+        local same = ({ c = "k", k = "c" })[target:sub(1, 1)]
 
         for i, choice in ipairs(p.choices) do
             Expect((choice:sub(1, 1) == target:sub(1, 1)) == (i == p.answer), p, options, "first sound of %q", choice)
+            Expect(choice:sub(1, 1) ~= same, p, options, "%q starts with the same sound, spelled %s", choice, tostring(same))
         end
+    elseif p.kind == "reading.sight" then
+        Expect(p.explanation:find(("\"%s\""):format(correct), 1, true) ~= nil, p, options, "the working names %q", correct)
     elseif p.kind == "reading.cvc" then
         local sounds = p.prompt:match("\n(%a %- %a %- %a)\n")
         local was, from, now = p.prompt:match("Change the \"(%a)\" in \"(%a+)\" to \"(%a)\"")
         local expected = ((sounds and sounds:gsub(" %- ", "")) or (from and from:gsub(was, now)))
 
         Expect(correct == expected, p, options, "the built word %q, not %q", tostring(expected), correct)
-    elseif p.kind == "reading.listen" then
-        local heard = p.speech:match("^Find the word (%a+)%.")
 
+        if from then
+            local having = 0
+
+            for _, choice in ipairs(p.choices) do
+                having = (having + (((choice:find(now, 1, true) ~= nil) and 1) or 0))
+            end
+
+            Expect(Contains(p.choices, from), p, options, "the unchanged %q is a choice", from)
+            Expect(having >= 2, p, options, "a wrong choice has the new %q too, so it alone doesn't decide", now)
+        end
+    elseif p.kind == "reading.listen" then
         Expect(correct == heard, p, options, "the answer is the word said aloud, %q", tostring(heard))
         Expect(not p.prompt:lower():find("%f[%a]" .. heard .. "%f[%a]"), p, options, "the prompt doesn't show the word")
     elseif p.kind == "reading.listenSound" then
-        local heard = p.speech:match("^Which letter does (%a+) start with%?")
-
         for i, choice in ipairs(p.choices) do
             Expect((choice == heard:sub(1, 1)) == (i == p.answer), p, options, "first letter of %q: %q", heard, choice)
         end
@@ -453,9 +498,11 @@ local function CheckReading(p, options)
         local letters = p.prompt:match("\n([A-Z][A-Z ]+)")
 
         Expect(letters:gsub(" ", "") ~= correct, p, options, "the letters are scrambled")
+        Expect(not p.prompt:find("Clue"), p, options, "the clue waits for the step")
 
         for i, choice in ipairs(p.choices) do
             Expect((Sorted(choice) == Sorted(letters)) == (i == p.answer), p, options, "anagram check for %q", choice)
+            Expect(#choice == #correct, p, options, "%q is as long as the answer", choice)
         end
     end
 end
@@ -475,7 +522,10 @@ test("the TOC lists ScholarWords.lua right before ScholarPuzzles.lua, and the ge
     local _, at = Sources()
 
     eq(at[2], at[1] + 1, "ScholarWords.lua loads right before ScholarPuzzles.lua")
-    truthy((at[3] > at[2]) and (at[4] > at[2]), "ScholarMath.lua and ScholarReading.lua load after ScholarPuzzles.lua")
+
+    for i = 3, #Files do
+        truthy(at[i] > at[2], Files[i] .. " loads after ScholarPuzzles.lua")
+    end
 end)
 
 test("loads standalone and defines ns.Puzzles, ns.ScholarWords and no globals", function()
@@ -615,7 +665,7 @@ test("each variant of a kind turns up", function()
 
     local variants = {
         "Count back by", "Which number is the biggest", "Which number is the smallest", "left over", "Change the",
-        "Say each sound", "Clue:", "gears in inches", "100 copper", "in all%?", "%)", "%% off",
+        "Say each sound", "gears in inches", "100 copper", "in all%?", "%)", "%% off",
     }
 
     Sweep(Load().Puzzles, 60, nil, function(p)
@@ -711,132 +761,6 @@ test("no context never mentions the player", function()
     Sweep(Load().Puzzles, 40, nil, function(p, options)
         falsy(p.prompt:find("You have") or p.prompt:find("You are level"), "no personal money or level at " .. Where(p, options))
     end)
-end)
-
-local function Words()
-    return Load().ScholarWords
-end
-
-test("banks hold distinct, plain, short options", function()
-    local wordBanks = Words()
-    local banks = { { wordBanks.sight, 3, 5 }, { wordBanks.spelling, 3, 5 }, { wordBanks.vocab, 3, 6 }, { wordBanks.blanks, 2, 5 } }
-
-    for _, bank in ipairs(banks) do
-        for _, entry in ipairs(bank[1]) do
-            local seen = {}
-
-            for i = bank[2], bank[3] do
-                local option = entry[i]
-
-                eq(Unplain(option, false), nil, "bank entry " .. entry[1])
-                truthy(#option <= 40, option .. " fits a choice")
-                falsy(seen[Fold(option)], "distinct option " .. option)
-                seen[Fold(option)] = true
-            end
-        end
-    end
-
-    for _, story in ipairs(wordBanks.stories) do
-        for q = 2, #story do
-            local seen = {}
-
-            for i = 2, 5 do
-                falsy(seen[Fold(story[q][i])], "distinct story answer " .. story[q][i])
-                seen[Fold(story[q][i])] = true
-                truthy(#story[q][i] <= 40, story[q][i] .. " fits a choice")
-            end
-        end
-    end
-end)
-
-test("the story bank has at least 15 short stories of 2 to 4 sentences with 1 to 3 questions", function()
-    local wordBanks = Words()
-
-    truthy(#wordBanks.stories >= 15, "at least 15 stories")
-
-    for _, story in ipairs(wordBanks.stories) do
-        local text = story[1]:gsub("{hero}", story.hero or "Pip"):gsub("{place}", story.place or "Goldshire")
-        local sentences = select(2, (text .. " "):gsub("[%.!%?]\"? ", ""))
-
-        truthy((sentences >= 2) and (sentences <= 4), ("2 to 4 sentences (%d): %s"):format(sentences, text))
-        truthy((#story >= 2) and (#story <= 4), "1 to 3 questions: " .. text)
-
-        for q = 2, #story do
-            local prompt = (text .. "\n" .. story[q][1]:gsub("{hero}", story.hero or "Pip"))
-
-            truthy(#prompt <= 240, ("fits the prompt limit (%d): %s"):format(#prompt, prompt))
-        end
-    end
-end)
-
-test("misspellings are never real words, and word banks don't overlap in meaning", function()
-    local wordBanks = Words()
-    local real = {}
-
-    local function Add(word)
-        real[word:lower()] = true
-    end
-
-    for _, family in ipairs(wordBanks.rhymes) do
-        for _, word in ipairs(family) do
-            Add(word)
-        end
-    end
-
-    for _, group in ipairs(wordBanks.sounds) do
-        for i = 2, #group do
-            Add(group[i])
-        end
-    end
-
-    for _, word in ipairs(wordBanks.cvc) do
-        Add(word)
-    end
-
-    for _, entry in ipairs(wordBanks.synonyms) do
-        for _, word in ipairs(entry) do
-            Add(word)
-        end
-    end
-
-    for _, bank in ipairs({ wordBanks.sight, wordBanks.spelling }) do
-        for _, entry in ipairs(bank) do
-            Add(entry[1])
-        end
-    end
-
-    for _, bank in ipairs({ wordBanks.sight, wordBanks.spelling }) do
-        for _, entry in ipairs(bank) do
-            for i = 3, 5 do
-                falsy(real[entry[i]], entry[i] .. " is not a real word")
-            end
-
-            truthy(entry[2]:find("___"), "a blank in " .. entry[2])
-        end
-    end
-
-    local owner = {}
-
-    for _, entry in ipairs(wordBanks.synonyms) do
-        for _, word in ipairs(entry) do
-            falsy(owner[word], word .. " belongs to one synonym entry only")
-            owner[word] = true
-        end
-    end
-
-    local family = {}
-
-    for i, words in ipairs(wordBanks.rhymes) do
-        for _, word in ipairs(words) do
-            falsy(family[word], word .. " belongs to one rhyme family only")
-            family[word] = i
-        end
-    end
-
-    for _, word in ipairs(wordBanks.cvc) do
-        eq(#word, 3, word .. " is three letters")
-        falsy(word:match("(%a).*%1"), word .. " has no repeated letter")
-    end
 end)
 
 test("pictures always match the math, and only small numbers in the early grades get one", function()

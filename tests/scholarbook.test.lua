@@ -1,5 +1,5 @@
--- The quest book on Scholar's riddle screen (ScholarView.lua): it opens in the riddle's place, as a page that scrolls,
--- and the panel fits the screen at any size and UI scale, with feedback that fits its row.
+-- The quest book on Scholar's riddle screen (ScholarView.lua): it opens below the riddle's story, as a page that
+-- scrolls, and the panel fits the screen at any size and UI scale, with feedback that fits its row.
 
 local Kit = use("scholar")
 local Accept = Kit.Accept

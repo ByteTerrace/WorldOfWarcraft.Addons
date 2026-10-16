@@ -41,6 +41,7 @@ WarbandBadges.lua
 WarbandRadar.lua
 Streaks.lua
 ScholarPictures.lua
+ScholarFrame.lua
 ScholarView.lua
 Scholar.lua
 QuestProgress.lua

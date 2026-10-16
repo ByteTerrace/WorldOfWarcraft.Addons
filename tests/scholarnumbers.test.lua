@@ -1,7 +1,7 @@
--- Scholar's place-value, clock and number-line riddles (ScholarNumbers.lua and ScholarNumberWords.lua): every answer is
--- what the prompt alone works out to, by an independent reading of the prompt; the mistakes each kind exists to catch
--- are offered with a why; and a number line's star riddle is drawn as a line. scholar.test.lua's sweeps check their
--- shape, and scholarmath.test.lua their steps, praise and working.
+-- Scholar's place-value, clock, and number-line riddles (ScholarNumbers.lua and ScholarNumberWords.lua): every answer
+-- is what the prompt alone works out to, by an independent reading of the prompt. Each kind offers the mistakes it
+-- exists to catch, with a why, and a number line's star riddle is drawn as a line. scholar.test.lua's sweeps check
+-- their shape, and scholarmath.test.lua their steps, praise, and working.
 
 local Kit = use("scholar")
 local Numbers = Kit.Numbers

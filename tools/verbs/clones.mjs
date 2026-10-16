@@ -1,10 +1,10 @@
 // The clones verb: lists structurally identical code in the Lua the format verb owns (every addon's
-// and the tests', not tests/fixtures), heaviest cluster first (tools/lib/clones.mjs). It reports;
-// deciding which copies to merge is review.
+// and the tests', not tests/fixtures), heaviest cluster first (tools/lib/clones.mjs). It reports,
+// and deciding which copies to merge is left to review.
 //
 //   clones [paths...] [--min-tokens <n>] [--min-statements <n>] [--json]
 //
-// --json prints one JSON record per cluster. Exit 0 whatever it finds; 2 on a usage error.
+// --json prints one JSON record per cluster. It exits 0 whatever it finds, or 2 on a usage error.
 
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";

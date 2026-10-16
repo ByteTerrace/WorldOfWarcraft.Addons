@@ -6,7 +6,7 @@ local addonName, ns = ...
 --              Cleared when the module stops and at logout.
 --   Rumble     vibrates strongly when combat starts and lightly when it ends.
 --
--- Blizzard's gamepad UI uses neither, so nothing conflicts. Both are harmless with no controller connected.
+-- Blizzard's controller UI uses neither, so nothing conflicts. Both are harmless with no controller connected.
 
 local C_GamePad = C_GamePad
 local CreateColor = CreateColor

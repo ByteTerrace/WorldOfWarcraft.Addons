@@ -2,12 +2,12 @@ local addonName, ns = ...
 
 -- ScholarSkills: what Scholar remembers about each skill (a puzzle kind such as "math.add") and how it picks the next
 -- one, the way flash cards are reviewed: a skill answered right on the first try moves up a box, a miss sends it back
--- to box 1, and a skill comes back after more riddles the higher its box (Interval). Scholar.lua keeps the records;
--- this file only decides, so the harness drives it with plain tables.
+-- to box 1, and a skill comes back after more riddles the higher its box (Interval). Scholar.lua keeps the records.
+-- This file only decides, so the harness drives it with plain tables.
 --
 -- A skill's record (Scholar.lua's skills collection): asked (riddles of it answered), firstTry (of those, right on the
 -- first try), box (1 to Boxes), due (the subject's riddle count at which it's due again), recent (its last RecentLength
--- first tries, "1" right and "0" missed, oldest first) and lastAt (GetServerTime of its last riddle).
+-- first tries, "1" right and "0" missed, oldest first), and lastAt (GetServerTime of its last riddle).
 --
 --   ns.ScholarSkills.Choose(kinds, recordOf, count, random) -> kind
 --   ns.ScholarSkills.Next(record, rightFirst, count, now) -> the record's new fields
@@ -18,7 +18,7 @@ local addonName, ns = ...
 
 local Boxes = 5
 -- How many more of its subject's riddles a skill in each box waits before it's due again: a missed skill (box 1) is due
--- at the very next one.
+-- at the next one.
 local Interval = { 1, 2, 4, 8, 16 }
 
 -- The skills' names, for the parent's report.
@@ -43,14 +43,14 @@ local Names = {
 
 local RecentLength = 5
 
---- Whether a skill is mastered: in box 4 or above.
+--- Returns whether a skill is mastered: in box 4 or above.
 ---@param record table
 ---@return boolean
 local function Mastered(record)
     return (record.box >= 4)
 end
 
---- A parent's name for a skill, or the kind itself for one without a name.
+--- Returns a parent's name for a skill, or the kind itself for one without a name.
 ---@param kind string
 ---@return string
 local function Name(kind)
@@ -72,8 +72,8 @@ local function Listed(records, test, none)
     return (((#names > 0) and table.concat(names, ", ")) or none)
 end
 
---- A skill's fields after a riddle of it: rightFirst is whether its first try was right, count the subject's riddles
---- answered including this one, and now the GetServerTime it was answered at.
+--- Returns a skill's fields after a riddle of it: rightFirst is whether its first try was right, count the subject's
+--- riddles answered including this one, and now the GetServerTime it was answered at.
 ---@param record table
 ---@param rightFirst boolean
 ---@param count number
@@ -94,8 +94,8 @@ local function Percent(part, whole)
     return math.floor((((part * 100) / whole) + 0.5))
 end
 
---- Whether a skill is being worked on: its last first try missed (it comes right back), or it has been asked at least
---- three times and fewer than half of its recent first tries were right.
+--- Returns whether a skill is being worked on: its last first try missed (it comes right back), or it has been asked at
+--- least three times and fewer than half of its recent first tries were right.
 ---@param record table
 ---@return boolean
 local function Struggling(record)
@@ -104,8 +104,9 @@ local function Struggling(record)
     return ((record.recent:sub(-1) == "0") or ((record.asked >= 3) and ((right * 2) < #record.recent)))
 end
 
---- The parent's report card, as lines of text: a summary, then each section's level, riddles and first-try rate, the
---- skills mastered and the ones being worked on, then the recent misses with the answer chosen and the right one.
+--- Returns the parent's report card, as lines of text. It starts with a summary, then gives each section's level,
+--- riddles, first-try rate, skills mastered, and skills being worked on, then the recent misses with the answer chosen
+--- and the right one.
 ---@param name string? the character's name
 ---@param sections table[] { label, level (nil for none), records = { [kind] = a skill's record } } each
 ---@param misses table[] the recent misses, newest first: { kind, prompt, chosen, right } each
@@ -157,7 +158,7 @@ local function Report(name, sections, misses)
 end
 
 -- How likely a skill is to come next: a due one first, the lower its box the likelier (a missed one, in box 1,
--- outweighs a new one), then a new one; one in box 3 or above that isn't due yet sits out.
+-- outweighs a new one), then a new one. One in box 3 or above that isn't due yet sits out.
 local function Weight(record, count)
     if record.asked == 0 then
         return 6
@@ -170,8 +171,8 @@ local function Weight(record, count)
     return (((record.box <= 2) and 1) or 0)
 end
 
---- The next skill to ask, from kinds (one subject's at one grade): a weighted pick (Weight). When every skill sits out,
---- the one due soonest.
+--- Returns the next skill to ask, from kinds (one subject's at one grade): a weighted pick (Weight). When every skill
+--- sits out, it returns the one due soonest.
 ---@param kinds string[]
 ---@param recordOf fun(kind: string): table a skill's record, with every field filled in
 ---@param count number the subject's riddles answered so far

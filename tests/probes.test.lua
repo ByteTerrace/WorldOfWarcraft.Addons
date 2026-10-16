@@ -1,4 +1,4 @@
--- Calibration of the fake client against the real one. Every probe in ByteTerrace_DevTools' probe files run here the
+-- Calibration of the fake client against the real one. Every probe in ByteTerrace_DevTools' probe files runs here the
 -- way `/btdev probe` runs it in game (Harness.RunProbe, tests/harness/probes.lua), once per context the real client
 -- recorded, and in each its context and result must match what the client recorded (tools/api/probes.json, from `node
 -- tools/tlk.mjs probes --import`). A mismatch means the harness models the client wrongly: fix the harness (marking the

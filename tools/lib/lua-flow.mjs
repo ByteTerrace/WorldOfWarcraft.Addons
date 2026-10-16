@@ -14,9 +14,9 @@
 //
 // A test whose result is discarded (`local _ = InCombatLockdown()`) decides nothing. After an
 // if, a fact holds only if it holds at the end of every branch that falls through. Loop bodies
-// don't export facts. A nested function inherits the binding facts at its definition (a binding
-// the tests accept is never reassigned, so it stays non-secret) but not NOT_LOCKDOWN (it runs
-// later, when lockdown may have changed).
+// don't export facts. A nested function inherits the binding facts at its definition, since a
+// binding the tests accept is never reassigned and so stays non-secret. It doesn't inherit
+// NOT_LOCKDOWN, because it runs later, when lockdown may have changed.
 //
 // tests = {
 //   secretCheck(call)   -> binding | null   issecretvalue(<binding>): true means secret

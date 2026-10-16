@@ -38,8 +38,8 @@ async function runCovered(dir, source, call = "") {
 
 export const tests = [
     {
-        // A nested function's statements count for it, not for the code around it; `local b`
-        // compiles to nothing, so it's no statement; an if counts by its condition.
+        // A nested function's statements count for it, not for the code around it. `local b`
+        // compiles to nothing, so it's no statement. An if counts by its condition.
         name: "coverage counts each statement in the function that holds it",
         run: async () => withTemp(async (dir) => {
             writeFileSync(join(dir, "File.lua"), [
@@ -100,7 +100,7 @@ export const tests = [
             const run = tlk(["test", "--dir", join(FIXTURES, "runner-coverage"), "--coverage"]);
             assert(run.status === 0 && /\b3 passed, 0 failed/.test(run.stdout), run.stdout);
             assert(/^coverage: \d+ of \d+ statements \(\d+\.\d%\)$/m.test(run.stdout), run.stdout);
-            // Loading ran Core's top levels but not its functions; nothing ran Krew.
+            // Loading ran Core's top levels but not its functions. Nothing ran Krew.
             assert(/^ {2}ByteTerrace_Core\/State\.lua (?!0\.0%)\d+\.\d% \(\d+ missed\): /m.test(run.stdout), run.stdout);
             assert(/^ {2}TheLanKrewToolKit\/Krew\.lua 0\.0% /m.test(run.stdout), run.stdout);
             const plain = tlk(["test", "--dir", join(FIXTURES, "runner-coverage")]);

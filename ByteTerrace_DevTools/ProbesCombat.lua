@@ -1,19 +1,19 @@
 local addonName, ns = ...
 
 -- Calibration probes about Blizzard's damage meter (C_DamageMeter) and death recaps (C_DeathRecap): what a session
--- holds idle, in combat and right after a fight, the local player's damage taken, the enemies' sources, and a death.
--- Recaps record common fields and the killing blow's common shape; separate swing/spell probes require that event kind
--- before recording its spell fields. Also the order of the steps into and out of combat (combat.edges), whether the
--- meter's totals are secret on leaving a PvP fight (damageMeter.pvpSecrecy), and ENCOUNTER_WARNING's payload
--- (encounterWarning.seen), from what DevTools.lua heard. Probes.lua's header is the contract; ProbeNeeds.lua defines
--- needs.
+-- holds idle, in combat, and right after a fight, the local player's damage taken, the enemies' sources, and a death.
+-- Recaps record common fields and the killing blow's common shape. Separate swing and spell probes require that event
+-- kind before recording its spell fields. They also cover the order of the steps into and out of combat (combat.edges),
+-- whether the meter's totals are secret on leaving a PvP fight (damageMeter.pvpSecrecy), and ENCOUNTER_WARNING's
+-- payload (encounterWarning.seen), from what DevTools.lua heard. Probes.lua's header is the contract, and
+-- ProbeNeeds.lua defines needs.
 --
 -- The last two keep what they hear here, as Probes.lua's listeners do (sets of shapes): DevTools.lua passes each
 -- PLAYER_REGEN_ENABLED to Probes.NotePvPLeftCombat, which in a PvP match reads the damage meter then and
 -- PvPLaterSeconds later, and ENCOUNTER_START and ENCOUNTER_WARNING to Probes.NoteEncounterStart and
 -- NoteEncounterWarning.
 
--- Spell and environmental payloads depend on the event kind; mitigation is optional in Blizzard_DeathRecap's damage
+-- Spell and environmental payloads depend on the event kind. Mitigation is optional in Blizzard_DeathRecap's damage
 -- tooltip. Neither belongs in the common event shape.
 local ConditionalRecapFields = {
     absorbed = true, avoidable = true, blocked = true, deadly = true, environmentalType = true, resisted = true,
@@ -48,7 +48,7 @@ local PvPMeter = { later = {}, leftCombat = {} }
 -- ENCOUNTER_START fired, and the sets of ENCOUNTER_WARNING's info shapes and of each of its fields' shapes.
 local EncounterWarnings = { fields = {}, shapes = {}, started = false }
 
--- IsInInstance's type ("none", "pvp", "arena", ...), or "secret".
+-- Returns IsInInstance's type ("none", "pvp", "arena", and so on), or "secret".
 local function InstanceType()
     local _, instanceType = IsInInstance()
 
@@ -99,7 +99,7 @@ local function CommonRecapShape(event)
     return shapes
 end
 
--- The current damage meter session of a DamageMeterType.
+-- Returns the current damage meter session of a DamageMeterType.
 local function CurrentSession(meterType)
     local types = Enum.DamageMeterSessionType
 
@@ -107,7 +107,7 @@ local function CurrentSession(meterType)
     return C_DamageMeter.GetCombatSessionFromType(types.Current, meterType)
 end
 
--- The local player's entry in the current session's Deaths list, or nil.
+-- Returns the local player's entry in the current session's Deaths list, or nil.
 local function LocalDeath()
     local sources = CurrentSession(Enum.DamageMeterType.Deaths).combatSources
 
@@ -149,7 +149,7 @@ local function RecapSpellShapes(kind)
     return result
 end
 
--- A damage meter session's session-level fields.
+-- Returns a damage meter session's session-level fields.
 local function SessionShape(session)
     local sources = session.combatSources
 
@@ -162,7 +162,7 @@ local function SessionShape(session)
     }
 end
 
--- A damage meter spell (DamageMeterCombatSpell) and its details, as shapes.
+-- Returns a damage meter spell (DamageMeterCombatSpell) and its details, as shapes.
 local function SpellShape(spell)
     local details = spell.combatSpellDetails
     local plainDetails = ((not issecretvalue(details) and (type(details) == "table") and details) or {})
@@ -176,8 +176,8 @@ local function SpellShape(spell)
     }
 end
 
--- Which damage meter session a session's duration matches in the available list (oldest first): "latest", "previous",
--- "neither", "none" (no duration) or "secret".
+-- Returns which damage meter session a session's duration matches in the available list (oldest first): "latest",
+-- "previous", "neither", "none" (no duration), or "secret".
 local function WhichSession(durationSeconds, sessions)
     if issecretvalue(durationSeconds) then
         return "secret"
@@ -228,7 +228,7 @@ function Probes.NoteEncounterWarning(info)
 end
 
 --- On leaving combat (DevTools.lua passes each PLAYER_REGEN_ENABLED) in a PvP match (the PvPMatch restriction, a
---- battleground or an arena), keeps the shapes of the damage meter's totals for damageMeter.pvpSecrecy, then and again
+--- battleground, or an arena), keeps the shapes of the damage meter's totals for damageMeter.pvpSecrecy, then and again
 --- PvPLaterSeconds later. Elsewhere it does nothing.
 function Probes.NotePvPLeftCombat()
     local instanceType = InstanceType()
@@ -362,9 +362,9 @@ Probes.Define({
     },
     {
         accumulates = true,
-        -- The fields each kind of recap event carries (SWING_DAMAGE, SPELL_DAMAGE, ENVIRONMENTAL_DAMAGE, ...): a field
-        -- counts for a kind when every event of that kind in the recap had it. Kept per kind and across deaths, since
-        -- which kinds a recap holds depends on how you died.
+        -- The fields each kind of recap event carries (SWING_DAMAGE, SPELL_DAMAGE, ENVIRONMENTAL_DAMAGE, and so on): a
+        -- field counts for a kind when every event of that kind in the recap had it. Kept per kind and across deaths,
+        -- since which kinds a recap holds depends on how you died.
         name = "deathRecap.events",
         needs = { "diedToMob" },
         run = function()
@@ -448,7 +448,7 @@ Probes.Define({
 
             if blow and not issecretvalue(recapID) and (type(recapID) == "number") and (recapID ~= 0) then
                 local byID = First(C_DeathRecap.GetRecapEvents(recapID))
-                -- True when the recaps agree, false when a plain field differs or there's no recap by ID, else "secret"
+                -- True when the recaps agree, false when a plain field differs or there's no recap by ID, or "secret"
                 -- when a field couldn't be compared.
                 local same = (byID ~= nil)
 
@@ -473,9 +473,9 @@ Probes.Define({
     {
         accumulates = true,
         -- The steps of your latest entering and leaving of combat, in the order they came, each with what
-        -- InCombatLockdown, UnitAffectingCombat("player") and IsAddOnRestrictionActive(Combat) said then
+        -- InCombatLockdown, UnitAffectingCombat("player"), and IsAddOnRestrictionActive(Combat) said then
         -- (Probes.NoteCombatEdge). Kombat.lua's victory waits for the damage meter on the assumption that the Combat
-        -- restriction can outlast PLAYER_REGEN_ENABLED; the leave edge says whether it does. A session whose order
+        -- restriction can outlast PLAYER_REGEN_ENABLED. The leave edge says whether it does. A session whose order
         -- differs adds its own sequence.
         name = "combat.edges",
         needs = { "idle", "combatEdges" },
@@ -490,7 +490,7 @@ Probes.Define({
         -- Whether the damage meter's totals stay secret in a PvP match once you leave combat: the current DamageDone
         -- session's totalAmount and your own entry's, read at PLAYER_REGEN_ENABLED (leftCombat) and PvPLaterSeconds
         -- later (later), each under where it was read ("pvp/PvPMatch"). The docs flag the session getters
-        -- SecretWhenInCombat only; Details! treats arena sessions as secret, which may be its main-game path.
+        -- SecretWhenInCombat only. Details! treats arena sessions as secret, which may be its main-game path.
         name = "damageMeter.pvpSecrecy",
         needs = { "pvpFight" },
         run = function()
@@ -501,9 +501,9 @@ Probes.Define({
     },
     {
         accumulates = true,
-        -- Whether the client fires ENCOUNTER_WARNING in boss encounters, and its EncounterWarningInfo's fields' shapes
-        -- (the docs mark text, the caster's and target's names and GUIDs, the icon, spell, isDeadly and color
-        -- SecretValue; severity, duration and the should* flags not). BigWigs listens for it on Forever, DBM only in
+        -- Whether the client fires ENCOUNTER_WARNING in boss encounters, and its EncounterWarningInfo's fields' shapes.
+        -- The docs mark text, the caster's and target's names and GUIDs, the icon, spell, isDeadly, and color
+        -- SecretValue, but not severity, duration, or the should* flags. BigWigs listens for it on Forever, DBM only in
         -- the main game. Also whether C_EncounterWarnings says the feature is there and turned on.
         name = "encounterWarning.seen",
         needs = { "encounter" },

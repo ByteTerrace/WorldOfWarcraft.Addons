@@ -36,8 +36,8 @@ export function formatFiles(root = repoRoot) {
 }
 
 /**
- * Formats each file; returns its findings ({ path, line, rule, message }: FORMAT or ORDER) and the
- * files it changed. ORDER findings come with check, from the formatted text.
+ * Formats each file and returns its findings ({ path, line, rule, message }: FORMAT or ORDER) and
+ * the files it changed. ORDER findings come with check, from the formatted text.
  * @param {{ files: string[], check?: boolean, passes?: string[], root?: string, sortCalls?: boolean }} options
  */
 export function formatRepository({ files, check = false, passes = PASSES, root = repoRoot, sortCalls = false }) {

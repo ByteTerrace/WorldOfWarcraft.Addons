@@ -1,5 +1,5 @@
 -- Blizzard UI the fake client models for addons that extend it: right-click and context menus (Menu, MenuUtil), class
--- colors (RAID_CLASS_COLORS) and the unit tooltip (GameTooltip, TooltipDataProcessor). See wow.lua for the rest.
+-- colors (RAID_CLASS_COLORS), and the unit tooltip (GameTooltip, TooltipDataProcessor). See wow.lua for the rest.
 --
 -- Menus (Blizzard_Menu: Menu.lua, MenuUtil.lua, MenuTemplates.lua):
 --   * Menu.ModifyMenu(tag, callback) registers callback(owner, rootDescription, contextData) and
@@ -17,38 +17,38 @@
 --     runs as responder(data, { context, buttonName }, menuProxy) and Click returns true and the
 --     response (the responder's, else the element's default: MenuResponse.Refresh, 2, for a
 --     checkbox). The MenuResponse global isn't faked: no addon names it.
---     menu:Find(text) returns the element description; menu:Texts() lists the texts in order.
+--     menu:Find(text) returns the element description. menu:Texts() lists the texts in order.
 --     Clicking text no element has is an error.
 --   * h:OpenTargetMenu() opens the target frame's menu: TargetFrame_OpenMenu's choice of which
---     (SELF, PARTY, RAID_PLAYER, PLAYER, ENEMY_PLAYER or TARGET, see TargetMenuWhich) with
+--     (SELF, PARTY, RAID_PLAYER, PLAYER, ENEMY_PLAYER, or TARGET, see TargetMenuWhich) with
 --     contextData { fromTargetFrame = true, unit = "target" }. [G] The owner (TargetFrame) and
 --     ownerFrame are nil.
 --   Tags (the forever branch): the target frame builds MENU_UNIT_ENEMY_PLAYER for an enemy player,
 --   MENU_UNIT_PLAYER for a friendly one outside the group, MENU_UNIT_PARTY / MENU_UNIT_RAID_PLAYER
---   for group members, MENU_UNIT_TARGET for an NPC and MENU_UNIT_SELF for the player, whose own
+--   for group members, MENU_UNIT_TARGET for an NPC, and MENU_UNIT_SELF for the player, whose own
 --   frame builds MENU_UNIT_SELF too. Nameplates open no menu.
 --   * MenuUtil.CreateContextMenu(ownerRegion, generator, ...) is MenuUtil.lua's: a nil owner is
 --     UIParent (GetAppropriateTopLevelParent), a root description (no title) goes to
 --     generator(ownerRegion, rootDescription, ...) (an error is reported and it carries on, like
 --     securecallfunction), then, if the generator tagged it (SetTag), the Menu.ModifyMenu callbacks
 --     for that tag run. Opening closes any open context menu. A description with no elements
---     opens nothing and returns nil (MenuManagerMixin:GenerateMenuInternal); otherwise it plays
+--     opens nothing and returns nil (MenuManagerMixin:GenerateMenuInternal). Otherwise it plays
 --     SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON (856, in h.soundKits) and returns the menu's proxy, whose
 --     methods the harness doesn't model. h:OpenContextMenu() returns the open context menu (an
---     error when none is open), a menu like h:OpenMenu's; clicking an element whose response is
---     nil, Close or CloseAll closes it (MenuManagerMixin's response handling), Refresh and Open
---     keep it open.
+--     error when none is open), a menu like h:OpenMenu's. Clicking an element whose response is
+--     nil, Close, or CloseAll closes it (MenuManagerMixin's response handling), and Refresh and
+--     Open keep it open.
 --   Descriptions support the element methods addons use: CreateButton, CreateTitle, CreateDivider,
 --   CreateSpacer, CreateCheckbox, CreateRadio (each inserts and returns the new element, which
 --   takes the same inserters to build a submenu), Insert, QueueTitle / QueueDivider / QueueSpacer
 --   (inserted before the next inserted element, dropped otherwise), SetTag / GetTag, SetEnabled /
 --   IsEnabled, SetData / GetData, SetResponder / HasResponder, SetResponse, SetCanSelect /
 --   CanSelect, SetIsSelected / IsSelected, AddInitializer, SetTooltip, SetOnEnter / SetOnLeave,
---   EnumerateElementDescriptions, HasElements and Pick. Any other method is an error.
+--   EnumerateElementDescriptions, HasElements, and Pick. Any other method is an error.
 --
 -- Class colors (Blizzard_SharedXML/ClassColors.lua):
 --   * RAID_CLASS_COLORS holds a color for each class the client has (the dump lists the nine
---     Classic classes): r, g, b and colorStr ("ffrrggbb", [G] lower case), which is all the addons
+--     classes of the original game): r, g, b, and colorStr ("ffrrggbb", [G] lower case), which is all the addons
 --     read; ColorMixin's methods aren't modeled. Any other key reads nil, like the plain table it is.
 --   * [G] The values are the ChrClasses colors warcraft.wiki.gg lists (Class colors), converted
 --     byte / 255; the Forever client's values weren't read in game (/dump RAID_CLASS_COLORS).
@@ -56,10 +56,10 @@
 -- Tooltips (Blizzard_SharedXMLGame/Tooltip, Blizzard_GameTooltip):
 --   * TooltipDataProcessor.AddTooltipPostCall(tooltipType, fn) records fn (a nil type is ignored,
 --     like InternalAddCall). Calls for TooltipDataProcessor.AllTypes ("ALL") run before the type's
---     own; the AllTypes member itself isn't faked, since no addon names it.
+--     own. The AllTypes member itself isn't faked, since no addon names it.
 --   * h:ShowUnitTooltip(token) is what hovering a unit does: GameTooltip is anchored to UIParent,
 --     then GameTooltip:SetUnit(token) builds the unit's TooltipData, adds its lines, runs the post
---     calls with (GameTooltip, data) (an error is reported and the rest still run) and shows the
+--     calls with (GameTooltip, data) (an error is reported and the rest still run), and shows the
 --     tooltip. A token with no unit hides it instead. Returns the data.
 --   * Unit TooltipData: { type = Enum.TooltipDataType.Unit, dataInstanceID, guid, lines = { {
 --     type = Enum.TooltipDataLineType.UnitName, leftText = name, unitToken = token } } }.
@@ -338,7 +338,7 @@ function Harness:OpenMenu(tag, contextData, owner)
     root:SetTag(tag, contextData)
 
     if which then
-        -- UnitPopupManager creates a title; its text comes from an initializer.
+        -- UnitPopupManager creates a title. Its text comes from an initializer.
         root:CreateTitle()
     end
 

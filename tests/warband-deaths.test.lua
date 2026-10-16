@@ -53,7 +53,7 @@ end)
 
 test("a melee killing blow reads as a melee hit, and the suspect fills in what the recap can't", function()
     local h, addon = Grouped()
-    -- Bob has no race, so the recap can't tell his faction; the suspect's faction fills it in.
+    -- Bob has no race, so the recap can't tell his faction. The suspect's faction fills it in.
     local bob = Enemy("Bob")
 
     h:SetTarget(bob)

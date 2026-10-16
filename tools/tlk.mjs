@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Repository automation. Every operation is a verb here; there are no loose scripts.
+// Runs the repository's automation. Every operation is a verb here, and there are no loose scripts.
 //
 //   node tools/tlk.mjs check [--quiet] [--wow-root <path>]           static gates over every addon
 //   node tools/tlk.mjs test [filter | files...] [--timeout <s>] [--dir <folder>] [--coverage] behavioral tests in real Lua 5.1
@@ -12,7 +12,7 @@
 //   node tools/tlk.mjs api-sync --latest [--source <wow-ui-source checkout | file>]   is the snapshot's build the newest?
 //   node tools/tlk.mjs probes [--import [<SavedVariables file>]] [--check [--warn-builds]] [--wow-root <path>] [--flavor <_folder_>]
 //
-// Before any verb loads, node_modules must match package-lock.json; when it doesn't, tlk says to
+// Before any verb loads, node_modules must match package-lock.json. When it doesn't, tlk says to
 // run `npm ci` and exits 2.
 
 import { parseArgs } from "node:util";

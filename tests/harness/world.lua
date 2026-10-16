@@ -1,10 +1,10 @@
--- The world around the player in the fake client: location and maps, the user waypoint, honor, raid warnings and boss
+-- The world around the player in the fake client: location and maps, the user waypoint, honor, raid warnings, and boss
 -- encounters (see wow.lua for the rest). Only what the addons call is modeled.
 --
 -- State: h.zone, h.subZone (GetRealZoneText, GetSubZoneText), h.mapID (the uiMapID the player is on), h.mapPosition = {
 -- x, y } (normalized to h.mapID), h.instance (nil, or IsInInstance's type: "party", "raid", "pvp", "arena",
 -- "scenario"), h.maps = { [uiMapID] = { name, mapType, parentMapID, flags, canSetWaypoint } } (h:AddMap), h.waypoint ({
--- uiMapID, x, y, z } or nil), h.superTracked (the user waypoint is super tracked) and h.raidNotices ({ text, color,
+-- uiMapID, x, y, z } or nil), h.superTracked (the user waypoint is super tracked), and h.raidNotices ({ text, color,
 -- displayTime } per raid warning message).
 --
 -- Modeling decisions ([D] documented, [G] a guess where the docs are silent):
@@ -26,7 +26,7 @@
 --               UiMapPoint.lua), returns wasSet and fires USER_WAYPOINT_UPDATED (SynchronousEvent:
 --               inside the call). [G] It refuses a map CanSetUserWaypointOnMap denies: true only for
 --               a map in h.maps whose canSetWaypoint is true, or, when unset, whose mapType is Zone,
---               Continent or Micro or whose flags include AlwaysAllowUserWaypoints. [G] Super
+--               Continent, or Micro or whose flags include AlwaysAllowUserWaypoints. [G] Super
 --               tracking needs a waypoint; SUPER_TRACKING_CHANGED fires when super tracking changes.
 --   Honor       [D] CHAT_MSG_COMBAT_HONOR_GAIN carries the documented 18-field chat payload and
 --               no secret flags. The text uses COMBATLOG_HONORGAIN (or _NO_RANK) and
@@ -34,7 +34,7 @@
 --               (Ketho/BlizzardInterfaceResources, forever branch, 1.60.1 (70009); the two HONORGAIN
 --               strings also printed identically in game). [G] The other fields are as
 --               h:FireChat fills them.
---   Quests      [D] QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED and QUEST_OBJECTS_FOUND are the same
+--   Quests      [D] QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, and QUEST_OBJECTS_FOUND are the same
 --               resources' enUS strings, with positional arguments (name, fulfilled, required);
 --               quests.lua writes the log's objective texts with them.
 --   Raid notice [D] RaidWarningUtil.AddMessage(text, colorInfo, displayTime) adds the message to
@@ -45,16 +45,16 @@
 --               (SecretWhenAnchoringSecret; RaidWarning.lua's ResetString comment), so a secret text
 --               errors in tainted code. The harness checks those steps and records the message
 --               instead of running the fading frame. ChatTypeInfo.RAID_WARNING's color is
---               r = 1, g = 0.282, b = 0 (printed in game); its other fields are
+--               r = 1, g = 0.282, b = 0 (printed in game). Its other fields are
 --               ChatTypeInfoConstants.lua's.
---   Encounters  [D] ENCOUNTER_START carries encounterID, encounterName, difficultyID and groupSize
+--   Encounters  [D] ENCOUNTER_START carries encounterID, encounterName, difficultyID, and groupSize
 --               (EncounterInfoDocumentation). [G] h:StartEncounter(spec) activates the Encounter
 --               restriction, then fires ENCOUNTER_START; the harness raises no boss abilities, so
 --               it fires no ENCOUNTER_WARNING of its own. h:EncounterWarning(spec) fires one: [D] its
 --               EncounterWarningInfo carries text, casterGUID, casterName, targetGUID, targetName,
---               iconFileID, tooltipSpellID, isDeadly and color (a ColorMixin) as secrets, since the
+--               iconFileID, tooltipSpellID, isDeadly, and color (a ColorMixin) as secrets, since the
 --               docs mark them SecretValue, and duration, severity (Enum.EncounterEventSeverity),
---               shouldPlaySound, shouldShowChatMessage and shouldShowWarning plain
+--               shouldPlaySound, shouldShowChatMessage, and shouldShowWarning plain
 --               (EncounterWarningsDocumentation). [G] Unset fields are empty strings, 0, false, a
 --               white color, Medium severity, and true for the should* flags.
 --               [G] C_EncounterWarnings.IsFeatureAvailable and IsFeatureEnabled are false: Blizzard's
@@ -116,7 +116,7 @@ local function UiMapPoint()
 end
 
 -- A vector as CreateVector2D (Blizzard_SharedXML/Vector2D.lua) makes it: x, y and Vector2DMixin's methods copied in.
--- Only GetXY is modeled; the rest of the mixin is absent.
+-- Only GetXY is modeled. The rest of the mixin is absent.
 function Harness.Vector2D(x, y)
     return { GetXY = GetXY, x = x, y = y }
 end
@@ -193,7 +193,7 @@ local function AddRaidNotice(h, text, colorInfo, displayTime)
     h.raidNotices[#h.raidNotices + 1] = { color = colorInfo, displayTime = displayTime, text = text }
 end
 
--- ChatTypeInfo (Blizzard_ChatFrameBase/Shared/ChatTypeInfoConstants.lua); only RAID_WARNING is modeled, reading any
+-- ChatTypeInfo (Blizzard_ChatFrameBase/Shared/ChatTypeInfoConstants.lua). Only RAID_WARNING is modeled, and reading any
 -- other type is an error.
 local function ChatTypeInfo()
     local info = {
@@ -301,7 +301,7 @@ end
 
 -- A chat event (CHAT_MSG_SAY, CHAT_MSG_CHANNEL, ...) with the documented 18-field payload around text and sender
 -- ("First Last", or "" for a system message): the other fields are empty ("" / 0 / false), guid is "" (documented
--- non-nil) and the lineID counts up from 1. [E] discordInfo (names.chatDiscordInfo): for a message that isn't from
+-- non-nil), and the lineID counts up from 1. [E] discordInfo (names.chatDiscordInfo): for a message that isn't from
 -- Discord, a table of empty strings, false flags and two numbers, without lastOnlineGUID; [G] the numbers are 0.
 function Harness:FireChat(event, text, sender)
     self.chatLineID = (self.chatLineID + 1)

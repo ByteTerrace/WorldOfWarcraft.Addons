@@ -1,4 +1,4 @@
--- Scholar's challenge: scheduling, the overlay, input capture, rewards and the parent lock.
+-- Scholar's challenge: scheduling, the overlay, input capture, rewards, and the parent lock.
 
 local Kit = use("scholar")
 
@@ -50,7 +50,7 @@ test("the right answer earns a star, closes the riddle and resets the timer", fu
 
     truthy(Showing(h), "a pending riddle appears at login")
 
-    -- Try every key; exactly one is right.
+    -- Try every key. Exactly one is right.
     for key = 1, 4 do
         h:Key(tostring(key), true)
     end

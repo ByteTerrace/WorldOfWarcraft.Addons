@@ -54,7 +54,7 @@ local RumbleSerial = 0
 local Vibration = { accepted = {}, refused = {}, tried = false }
 local WorldEntered = false
 
--- The active controller's label style as a value when it's one Blizzard's UI knows, else "other".
+-- Returns the active controller's label style as a value when it's one Blizzard's UI knows, or "other" otherwise.
 local function LabelStyle(state)
     local style = (((type(state) == "table") and state.labelStyle) or nil)
 
@@ -69,7 +69,7 @@ local function NoteWorldEntered()
     WorldEntered = true
 end
 
--- A payload value as a shape: enum values by name (interface type, power level).
+-- Returns a payload value as a shape: enum values by name (interface type, power level).
 local function PayloadShape(event, value)
     if event == "INPUT_DEVICE_INTERFACE_TRANSITION" then
         return (EnumName(Enum.InputDeviceInterfaceType, value) or Shape(value))
@@ -196,8 +196,8 @@ Probes.Define({
     },
     {
         accumulates = true,
-        -- What each controller probed with says about itself, merged across controllers: label styles, power levels and
-        -- the interface style each was used in, by name.
+        -- What each controller probed with says about itself, merged across controllers: label styles, power levels,
+        -- and the interface style each was used in, by name.
         harness = "these are your controllers' own answers: they become the input fact's cases",
         name = "gamePad.controllers",
         needs = { "controller" },

@@ -1,28 +1,29 @@
-// Static gates over every addon. Each finding is `path:line: RULE message`; any finding fails. A
+// Static gates over every addon. Each finding is `path:line: RULE message`, and any finding fails. A
 // method call counts in each form it takes: obj:M(), and obj.M(obj) or obj["M"](obj) passing its
 // receiver first.
 //
 //   PARSE     every .lua parses as Lua 5.1.
-//   TOC       the TOC lists every .lua in the addon folder, once, and only files that exist; every
-//             dependency (## Dependencies, ## RequiredDeps, ## Dep*) is an addon here; ## Interface
+//   TOC       the TOC lists every .lua in the addon folder, once, and only files that exist. Every
+//             dependency (## Dependencies, ## RequiredDeps, ## Dep*) is an addon here. ## Interface
 //             (a comma-separated list) includes the installed Forever client's, or without an
 //             install the one the API snapshot's build implies (1.60.1 is 16001), and check
-//             says which it used. An addon's TOC is <Name>_Forever.toc or <Name>_Camelot.toc (the
-//             client loads both suffixes; the tools read _Forever.toc when a folder has both, and
-//             a folder with both is reported, since which one the client loads isn't documented);
-//             a top-level folder with a .toc but neither is reported (the client won't load it).
-//   GLOBAL    a global read names something the client dump or a loaded addon defines (also via
-//             _G.X, getfenv().X and getglobal("X")). A global write is declared: SavedVariables,
-//             SavedVariablesPerCharacter, AddonCompartmentFunc, SLASH_*, or ## X-Globals; that
-//             covers `X = `, `_G.X = `, `_G["X"] = `, getfenv() indexing, rawset(_G, "X", v) and
+//             says which it used. An addon's TOC is <Name>_Forever.toc or <Name>_Camelot.toc,
+//             since the client loads both suffixes. The tools read _Forever.toc when a folder has
+//             both, and a folder with both is reported, since which one the client loads isn't
+//             documented. A top-level folder with a .toc but neither is reported, since the client
+//             won't load it.
+//   GLOBAL    a global read names something the client dump or a loaded addon defines (also through
+//             _G.X, getfenv().X, and getglobal("X")). A global write is declared: SavedVariables,
+//             SavedVariablesPerCharacter, AddonCompartmentFunc, SLASH_*, or ## X-Globals. That
+//             covers `X = `, `_G.X = `, `_G["X"] = `, getfenv() indexing, rawset(_G, "X", v), and
 //             setglobal("X", v). A write with a dynamic key, getfenv(level) for a level other than
-//             0 or 1, setfenv and loadstring/load need `-- global: <why>`. Assigning into a client
+//             0 or 1, setfenv, and loadstring/load need `-- global: <why>`. Assigning into a client
 //             global's members (`string.trimall = `, `C_GamePad.X = `) is a finding (the
 //             SlashCmdList and StaticPopupDialogs registries excepted), and so is a CreateFrame
 //             name literal that collides with a client global.
 //   MEMBER    every static member chain rooted at a client global exists in the snapshot, through
-//             local aliases and string-literal indexes: C_GamePad.SetVibration, Enum.PowerType.Energy;
-//             and so does a client table's method called with `:` (C_GamePad:SetVibration()).
+//             local aliases and string-literal indexes: C_GamePad.SetVibration, Enum.PowerType.Energy.
+//             So does a client table's method called with `:` (C_GamePad:SetVibration()).
 //   EVENT     an event name passed to On / RegisterEvent / RegisterUnitEvent / Fire / ... is a real
 //             event, whether a literal or a file-level constant local.
 //   SECRET    a call to a function that can return a secret is annotated `-- secret: <why>`, sits
@@ -33,23 +34,25 @@
 //             function as a value (pcall(UnitHealth, ...), t.f = UnitHealth, a reassigned alias)
 //             needs the annotation too. A widget getter (obj:M() or obj.M(...), or obj.M as a
 //             value) counts when its file calls a setter that can give that aspect a secret for
-//             tainted code; an anchoring getter (GetWidth, GetStringHeight, ...) when the file
-//             calls any such setter, since any secret aspect can make anchoring secret. So a file
+//             tainted code. An anchoring getter (GetWidth, GetStringHeight, ...) counts when the
+//             file calls any such setter, since any secret aspect can make anchoring secret. So a file
 //             that never feeds secrets to widgets can read its frames' sizes and ids. In a handler
 //             passed as a function literal to On / RegisterEvent / SetScript("OnEvent") /
 //             HookScript("OnEvent"), a parameter carrying a non-unit field of a secret-flagged
 //             event's payload (or a local the handler's `...` fills at its top) can't be compared,
-//             computed with, indexed, called or branched on without such a guard. An annotated call
+//             computed with, indexed, called, or branched on without such a guard. An annotated call
 //             assigned to an existing local covers the call, not that local's later uses.
-//   PROTECTED a function forbidden to addon code (tools/api/forbidden.json) is never called nor taken
+//   PROTECTED a function forbidden to addon code (tools/api/forbidden.json) is never called or taken
 //             as a value, and a protected global (IsProtectedFunction) taken as a value needs
-//             `-- protected: <why>`: calls through the value skip the guard. A call to a restricted function (HasRestrictions), a HasRestrictions
-//             method on any receiver, or a protected method on a frame from a Secure template
-//             (followed through locals, aliases and fields; in a file that creates a Secure frame,
-//             any receiver not proven non-Secure) is dominated by an InCombatLockdown() test whose
-//             branch returns (directly, or through a never-reassigned local of the same function
-//             holding its result), sits in a `not InCombatLockdown()` branch, or is annotated
-//             `-- protected: <why>`. A closure doesn't inherit its definer's guard.
+//             `-- protected: <why>`, because calls through the value skip the guard. A call to a
+//             restricted function (HasRestrictions), a HasRestrictions method on any receiver, or a
+//             protected method on a frame from a Secure template is dominated by an
+//             InCombatLockdown() test whose branch returns, sits in a `not InCombatLockdown()`
+//             branch, or is annotated `-- protected: <why>`. The test counts directly, or through a
+//             never-reassigned local of the same function holding its result. A Secure frame is
+//             followed through locals, aliases, and fields, and in a file that creates a Secure
+//             frame, any receiver not proven non-Secure counts as one. A closure doesn't inherit
+//             its definer's guard.
 //
 //   FRAMEWORK in an addon built on ByteTerrace_Core, no call to a client API the framework owns
 //             (C_Timer's timers, addon message sending, logged too, and prefixes, PlaySoundFile,
@@ -58,50 +61,52 @@
 //             lifetime and the client's rules, and a second implementation is a defect.
 //   ARGS      a call to a documented client function (its `Arguments` in the snapshot), directly
 //             or through a never-reassigned alias, passes no more arguments than the docs declare
-//             and none fewer than the last one they don't mark Nilable (or give a Default; a
+//             and none fewer than the last one they don't mark Nilable or give a Default (a
 //             LuaValueReference takes nil). A call whose last argument is a call or `...` passes an
-//             unknown count and isn't judged; nor are `:` calls and widget methods (the gate doesn't
-//             know a receiver's widget type, and the docs can't state overloads). The snapshot
+//             unknown count and isn't judged. `:` calls and widget methods aren't judged either,
+//             because the gate doesn't know a receiver's widget type and the docs can't state
+//             overloads. The snapshot
 //             doesn't record repeating arguments (StrideIndex), so a function whose last argument
 //             is a LuaValueReference or LuaValueVariant (Mixin, scrub) is judged only before it.
 //
 //   An annotation is a `--` line comment on the construct's line, or alone on the line above.
-//   Not seen: dynamic reads (_G[k]), values that cross files or function calls, and handlers
-//   that aren't function literals. Guards are per function and don't flow out of loops.
+//   The gates don't see dynamic reads (_G[k]), values that cross files or function calls, or
+//   handlers that aren't function literals. Guards are per function and don't flow out of loops.
 //   NAMING    Puck's C# naming, mapped to Lua (docs/Conventions.md): file-level locals (top level,
 //             or in a top-level `do` block) and every function or method are PascalCase (constants
 //             too: MaxQueue, never MAX_QUEUE), including a local declared ahead and given a function
-//             later; locals inside functions, loops and branches, parameters and loop variables are
-//             camelCase. An alias keeps the name of what it aliases (local floor = math.floor),
+//             later. Locals inside functions, loops, and branches, along with parameters and loop
+//             variables, are camelCase. An alias keeps the name of what it aliases (local floor = math.floor),
 //             a file's own `local addonName, ns = ...` is exempt, and so are metamethods (__index).
 //   COMMENT   no banner dividers (four or more of - = * # _ ~) and no debt markers (TODO, FIXME,
-//             HACK, XXX, KLUDGE, REVISIT in capitals, or "for now"), as Puck's comment-smell gate;
-//             and each paragraph of full-line comments is a sentence: a capital letter, a digit or
-//             code first, and . ! ? or : last (verbatim lines and the gates' annotations are kept).
-//   HYGIENE   luacheck's warnings, as far as a parser decides them: a local, local function or loop
+//             HACK, XXX, KLUDGE, REVISIT in capitals, or "for now"), as Puck's comment-smell gate.
+//             Each paragraph of full-line comments is a sentence: a capital letter, a digit, or
+//             code first, and . ! ? or : last. Verbatim lines and the gates' annotations are kept
+//             as written.
+//   HYGIENE   luacheck's warnings, as far as a parser decides them: a local, local function, or loop
 //             variable nothing reads (a local function only its own body calls counts as unused);
 //             a parameter nothing reads (remove it, or rename it to _ when a later parameter or
-//             `...` is read and it keeps its position; callbacks too); a local, parameter or loop
+//             `...` is read and it keeps its position; callbacks too); a local, parameter, or loop
 //             variable that shadows or redefines a visible local of the same file (a callback's
 //             `state` may shadow an outer `state`, docs/Conventions.md); a statement after one that
 //             always leaves its block (`do return end`, an if whose every branch, else included,
-//             returns or breaks); an empty if, elseif or else branch, do block or loop body (an empty
+//             returns or breaks); an empty if, elseif, or else branch, do block, or loop body (an empty
 //             function is a no-op callback, allowed); and a value assigned to a local that a later
 //             statement of the same block overwrites before anything reads it (straight-line code,
-//             and only locals no closure references). `_`, names starting with `_` and a file's own
+//             and only locals no closure references). `_`, names starting with `_`, and a file's own
 //             `local addonName, ns = ...` are exempt.
 //   FORMAT    every addon's Lua and the tests' Lua is what the format verb writes (Puck's formatter
-//             passes, mapped to Lua: docs/Conventions.md#formatting); a finding names the file's
+//             passes, mapped to Lua: docs/Conventions.md#formatting). A finding names the file's
 //             first line that would change.
 //   LENGTH    no file exceeds MAX_LINES.
-//   STYLE     LF line endings, final newline, no tabs, no trailing whitespace.
+//   STYLE     LF line endings, a final newline, no tabs, and no trailing whitespace.
 //
-//   Beyond the addons, tools/ and tests/ get LENGTH and STYLE, and the tests' Lua (tests/*.lua and
-//   tests/harness, not tests/fixtures, which are deliberately bad) gets NAMING, COMMENT and HYGIENE too,
+//   Beyond the addons, tools/ and tests/ get LENGTH and STYLE. The tests' Lua (tests/*.lua and
+//   tests/harness, not the deliberately bad tests/fixtures) also gets NAMING, COMMENT, and HYGIENE,
 //   and GLOBAL as the runner's Lua sees it (tools/lib/check-tests.mjs).
 //
 // Snapshot truth: when the snapshot has a client dump, a global or member counts as known only if
-// the dump has it; documented-only names don't. Without a dump, the documented API is the fallback.
+// the dump has it. Documented-only names don't. Without a dump, the documented API is the fallback.
 
 import { checkStyleRules } from "../lib/check-style.mjs";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -151,7 +156,7 @@ export function loadApi(path = join(repoRoot, "tools", "api", "forever.json")) {
         if (members.get("Enum")?.has(name) && !members.has(`Enum.${name}`)) addMembers(`Enum.${name}`, Object.keys(fields));
     }
     // Per method name (across widget APIs): its secret flags (anchoring kept apart), the aspects
-    // its returns follow, whether it's protected or restricted; and the aspects each setter can
+    // its returns follow, whether it's protected or restricted, and the aspects each setter can
     // make secret for tainted code (SecretArguments "AllowedWhenTainted" + SecretArgumentsAddAspect).
     const methodSecrets = new Map();
     const aspectSetters = new Map();
@@ -220,7 +225,7 @@ export function expectedInterface(wowRoot, api) {
 }
 
 // Returns the findings (empty when every gate passes). root and clientInterface exist for the
-// gate's own tests, which run it over fixture addons; wowRoot is the install to read the client
+// gate's own tests, which run it over fixture addons. wowRoot is the install to read the client
 // interface from (deploy passes its --wow-root), and apiPath the API snapshot.
 export async function runChecks({ quiet = false, root = repoRoot, clientInterface, wowRoot = DEFAULT_WOW_ROOT, apiPath } = {}) {
     const findings = [];

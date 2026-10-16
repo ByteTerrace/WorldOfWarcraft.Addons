@@ -1,10 +1,10 @@
 // Builds tools/api/forever.json, the API snapshot the static gate and the test harness read.
 //
 //   --docs <dir>     Blizzard_APIDocumentationGenerated from the Forever UI source. Supplies every
-//                    documented function, event and widget method with its secret-value metadata.
+//                    documented function, event, and widget method with its secret-value metadata.
 //   --globals <file> ByteTerrace_DevTools SavedVariables from `/btdev dump` in the installed client.
 //                    Supplies every global the client exposes (including Lua-defined ones such as
-//                    CreateColor, Settings, UIParent) and the member names of its tables.
+//                    CreateColor, Settings, and UIParent) and the member names of its tables.
 //   --latest         writes nothing: compares the docs build the snapshot records (source.docs)
 //                    with the newest build on the forever branch of Gethe/wow-ui-source (its
 //                    version.txt, "1.60.1.70374"). Exits 0 when they match, 1 when they differ,
@@ -13,7 +13,7 @@
 //                    (its version.txt, else its HEAD commit's title, "1.60.1 (70374)") or a file
 //                    holding either, instead of GitHub.
 //
-// The documentation files are executed in real Lua 5.1 against a stub APIDocumentation that
+// The verb runs the documentation files in real Lua 5.1 against a stub APIDocumentation that
 // captures what they register, so the snapshot is exactly what the client documents.
 //
 // Snapshot format (one entry per line, so diffs stay readable):
@@ -28,12 +28,12 @@
 // An entry holds only what the docs state: `secret` (the Secret* predicate flags, sorted),
 // `SecretArguments` (verbatim), `IsProtectedFunction`, `HasRestrictions`, the argument (or event
 // payload) types as `Arguments` / `Payload`, the positions among them that may be nil (`Nilable`, or
-// a `Default`) as `ArgumentsNilable` / `PayloadNilable`, and the aspect lists `SecretArgumentsAddAspect` /
-// `SecretReturnsForAspect` (Enum.SecretAspect names), and `Preconditions`: the Requires* /
-// Restricted* precondition markers set on the entry (RequiresFontStringTextAccess,
-// RestrictedForMacroChatMessages, ...; SecretPredicatesDocumentation defines them). A nested
-// table's members are keyed by its dotted path ("Enum.PowerType"). The docs half is functions,
-// events, methods and enums; the globals half is globals and members.
+// a `Default`) as `ArgumentsNilable` / `PayloadNilable`, the aspect lists `SecretArgumentsAddAspect` /
+// `SecretReturnsForAspect` (Enum.SecretAspect names), and `Preconditions`. `Preconditions` holds the
+// Requires* and Restricted* precondition markers set on the entry, such as RequiresFontStringTextAccess
+// and RestrictedForMacroChatMessages, which SecretPredicatesDocumentation defines. A nested table's
+// members are keyed by its dotted path ("Enum.PowerType"). The docs half is functions, events,
+// methods, and enums. The globals half is globals and members.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
@@ -53,9 +53,9 @@ export const options = {
 // The forever branch's version file: "<version>.<build>" and a newline.
 export const FOREVER_VERSION_URL = "https://raw.githubusercontent.com/Gethe/wow-ui-source/forever/version.txt";
 
-// A real client exposes tens of thousands of globals; anything far smaller is a broken dump.
+// A real client exposes tens of thousands of globals. Anything far smaller is a broken dump.
 export const MIN_GLOBALS = 10000;
-// Blizzard's generated docs document over 5000 functions; a folder with far fewer is the wrong one,
+// Blizzard's generated docs document over 5000 functions. A folder with far fewer is the wrong one,
 // or a partial checkout, and would silently stop the SECRET and PROTECTED rules from firing.
 export const MIN_DOC_FUNCTIONS = 2000;
 
@@ -204,8 +204,9 @@ export function sourceBuild(text) {
     return dotted ? `${dotted[1]} (${dotted[2]})` : buildOf(text);
 }
 
-// The forever branch's newest build: from source when given (a checkout's version.txt, else its
-// HEAD commit's title; or a file's text), else from GitHub. Throws when it can't be read.
+// The forever branch's newest build: from source when given, else from GitHub. From a checkout,
+// it's the version.txt, else the HEAD commit's title. From a file, it's the file's text. Throws
+// when it can't be read.
 export async function latestBuild(source) {
     let build;
     let from = source;
@@ -283,7 +284,7 @@ export function missingGroups(names) {
 // Reads ByteTerrace_DevTools SavedVariables:
 //   ByteTerraceDevToolsDB = { build = {...}, globals = { [name] = { type =, members =, tables = } } }
 // where `tables` (optional) maps a member name to that nested table's member names. Rows cross
-// from Lua as tab-separated lines, so member names need no escaping; names containing control
+// from Lua as tab-separated lines, so member names need no escaping. Names containing control
 // characters are skipped, and so are globals named after an address ("table: 000001F161607270"),
 // which change every session. Throws on a dump that can't be a real client's.
 export async function readGlobals(file) {
@@ -444,7 +445,7 @@ export async function run(values) {
     }
     if (dump) {
         const addons = findAddons();
-        // The dump leaves out every name an addon touched. This repository's are expected; another
+        // The dump leaves out every name an addon touched. This repository's are expected. Another
         // addon's may have replaced a client global, which the snapshot then lacks.
         const others = Object.entries(dump.skipped).filter(([addon]) => !addons.some((a) => a.name === addon));
         if (others.length) {

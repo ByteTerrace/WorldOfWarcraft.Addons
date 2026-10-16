@@ -1,5 +1,5 @@
 -- Calibration probes in the fake client (see wow.lua for the rest). ByteTerrace_DevTools' probe files (Probes.lua and
--- the files its header names) define each probe once; the real client runs it through /btdev probe and the harness runs
+-- the files its header names) define each probe once. The real client runs it through /btdev probe and the harness runs
 -- it here, so the two answers can be compared.
 --
 -- Harness.OBSERVED_PROBES is what the real client answered (tools/api/probes.json, passed by tools/lib/harness.mjs as a
@@ -14,7 +14,7 @@
 -- It returns { probe, Probes, gap, observed, runs, problem, differences }: gap is why the harness can't run the probe
 -- (a need it can't recreate), and runs is a list of { context (the recorded one, or nil), h, problem, record,
 -- differences }. A run's problem is why it failed (a setup that doesn't meet its need, an error, an unsaveable result,
--- errors reported to the client); its differences (Probes.Diff of the client's { context, result } and the harness's)
+-- errors reported to the client). Its differences (Probes.Diff of the client's { context, result } and the harness's)
 -- are set when the client's record exists. The run's problem is the first run's that has one, prefixed by its context,
 -- and differences every run's, each carrying its context. An accumulating probe's record merges what every session
 -- showed, so one harness run can't equal it: the harness may show only what the client did, so its result is compared

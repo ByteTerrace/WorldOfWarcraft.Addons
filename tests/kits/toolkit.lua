@@ -1,6 +1,6 @@
--- Helpers for The Lan Krew ToolKit's end-to-end tests (toolkit, krew, kombat and the warband tests): loading the addon,
--- a Krew group, enemy players, and what the Krew sends, receives and shows (cards and raid notices). A test file gets
--- the table with use("toolkit").
+-- Helpers for The Lan Krew ToolKit's end-to-end tests (toolkit, krew, kombat, and the warband tests): loading the
+-- addon, a Krew group, enemy players, and what the Krew sends, receives, and shows (cards and raid notices). A test
+-- file gets the table with use("toolkit").
 
 -- The players' own sounds folder (TheLanKrewToolKit\Media\), as sound paths name it.
 local MediaPath = "Interface\\AddOns\\TheLanKrewToolKit\\Media\\"

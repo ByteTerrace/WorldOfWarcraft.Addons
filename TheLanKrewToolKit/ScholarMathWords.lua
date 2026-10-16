@@ -1,12 +1,12 @@
 local addonName, ns = ...
 
--- The math riddles' text and word banks, as ns.ScholarMathWords: ScholarMath.lua reads it; this file only holds data.
+-- The math riddles' text and word banks, as ns.ScholarMathWords: ScholarMath.lua reads it. This file only holds data.
 -- Everything is original, kid-friendly plain ASCII. The titles live with the others in ScholarWords.lua.
 --
--- A text's {name} is filled from the riddle's variables. In word problems a number {a} also comes counted with an item
--- as {A} ("3 apples"), plus {Hero} (first mention), {hero}, {place} and {items}. expr is the calculation behind the
--- answer, in ASCII. hint is the strategy, step a worked first step (never the answer), explain the working, and praise
--- names the strategy when the first try is right. whys says, kindly, what mistake each named wrong answer comes from;
+-- The riddle's variables fill a text's {name}. In word problems a number {a} also comes counted with an item as {A} ("3
+-- apples"), plus {Hero} (first mention), {hero}, {place}, and {items}. expr is the calculation behind the answer, in
+-- ASCII. hint is the strategy, step a worked first step (never the answer), explain the working, and praise names the
+-- strategy when the first try is right. whys says, kindly, what mistake each named wrong answer comes from.
 -- wrong is the why for any other ({choice} names it). cases are variants a generator picks by what the numbers need (a
 -- carry, a trade, a unit fraction): a case's fields replace the text's, and its whys add to them.
 --
@@ -496,7 +496,7 @@ ns.ScholarMathWords = {
         prompts = { "What is {p}% of {n} gold?" },
         step = "{how}",
         -- How to build each percent from easy parts, filled with the riddle's numbers first: way joins the hint, how is
-        -- the step, work the explanation's working and strategy the praise.
+        -- the step, work the explanation's working, and strategy the praise.
         ways = {
             [10] = {
                 how = "Ten percent is a tenth of all {n} gold: split it into ten equal parts.",

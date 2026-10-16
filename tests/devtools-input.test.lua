@@ -1,5 +1,5 @@
 -- ByteTerrace_DevTools' controller tools: /btdev rumble plays the vibration candidates in turn for gamePad.vibration,
--- or one vibration as typed; the input listener keeps the controller and interface events' payload shapes from load,
+-- or one vibration as typed. The input listener keeps the controller and interface events' payload shapes from load,
 -- for input.events.
 
 local function Load()

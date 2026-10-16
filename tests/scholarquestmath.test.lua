@@ -1,6 +1,6 @@
 -- Math from the player's own quests (ScholarNumbers.lua's math.quest): its riddles count with what the quest book
--- recorded (an objective's count, name and giver, two objectives' total, a vendor's copper, the quests turned in), each
--- answer is what its prompt works out to, and Scholar asks it only while the quest book holds a quest.
+-- recorded (an objective's count, name, and giver, two objectives' total, a vendor's copper, the quests turned in),
+-- each answer is what its prompt works out to, and Scholar asks it only while the quest book holds a quest.
 
 local Kit = use("scholar")
 local Accept = Kit.Accept

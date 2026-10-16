@@ -1,29 +1,29 @@
 -- SoundBank: player-supplied sounds bound to game moments. An addon ships no audio: players drop files named after each
--- sound (FinishHim.ogg; .ogg wins if both exist) into the addon's media folder and restart the game (the client only
--- sees files that existed at launch). Numbered copies up to MaxVariants (FinishHim2.ogg ... FinishHim5.ogg) are
+-- sound (FinishHim.ogg; .ogg wins if both exist) into the addon's media folder and restart the game (the client sees
+-- only files that existed at launch). Numbered copies up to MaxVariants (FinishHim2.ogg ... FinishHim5.ogg) are
 -- variants: each time a sound plays, one of its present files is picked at random. Which files are present comes from
--- C_UIFileAsset.IsKnownFile, as boss mods check external sounds (it knows loose addon files, probed in game), asked
--- once per sound. PlaySoundFile also says no for a muted channel, so its answer alone can't tell a missing file from a
--- muted one.
+-- C_UIFileAsset.IsKnownFile, asked once per sound, as boss mods check external sounds. It knows loose addon files
+-- (probed in game). PlaySoundFile also says no for a muted channel, so its answer alone can't tell a missing file from
+-- a muted one.
 --
 --   local sounds = ByteTerrace.NewSoundBank(addon, { master = "Sounds.enabled", channel = "Sounds.channel",
 --                                                     folder = "Interface\\AddOns\\MyAddon\\Media\\" }) -- optional
 --   sounds:Define(key, spec)   at file load. spec: file, word (for Test), label, row (the boolean
---                              setting that switches it; sounds may share one), needs (optional: a
---                              row that must also be true, such as a class check) and cooldown
+--                              setting that switches it; sounds can share one), needs (optional: a
+--                              row that must also be true, such as a class check), and cooldown
 --                              (optional: seconds before it plays again).
 --   sounds:Row(name, label, description, keys)   the setting row spec for one sound or a family
---                              sharing it; its description names their files.
---   sounds:IsOn(key)           the master switch, its row and its needs row are on.
---   sounds:Play(key)           plays a variant if IsOn and off cooldown; returns the sound handle,
---                              nil when nothing played (off, cooling down, or no file).
+--                              sharing it. Its description names their files.
+--   sounds:IsOn(key)           the master switch, its row, and its needs row are on.
+--   sounds:Play(key)           plays a variant if IsOn and off cooldown. Returns the sound handle,
+--                              or nil when nothing played (off, cooling down, or no file).
 --   sounds:WhileOn(keys...)    an active rule for a module that only serves these sounds.
 --   sounds:Stop(handle)        fades a sound out.
 --   sounds:Test(arg)           the "<word> [variant]" test command: plays regardless of switches
---                              and says why nothing played; no word lists every sound.
+--                              and says why nothing played. With no word, it lists every sound.
 --
 -- The master option names the boolean row that switches every sound, and channel the string row naming the volume
--- channel they play on (Master, SFX, Music, Ambience, Dialog).
+-- channel they play on (Master, SFX, Music, Ambience, or Dialog).
 
 local Extensions = { ".ogg", ".mp3" }
 local FadeOutMilliseconds = 1000
@@ -57,7 +57,7 @@ local function FileName(sound, variant)
 end
 
 -- A sound's files, read once: the client only sees files that existed at launch. files[variant] is the path the client
--- knows for that variant (.ogg first) or false; present lists the known ones.
+-- knows for that variant (.ogg first) or false, and present lists the known ones.
 local function Files(self, sound)
     local files = sound.files
 
@@ -144,7 +144,7 @@ function SoundBank:Define(key, spec)
     self.m_order[#self.m_order + 1] = key
 end
 
---- Whether a sound would play now, cooldown aside: the master switch, its row and its needs row.
+--- Returns whether a sound would play now, cooldown aside: the master switch, its row, and its needs row.
 ---@param key string
 ---@return boolean
 function SoundBank:IsOn(key)
@@ -180,8 +180,8 @@ function SoundBank:Play(key)
     return handle
 end
 
---- The boolean setting row that switches one sound, or a family of sounds sharing it; its description names their
---- files.
+--- Returns the boolean setting row that switches one sound, or a family of sounds sharing it. Its description names
+--- their files.
 ---@param name string the row's name in its module
 ---@param label string
 ---@param description string when the sounds play
@@ -217,7 +217,7 @@ function SoundBank:Stop(handle)
 end
 
 --- The test command: "<word> [variant]" plays that sound (a variant, or one at random) whatever the switches say, and
---- says why when nothing played; no word lists every sound.
+--- says why when nothing played. With no word, it lists every sound.
 ---@param arg string?
 function SoundBank:Test(arg)
     local addon = self.m_addon
@@ -262,8 +262,8 @@ function SoundBank:Test(arg)
     end
 end
 
---- An active rule: the master switch, and any of the sounds' rows (with their needs) on. A module that serves only
---- these sounds registers nothing while none of them could play.
+--- Returns an active rule: the master switch, and any of the sounds' rows (with their needs) on. A module that serves
+--- only these sounds registers nothing while none of them could play.
 ---@param ... string sound keys
 ---@return table rule { reads, when }
 function SoundBank:WhileOn(...)

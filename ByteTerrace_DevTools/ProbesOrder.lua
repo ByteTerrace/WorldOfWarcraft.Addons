@@ -5,7 +5,7 @@ local addonName, ns = ...
 -- state is as the damage meter's current session updates (meter.lua's h:EnterCombat), whether a nameplate's frame is
 -- shown and its unit exists as NAME_PLATE_UNIT_ADDED and NAME_PLATE_UNIT_REMOVED dispatch (units.lua's h:AddNamePlate
 -- and h:RemoveNamePlate), and whether a quest's title stays known once it's turned in (quests.lua). DevTools.lua
--- listens from load and passes each event here; each keeps the set of states it saw, so a state seen before costs a
+-- listens from load and passes each event here. Each keeps the set of states it saw, so a state seen before costs a
 -- lookup.
 --
 --   Probes.NoteDeathState()               PLAYER_DEAD, for death.combatState
@@ -36,7 +36,8 @@ local SessionStates = {}
 -- The last quest turned in since load (NoteTurnIn): its ID, or nil.
 local TurnedIn = { questID = nil }
 
--- Combat's state as one item, as combat.edges writes it: lockdown, the player's combat flag and the Combat restriction.
+-- Returns combat's state as one item, as combat.edges writes it: lockdown, the player's combat flag, and the Combat
+-- restriction.
 local function CombatState()
     local restricted = C_RestrictedActions.IsAddOnRestrictionActive(Enum.AddOnRestrictionType.Combat)
 
@@ -124,7 +125,7 @@ Probes.Define({
     {
         accumulates = true,
         -- The combat states PLAYER_DEAD dispatched in: the harness's h:Die fires it while lockdown still holds and only
-        -- then ends combat, which FactsDeath.lua, Kombat.lua and WarbandDeaths.lua read as one fight's end.
+        -- then ends combat, which FactsDeath.lua, Kombat.lua, and WarbandDeaths.lua read as one fight's end.
         name = "death.combatState",
         needs = { "diedSinceLoad" },
         run = function() return { atDeath = Joined(DeathStates) } end,
@@ -132,7 +133,7 @@ Probes.Define({
     {
         accumulates = true,
         -- The combat states DAMAGE_METER_CURRENT_SESSION_UPDATED dispatched in: the harness starts a session as
-        -- h:EnterCombat's PLAYER_REGEN_DISABLED leaves lockdown in force, and nowhere else; Kombat.lua and Facts.lua
+        -- h:EnterCombat's PLAYER_REGEN_DISABLED leaves lockdown in force, and nowhere else. Kombat.lua and Facts.lua
         -- follow the current session.
         name = "damageMeter.currentSession",
         needs = { "sessionUpdated" },
@@ -142,7 +143,7 @@ Probes.Define({
         accumulates = true,
         -- Whether a nameplate's frame is shown and its unit exists as NAME_PLATE_UNIT_ADDED and NAME_PLATE_UNIT_REMOVED
         -- dispatch: the harness shows the plate before ADDED, and keeps the unit readable through REMOVED and hides the
-        -- plate after it; Warband.lua and WarbandBadges.lua draw on plates in those handlers.
+        -- plate after it. Warband.lua and WarbandBadges.lua draw on plates in those handlers.
         name = "namePlates.events",
         needs = { "namePlateCameAndWent" },
         run = function()

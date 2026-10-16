@@ -1,5 +1,5 @@
-// The per-file Lua rules of the check verb (GLOBAL, MEMBER, EVENT, SECRET, PROTECTED, FRAMEWORK, ARGS); see
-// tools/verbs/check.mjs for what each rule enforces and what it can't see.
+// The per-file Lua rules of the check verb: GLOBAL, MEMBER, EVENT, SECRET, PROTECTED, FRAMEWORK, and ARGS.
+// See tools/verbs/check.mjs for what each rule enforces and what it can't see.
 
 import { NOT_LOCKDOWN, flow } from "./lua-flow.mjs";
 import { analyze, globalPath, parse, staticPath, stringValue, walk } from "./lua-scope.mjs";
@@ -43,7 +43,7 @@ export const callBase = (node) => (node?.type === "CallExpression" || node?.type
 export const callArgs = (node) => node.type === "CallExpression" ? node.arguments : node.type === "StringCallExpression" ? [node.argument] : [node.arguments];
 
 // Annotation comments by kind. Only `--` line comments count. One on the line of the construct
-// always counts; one on the line above counts only when it's alone on its line.
+// always counts. One on the line above counts only when it's alone on its line.
 function collectAnnotations(comments, lines) {
     const annotations = { secret: { on: new Set(), above: new Set() }, protected: { on: new Set(), above: new Set() }, global: { on: new Set(), above: new Set() } };
     for (const comment of comments ?? []) {
@@ -93,7 +93,7 @@ export function checkLua(file, text, context, report) {
         exits: (call) => path(callBase(call)) === "error",
     });
 
-    // The member a call base names: `obj:M`, `obj.M` or `obj["M"]`; null otherwise.
+    // The member a call base names (`obj:M`, `obj.M`, or `obj["M"]`), or null when it names none.
     const memberName = (base) => {
         if (base?.type === "MemberExpression") return base.identifier.name;
         if (base?.type === "IndexExpression") return stringValue(base.index);
@@ -112,7 +112,7 @@ export function checkLua(file, text, context, report) {
     // passes its receiver first (frame.RegisterEvent(frame, "EVENT")).
     const eventArgument = (base, args) => (base.indexer !== ":" && isMethodCall(base, args) ? args[1] : args[0]);
     // A forbidden function or method a path names: "SetRaidTarget", or "SettingsPanel:Open" for the
-    // path "SettingsPanel.Open"; null otherwise.
+    // path "SettingsPanel.Open". It's null when the path names neither.
     const forbiddenPath = (name) => {
         if (!name || !api.forbiddenFunctions) return null;
         if (api.forbiddenFunctions.has(name)) return name;
@@ -121,7 +121,7 @@ export function checkLua(file, text, context, report) {
     };
 
     // Pre-pass: guard arguments, aspects this file's setters can make secret, receivers' events,
-    // Secure frame creation, field assignments of frames.
+    // Secure frame creation, and field assignments of frames.
     const guardArguments = new Set();
     const setAspects = new Set();
     const registered = new Map(); // receiver key -> Set of event names
@@ -258,7 +258,7 @@ export function checkLua(file, text, context, report) {
         if (!base || !isClient(base) || REGISTRIES.has(base.split(".")[0]) || annotated("global", line(node))) return;
         report(file, line(node), "GLOBAL", `assignment into client global ${base}.${key ?? "[?]"}; annotate "-- global: <why>" if intended`);
     };
-    // Assignment targets: X, _G.X / _G["X"] / _G[k], getfenv().X, client.member.
+    // Assignment targets: X, _G.X / _G["X"] / _G[k], getfenv().X, and client.member.
     const assignTo = (target, node) => {
         if (target.type === "Identifier") {
             if (!scope.bindingOf(target)) globalWrite(target.name, node);
@@ -281,7 +281,7 @@ export function checkLua(file, text, context, report) {
         if (node.type === "AssignmentStatement") node.variables.forEach((target) => assignTo(target, node));
         if (node.type === "FunctionDeclaration" && node.identifier && !node.isLocal) assignTo(node.identifier, node);
 
-        // Framework-owned functions taken as values (an alias, a callback) reach past it too; calls
+        // Framework-owned functions taken as values (an alias, a callback) reach past it too. Calls
         // are reported below.
         const isMemberName = parent?.type === "MemberExpression" && parent.identifier === node;
         const isChainBase = parent?.type === "MemberExpression" && parent.base === node;
@@ -315,7 +315,7 @@ export function checkLua(file, text, context, report) {
                 + "check issecretvalue before comparing, computing or branching on it, or annotate \"-- secret: <why>\"");
         }
 
-        // Member chains (outermost static node of each chain; assignment targets are GLOBAL's).
+        // Member chains, at the outermost static node of each chain. Assignment targets are GLOBAL's.
         if ((node.type === "MemberExpression" && node.indexer === ".") || (node.type === "IndexExpression" && stringValue(node.index) !== null)) {
             const partOfChain = (parent?.type === "MemberExpression" && parent.base === node && parent.indexer === ".")
                 || (parent?.type === "IndexExpression" && parent.base === node && stringValue(parent.index) !== null);
@@ -359,8 +359,8 @@ export function checkLua(file, text, context, report) {
                 }
             }
 
-            // Argument counts of documented client functions (a `:` call passes a receiver the docs
-            // don't count, so it's skipped).
+            // Argument counts of documented client functions. A `:` call passes a receiver the docs
+            // don't count, so it's skipped.
             const documented = name && base.indexer !== ":" && isClient(name) && Object.hasOwn(api.functions, name) ? api.functions[name] : null;
             const mismatch = documented && argumentMismatch(documented, args);
             if (mismatch) report(file, line(node), "ARGS", `${name} ${mismatch}`);
@@ -403,7 +403,7 @@ export function checkLua(file, text, context, report) {
                 }
             }
 
-            // Protected calls: a forbidden function fails at any time; the rest need a combat guard.
+            // Protected calls: a forbidden function fails at any time, and the rest need a combat guard.
             // A forbidden method is recorded as "Global:Method" (SettingsPanel:OpenToCategory), and
             // counts called with `:`, or with `.` or `[]` passing its receiver first.
             const member = memberName(base);
@@ -438,7 +438,7 @@ export function checkLua(file, text, context, report) {
                 const name = path(node);
                 // A forbidden or protected function taken as a value (an alias, pcall's argument)
                 // is called where no gate looks.
-                // A local alias was reported where it was made; a name the client lacks is MEMBER's.
+                // A local alias was reported where it was made. A name the client lacks is MEMBER's.
                 const viaAlias = (node.type === "Identifier" && scope.bindingOf(node)) || (name && isClient(name) && unknownMember(api, name));
                 const forbiddenValue = !viaAlias && forbiddenPath(name);
                 const protectedValue = !viaAlias && !forbiddenValue && name && api.protectedFunctions.has(name) ? name : null;
@@ -471,7 +471,7 @@ export function checkLua(file, text, context, report) {
     // An annotated secret call (`-- secret: <why>`) assigned to locals: the annotation vouches for
     // the call, not for every later use. A use that compares or computes with the value, tests it,
     // or keys a table with it is reported unless a guard dominates it or it carries its own
-    // annotation. Passing it on, storing it and indexing it (a structure's fields) are left to the
+    // annotation. Passing it on, storing it, and indexing it (a structure's fields) are left to the
     // harness, whose secrets throw on indexing.
     // Assigned to an existing local, the uses that count are those after the assignment.
     function annotatedMisuse(call, parent, label) {
@@ -510,9 +510,10 @@ export function checkLua(file, text, context, report) {
         return parent.type === "IndexExpression" && parent.index === node;
     }
 
-    // Whether an identifier's value decides something: compared, computed with, tested, indexed or
-    // called, or used as a key; or is kept where later code could do those unchecked: assigned (to a
-    // local, a field or a global), put in a table, or carried out of an and/or into one of those.
+    // Whether an identifier's value decides something, or is kept where later code could do those
+    // things unchecked. It decides something when it's compared, computed with, tested, indexed,
+    // called, or used as a key. It's kept when it's assigned (to a local, a field, or a global), put
+    // in a table, or carried out of an and/or into one of those.
     function decides(node, parent) {
         if (!parent) return false;
         if (parent.type === "AssignmentStatement" || parent.type === "LocalStatement") return parent.init.includes(node);
@@ -552,7 +553,7 @@ export function checkLua(file, text, context, report) {
     }
 
     // A `.` or `[]` call is a method call only when it passes its receiver first
-    // (frame.Show(frame), frame["Show"](frame)); Probes.Show(value) is a plain function that happens
+    // (frame.Show(frame), frame["Show"](frame)). Probes.Show(value) is a plain function that happens
     // to share a method's name.
     function isMethodCall(base, args) {
         if (base.indexer === ":") return true;

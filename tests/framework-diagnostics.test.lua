@@ -192,7 +192,7 @@ test("counting adds no allocation to a dispatch: it costs exactly its handlers' 
     eq(rawget(events, "Dispatch"), nil, "profiling is off: the class's counting Dispatch runs")
     local dispatch = BytesPerCall(function() events:Dispatch("PLAYER_TARGET_CHANGED") end, 200)
     local call = BytesPerCall(function() SafeCall(Empty) end, 200)
-    -- The harness's xpcall (WoW's, passing arguments) allocates; the dispatcher must add nothing.
+    -- The harness's xpcall (WoW's, passing arguments) allocates. The dispatcher must add nothing.
     eq(dispatch, handlers * call, "bytes per dispatch")
     eq(addon.Modules.M.Work.events, 201 * handlers)
     eq(h:CountApiCalls("debugprofilestop"), 0)

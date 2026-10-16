@@ -1,10 +1,10 @@
 -- Module: one feature of an addon, declared with addon:Module (AddOn.lua), which validates the spec and declares its
--- rows, records, messages and commands.
+-- rows, records, messages, and commands.
 --
 -- A module owns what it creates through its methods: handlers (On), watchers (Watch, OnIncrease), rules (Rule), message
--- listeners (Listen) and timers (After, Every). Callback binds deferred UI actions to one activation. Stopping removes
+-- listeners (Listen), and timers (After, Every). Callback binds deferred UI actions to one activation. Stopping removes
 -- subscriptions, expires actions, runs OnDisable, and returns its runtime rows to their defaults, so a stopped module
--- registers no events, runs no code and leaves no stale facts.
+-- registers no events, runs no code, and leaves no stale facts.
 --
 -- Timers run their callback as one state batch, isolated like an event handler, and never after the module stops: a
 -- retry scheduled by a feature the player just switched off doesn't fire.
@@ -12,12 +12,12 @@
 -- Dependencies: a module with demand = true runs only while a running module names it in its uses list. A user's
 -- dependencies start before its OnEnable, so their rows hold real values when its rules take their first reading and
 -- their handlers for an event run before its own. They stop after the last user stops. A failed start tears down its
--- resources and releases the dependencies it acquired; a failed dependency prevents its user from starting.
+-- resources and releases the dependencies it acquired. A failed dependency prevents its user from starting.
 --
 -- Public members: Name, Addon, Spec (the declaration, never changed), Enabled, Records ([name] = collection), Comms
--- (its messages, when spec.comms declares them), Users (how many running modules use a demand module) and Work (its
--- work record, Core.lua: what its handlers, watchers, rules, listeners, timers, commands and deferred actions ran, kept
--- across stops and starts).
+-- (its messages, when spec.comms declares them), Users (how many running modules use a demand module), and Work. Work
+-- is its work record (Core.lua): what its handlers, watchers, rules, listeners, timers, commands, and deferred actions
+-- ran, kept across stops and starts.
 
 local ByteTerrace = ByteTerrace
 local C_Timer = C_Timer
@@ -63,7 +63,7 @@ local function ResetRuntime(module)
     end
 end
 
---- Creates a module object; AddOn:Module declares everything else.
+--- Creates a module object. AddOn:Module declares everything else.
 ---@param addon table the owning AddOn
 ---@param name string
 ---@param spec table
@@ -76,7 +76,7 @@ function ByteTerrace.NewModule(addon, name, spec)
     }, Module)
 end
 
---- Starts a demand module for one more user. Answers whether it runs: not while it's stopping, so a user started from
+--- Starts a demand module for one more user. Returns whether it runs: not while it's stopping, so a user started from
 --- its OnDisable doesn't run on it.
 ---@return boolean
 function Module:Acquire()
@@ -90,7 +90,7 @@ function Module:Acquire()
 end
 
 --- Calls fn() once after seconds, as one state batch, unless the module stops (or Cancel) first. Scheduling on a
---- stopped or stopping module (from OnDisable) is an error, as for On, Watch and Rule.
+--- stopped or stopping module (from OnDisable) is an error, as for On, Watch, and Rule.
 ---@param seconds number
 ---@param fn function
 ---@return table timer for Cancel
@@ -140,7 +140,7 @@ function Module:Callback(fn, ...)
     end
 end
 
---- Cancels a timer from After or Every; nil, or a timer that already ran, is ignored.
+--- Cancels a timer from After or Every. Passing nil, or a timer that already ran, is ignored.
 ---@param timer table?
 function Module:Cancel(timer)
     if timer and self.m_timers[timer] then
@@ -175,13 +175,14 @@ function Module:Every(seconds, fn)
     return timer
 end
 
---- A row's value.
+--- Returns a row's value.
 ---@param row integer|string relative to the module unless it contains "."
 function Module:Get(row)
     return self.Addon.State.Values[self:Id(row, 2)]
 end
 
---- A row's id, from its name (resolved once and cached) or an id passed straight through. An unknown row is an error.
+--- Returns a row's id, from its name (resolved once and cached) or an id passed straight through. An unknown row is an
+--- error.
 ---@param row integer|string
 ---@param level integer? the error level for a caller that wraps Id (1, the default, is Id's caller)
 ---@return integer
@@ -205,14 +206,14 @@ function Module:Id(row, level)
     return id
 end
 
---- Whether the module can accept work; OnDisable and dependency teardown are already stopped.
+--- Returns whether the module can accept work. It counts as stopped during OnDisable and dependency teardown.
 ---@return boolean
 function Module:IsRunning()
     return (self.Enabled and not self.m_stopping)
 end
 
---- Listens to a shared transport while this module runs. Stopping removes the listener, even during a delivery;
---- enabling again registers a fresh listener from OnEnable.
+--- Listens to a shared transport while this module runs. Stopping removes the listener, even during a delivery.
+--- Enabling again registers a fresh listener from OnEnable.
 ---@param comms table a module's Comms
 ---@param kind string uppercase message kind
 ---@param fn fun(sender: string, fields: string[])
@@ -255,8 +256,8 @@ function Module:On(event, fn, unit)
 end
 
 --- Calls fn(state, count, previous) after each publish in which a count row went up: how a feature reacts to something
---- that happened (a kill, a death, a star) rather than to a value. A count that goes down (a stopped module resetting
---- its rows) is only remembered.
+--- that happened (a kill, a death, or a star) rather than to a value. A count that goes down (a stopped module
+--- resetting its rows) is only remembered.
 ---@param row integer|string a number row
 ---@param fn fun(state: table, count: number, previous: number)
 ---@return table watcher
@@ -276,7 +277,7 @@ function Module:OnIncrease(row, fn)
     end, true)
 end
 
---- How many of the module's timers are pending.
+--- Returns how many of the module's timers are pending.
 ---@return integer
 function Module:PendingTimers()
     local count = 0
@@ -302,7 +303,7 @@ function Module:Prepare(uses)
     end
 end
 
---- Releases one user of a demand module; the last one stops it. Only a stopping user calls it, once for each Acquire it
+--- Releases one user of a demand module. The last one stops it. Only a stopping user calls it, once for each Acquire it
 --- made.
 function Module:Release()
     self.Users = (self.Users - 1)
@@ -326,14 +327,14 @@ function Module:ResolveRows(rows, level)
     return ids
 end
 
---- Resolves "row" to "<Module>.row"; a name containing "." ("combat.active") is already absolute.
+--- Resolves "row" to "<Module>.row". A name containing "." ("combat.active") is already absolute.
 ---@param row string
 ---@return string
 function Module:RowName(row)
     return ((row:find(".", 1, true) and row) or (self.Name .. "." .. row))
 end
 
---- State:Rule, owned by the module; reads may be relative row names.
+--- Adds a State:Rule that the module owns. Its reads can be relative row names.
 ---@param spec table { reads, when, changed, initial? }
 ---@return table watcher
 function Module:Rule(spec)
@@ -353,7 +354,7 @@ function Module:Rule(spec)
     return watcher
 end
 
---- Writes a row through State:Set; errors point at the caller.
+--- Writes a row through State:Set. Errors point at the caller.
 ---@param row integer|string
 function Module:Set(row, value)
     self.Addon.State:Set(self:Id(row, 2), value, 2)
@@ -365,7 +366,7 @@ end
 ---@param enabled boolean
 function Module:SetEnabled(enabled)
     if (enabled == self.Enabled) or self.m_stopping then
-        -- A stop in progress finishes first; a nested start or stop is ignored.
+        -- A stop in progress finishes first. A nested start or stop is ignored.
         return
     end
 
@@ -435,7 +436,7 @@ function Module:SetEnabled(enabled)
 end
 
 --- Connects the module to its enabled row and active rule. A module runs while its enabled row (if it has one) is true
---- and its spec.active rule (if any) holds; that's how a module depends on other rows, so a switched-off feature
+--- and its spec.active rule (if any) holds. That's how a module depends on other rows, so a switched-off feature
 --- registers nothing. A demand module waits for users.
 function Module:Start()
     local spec = self.Spec
@@ -467,7 +468,7 @@ function Module:Start()
     end)
 end
 
---- State:Watch, owned by the module.
+--- Adds a State:Watch that the module owns.
 ---@param rows (integer|string)[]
 ---@param fn fun(state: table)
 ---@param skipInitial boolean?

@@ -3,21 +3,23 @@
 // A coverage job loads each addon file instrumented (instrument below): every statement counts
 // its own hits, so statements that share a line are told apart, and a nested function's
 // statements never count for the code around it. The items, each keyed by the line its function
-// is defined on (owner; 0 for the file itself) and the line and column it starts at:
-//   * a simple statement (local, assignment, call, return, a named function) counts when it's
-//     reached, by a hit marker in front of it; it spans its lines, first to last
-//   * an if counts by its condition, which runs whenever the if is reached, so its marker sits
-//     in front of the if; an elseif's and a repeat's until condition are wrapped, keeping their
-//     value, and count each time they're evaluated; a while counts its condition and a for loop
-//     its header, both marked in front of the loop; their bodies are statements of their own
-//   * `local x` without a value (or with nil), `do ... end` and `break` are left out: they do
-//     nothing a test could miss on their own
+// is defined on (owner, or 0 for the file itself) and the line and column it starts at:
+//   * A simple statement (local, assignment, call, return, a named function) counts when it's
+//     reached, by a hit marker in front of it. It spans its lines, first to last.
+//   * An if counts by its condition, which runs whenever the if is reached, so its marker sits
+//     in front of the if. An elseif's condition and a repeat's until condition are wrapped,
+//     keeping their value, and count each time they're evaluated. A while counts its condition
+//     and a for loop its header, both marked in front of the loop. Their bodies are statements
+//     of their own.
+//   * `local x` without a value (or with nil), `do ... end`, and `break` are left out: they do
+//     nothing a test could miss on their own.
 //
 // Instrumenting keeps every line number and the chunk name ("@Addon/File.lua"), so errors and
 // tracebacks read as they do uninstrumented. The file becomes the body of a function that a
-// loader chunk returns, given the hit counts as its one upvalue (a marker is `H[i]=H[i]+1;`, a
-// wrapped condition `H.t(i, cond)`), all inserted on existing lines: no function gains a local
-// and each gains at most that one upvalue, within Lua 5.1's limits (200 locals, 60 upvalues).
+// loader chunk returns, given the hit counts as its one upvalue. A marker is `H[i]=H[i]+1;` and
+// a wrapped condition is `H.t(i, cond)`, all inserted on existing lines: no function gains a
+// local, and each gains at most that one upvalue, within Lua 5.1's limits (200 locals, 60
+// upvalues).
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -106,13 +108,13 @@ export function coverageItems(text) {
 // An item's key in the hits: "<line>:<column>" of where it starts.
 const keyOf = (item) => `${item.first}:${item.column}`;
 
-// The name of the hit counts in instrumented code; nothing in an addon is named this.
+// The name of the hit counts in instrumented code. Nothing in an addon is named this.
 const HITS = "__tlkHits";
 
 // A source rewritten to count its items' hits: { text, items }, or null when it doesn't parse
 // (loading the original then reports the syntax error). text is a chunk returning the instrumented
-// file as a function of the file's own arguments; call it with the counts table (H[i] = 0 for
-// each item, and H.t(i, v), which counts item i and returns v).
+// file as a function of the file's own arguments. Call it with the counts table: H[i] = 0 for each
+// item, and H.t(i, v), which counts item i and returns v.
 export function instrument(source) {
     let items;
     try {
@@ -143,11 +145,12 @@ export function instrument(source) {
     return { text, items: items.map(({ owner, first, last, column }) => ({ owner, first, last, column })) };
 }
 
-// The Lua side of a coverage job: __coverageStart() makes loadstring instrument the addons'
-// chunks ("@Addon/File.lua", the names Harness:LoadFiles in tests/harness/wow.lua loads each file
-// under) through __instrument (a JS function: source, chunk name -> "<id>\t<count>\n<text>", or
-// nil), compiling each distinct source once; __coverageStop() restores it; __coverageHits()
-// returns "<id>\t<item>,<item>..." per instrumented source, the items that ran.
+// The Lua side of a coverage job. __coverageStart() makes loadstring instrument the addons' chunks
+// through __instrument, compiling each distinct source once. The chunks are named
+// "@Addon/File.lua", the names Harness:LoadFiles in tests/harness/wow.lua loads each file under.
+// __instrument is a JS function: source, chunk name -> "<id>\t<count>\n<text>", or nil.
+// __coverageStop() restores loadstring. __coverageHits() returns "<id>\t<item>,<item>..." per
+// instrumented source: the items that ran.
 export const COVERAGE_LUA = `
     local realLoadstring = loadstring
     local loaded = {}

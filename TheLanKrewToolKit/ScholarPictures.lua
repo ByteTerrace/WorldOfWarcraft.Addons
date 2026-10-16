@@ -1,17 +1,17 @@
 local addonName, ns = ...
 
--- Scholar's pictures: riddles drawn so young players can count. ScholarView owns the frame's place on the screen; this
+-- Scholar's pictures: riddles drawn so young players can count. ScholarView owns the frame's place on the screen. This
 -- file fills it.
 --
 --   ns.ScholarPictures.Create(parent) -> frame   an empty picture area
 --   ns.ScholarPictures.Draw(frame, picture, tiles) -> height
 --     picture (from the puzzle) is { kind = "groups", groups, each } (bags of items), "join"
---     { a, b } (two piles), "take" { a, b } (a pile with b crossed out) or "count" { n }, each with
+--     { a, b } (two piles), "take" { a, b } (a pile with b crossed out), or "count" { n }, each with
 --     the item it counts ("apple"), drawn with that item's icon (a star when none is known), or
---     "line" { to, jumps, mark } (a number line from 0 to to in jumps equal jumps, its ends
---     labeled, with a star over the tick mark jumps from 0); tiles are an unscramble's letters,
---     drawn as letter tiles instead. Returns 0 when there's nothing to draw, and the frame is then
---     hidden.
+--     "line" { to, jumps, mark } (a number line from 0 to `to` in `jumps` equal jumps, its ends
+--     labeled, with a star over the tick `mark` jumps from 0); tiles are an unscramble's letters,
+--     drawn as letter tiles instead. Returns 0 when there's nothing to draw, and then hides the
+--     frame.
 --
 -- It also defines ns.ScholarStyle, the look the whole Scholar screen shares: { Palette, Solid, Border, StarIcon,
 -- WrongIcon, Backdrop(frame, edgeSize), BackdropColors(frame, fill, edge), TextColor(fontString, color) }. This file
@@ -20,7 +20,7 @@ local addonName, ns = ...
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local IconGap = 3
 local IconSize = 20
--- A number line's jump, tick and star, in pixels.
+-- A number line's jump, tick, and star, in pixels.
 local JumpWidth = 30
 local LineStarSize = 18
 local TickHeight = 12
@@ -107,7 +107,7 @@ local function BackdropColors(frame, fill, edge)
     end
 end
 
--- Lays out a number line (see the header) under its star, with its ends labeled below; returns its width and height.
+-- Lays out a number line (see the header) under its star, with its ends labeled below. Returns its width and height.
 local function DrawLine(pictures, picture)
     local width = (picture.jumps * JumpWidth)
     local bar = pictures.Bar
@@ -176,7 +176,7 @@ local function PictureIcon(pictures, index)
     return icon
 end
 
--- Places count icons in a grid of columns starting at (x, y); returns the grid's width and height.
+-- Places count icons in a grid of columns starting at (x, y). Returns the grid's width and height.
 local function Grid(pictures, first, count, columns, x, y, texture, crossedFrom)
     for n = 1, count do
         local icon = PictureIcon(pictures, (first + n) - 1)
@@ -207,7 +207,7 @@ local function TextColor(fontString, color)
     fontString:SetTextColor(color[1], color[2], color[3])
 end
 
--- Lays out an unscramble's letters as tiles; returns their width and height.
+-- Lays out an unscramble's letters as tiles. Returns their width and height.
 local function DrawTiles(pictures, tiles)
     local x = 0
 
@@ -325,7 +325,7 @@ local function Draw(pictures, picture, tiles)
     return height
 end
 
---- An empty picture area on parent.
+--- Creates an empty picture area on parent.
 ---@param parent table
 ---@return table frame
 function ScholarPictures.Create(parent)

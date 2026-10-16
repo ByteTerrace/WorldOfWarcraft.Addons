@@ -19,7 +19,7 @@ local Asked = {
     { expression = "56 / 7", fact = { a = 56, b = 7 }, grade = 3, kind = "math.divide" },
 }
 
--- Asks riddles (answering each right) until one of kind is up, or tries runs out; that riddle is left on screen.
+-- Asks riddles (answering each right) until one of kind is up, or tries runs out. That riddle stays on screen.
 local function Until(h, shown, test, tries)
     for _ = 1, tries do
         h:Slash("/tlk puzzle")

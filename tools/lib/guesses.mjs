@@ -2,14 +2,14 @@
 // fallback) with the claim it makes, the client names the claim is about, and how much depends on it, so the guesses
 // worth a probe come first.
 //
-// A guess's claim is the text from its marker to the end of its sentence or the next marker; a marker in parentheses
+// A guess's claim is the text from its marker to the end of its sentence or the next marker. A marker in parentheses
 // or followed by punctuation ("([G] the order)", "is restricted [C].") marks the sentence it sits in instead. Its
 // names are the snapshot's functions and events and the harness's methods the claim mentions, plus the function a
 // comment sits directly above (a fake or a Harness method). A namespace member named alone ("GetPowerLevel")
 // resolves to the one snapshot function it ends.
 //
 //   findGuesses(path, text)                  [{ path, line, marker, claim, words, follows }]
-//   rankGuesses(guesses, sources)            the guesses with names, addons, tests and probes, most depended on first
+//   rankGuesses(guesses, sources)            the guesses with names, addons, tests, and probes, most depended on first
 
 const Marker = /\[([GCDE])\]/g;
 const SentenceEnd = /[.!?](?=\s|$)/g;
@@ -103,8 +103,8 @@ const escape = (name) => name.replace(/[.:]/g, "\\$&");
 // library ("format", "table.count") reads as prose.
 const ApiShaped = (word) => /^[A-Z][A-Z0-9_]+$/.test(word) || (/[A-Z]/.test(word) && !/^(bit|coroutine|math|os|string|table)\./.test(word));
 
-// The snapshot names, events and Harness methods a guess is about. A member resolves only when it starts with a
-// capital, as the client's do.
+// The snapshot names, events, and Harness methods a guess is about. A member resolves only when it starts with
+// a capital, as the client's do.
 function namesOf(guess, { events, functions, members, methods }) {
     const names = new Set();
     const add = (word) => {

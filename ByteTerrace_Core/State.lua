@@ -5,8 +5,8 @@
 --                        (number), persist (default true), scope ("account" default, or
 --                        "character"), label / description / section (settings window), lockedBy
 --                        (a boolean row's name: while that row is true, writes to this row are
---                        refused, e.g. settings a parent locked). The spec is copied; the
---                        caller's table is never changed.
+--                        refused, such as settings a parent locked). The spec is copied, and
+--                        the caller's table is never changed.
 --   Compile(stores, modules)
 --                        sorts names to dense ids and validates every declaration, reporting all
 --                        problems at once. stores = { account = table, character = table? }: the
@@ -18,16 +18,16 @@
 --                        module are kept: a module whose file failed to load, or whose declaration
 --                        failed partway, must not lose its settings.
 --                        A records row (declared by Records.lua with records = true) is a
---                        collection's version; its store key holds the collection and is kept.
+--                        collection's version. Its store key holds the collection and is kept.
 --   Get / Set / Toggle   by id (hot paths) or name (boundaries). Every write is validated: kind,
 --                        enum, bounds, step, finiteness, and never a secret value, since rules
 --                        compute over rows.
 --   Watch / Rule         run after a publish in which one of their rows changed. Each run counts
 --                        as a change in the watcher's work record (a module's Work; the addon's
 --                        own by default), timed while the addon's Profiling is on.
---   BeginBatch/EndBatch  bracket a batch; the outermost EndBatch publishes.
+--   BeginBatch/EndBatch  bracket a batch, and the outermost EndBatch publishes.
 --
--- After compile, hot paths read state.Values[id] directly; Ids, Specs and Order (names in declaration order, the
+-- After compile, hot paths read state.Values[id] directly. Ids, Specs, and Order (names in declaration order, the
 -- settings layout) are public too. Nothing outside this file writes them. Counts (publishes and watcher runs since load
 -- or the last debug reset) and Trace (a callback for every published change of chosen rows) serve the debug command.
 --
@@ -36,7 +36,7 @@
 -- publish round. So writing a value and writing it back notifies no one, a watcher never reacts to a write made before
 -- it existed, and it hears every change after. A rule registered inside a batch takes its first verdict when that batch
 -- publishes, so what modules do while starting can't depend on the order they were declared in. Watchers run in
--- registration order, once per publish however many of their rows changed. Their writes publish in a further round; a
+-- registration order, once per publish however many of their rows changed. Their writes publish in a further round. A
 -- batch still scheduling watchers after MaxPublishRounds is reported, never looped forever. Persisted rows store only
 -- values that differ from the default, so a changed default applies.
 
@@ -119,7 +119,7 @@ local function Admits(spec, value)
     return true
 end
 
--- "Module.row" -> "Module".
+-- Returns a row name's module: "Module.row" -> "Module".
 local function ModuleOf(name)
     return (((type(name) == "string") and name:match("^([^.]+)%.")) or nil)
 end
@@ -350,8 +350,8 @@ local function Publish(self)
     local unsettled = self.m_touchedList
 
     if #unsettled > 0 then
-        -- Out of rounds. The leftover writes still count (versions move); only a batch that would run watchers yet
-        -- again is a real loop, and it is reported rather than run.
+        -- Out of rounds. The leftover writes still count (versions move). Only a batch that would run watchers yet
+        -- again is a real loop, and it's reported rather than run.
         local names = {}
 
         for i = 1, #unsettled do
@@ -503,8 +503,8 @@ local function Validate(name, spec, problems)
     end
 end
 
---- Whether value passes spec's admission check (secrecy, kind, finiteness, enum, bounds, step). Defaults, saved values
---- and live writes use the same boundary.
+--- Returns whether value passes spec's admission check (secrecy, kind, finiteness, enum, bounds, and step). Defaults,
+--- saved values, and live writes use the same boundary.
 ---@param spec table a validated row or field spec
 ---@return boolean ok
 ---@return string? why the reason when refused
@@ -555,12 +555,12 @@ function ByteTerrace.NewState(addon)
     }, State)
 end
 
---- Opens a batch; batches nest, and the outermost EndBatch publishes.
+--- Opens a batch. Batches nest, and the outermost EndBatch publishes.
 function State:BeginBatch()
     self.m_batchDepth = (self.m_batchDepth + 1)
 end
 
---- Assigns ids, validates every declaration (raising all problems at once) and loads persisted values from stores.
+--- Assigns ids, validates every declaration (raising all problems at once), and loads persisted values from stores.
 ---@param stores table { account = table, character = table? }
 ---@return string[] dropped saved keys reset because they no longer validate
 ---@return string[] unclaimed saved keys kept because no loaded module declares them
@@ -676,7 +676,7 @@ function State:EndBatch()
     end
 end
 
---- A row's value, by id or name.
+--- Returns a row's value, by id or name.
 ---@param ref integer|string
 function State:Get(ref)
     if type(ref) == "number" then
@@ -686,7 +686,7 @@ function State:Get(ref)
     return self.Values[self:Id(ref)]
 end
 
---- A row's id. An unknown name is an error.
+--- Returns a row's id. An unknown name is an error.
 ---@param name string
 ---@return integer
 function State:Id(name)
@@ -699,7 +699,7 @@ function State:Id(name)
     return id
 end
 
---- Whether a row is locked (its lockedBy row is true).
+--- Returns whether a row is locked (its lockedBy row is true).
 ---@param ref integer|string
 ---@return boolean
 function State:IsLocked(ref)
@@ -708,15 +708,15 @@ function State:IsLocked(ref)
     return ((spec.lockId ~= nil) and (self.Values[spec.lockId] == true))
 end
 
---- A row's name.
+--- Returns a row's name.
 ---@param id integer
 ---@return string
 function State:Name(id)
     return self.m_names[id]
 end
 
---- A verdict over rows. changed runs whenever the verdict flips; with spec.initial it also runs once with the first
---- verdict. Registered inside a batch, the first verdict is taken when the batch publishes.
+--- Adds a rule: a verdict over rows. changed runs whenever the verdict flips. With spec.initial, it also runs once with
+--- the first verdict. For a rule registered inside a batch, the first verdict is taken when the batch publishes.
 ---@param spec table { reads, when(state) -> boolean, changed(active, state), initial?, work? (as for Watch) }
 ---@return table watcher for Unwatch
 function State:Rule(spec)
@@ -749,7 +749,7 @@ function State:Rule(spec)
     return watcher
 end
 
---- Writes a row, validating the value first; outside a batch it publishes at once. Writing the value a row already
+--- Writes a row, validating the value first. Outside a batch, it publishes at once. Writing the value a row already
 --- holds returns before any validation.
 ---@param ref integer|string
 ---@param level integer? the error level for a caller that wraps Set (Module:Set passes 2)
@@ -840,7 +840,7 @@ function State:Trace(ids, fn)
     self.m_traced, self.m_traceFn = traced, fn
 end
 
---- Stops a watcher or rule; it doesn't run again, even later in a publish in progress. Stopping one twice finds nothing
+--- Stops a watcher or rule. It doesn't run again, even later in a publish in progress. Stopping one twice finds nothing
 --- to remove the second time.
 ---@param watcher table from Watch or Rule
 function State:Unwatch(watcher)
@@ -851,7 +851,7 @@ function State:Unwatch(watcher)
     end
 end
 
---- How many published changes a row has had since load.
+--- Returns how many published changes a row has had since load.
 ---@param ref integer|string
 ---@return integer
 function State:Version(ref)
@@ -874,7 +874,7 @@ function State:Watch(rows, fn, skipInitial, work)
     return watcher
 end
 
---- How many watchers and rules are registered.
+--- Returns how many watchers and rules are registered.
 ---@return integer
 function State:WatcherCount()
     local seen = {}

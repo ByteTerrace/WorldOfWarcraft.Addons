@@ -6,11 +6,12 @@
 //          reported only when no enclosing unit or block is itself in a cluster, so a function's
 //          inner blocks never count twice.
 //
-// Each body is fingerprinted twice over its tokens (whitespace and comments don't count): a
-// structural fingerprint with every identifier and literal replaced by a placeholder (so a copy with
-// renamed variables or changed constants still matches), and an exact one over the tokens' text.
-// Clusters share a structural fingerprint and weigh at least minTokens tokens; `exact` says how many
-// of a cluster's members are token for token the same. The output is ordered, so runs diff cleanly.
+// The detector fingerprints each body twice over its tokens, and whitespace and comments don't
+// count: a structural fingerprint with every identifier and literal replaced by a placeholder, and
+// an exact one over the tokens' text. The structural one still matches a copy with renamed
+// variables or changed constants. Clusters share a structural fingerprint and weigh at least
+// minTokens tokens. `exact` says how many of a cluster's members are token for token the same. The
+// output is ordered, so runs diff cleanly.
 
 import luaparse from "luaparse";
 import { parse, walk } from "./lua-scope.mjs";
@@ -130,7 +131,7 @@ function cluster(bodies, minTokens) {
  */
 export function findClones(files, { minTokens = DefaultMinTokens, minStatements = DefaultMinStatements } = {}) {
     const bodies = files.flatMap(({ path, text }) => bodiesOf(path, text, minStatements));
-    // Units first; then blocks outside every clustered unit and block, outermost first.
+    // Units come first, then blocks outside every clustered unit and block, outermost first.
     const clustered = new Set();
     const result = [];
     const take = (groups) => {

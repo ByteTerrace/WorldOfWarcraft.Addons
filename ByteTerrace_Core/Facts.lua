@@ -1,10 +1,10 @@
 -- Facts: game state that several modules rule over, published as runtime (unpersisted) rows. Each fact is a module
--- whose event adapter is the only code that reads the WoW API; every reader works from the row. No fact holds a secret:
+-- whose event adapter is the only code that reads the WoW API. Every reader works from the row. No fact holds a secret:
 -- an adapter whose API can return one checks issecretvalue and keeps the last known value.
 --
 -- An addon opts in with NewAddOn's facts = { ... }. Facts are declared before its own modules, so they're enabled first
--- and hold their real value before any other module's rules take their first reading (a /reload in combat must not look
--- like combat starting).
+-- and hold their real value before any other module's rules take their first reading. A /reload in combat must not look
+-- like combat starting.
 --
 --   combat.active  true while the player is in combat. Set on PLAYER_REGEN_DISABLED, before
 --                  InCombatLockdown() turns true.
@@ -30,7 +30,7 @@ ByteTerrace.Facts = {
             local state = module.Addon.State
 
             local function Update()
-                -- UnitIsAFK is secret during chat messaging lockdown; keep the last known value then.
+                -- UnitIsAFK is secret during chat messaging lockdown, so the adapter keeps the last known value then.
                 local afk = UnitIsAFK("player")
 
                 if not issecretvalue(afk) then

@@ -2,15 +2,15 @@ local addonName, ns = ...
 
 -- The math generators: one function per math kind in ScholarWords.kinds, registered in Kit.Generators for Generate
 -- (ScholarPuzzles.lua, which loads first), except the ones in ScholarMoney.lua and ScholarNumbers.lua, which load after
--- this file and build with the functions it lends through Kit (below). Pure like ScholarPuzzles.lua. Their text and
--- banks are ns.ScholarMathWords (ScholarMathWords.lua, which loads right before this file).
+-- this file and build with the functions it lends through Kit (below). Like ScholarPuzzles.lua, it's pure. Their text
+-- and banks are ns.ScholarMathWords (ScholarMathWords.lua, which loads right before this file).
 --
--- Every puzzle here is numeric: it carries value (the answer as a number; copper for money, tenths as a decimal) and,
+-- Every puzzle here is numeric: it carries value (the answer as a number: copper for money, tenths as a decimal) and,
 -- for calculations, expression (ASCII: + - x / and parentheses), so callers and tests can recompute it.
 --
 -- Each riddle lists the mistakes its kind invites, most telling first, as { n, why = name }: name is one of its text's
--- whys. The first that fits is required, so the mistake the riddle exists to catch is always a choice; the others are
--- kept, with their whys, when WrongNumbers draws them. Plain numbers are near misses.
+-- whys. The first that fits is required, so the mistake the riddle exists to catch is always a choice. WrongNumbers
+-- keeps the others, with their whys, when it draws them. Plain numbers are near misses.
 --
 -- The riddles that ask one fact (a small sum or difference, a times-table or division fact) set puzzle.fact = { a, b },
 -- the numbers in the order asked (a division's a is the number shared), and ask state.fact (Generate's fact option)
@@ -22,7 +22,7 @@ local addonName, ns = ...
 --   Kit.Text(text, cases)                                      that text with its cases laid over it
 --   Kit.Why(template, vars, extra), Kit.With(list, ...)        a why filled in; near misses appended
 
--- The factors multiplication's first level mixes in: the rules for 0, 1 and 10, and the doubles and fives.
+-- The factors multiplication's first level mixes in: the rules for 0, 1, and 10, and the doubles and fives.
 local EasyFactors = { 0, 1, 2, 5, 10 }
 
 -- Times-table factor ranges per level: { first from, first to, second from, second to }.
@@ -88,8 +88,8 @@ local function AddParts(a, b)
     }
 end
 
--- The fact state asks again (state.fact) as a, b, when both are whole numbers from 0 to 144 that fits(a, b) admits; nil
--- otherwise, and the riddle rolls its own.
+-- The fact state asks again (state.fact) as a, b, when both are whole numbers from 0 to 144 that fits(a, b) admits.
+-- Otherwise it's nil, and the riddle rolls its own.
 local function AskedFact(state, fits)
     local fact = (((type(state.fact) == "table") and state.fact) or {})
     local a = fact.a
@@ -177,7 +177,7 @@ local function Packs(state)
         { { (b * c), why = "packs" }, { ((a + b) * c), why = "leftToRight" }, { ((a + b) + c), why = "allAdded" }, (v + c), (v - c) }
 end
 
--- A price and a percent whose steps stay whole; sometimes the player's own gold.
+-- A price and a percent whose steps stay whole. The price is sometimes the player's own gold.
 local function PercentPlan(state)
     local mine = (state.context.copper and floor(state.context.copper / 10000))
 
@@ -268,7 +268,7 @@ end
 
 -- Which of four numbers is biggest or smallest. options: format (a number's text), places (its text with every decimal
 -- place, for the working), scale (the terms are n / scale), trap (the number with the longer-is-bigger why), and x and
--- y (the two numbers the step compares; by default, the first two that aren't the answer). The opposite extreme always
+-- y (the two numbers the step compares, by default the first two that aren't the answer). The opposite extreme always
 -- gets its why.
 local function Extreme(state, kind, key, four, biggest, options)
     local format = (options.format or tostring)
@@ -318,8 +318,8 @@ local function Extreme(state, kind, key, four, biggest, options)
     return Finish(state, kind, text, vars, format(best), wrongs)
 end
 
--- Hundredths that end in a tenth, beside the trap that's longer but smaller ("3.12" against "3.4"), the tenth below and
--- a number with a smaller whole part. The step compares the trap with the tenth below.
+-- Hundredths that end in a tenth, beside the trap that's longer but smaller ("3.12" against "3.4"), the tenth below,
+-- and a number with a smaller whole part. The step compares the trap with the tenth below.
 local function DecimalCompare(state)
     local whole = state.roll(1, 5)
     local tenth = state.roll(2, 9)
@@ -458,8 +458,8 @@ local function AddBig(state)
         { cases = (((parts.ones >= 10) and { "carry" }) or nil) })
 end
 
--- Addition within the grade's cap: the sum is rolled first and then split, so every sum and split is as likely. A sum
--- past 10 from two numbers under 10 makes a ten first; the rest count on from the bigger number.
+-- Addition within the grade's cap: it rolls the sum first and then splits it, so every sum and split is as likely. A
+-- sum past 10 from two numbers under 10 makes a ten first; the rest count on from the bigger number.
 local function AddSmall(state)
     local cap = SmallCap[min(state.grade, 1)][state.level]
     local low = (((state.grade == 0) and 1) or 2)
@@ -497,7 +497,7 @@ local function AddSmall(state)
     return puzzle
 end
 
--- Two-digit times one-digit, worked as partial products; the classic slip is leaving out the carry.
+-- Two-digit times one-digit, worked as partial products. The classic slip is leaving out the carry.
 local function MultiplyBig(state)
     local range = ({ { 11, 25, 2, 5 }, { 12, 60, 3, 9 }, { 25, 99, 6, 9 } })[state.level]
     local a = state.roll(range[1], range[2])
@@ -525,7 +525,7 @@ local function MultiplyBig(state)
         { cases = (((carry > 0) and { "carry" }) or nil) })
 end
 
--- Times-table facts. Level 1 mixes the rules for 0, 1 and 10 with the doubles and fives, either factor first.
+-- Times-table facts. Level 1 mixes the rules for 0, 1, and 10 with the doubles and fives, either factor first.
 local function MultiplyFacts(state)
     local a, b = AskedFact(state, FitsTimes)
 
@@ -644,7 +644,7 @@ Generators["math.count"] = function(state)
     return puzzle
 end
 
--- Tenths: adding (level 1 stays under 1), subtracting at level 3, comparing at level 2.
+-- Tenths: adding (level 1 stays under 1), subtracting at level 3, and comparing at level 2.
 Generators["math.decimal"] = function(state)
     if (state.level == 2) and Chance(state, 2) then
         return DecimalCompare(state)
@@ -744,7 +744,7 @@ Generators["math.multistep"] = function(state)
     return Numeric(state, "math.multistep", key, vars, wrong, {})
 end
 
--- Of a price, or off it; the steps build the percent from a tenth, a half or a quarter.
+-- A percent of a price, or off it. The steps build the percent from a tenth, a half, or a quarter.
 Generators["math.percent"] = function(state)
     local n, p, mine = PercentPlan(state)
     local off = ((n * p) / 100)

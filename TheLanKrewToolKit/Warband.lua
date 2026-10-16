@@ -4,21 +4,22 @@ local addonName, ns = ...
 --
 -- Three account-wide collections:
 --   ledger   the people the Krew chose: grudge (someone who killed one of us), mark (marked for
---            death) and glory (a champion the Krew aids, whatever their faction). It never forgets
+--            death), and glory (a champion the Krew aids, whatever their faction). It never forgets
 --            anyone: at LedgerLimit it refuses newcomers, and says so, until you forgive someone.
 --   wars     guilds the Krew is at war with: every member counts as an enemy of the Krew.
 --   people   rivalry records for every enemy player you've met: class, level, guild, times seen,
 --            where, and the score (our kills of them against their kills of us). At PeopleLimit
---            the strangers seen longest ago make room, PeopleTrim at a time; ledger people stay.
+--            the strangers seen longest ago make room, PeopleTrim at a time. Ledger people stay.
 --
 -- What it does with them:
---   Sightings  when a ledger player or a member of a guild at war shows up (nameplate, target or
---              mouseover), a raid warning says so; for a mark or grudge the Krew hears where, and
---              a champion in a fight asks the Krew for aid. Nameplate badges (WarbandBadges.lua) and the nearby-enemies window
---              (WarbandRadar.lua) show the same standing. Each person alerts once per AlertCooldown,
---              and a brawl doesn't stack warnings: the alerts that follow one within AlertWindow
---              merge into one summary with one sound when it ends ("3 more grudges nearby: ..."),
---              ordered mark, grudge, war, champion. The Krew still hears of each sighting.
+--   Sightings  when a ledger player or a member of a guild at war shows up (nameplate, target, or
+--              mouseover), a raid warning says so. For a mark or grudge, the Krew hears where, and
+--              a champion in a fight asks the Krew for aid. Nameplate badges (WarbandBadges.lua)
+--              and the nearby-enemies window (WarbandRadar.lua) show the same standing. Each
+--              person alerts once per AlertCooldown, and a brawl doesn't stack warnings: the
+--              alerts that follow one within AlertWindow merge into one summary with one sound
+--              when it ends ("3 more grudges nearby: ..."), ordered mark, grudge, war, then
+--              champion. The Krew still hears of each sighting.
 --   Vengeance  an honorable kill on a marked or grudge enemy settles the score, for everyone.
 --   Grudges    WarbandDeaths.lua names who killed you and offers to hold a grudge.
 --   Rally      /tlk rally calls the Krew to your position: a raid warning and a map waypoint.
@@ -31,19 +32,19 @@ local addonName, ns = ...
 --   Remember, CountDeath    update a rivalry record; count a Krew member's death to someone
 --   TakeFoe                 the prime suspect when you die
 --   IdentifyNow(unit)       Identify, reusing this frame's reading of the same player (tooltips)
---   Labels, Icons, Order    each standing's display name, raid-target icon and sort rank
+--   Labels, Icons, Order    each standing's display name, raid-target icon, and sort rank
 --   Mark, HoldGrudge, Glory, Forgive, DeclareWar, MakePeace   the ledger and war actions (the
 --                           first three answer false when the full ledger refused a newcomer)
 --   Module                  the Warband module, for WarbandMessages.lua's listeners
 --   SetKind, Avenge, HeardSighting, FreshGathering   what the Krew's messages do to the ledger,
---                           the kill tally and the report cooldowns (WarbandMessages.lua)
+--                           the kill tally, and the report cooldowns (WarbandMessages.lua)
 --   OnNearby(info)          set by WarbandRadar.lua while it runs: each hostile player seen
 --   OnPlate(unit, info)     set by WarbandBadges.lua while it runs: each nameplate that appears,
 --                           with its info (nil for no readable player), so a plate is read once
 --
 -- Everything shared goes through ns.Krew (Krew.lua): hidden addon messages to your own group only, rate-limited, never
--- during chat messaging lockdown; WarbandMessages.lua hears the Krew's messages and shares your marks and wars with
--- members who join. Names come from nameplates, your target and mouseover, which the client keeps readable for players
+-- during chat messaging lockdown. WarbandMessages.lua hears the Krew's messages and shares your marks and wars with
+-- members who join. Names come from nameplates, your target, and mouseover, which the client keeps readable for players
 -- outside PvP matches. Your honorable kills come from ByteTerrace_Core's kills fact, and your killers from its death
 -- fact (WarbandDeaths.lua).
 
@@ -76,7 +77,7 @@ local SeenWriteInterval = 60
 local SightCooldown = 120
 local WarsLimit = 50
 
--- Each standing's raid-target icon: a star for glory, a cross for grudge, a skull for mark and a square for war.
+-- Each standing's raid-target icon: a star for glory, a cross for grudge, a skull for mark, and a square for war.
 local Icons = {
     glory = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1",
     grudge = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_7",
@@ -135,7 +136,7 @@ local Gathering = {}
 local Held = {}
 -- Maps each held champion in a fight to true.
 local HeldFighting = {}
--- Each maps a key to the GetTime() of its last alert, counted kill and Krew report, in that order.
+-- Each maps a key to the GetTime() of its last alert, counted kill, and Krew report, in that order.
 local LastAlert = {}
 -- The info of the hostile player you last targeted, plus its time.
 local LastFoe
@@ -193,7 +194,7 @@ local function DeclareWar(guild)
     Addon:Print("The Krew is at war with <" .. GuildName(guild) .. ">.")
 end
 
---- "Bob Doe (60 Rogue)", with whatever the rivalry record knows.
+--- Returns "Bob Doe (60 Rogue)", with whatever the rivalry record knows.
 ---@param key string
 ---@return string
 local function Describe(key)
@@ -225,8 +226,8 @@ local function Forgive(key)
     Addon:Print("Forgave " .. key .. ".")
 end
 
---- Whether a gathering in a subzone is news: not reported, by you or the Krew, in the last IntelCooldown seconds. News
---- counts as reported from now on.
+--- Returns whether a gathering in a subzone is news: not reported, by you or the Krew, in the last IntelCooldown
+--- seconds. News counts as reported from now on.
 ---@param zone string
 ---@param subZone string
 ---@return boolean fresh
@@ -256,7 +257,8 @@ local function GuildSubject(arg)
     return ((info and (info.guild ~= "") and info.guild) or nil)
 end
 
---- The Krew was just told about key (a SIGHT message): you don't report them again for SightCooldown seconds.
+--- Records that the Krew was just told about key (a SIGHT message), so you don't report them again for SightCooldown
+--- seconds.
 ---@param key string
 local function HeardSighting(key)
     LastShared[key] = GetTime()
@@ -323,8 +325,8 @@ local function EndWindow()
     wipe(HeldFighting)
 end
 
---- What the client lets addons know about a player unit (Identify), reusing Seen's reading of the same player in the
---- same frame: a mouseover's tooltip follows its UPDATE_MOUSEOVER_UNIT.
+--- Returns what the client lets addons know about a player unit (Identify), reusing Seen's reading of the same player
+--- in the same frame: a mouseover's tooltip follows its UPDATE_MOUSEOVER_UNIT.
 ---@param unit string
 ---@return table? info
 local function IdentifyNow(unit)
@@ -335,7 +337,8 @@ local function IdentifyNow(unit)
     return Identify(unit)
 end
 
---- What someone's rivalry record knows about them, as an info (Identify's shape; blank fields for a stranger).
+--- Returns what someone's rivalry record knows about them, as an info (Identify's shape, with blank fields for a
+--- stranger).
 ---@param key string
 ---@return table info
 local function Known(key)
@@ -376,7 +379,7 @@ local function Place()
     return PlaceZone, PlaceSubZone
 end
 
--- Counts hostile players on nameplates; enough of them in a subzone is a gathering worth reporting.
+-- Counts hostile players on nameplates. Enough of them in a subzone is a gathering worth reporting.
 local function CountGathering(info)
     if not WarbandModule:Get("intel") then
         return
@@ -460,7 +463,7 @@ local function Remember(key, info, values)
     People:Set(key, values)
 end
 
--- Counts a kill of key against them and their guild at war; false when it was already counted.
+-- Counts a kill of key against them and their guild at war. Returns false when the kill was already counted.
 local function CountKill(key)
     local now = GetTime()
 
@@ -479,7 +482,7 @@ local function CountKill(key)
     return true
 end
 
---- A person's score line: "Krew 3 : 5 Bob" is our kills of them against their kills of us.
+--- Returns a person's score line: "Krew 3 : 5 Bob" is our kills of them against their kills of us.
 ---@param key string
 ---@return string
 local function Score(key)
@@ -589,8 +592,8 @@ local function SetKind(key, kind, by)
     return true
 end
 
--- Puts a player in the ledger as kind, from you, and tells the Krew with message; false when the full ledger refused
--- them (the Krew isn't told).
+-- Puts a player in the ledger as kind, from you, and tells the Krew with message. Returns false when the full ledger
+-- refused them (the Krew isn't told).
 local function Choose(info, kind, message)
     Remember(info.key, info)
 
@@ -643,7 +646,8 @@ local function Mark(info)
     return Choose(info, "mark", "MARK")
 end
 
---- A person's standing with the Krew: their ledger kind, else "war" when their guild is at war with the Krew, else nil.
+--- Returns a person's standing with the Krew: their ledger kind, else "war" when their guild is at war with the Krew,
+--- else nil.
 ---@param key string
 ---@param guild string? their guild key; the rivalry record's when omitted
 ---@return string? status "mark", "grudge", "glory" or "war"
@@ -668,8 +672,8 @@ local function IsHunted(key)
     return ((status == "mark") or (status == "grudge"))
 end
 
---- A Krew member took down key (a KILL message): when the Krew hunts them, the kill counts (once, however many tell of
---- it) and the vengeance card names who did it.
+--- Handles a Krew member taking down key (a KILL message): when the Krew hunts them, the kill counts (once, however
+--- many tell of it), and the vengeance card names who did it.
 ---@param key string
 ---@param by string the Krew member
 local function Avenge(key, by)
@@ -689,8 +693,8 @@ local function OnKill(victim)
 end
 
 -- A player unit came into view: a nameplate (plate), your target, or mouseover. It's read once, for the badges
--- (Warband.OnPlate) and the prime suspect too (suspect: a hostile player you engage; "fighting" for one that's in
--- combat, asked only of a hostile player).
+-- (Warband.OnPlate) and the prime suspect too. The suspect argument marks a hostile player you engage, or is "fighting"
+-- for one that's in combat (asked only of a hostile player).
 local function Seen(unit, plate, suspect)
     local info = Identify(unit)
 
@@ -745,7 +749,7 @@ local function Seen(unit, plate, suspect)
     end
 end
 
---- The player a command is about: a typed name (Warband.PlayerNamed), or your target.
+--- Returns the player a command is about: a typed name (Warband.PlayerNamed), or your target.
 ---@param arg string? the command's argument: a full name ("First Last")
 ---@return table? info nil for a bad name, or no name and no player target
 local function Subject(arg)
@@ -762,8 +766,8 @@ local function Subject(arg)
     end
 end
 
---- The prime suspect when you die: the hostile player you target, else the one you last targeted (or moused over in
---- combat) within FoeMemory seconds. Taking it forgets the last one.
+--- Returns the prime suspect when you die: the hostile player you target, else the one you last targeted (or moused
+--- over in combat) within FoeMemory seconds. Taking it forgets the last one.
 ---@return table? info
 local function TakeFoe()
     local suspect

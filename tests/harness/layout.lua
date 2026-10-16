@@ -1,6 +1,6 @@
 -- Layout of the fake client's widgets (widgets.lua uses it): deterministic stand-ins for the sizes the client computes.
 -- A FontString's text is CharWidth px per character (the longest line) by LineHeight px per line, wrapped at character
--- boundaries to its width unless SetWordWrap(false); a region's size along an axis is its anchored size (two opposite
+-- boundaries to its width unless SetWordWrap(false). A region's size along an axis is its anchored size (two opposite
 -- anchors on the same relative region, or SetAllPoints), else its set size, else 0 (a FontString falls back to its
 -- string size).
 --
@@ -26,7 +26,7 @@ local Axes = {
 
 local Size
 
--- SetPoint(point [, relativeTo [, relativePoint]] [, x, y]); a point replaces the same point.
+-- SetPoint(point [, relativeTo [, relativePoint]] [, x, y]). A point replaces the same point.
 local function Anchor(s, point, a, b, c, d)
     local relativeTo
     local relativePoint

@@ -1,6 +1,6 @@
 // deploy's and package's own tests. Link handling is tested as pure functions over paths, and
 // end to end only against an AddOns folder in a temporary directory, never the real install.
-// package's versions, changelog and zip are pure functions, and its build reads HEAD without
+// package's versions, changelog, and zip are pure functions, and its build reads HEAD without
 // writing anywhere.
 
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
@@ -65,7 +65,7 @@ export const tests = [
         },
     },
     {
-        // The addon in another worktree is this repo's own; another addon's folder, or a folder
+        // The addon in another worktree is this repo's own. Another addon's folder, or a folder
         // outside every worktree, isn't. A dangling link beside or inside a worktree was one.
         name: "deploy treats a link to the same addon in any worktree of this repository as its own",
         run: async () => {

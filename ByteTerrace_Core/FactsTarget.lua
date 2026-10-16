@@ -4,7 +4,7 @@
 --   target.serial       bumps on every target change.
 --   target.enemyPlayer  the target is an attackable player (re-checked when a duel or PvP flag
 --                       changes attackability).
---   target.formidable   the target is attackable and elite, rare elite, a world boss, a boss mob
+--   target.formidable   the target is attackable and elite, rare elite, a world boss, a boss mob,
 --                       or skull level (too far above you to show its level).
 --   target.alive        the target is alive.
 --   target.died         the enemy player target died while targeted (not a corpse you selected).
@@ -13,7 +13,7 @@
 --                       it counts for a target that became attackable while you targeted it (the
 --                       duel starting), never for one attackable when you targeted it or reloaded.
 --
--- Health changes are the hot path in a fight: they only re-read whether the target lives (one API call). Attackability
+-- Health changes are the hot path in a fight: they re-read only whether the target lives (one API call). Attackability
 -- and rank re-read on the events that change them, and attackability on health changes too while the target is a player
 -- who isn't an enemy yet (a duel about to start), in case the client doesn't say so otherwise. Whether the target is a
 -- player is read once per target, and its rank once per target too, only when it's attackable.
@@ -36,7 +36,7 @@ local function IsTrue(value)
     return (not issecretvalue(value) and (value == true))
 end
 
--- Whether the target is elite, rare elite, a world boss, a boss mob or skull level.
+-- Whether the target is elite, rare elite, a world boss, a boss mob, or skull level.
 local function IsFormidable()
     local classification = UnitClassification("target")
 
@@ -85,8 +85,8 @@ ByteTerrace.Facts.target = {
             return (hostile and isPlayer), (hostile and rank), not IsTrue(UnitIsDeadOrGhost("target"))
         end
 
-        -- The same target lives or dies; wasEnemy says it was an enemy player while alive (one may stop being
-        -- attackable as it dies).
+        -- The same target lives or dies. wasEnemy says it was an enemy player while alive, since one may stop being
+        -- attackable as it dies.
         local function Live(isAlive, wasEnemy)
             if isAlive and not state.Values[alive] then
                 -- The target was resurrected, so a death from here on counts again.
@@ -98,7 +98,7 @@ ByteTerrace.Facts.target = {
             state:Set(alive, isAlive)
         end
 
-        -- Same target, new facts: attackability, rank, death, resurrection.
+        -- Same target, new facts: attackability, rank, death, and resurrection.
         local function Refresh()
             local isEnemy, isFormidable, isAlive = Read()
 

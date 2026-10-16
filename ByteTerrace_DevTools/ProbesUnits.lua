@@ -3,7 +3,7 @@ local addonName, ns = ...
 -- Calibration probes about units: identity and health (secret or plain, idle and in combat), health percent,
 -- classification, primary power, combo points, nameplate frames, the UNIT_COMBAT payloads and UNIT_AURA tokens
 -- DevTools.lua collects, and whether aura sounds (C_UnitAuras.AddAuraSound) register. Probes.lua's header is the
--- contract; ProbeNeeds.lua defines the needs.
+-- contract, and ProbeNeeds.lua defines the needs.
 
 -- UnitClassification's documented answers (warcraft.wiki.gg API_UnitClassification).
 local Classifications = {
@@ -27,7 +27,7 @@ local Shape = Probes.Shape
 local UnitCombat = Probes.UnitCombat
 local Value = Probes.Value
 
--- A unit's UnitClassification and UnitLevel, as shapes; isSkull is a plain level of -1.
+-- Returns a unit's UnitClassification and UnitLevel, as shapes. isSkull is a plain level of -1.
 local function Classification(unit)
     local classification = UnitClassification(unit)
     local level = UnitLevel(unit)
@@ -41,7 +41,8 @@ local function Classification(unit)
     }
 end
 
--- The player's combo points, as shapes: UnitPower and UnitPowerMax of the power type, and GetComboPoints on the target.
+-- Returns the player's combo points, as shapes: UnitPower and UnitPowerMax of the power type, and GetComboPoints on the
+-- target.
 local function ComboPoints()
     local comboPoints = Enum.PowerType.ComboPoints
     -- secret: recorded by Shape as a marker
@@ -63,7 +64,7 @@ local function Health(unit)
     return { health = Shape(health), healthMax = Shape(healthMax) }
 end
 
--- UnitHealthPercent and UnitHealthMissing, with and without predicted healing, as shapes.
+-- Returns UnitHealthPercent and UnitHealthMissing, with and without predicted healing, as shapes.
 local function HealthSignals(unit)
     -- secret: recorded by Shape as a marker
     local percent = UnitHealthPercent(unit)
@@ -80,8 +81,8 @@ local function HealthSignals(unit)
     }
 end
 
--- A unit's identity: UnitName, UnitClass and UnitGUID, as shapes. withRealm adds UnitName's realm, for units whose
--- realm is always the player's (an NPC's is nil).
+-- Returns a unit's identity: UnitName, UnitClass, and UnitGUID, as shapes. withRealm adds UnitName's realm, for units
+-- whose realm is always the player's (an NPC's is nil).
 local function Identity(unit, withRealm)
     -- secret: recorded by Shape as a marker
     local name, realm = UnitName(unit)
@@ -96,7 +97,7 @@ local function Identity(unit, withRealm)
     }
 end
 
--- The nameplate frame of a non-player unit (enemy or friendly, NamePlateToken), as shapes.
+-- Returns the nameplate frame of a non-player unit (enemy or friendly, NamePlateToken), as shapes.
 local function NamePlateShape(enemy)
     local plate = C_NamePlate.GetNamePlateForUnit(NamePlateToken(enemy))
 
@@ -115,8 +116,8 @@ local function NamePlateShape(enemy)
     }
 end
 
--- A unit's primary power, as shapes: UnitPowerType's number and token, UnitPower and UnitPowerMax of that type (no
--- PowerType argument). Any class answers: mana, rage and energy are all primary.
+-- Returns a unit's primary power, as shapes: UnitPowerType's number and token, and UnitPower and UnitPowerMax of that
+-- type (no PowerType argument). Any class answers: mana, rage, and energy are all primary.
 local function PrimaryPower(unit)
     local powerType, token = UnitPowerType(unit)
     -- secret: recorded by Shape as a marker
@@ -128,7 +129,7 @@ local function PrimaryPower(unit)
 end
 
 -- Registers an aura sound for AuraSoundSpellID on the player with throttleSeconds, then removes it by the ID it
--- returned: whether either call errored, and the ID's shape.
+-- returned. Returns whether either call errored, and the ID's shape.
 local function TryAuraSound(throttleSeconds)
     local auras = C_UnitAuras
 
@@ -150,7 +151,7 @@ end
 
 Probes.Define({
     {
-        -- What addon code may do with a secret (UnitHealth("player") is always one, probed): each operation is tried in
+        -- What addon code can do with a secret (UnitHealth("player") is always one, probed): each operation is tried in
         -- pcall, so a refusal is recorded instead of raised. The *Result fields give what an allowed operation returned
         -- (a secret's marker, or its type), or "refused".
         name = "secrets.operations",
@@ -387,7 +388,7 @@ Probes.Define({
     },
     {
         accumulates = true,
-        -- PARTY_KILL is how killing-blow addons read kills since the combat log closed: whose blow (you, your pet,
+        -- PARTY_KILL is how killing-blow addons read kills since the combat log closed: whose blow (you, your pet, or
         -- someone else) and the victim's kind. UNIT_DIED and PLAYER_TARGET_DIED are new in the same client.
         name = "kills.seen",
         needs = { "killedMob" },

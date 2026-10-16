@@ -1,23 +1,23 @@
 local addonName, ns = ...
 
--- More math generators, registered in Kit.Generators like ScholarMath.lua's, whose builders (Kit.Numeric, Text, Why and
--- With) they share: place value, telling time, the number line, the order of operations, and math from the player's own
--- quests. Pure like ScholarPuzzles.lua. Their text and banks are ns.ScholarNumberWords (ScholarNumberWords.lua); the
--- order of operations reads ScholarMathWords' order text.
+-- More math generators, registered in Kit.Generators like ScholarMath.lua's, whose builders (Kit.Numeric, Text, Why,
+-- and With) they share: place value, telling time, the number line, the order of operations, and math from the player's
+-- own quests. Like ScholarPuzzles.lua, they're pure. Their text and banks are ns.ScholarNumberWords
+-- (ScholarNumberWords.lua). The order of operations reads ScholarMathWords' order text.
 --
 -- Every puzzle here is numeric, like ScholarMath.lua's: value is the answer as a number and expression its calculation.
--- A time of day is minutes, its hour (1 to 12) times 60 plus its minutes, so 2:45 is 165; its choices read as a clock
+-- A time of day is minutes, its hour (1 to 12) times 60 plus its minutes, so 2:45 is 165. Its choices read as a clock
 -- does ("2:45"), and a length of time's as minutes ("35 minutes"). A number line's star riddle carries picture = { kind
--- = "line", to, jumps, mark, row }: a line from 0 to to in jumps equal jumps with a star on the tick mark jumps from 0,
--- which ScholarPictures draws in place of row, the line as text in the prompt, through grade 3.
+-- = "line", to, jumps, mark, row }: a line from 0 to `to` in `jumps` equal jumps, with a star on the tick `mark` jumps
+-- from 0. ScholarPictures draws it in place of `row`, the line as text in the prompt, through grade 3.
 --
 -- math.quest counts with state.known (every QuestBook record): an objective's count and name with its quest's giver or
 -- title, two objectives' total, a vendor's copper for a quest's items (with the player's own copper when it's small),
 -- and the quests the book holds and has turned in. ScholarWords.fromQuests lists it, so Scholar asks it only while the
--- quest book holds a quest; when no record fits, it tells the same riddles about a stock hero, giver and item from
+-- quest book holds a quest. When no record fits, it tells the same riddles about a stock hero, giver, and item from
 -- ScholarWords' quest banks.
 
--- The longest giver, objective and title, in bytes, a quest riddle names.
+-- The longest giver, objective, and title, in bytes, a quest riddle names.
 local MaxGiver = 24
 local MaxObjective = 28
 local MaxTitle = 36
@@ -197,7 +197,7 @@ local OrderForms = {
 }
 
 -- The number closest to t: one sits gap away, and every other farther. The trap shares t's leading digit but sits
--- farther off; the rest fall below or above t so the answer's rank among the four gives nothing away.
+-- farther off. The rest fall below or above t, so the answer's rank among the four gives nothing away.
 local function Closest(state)
     local scale = (((state.grade >= 3) and 10) or 1)
     local t = ((10 * scale) * state.roll(2, 8))
@@ -315,8 +315,8 @@ local function Halfway(state)
         {})
 end
 
--- A star on a line of equal jumps, its prompt holding the line as text; drawn as a picture in the early grades, like
--- the other pictures (ScholarPuzzles.lua).
+-- A star on a line of equal jumps, its prompt holding the line as text. It's drawn as a picture in the early grades,
+-- like the other pictures (ScholarPuzzles.lua).
 local function Mark(state)
     local line = Pick(state, Lines[Tier(state)])
     local e = line[1]
@@ -407,7 +407,7 @@ local function QuestCounts(state)
 end
 
 -- How many more an objective needs. The amount done is never the answer or one short of it, which the hint and step
--- name; a stock riddle tells it about a stock hero.
+-- name. A stock riddle tells it about a stock hero.
 local function QuestMore(state, objectives, cap)
     local stock = (#objectives == 0)
     local objective = (((not stock) and Pick(state, objectives)) or nil)
@@ -549,13 +549,13 @@ local function QuestTotal(state, objectives, cap)
     return Numeric(state, "math.quest", NumberWords.questTotal, vars, With(named, (v + 1), (v - 1), (v + 2), (v + 10)), { cases = cases })
 end
 
--- A number of hundreds, tens or ones as the place-value texts say it: "3 hundreds", "1 ten".
+-- A number of hundreds, tens, or ones as the place-value texts say it: "3 hundreds", "1 ten".
 local function Said(n, at)
     return Count(n, Places[at])
 end
 
--- A number built from its hundreds, tens and ones, said in a shuffled order or in place order: "7 ones and 4 tens". A
--- zero tens place is left out of what's said, the classic trap.
+-- A number built from its hundreds, tens, and ones, said in a shuffled order or in place order: "7 ones and 4 tens". A
+-- zero tens place is left out of what's said: the classic trap.
 local function Build(state)
     local count = min(PlaceDigits[min(state.grade, 4)][state.level], 3)
     local digits = DistinctNumber(state, count)
@@ -631,7 +631,7 @@ local function Build(state)
     return Numeric(state, "math.placeValue", NumberWords.build, vars, With(named, (v + 10), (v - 10), (v + 1), (v - 1)), { cases = cases })
 end
 
--- What a digit is worth where it sits; never the ones place, where the digit is its own worth.
+-- What a digit is worth where it sits. It's never the ones place, where the digit is its own worth.
 local function DigitWorth(state)
     local count = PlaceDigits[min(state.grade, 4)][state.level]
     local digits, n = DistinctNumber(state, count)
@@ -744,7 +744,7 @@ local function TensIn(state)
         { cases = (((hd > 0) and { "hundreds" }) or nil) })
 end
 
--- When a trip ends, from its start and how long it lasts; at the last tier it can cross into the next hour, but never
+-- When a trip ends, from its start and how long it lasts. At the last tier, it can cross into the next hour, but never
 -- ends right on it.
 local function TimeElapsed(state)
     local tier = Tier(state)
@@ -776,7 +776,7 @@ local function TimeElapsed(state)
         { cases = ((cross and { "cross" }) or nil), format = Clock, hi = 779, lo = 60 })
 end
 
--- A time read from the clock's hands. The long hand's number is minutes by fives; the short hand sits between its hour
+-- A time read from the clock's hands. The long hand's number is minutes by fives. The short hand sits between its hour
 -- and the next, except at o'clock.
 local function TimeHands(state)
     local tier = Tier(state)

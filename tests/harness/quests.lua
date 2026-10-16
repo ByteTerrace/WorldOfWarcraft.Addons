@@ -2,18 +2,18 @@
 -- Blizzard's interaction manager opens). See wow.lua for the rest.
 --
 -- State: h.questLog (the quests in the log, in order: { id, title, text, goal, objectives, header, level }),
--- h.questTitles ([questID] = title, for every quest the client has seen) and h.questDialog (nil, or { panel = "detail"
+-- h.questTitles ([questID] = title, for every quest the client has seen), and h.questDialog (nil, or { panel = "detail"
 -- | "reward", quest, reward }) with the giver as the "questnpc" and "npc" units while it's open. A quest spec is { id,
 -- title, text (the description), goal (the objective summary), objectives = { { text (what the objective names: an
 -- item, a creature, a task), required, type ("item" unless given), uncached } }, header (the log's zone header), level
--- }; missing fields get stand-ins. h.gossip is the open gossip window's NPC (or nil), and h.interactions the open
+-- }. Missing fields get stand-ins. h.gossip is the open gossip window's NPC (or nil), and h.interactions the open
 -- interaction manager windows ([Enum.PlayerInteractionType value] = true).
 --
 --   h:OfferQuest(spec, giver)     the giver's offer panel: QUEST_DETAIL(0)
 --   h:AcceptQuest()               accepts the offer: QUEST_ACCEPTED(id), QUEST_LOG_UPDATE, QUEST_FINISHED
 --   h:AutoAcceptQuest(spec)       an area trigger's quest, straight into the log: no dialog, no text shown
 --   h:OpenTurnIn(id, ender, reward)  the reward panel of a quest in the log: QUEST_COMPLETE
---   h:CompleteQuest(xp, money)    clicks Complete Quest: QUEST_TURNED_IN(id, xp, money),
+--   h:CompleteQuest(xp, money)    selects Complete Quest: QUEST_TURNED_IN(id, xp, money),
 --                                 QUEST_REMOVED(id, false), QUEST_LOG_UPDATE, QUEST_FINISHED
 --   h:LoadQuestNames()            the client has loaded the names uncached objectives lacked:
 --                                 QUEST_LOG_UPDATE
@@ -25,7 +25,7 @@
 -- Modeling decisions ([D] documented or seen in Blizzard's Forever UI source, [E] observed in the client, [G] a guess
 -- where neither says):
 --   Dialogs     [D] Forever loads the Mainline QuestFrame (Blizzard_UIPanels_Game's TOC, [Family]):
---               QUEST_DETAIL shows QuestFrameDetailPanel, which reads GetTitleText, GetQuestText
+--               QUEST_DETAIL shows QuestFrameDetailPanel, which reads GetTitleText, GetQuestText,
 --               and GetObjectiveText; QUEST_COMPLETE shows QuestFrameRewardPanel (GetRewardText);
 --               QUEST_FINISHED hides the frame; the frame's title is UnitName("questnpc"). An area
 --               trigger's auto-accepted quest closes the dialog without showing it. [E] Those texts
@@ -37,8 +37,8 @@
 --               { text, type, finished, numFulfilled, numRequired }. The docs' Nilable
 --               objectiveType comes with some objectives and not others (questLog.objectives saw
 --               both, item objectives included); [G] which ones isn't known, so the harness sends
---               none, and nothing here reads it; GetQuestLogQuestText(index)
---               answers the description and the objective summary, and GetTitleForQuestID a title
+--               none, and nothing here reads it. [E] GetQuestLogQuestText(index) answers the
+--               description and the objective summary, and GetTitleForQuestID a title
 --               (questLog.text). [G] One header per header name, in first-seen order; a header's
 --               entry carries the same fields with questID 0. [G] An objective's text puts its
 --               count first ("0/8 Wolf Pelt"), as the Mainline tracker shows it; probe
@@ -53,7 +53,7 @@
 --               h:LoadQuestNames. [G] A turned-in quest's title stays known to GetTitleForQuestID (questLog.titleAfterTurnIn asks the client).
 --   Windows     [D] Blizzard's Forever UI shows the gossip frame on GOSSIP_SHOW(textureKit) and
 --               hides it on GOSSIP_CLOSED(interactionIsContinuing) (CustomGossipFrameBase.lua).
---               The merchant, mailbox, bank, auction house, trainer and other windows register
+--               The merchant, mailbox, bank, auction house, trainer, and other windows register
 --               with PlayerInteractionFrameManager, which shows each on
 --               PLAYER_INTERACTION_MANAGER_FRAME_SHOW(type) and hides it on _HIDE(type).
 --               [G] The flight master's map (TaxiNode) is shown the same way: no Forever UI file
@@ -248,7 +248,7 @@ function Harness:CloseGossip()
     self:Fire("GOSSIP_CLOSED", false)
 end
 
---- Closes a window the interaction manager showed; the flight master's map also fires TAXIMAP_CLOSED.
+--- Closes a window the interaction manager showed. The flight master's map also fires TAXIMAP_CLOSED.
 function Harness:CloseInteraction(name)
     local value = InteractionType(name)
 

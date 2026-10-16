@@ -3,28 +3,29 @@
 -- death.attributed (the killer rows are set).
 --
 --   death.count          your deaths this session.
---   death.attributed     the death.count the killer rows describe; it rises once per death, after
+--   death.attributed     the death.count the killer rows describe. It rises once per death, after
 --                        they're set, even when the killer stays unknown.
---   death.killer         the killer's name as the recap printed it (a player's "First Last"); ""
---                        when unknown.
---   death.killerKind     "player", "self" (your own blow: a sapper charge, say), "pet" (anything
---                        else a player controls: a pet, a totem), "npc", or "" when unknown.
+--   death.killer         the killer's name as the recap printed it (a player's "First Last"),
+--                        or "" when unknown.
+--   death.killerKind     "player", "self" (your own blow, such as a sapper charge), "pet"
+--                        (anything else a player controls, such as a pet or a totem), "npc", or "" when unknown.
 --   death.killerClass    a player killer's class file ("ROGUE"), else "".
 --   death.killerFaction  a player killer's faction ("Alliance" or "Horde"), else "".
---   death.killerSpell    the killing blow's spell name; "" for a melee swing or unknown.
---   death.killerDamage   the killing blow's damage; 0 when unknown.
+--   death.killerSpell    the killing blow's spell name, or "" for a melee swing or unknown.
+--   death.killerDamage   the killing blow's damage, or 0 when unknown.
 --
 -- Who killed you comes from Blizzard's death recap: the damage meter's Deaths lists (the current session, else the
 -- overall one) hold your death with its recap ID (readable even in combat). This adapter uses events[1] as the killing
 -- blow, following Gethe/wow-ui-source's forever branch:
 -- Interface/AddOns/Blizzard_DeathRecap/Mainline/Blizzard_DeathRecap.lua, DeathRecapMixin:BuildDataProvider iterates
 -- C_DeathRecap.GetRecapEvents with ipairs and sets elementData.causedDeath = i == 1. Its TOC gates it with
--- [AllowLoadGameType mainline], which covers camelot: Forever's TOCs add [ExcludeLoadGameType camelot] wherever
--- mainline shouldn't. An attacker the recap hides (hideCaster, which Blizzard's recap window honors) is unknown. The
--- recap may land a moment after PLAYER_DEAD, so the fact looks again on the meter's updates and at RecapRetries, at
--- most RecapWait seconds, then publishes the death as unknown. Recap IDs rise with each death, so deaths take the new
--- recaps in order: each new ID, oldest first, belongs to the oldest death still owed one. A death that gave up still
--- takes its recap if it comes within LateWait, and sets it aside, so a later death never takes another death's recap.
+-- [AllowLoadGameType mainline], which covers camelot: Forever's TOCs add [ExcludeLoadGameType camelot] wherever Forever
+-- leaves out a mainline addon. An attacker the recap hides (hideCaster, which Blizzard's recap window honors) is
+-- unknown. The recap may land a moment after PLAYER_DEAD, so the fact looks again on the meter's updates and at
+-- RecapRetries, at most RecapWait seconds, then publishes the death as unknown. Recap IDs rise with each death, so
+-- deaths take the new recaps in order: each new ID, oldest first, belongs to the oldest death still owed one. A death
+-- that gave up still takes its recap if it comes within LateWait, and sets it aside, so a later death never takes
+-- another death's recap.
 
 -- Seconds after RecapWait in which a late recap is still your last death's.
 local LateWait = 30
@@ -81,7 +82,7 @@ local function DeathsIn(sessionType, after, found)
     end
 end
 
--- The recap IDs of your deaths in the damage meter above after, oldest first.
+-- Returns the recap IDs of your deaths in the damage meter above after, oldest first.
 local function DeathsAfter(after)
     local found = {}
     local list = {}
@@ -102,8 +103,8 @@ local function DeathsAfter(after)
     return list
 end
 
--- What the killing blow of a recap says about your killer: { name, kind, class, faction, spell, damage }, or nil for a
--- recap without events.
+-- Returns what the killing blow of a recap says about your killer: { name, kind, class, faction, spell, damage }, or
+-- nil for a recap without events.
 local function Killer(recapID)
     local events = Plain(C_DeathRecap.GetRecapEvents(recapID), "table")
     local blow = (events and Plain(events[1], "table"))
@@ -141,7 +142,7 @@ local function Killer(recapID)
     return killer
 end
 
--- The recap ID of your newest death in the damage meter, or 0.
+-- Returns the recap ID of your newest death in the damage meter, or 0.
 local function NewestDeath()
     local list = DeathsAfter(0)
 
@@ -155,7 +156,7 @@ ByteTerrace.Facts.death = {
         local count = module:Id("count")
         -- The highest recap ID a death took, or the one there at start.
         local handled = NewestDeath()
-        -- The deaths still owed a recap, oldest first; each is { number, gaveUp, settled, timers }.
+        -- The deaths still owed a recap, oldest first. Each is { number, gaveUp, settled, timers }.
         local owed = {}
         -- The meter-update handler, held while any death is owed a recap.
         local waitHandle
@@ -192,7 +193,7 @@ ByteTerrace.Facts.death = {
             end
         end
 
-        -- Gives each new recap, oldest first, to the oldest death owed one; a death that gave up takes it without a
+        -- Gives each new recap, oldest first, to the oldest death owed one. A death that gave up takes it without a
         -- word. A recap no death is owed (none waiting) only moves handled.
         local function TryRecap()
             for _, id in ipairs(DeathsAfter(handled)) do

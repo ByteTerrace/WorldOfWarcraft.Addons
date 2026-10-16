@@ -1,5 +1,5 @@
 -- The harness's fidelity rules for units (tests/harness/units.lua): enemy players, nameplates, mouseover, death, raid
--- target icons, GUIDs and realms.
+-- target icons, GUIDs, and realms.
 
 local Kit = use("harness")
 

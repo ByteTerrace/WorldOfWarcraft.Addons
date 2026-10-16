@@ -1,7 +1,7 @@
 local addonName, ns = ...
 
--- Scholar quest riddles: questions about a quest the player was shown, from its QuestBook record (QuestBook.lua). Pure
--- like the other puzzle files: no WoW API, and no randomness but the state's roll. ScholarPuzzles.Generate calls
+-- Scholar quest riddles: questions about a quest the player was shown, from its QuestBook record (QuestBook.lua). Like
+-- the other puzzle files, it's pure: no WoW API, and no randomness but the state's roll. ScholarPuzzles.Generate calls
 -- Kit.AskQuest for the "quest" subject.
 --
 --   Kit.AskQuest(state, quest, known)  a puzzle about quest (a record), with known (every record,
@@ -12,20 +12,20 @@ local addonName, ns = ...
 -- them all, so every riddle teaches looking it up: its hint says where in the book to look, its step walks to the line,
 -- its explanation quotes it, and its praise names that. Kinds: who gave it, who took it (turned in), where it began,
 -- where it ended, how many an objective asked for, what it asked, which quest a giver gave, and a word missing from its
--- text (enUS clients only: the words are split as English letters, the plain words left out are English ones, and the
--- missing word's wrong answers are words of its own kind by English endings and neighbors, from ScholarWords'
--- questWords). A kind runs only when the record holds its answer, and its three wrong answers come from the player's
--- other quests first (each saying which quest it's from), then from ScholarWords' banks for the player's faction
--- (state.context.faction), never one that is also true (the zone around the place it began, another quest the same
--- giver gave or might have, a bank quest that giver really gives). Who gave it and who took it, and where it began and
--- where it ended, are each other's first wrong answer, the mix-up a reader makes.
+-- text. The missing word is for enUS clients only: the words are split as English letters, the plain words left out are
+-- English ones, and the missing word's wrong answers are words of its own kind by English endings and neighbors, from
+-- ScholarWords' questWords. A kind runs only when the record holds its answer, and its three wrong answers come from
+-- the player's other quests first (each saying which quest it's from), then from ScholarWords' banks for the player's
+-- faction (state.context.faction). A wrong answer is never one that is also true: the zone around the place it began,
+-- another quest the same giver gave or might have, or a bank quest that giver really gives. Who gave it and who took
+-- it, and where it began and where it ended, are each other's first wrong answer, the mix-up a reader makes.
 --
 -- A title can give its answer away ("Wolves Across the Border", asking for Tough Wolf Meat): then the wrong answers
 -- share the title's words too, or the riddle names the quest as the one in the quest book instead. Which quest a giver
 -- gave isn't asked when the giver's name is in its title.
 --
--- Which kind: what the quest asked for (how many, what, a missing word) before who and where, and not the kind last
--- asked about this quest (its askedKind; who gave it and which quest a giver gave are one kind) unless no other fits.
+-- Which kind: what the quest asked for (how many, what, or a missing word) before who and where, and not the kind last
+-- asked about this quest (its askedKind) unless no other fits. Who gave it and which quest a giver gave are one kind.
 
 -- The kinds about what a quest asked for, asked before who and where.
 local ContentKinds = { ["quest.count"] = true, ["quest.objective"] = true, ["quest.blank"] = true }
@@ -105,8 +105,8 @@ local function Covers(hits, wanted)
     return true
 end
 
--- A one-line text from a record: no control characters, escape or template characters, trimmed, at most length; ""
--- otherwise.
+-- A one-line text from a record: no control characters, escape or template characters, trimmed, and at most length, or
+-- "" otherwise.
 local function Line(text, length)
     if type(text) ~= "string" then
         return ""
@@ -200,8 +200,8 @@ local function Tokens(sentence)
     return tokens
 end
 
--- An objective's kind as the riddles ask about it, by the log's type: an item to bring, a foe to defeat, anything else
--- a task to do.
+-- An objective's kind as the riddles ask about it, by the log's type: an item to bring, a foe to defeat, and anything
+-- else a task to do.
 local ObjectiveKinds = { item = "item", monster = "foe" }
 local ObjectiveVerbs = { { "item", "Bring" }, { "foe", "Defeat" }, { "task", "Do" } }
 
@@ -223,8 +223,8 @@ local function BlankBank(state, kind)
 end
 
 -- The missing word at sentence's token i, with three wrong answers of its kind (as long, give or take three letters,
--- and not in the sentence): words of that kind from the rest of the quest's text first, then the bank's; nil when there
--- are too few, or the word is in the sentence twice (it would show through its blank).
+-- and not in the sentence): words of that kind from the rest of the quest's text first, then the bank's. It's nil when
+-- there are too few, or the word is in the sentence twice (it would show through its blank).
 local function Blank(state, sentence, i, pool)
     local token = sentence.tokens[i]
     local kind = sentence.kinds[i]
@@ -275,7 +275,7 @@ local function Blank(state, sentence, i, pool)
         after[#after + 1] = chunk
     end
 
-    -- The words just before the blank, or just after it when one word before it is all there is ("The ___ of").
+    -- The words right before the blank, or right after it when one word before it is all there is ("The ___ of").
     local lead = concat(before, " ", max(1, (#before - LeadWords) + 1))
     local side = "after"
 
@@ -388,7 +388,7 @@ local function ProperWords(state)
     return proper
 end
 
--- A record's objective i, or nil: what it names, its count and its kind. One without a name, or without the kind the
+-- A record's objective i, or nil: what it names, its count, and its kind. One without a name, or without the kind the
 -- book notes, isn't asked about.
 local function RecordObjective(record, i)
     local name = Line(record["objective" .. i], MaxLine)
@@ -403,7 +403,7 @@ local function RecordObjective(record, i)
 end
 
 -- A record as the riddles read it: { title, giver, place, zone, ender, endPlace, endZone, turnedIn, goal, text,
--- askedKind, objectives = { { name, kind, required } } }, every field cleaned; nil without a title.
+-- askedKind, objectives = { { name, kind, required } } }, every field cleaned, or nil without a title.
 local function Clean(record)
     local quest = {
         askedKind = Line(record.askedKind, MaxLine), ender = Line(record.ender, MaxLine),
@@ -421,8 +421,8 @@ local function Clean(record)
 end
 
 -- The kind of tokens[i] as a missing word (see ScholarWords' questWords): "place" or "name" (a capitalized word of the
--- faction's lists, not starting the sentence), "noun", "nouns", "ed", "ing", "ly" or "er"; nil for any other word,
--- which isn't asked or offered.
+-- faction's lists, not starting the sentence), "noun", "nouns", "ed", "ing", "ly", or "er". It's nil for any other
+-- word, which isn't asked or offered.
 local function WordKind(tokens, i, proper)
     local token = tokens[i]
     local previous = tokens[i - 1]
@@ -452,8 +452,8 @@ local function WordKind(tokens, i, proper)
     return nil
 end
 
--- A sentence of the quest's text with one word to blank out and three wrong answers of its kind; nil when the text has
--- none.
+-- A sentence of the quest's text with one word to blank out and three wrong answers of its kind, or nil when the text
+-- has none.
 local function BlankCandidate(state)
     local proper = ProperWords(state)
     local sentences = {}
@@ -501,8 +501,8 @@ local function BlankCandidate(state)
 end
 
 -- Three wrong answers, and whether the riddle may show the title: from lists in order (each shuffled; an entry is a
--- value or { value, why }), each distinct, not the answer and (with excluded, a set of lowercase values that are also
--- true) not excluded. When the answer shares a word with title, the wrong answers must share it too or the title would
+-- value or { value, why }), each distinct, not the answer, and (with excluded, a set of lowercase values that are also
+-- true) not excluded. When the answer shares a word with title, the wrong answers must share it too, or the title would
 -- give the answer away: three that do are taken when there are three, and otherwise the riddle leaves the title out.
 -- Finish shuffles where they sit among the choices.
 local function Wrongs(state, answer, lists, excluded, title)
@@ -547,8 +547,8 @@ local function Wrongs(state, answer, lists, excluded, title)
 end
 
 -- A generator asking for the quest's field: its first wrong answer is the field it's mixed up with, when the book shows
--- it; then the same pair of fields in other quests, then the faction bank's bankKey list, never naming the field's own
--- zone.
+-- it. Then come the same pair of fields in other quests, then the faction bank's bankKey list, never naming the field's
+-- own zone.
 local function AskFor(field, pair, bankKey, zoneField)
     local kind = ("quest." .. field)
 
@@ -578,7 +578,7 @@ Generators["quest.giver"] = AskFor("giver", { "giver", "ender" }, "names")
 Generators["quest.place"] = AskFor("place", { "place", "endPlace" }, "places", "zone")
 
 -- How many an objective asked for. Another objective's number, beside its own name in the book, is always a wrong
--- answer, the mix-up to catch; every other wrong number says which way the book's is.
+-- answer, the mix-up to catch. Every other wrong number says which way the book's is.
 Generators["quest.count"] = function(state)
     local quest = state.quest
     local whys = Words.quest.count.whys
@@ -739,7 +739,7 @@ local function Ordered(state, kinds)
     return ordered
 end
 
---- A puzzle about quest, or nil when no kind of question fits it. See the file header.
+--- Returns a puzzle about quest, or nil when no kind of question fits it. See the file header.
 ---@param state table ScholarPuzzles' generation state
 ---@param record table a QuestBook record, with its key
 ---@param known table[] every QuestBook record, with their keys

@@ -1,7 +1,7 @@
--- Scholar's reading riddles (TheLanKrewToolKit/ScholarReadingWords.lua, ScholarStoryWords.lua and ScholarReading.lua):
+-- Scholar's reading riddles (TheLanKrewToolKit/ScholarReadingWords.lua, ScholarStoryWords.lua, and ScholarReading.lua):
 -- the banks' answer keys and shapes, and gates over many generated riddles of each kind. The answer is never findable
--- by its length, no one answer crowds a kind, and the real confusions (a word that starts like the target, a close
--- sound, a near word, one letter of a letter team, a blend with a letter dropped) turn up. Like scholar.test.lua, the
+-- by its length, no one answer crowds a kind, and the real confusions turn up: a word that starts like the target, a
+-- close sound, a near word, one letter of a letter team, and a blend with a letter dropped. Like scholar.test.lua, the
 -- puzzle files load on their own with a seeded LCG as the only randomness.
 
 local Files = { "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarReadingWords.lua", "ScholarStoryWords.lua", "ScholarReading.lua" }

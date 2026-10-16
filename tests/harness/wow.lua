@@ -2,39 +2,39 @@
 --
 -- Fidelity rules, each enforced so a test fails where the client would:
 --   * Secret values and restrictions (secrets.lua): APIs the snapshot flags return opaque secrets
---     when their documented predicate holds under h.restrictions; secret arguments, protected
---     calls and restricted functions are enforced from the snapshot entry of every wrapped API.
---     A blocked call does nothing, fires ADDON_ACTION_BLOCKED (or _FORBIDDEN) and is recorded
---     in h.blocked; the caller keeps running, like the client.
+--     when their documented predicate holds under h.restrictions. Secret arguments, protected
+--     calls, and restricted functions are enforced from the snapshot entry of every wrapped API.
+--     A blocked call does nothing, fires ADDON_ACTION_BLOCKED (or _FORBIDDEN), and is recorded
+--     in h.blocked. The caller keeps running, like the client.
 --   * Restriction changes fire ADDON_RESTRICTION_STATE_CHANGED like the client: Activating (1)
---     while the restriction isn't enforced yet, then Active (2) once it is; Inactive (0) after
+--     while the restriction isn't enforced yet, then Active (2) once it is, and Inactive (0) after
 --     it's lifted. IsAddOnRestrictionActive is false during every such dispatch (its doc).
 --   * Only real API: registering an event, firing one, or calling a widget method the snapshot
 --     doesn't list is an error, and every fake names a global the client dump has (the test
 --     runner checks). Reading an undefined global is an error unless the TOC declares it as a
 --     SavedVariable.
---   * SavedVariables are nil while an addon's files run and are assigned just before its
+--   * SavedVariables are nil while an addon's files run and are assigned right before its
 --     ADDON_LOADED, like the client.
 --   * InCombatLockdown() is still false while PLAYER_REGEN_DISABLED handlers run.
---   * A script error reaches the error handler (h.errors) and the dispatch continues; a test
+--   * A script error reaches the error handler (h.errors) and the dispatch continues. A test
 --     fails on any error it didn't expect (h:ExpectErrors).
 --   * Every widget method call is counted, so tests can assert work per event. Widget state
 --     lives in a side table (Harness.State(widget)), never in the widget's own fields.
---   * SavedVariables are written like the client writes them: finite numbers, strings, booleans
+--   * SavedVariables are written like the client writes them: finite numbers, strings, booleans,
 --     and tables with string or finite-number keys, copied (shared tables become separate copies;
---     a cycle's back-reference, functions, userdata, widgets, NaN and inf are dropped).
+--     a cycle's back-reference, functions, userdata, widgets, NaN, and inf are dropped).
 --   * h:Advance runs at most Harness.MAX_TIMER_CALLBACKS callbacks per call and then errors, so a
 --     timer that keeps rescheduling itself fails the test instead of hanging it.
 --   * Groups and addon messages (group.lua): party and raid tokens, IsInGroup/IsInRaid by
---     category, and C_ChatInfo.SendAddonMessage's validation, lockdown, per-prefix throttle and
+--     category, and C_ChatInfo.SendAddonMessage's validation, lockdown, per-prefix throttle, and
 --     echo of your own group messages.
---   * Keyboard input (input.lua, h:Key) reaches visible, keyboard-enabled frames topmost first; a
+--   * Keyboard input (input.lua, h:Key) reaches visible, keyboard-enabled frames topmost first. A
 --     frame that doesn't propagate keyboard input (the default) consumes the key.
 --   * The env's math.random is Lua's until h:SeedRandom(n) (input.lua) switches it, and random, to
 --     the harness's own deterministic generator.
---   * Enemy players, nameplates, mouseover, death, raid icons and guilds (units.lua); location,
---     maps, waypoints, honor and raid warnings (world.lua); right-click and context menus, class
---     colors and the unit tooltip (ui.lua); Blizzard's damage meter and death recaps (meter.lua);
+--   * Enemy players, nameplates, mouseover, death, raid icons, and guilds (units.lua); location,
+--     maps, waypoints, honor, and raid warnings (world.lua); right-click and context menus, class
+--     colors, and the unit tooltip (ui.lua); Blizzard's damage meter and death recaps (meter.lua);
 --     spoken alerts and text to speech (speech.lua); the quest log and quest dialogs (quests.lua).
 --   * Every combat is a damage meter session: h:EnterCombat starts one, h:LeaveCombat ends it.
 --   * Calibration probes (probes.lua): Harness.RunProbe runs a ByteTerrace_DevTools probe the way
@@ -61,7 +61,7 @@ end
 -- Decodes the API snapshot tools/lib/harness.mjs passes as text into { functions, events, methods = { [api] = {
 -- [method] = entry } }, enums }. An entry holds secret (a set of flags), SecretArguments, IsProtectedFunction,
 -- HasRestrictions, Arguments and Payload (comma-separated types), the aspect sets SecretArgumentsAddAspect /
--- SecretReturnsForAspect and the Preconditions set (RequiresFontStringTextAccess, RestrictedForMacroChatMessages, ...),
+-- SecretReturnsForAspect, the Preconditions set (RequiresFontStringTextAccess, RestrictedForMacroChatMessages, ...),
 -- and ArgumentsNilable / PayloadNilable: the sets of positions that may be nil ({ [3] = true }).
 local function Set(list)
     if list == "" then
@@ -132,7 +132,7 @@ end
 
 local Snapshot = __snapshot
 
--- JS arrays arrive 0-based; make them Lua sequences.
+-- JS arrays arrive 0-based. This makes them Lua sequences.
 local function Sequence(t)
     if (t == nil) or (t[0] == nil) then
         return (t or {})
@@ -222,7 +222,7 @@ local function FillUnit(unit)
     end
 
     if unit.playerControlled == nil then
-        -- Players are player-controlled; a pet, which is too, needs its test to set playerControlled.
+        -- Players are player-controlled. A pet, which is too, needs its test to set playerControlled.
         unit.playerControlled = unit.isPlayer
     end
 
@@ -300,7 +300,7 @@ function Harness.New(player)
     h.workTime = 0
     -- GetServerTime() and time()'s answer.
     h.serverTime = Harness.SERVER_EPOCH
-    -- Whether the player is in combat; it mirrors restrictions.Combat.
+    -- Whether the player is in combat. It mirrors restrictions.Combat.
     h.inCombat = false
     h.lockdown = false
     -- Each active restriction is true under its Enum.AddOnRestrictionType name.
@@ -327,7 +327,7 @@ function Harness.New(player)
     h.handles = 0
     -- The calls to each wrapped function, by API name (h:CountApiCalls).
     h.apiCalls = {}
-    -- C_AddOnProfiler's answers: enabled, and [metric] = number for each addon, the application and all addons
+    -- C_AddOnProfiler's answers: enabled, and [metric] = number for each addon, the application, and all addons
     -- together; memory is GetAddOnMemoryUsage's KB by addon.
     h.profiler = { addons = {}, application = {}, enabled = false, memory = {}, overall = {} }
     h.memoryUpdates = 0
@@ -374,20 +374,20 @@ function Harness.New(player)
     h.units = {}
     -- The globals the TOC declares (SavedVariables), which may be read while nil.
     h.declared = {}
-    -- The messages passed to the error handler; a test fails if any are unexpected.
+    -- The messages passed to the error handler. A test fails if any are unexpected.
     h.errors = {}
     -- A count, or a list of patterns (see ExpectErrors).
     h.expectedErrors = 0
     -- A count, or a list of patterns (see ExpectBlocked).
     h.expectedBlocked = 0
-    -- The gamepad buttons no frame consumed.
+    -- The controller buttons no frame consumed.
     h.propagated = {}
     -- The keys no frame consumed (h:Key).
     h.propagatedKeys = {}
     -- The group the player is in (see group.lua).
     h.group = { kind = nil, members = {} }
     h.partySerial = 0
-    -- Each prefix registered with C_ChatInfo is true; a UI restart clears them.
+    -- Each prefix registered with C_ChatInfo is true. A UI restart clears them.
     h.prefixes = {}
     h.prefixOrder = {}
     -- Each SendAddonMessage call's { prefix, message, chatType, target, result }.
@@ -409,11 +409,11 @@ function Harness.New(player)
     h.loadOrder = {}
     -- IsLoggedIn() is true from PLAYER_LOGIN on.
     h.loggedIn = false
-    -- GetLocale()'s answer; the GlobalStrings stay enUS unless a test rawsets them.
+    -- GetLocale()'s answer. The GlobalStrings stay enUS unless a test rawsets them.
     h.locale = "enUS"
     -- Each SavedVariable's value by name, as the client restores it.
     h.saved = (player.saved or {})
-    -- Units, maps, waypoints, honor and raid notices (units.lua, world.lua).
+    -- Units, maps, waypoints, honor, and raid notices (units.lua, world.lua).
     h:InitWorld(player)
     -- Damage meter sessions and death recaps (meter.lua).
     h:InitMeter()
@@ -459,7 +459,7 @@ end
 
 -- Sets (or with nil, removes) a unit other than the player and target: pet, focus, mouseover, vehicle, party1-4 or
 -- nameplate1-40 (a party token set here wins over h:JoinGroup's). Missing fields default like SetTarget's. Fires
--- nothing; fire the event the change would cause (PLAYER_FOCUS_CHANGED, UNIT_PET, ...) if the test needs it.
+-- nothing. Fire the event the change would cause (PLAYER_FOCUS_CHANGED, UNIT_PET, ...) if the test needs it.
 function Harness:SetUnit(token, unit)
     assert(ConfigurableUnits[token], "SetUnit: " .. tostring(token) .. " isn't a configurable unit (use h.player or h:SetTarget)")
     self.units[token] = ((unit and FillUnit(unit)) or nil)
@@ -538,7 +538,7 @@ local function Serialize(value, path)
 
     for k, v in pairs(value) do
         if IsSecret(k) then
-            -- The client refuses a secret table key when it's set (secrets.rawOperations: tableKey); Lua 5.1 can't
+            -- The client refuses a secret table key when it's set (secrets.rawOperations: tableKey). Lua 5.1 can't
             -- intercept that, so the write to SavedVariables is where it surfaces.
             error("a secret table key reached SavedVariables", 0)
         end
@@ -639,7 +639,7 @@ end
 -- Dispatches an event to every frame registered for it when the dispatch starts (frames created or registered during it
 -- wait for the next one). Unit registrations filter on the raw unit token, before any wrapping. A payload the snapshot
 -- flags as secret is wrapped when its predicate holds, except its unit-token fields. Handler errors reach the error
--- handler; a payload the event couldn't carry (Harness.CheckPayload) is the test's error.
+-- handler. A payload the event couldn't carry (Harness.CheckPayload) is the test's error.
 function Harness:Fire(event, ...)
     local entry = Snapshot.events[event]
 
@@ -699,7 +699,7 @@ function Harness:LoadAddon(name)
 end
 
 -- Loads one addon's files (dependencies first), assigns its SavedVariables (account and per-character, from h.saved)
--- and fires its ADDON_LOADED, like the client. The SavedVariables are nil while the files run; a restored value
+-- and fires its ADDON_LOADED, like the client. The SavedVariables are nil while the files run. A restored value
 -- replaces whatever the files assigned.
 function Harness:LoadFiles(name)
     if self.loaded[name] then
@@ -774,7 +774,7 @@ function Harness:ResetCalls()
     end
 end
 
--- Schedules fn at h.time + delay; returns the entry (entry.cancelled stops it).
+-- Schedules fn at h.time + delay and returns the entry (entry.cancelled stops it).
 function Harness:Schedule(delay, fn)
     self.timerSerial = (self.timerSerial + 1)
     local entry = { due = (self.time + math.max(delay or 0, 0)), fn = fn, serial = self.timerSerial }
@@ -786,7 +786,7 @@ end
 
 -- Activates or clears an addon restriction (Enum.AddOnRestrictionType name). Activating fires
 -- ADDON_RESTRICTION_STATE_CHANGED(type, Activating) while the restriction isn't enforced, then enforces it and fires
--- Active (none for SILENT_ACTIVE ones); clearing lifts it, then fires Inactive.
+-- Active (none for SILENT_ACTIVE ones). Clearing lifts it, then fires Inactive.
 function Harness:SetRestriction(name, active)
     local index
 
@@ -845,8 +845,8 @@ function Harness:Click(widget, button)
     return true
 end
 
--- Presses (down = true) or releases a gamepad key like "PAD1". The newest visible frame (every ancestor shown) with
--- gamepad buttons enabled and a script for it takes the key, whatever the script returns [E]: while Scholar's riddle
+-- Presses (down = true) or releases a controller key like "PAD1". The newest visible frame (every ancestor shown) with
+-- controller buttons enabled and a script for it takes the key, whatever the script returns [E]: while Scholar's riddle
 -- had its buttons enabled, the d-pad, which the riddle doesn't bind and whose script returned true, never reached the
 -- game (client 1.60.1 (70009)). Only a key no such frame takes lands in h.propagated.
 function Harness:Gamepad(key, down)
@@ -959,7 +959,7 @@ function Harness:Restart(isInitialLogin, isReloadingUi, whileAway)
     self:Login(isInitialLogin, isReloadingUi)
 end
 
--- Runs a slash command as if typed, e.g. h:Slash("/tlk fom").
+-- Runs a slash command as if typed, for example h:Slash("/tlk fom").
 function Harness:Slash(line)
     local command, rest = line:match("^(/%S+)%s*(.-)$")
 

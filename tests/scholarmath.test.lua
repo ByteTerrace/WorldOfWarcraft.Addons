@@ -1,6 +1,6 @@
 -- How Scholar's math riddles teach (ScholarMath.lua and ScholarMathWords.lua): every riddle offers the answer its
--- kind's known mistake produces, with a why that names the mistake; it has a worked first step, praise that names the
--- strategy, and an explanation that shows the working; the answer's place among the numbers gives nothing away; and
+-- kind's known mistake produces, with a why that names the mistake. It has a worked first step, praise that names the
+-- strategy, and an explanation that shows the working. The answer's place among the numbers gives nothing away, and
 -- hints fit the riddle they're on. The mistakes below are an independent list of what each kind invites, most telling
 -- first: a riddle must offer the first one that's a fair choice (a whole number, not the answer, positive unless the
 -- answer is 0).
@@ -121,8 +121,8 @@ local function Value(p, choice)
     return Numbers(choice)[1]
 end
 
--- Each kind's mistakes, most telling first, as values a choice would have; any = true when any of them will do (the
--- kind picks one at random).
+-- Each kind's mistakes, most telling first, as values a choice would have. A list carries any = true when any of them
+-- will do (the kind picks one at random).
 local Mistakes = {
     ["math.add"] = function(p, options)
         local a, b = unpack(Numbers(p.expression))
@@ -212,8 +212,8 @@ local Mistakes = {
 
         return { (a + b) }
     end,
-    -- The trap shares the target's first digit but sits farther off; a halfway riddle's is half the gap; a star's is
-    -- the jumps counted; a fraction of the way's is its number of parts.
+    -- The trap shares the target's first digit but sits farther off. A halfway riddle's is half the gap. A star's is
+    -- the jumps counted. A fraction of the way's is its number of parts.
     ["math.numberLine"] = function(p)
         local n = Numbers(p.expression)
 
@@ -352,7 +352,7 @@ local Mistakes = {
         return { ((start + (3 * step)) + (((step < 0) and -1) or 1)) }
     end,
     -- Words: reading the minutes like money, or quarter to as quarter past. Hands: the long hand's number as minutes. A
-    -- trip: forgetting the new hour, or going back; how long: taking times away as if an hour had 100 minutes.
+    -- trip: forgetting the new hour, or going back. How long: taking times away as if an hour had 100 minutes.
     ["math.time"] = function(p)
         local prompt = p.prompt
         local h = tonumber(prompt:match("half past (%d+)") or prompt:match("quarter past (%d+)") or "")

@@ -6,28 +6,28 @@
 --                       registered, watchers, pending timers, records, queued messages, and the
 --                       errors SafeCall has caught.
 --   debug events        each registered event with its dispatches since load (or reset), its
---                       handlers and its unit filter, busiest first; then publishes and watcher runs.
+--                       handlers, and its unit filter, busiest first, then publishes and watcher runs.
 --   debug work          each module's work since load (or reset), busiest first: its event
 --                       handler calls, timer callbacks, state-change callbacks, commands, message
---                       deliveries and deferred actions; "addon" is what the framework ran for no
---                       module (built-in commands, module switching). While profiling, also the
+--                       deliveries, and deferred actions. "addon" is what the framework ran for no
+--                       module (built-in commands and module switching). While profiling, also the
 --                       time each module's callbacks took.
 --   debug rows <text>   every row whose name contains text (runtime rows too): value and version.
 --   debug trace <text>  prints each published change of the rows whose names contain text, until
 --                       debug trace off. Untraced rows cost nothing.
 --   debug cpu           the client's addon profiler for this addon: time per frame (recent,
 --                       session, peak, encounter), its share of the game's time, the frames it took
---                       over 1 to 100 ms, and its memory. Blizzard's AddOn list shows the same.
+--                       over 1 to 100 milliseconds, and its memory. Blizzard's AddOn list shows the same.
 --                       The framework's own work counts under ByteTerrace_Core, shown after it.
 --   debug profile       toggles profiling: from then on each dispatched callback is timed with
 --                       debugprofilestop and its time added to its module's work. Times start at
---                       zero; a callback's time includes what it runs synchronously (a message
---                       listener's time is inside the transport's event handler too). Off by
+--                       zero. A callback's time includes what it runs synchronously, so a message
+--                       listener's time is inside the transport's event handler too. Off by
 --                       default, and while off nothing is timed.
---   debug reset         zeroes the event, publish, watcher and work counts.
+--   debug reset         zeroes the event, publish, watcher, and work counts.
 --
 -- The counts it reads are always kept: an integer increment per dispatch and per publish, and a field increment on the
--- work record the dispatched handler, watcher, timer or command holds.
+-- work record the dispatched handler, watcher, timer, or command holds.
 
 -- The framework's addon, where its dispatch and publishes are counted.
 local CoreName = "ByteTerrace_Core"
@@ -135,8 +135,8 @@ local function Rows(addon, text)
     end
 end
 
--- An addon's time per frame for metric, and its share as Blizzard's AddOn list computes it: its time against the game's
--- time outside other addons.
+-- Returns an addon's time per frame for metric, and its share as Blizzard's AddOn list computes it: its time against
+-- the game's time outside other addons.
 local function Share(name, metric)
     local mine = C_AddOnProfiler.GetAddOnMetric(name, metric)
     local total = ((C_AddOnProfiler.GetApplicationMetric(metric) - C_AddOnProfiler.GetOverallMetric(metric)) + mine)
@@ -169,7 +169,7 @@ local function Cpu(addon)
     UpdateAddOnMemoryUsage()
     print(("  Memory: %.0f KB"):format(GetAddOnMemoryUsage(name)))
 
-    -- The framework's dispatch, publishes and records run in ByteTerrace_Core, counted there.
+    -- The framework's dispatch, publishes, and records run in ByteTerrace_Core, counted there.
     if name ~= CoreName then
         local time = ((profiling and (" recent " .. Share(CoreName, Enum.AddOnProfilerMetric.RecentAverageTime) .. ",")) or "")
 
@@ -255,7 +255,7 @@ local function Trace(addon, text)
         (addon.Slash and addon.Slash[1]) or ""))
 end
 
--- Every work record: [name] = work, "addon" for the addon's own.
+-- Returns every work record: [name] = work, "addon" for the addon's own.
 local function WorkRecords(addon)
     local records = { addon = addon.Work }
 
@@ -356,7 +356,7 @@ local function WorkReport(addon)
     end
 end
 
---- The debug command: no argument toggles debug output; otherwise a report (see the file header).
+--- The debug command: no argument toggles debug output, and any other argument picks a report (see the file header).
 ---@param arg string?
 function AddOn:DebugCommand(arg)
     local word, rest = (arg or ""):match("^(%S*)%s*(.-)%s*$")

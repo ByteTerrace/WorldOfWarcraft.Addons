@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 -- Calibration probes about player names. Forever's characters carry a surname: Blizzard's Forever code reads UnitName
 -- as (name, surname) where retail reads (name, realm), and shows "First Last" with
--- Constants.CharacterNameSeparatorConsts' separator (Blizzard_FrameXMLUtil/Camelot/ NameUtil.lua). These probes record
+-- Constants.CharacterNameSeparatorConsts' separator (Blizzard_FrameXMLUtil/Camelot/NameUtil.lua). These probes record
 -- which shape each source of names has: the unit APIs, the GUID lookup, and the senders of chat events (DevTools.lua
 -- passes those to Probes.NoteSender from load), with the shape of their discordInfo (Probes.NoteDiscordInfo).
 --
@@ -15,7 +15,7 @@ local NameShape = Probes.NameShape
 local Senders = Probes.Senders
 local Value = Probes.Value
 
--- Every return of a name API, as name shapes: { "Aa", "Aa" } for (name, surname).
+-- Returns every value a name API returns, as name shapes: { "Aa", "Aa" } for (name, surname).
 local function Returns(...)
     local shapes = {}
 
@@ -28,7 +28,7 @@ local function Returns(...)
     return shapes
 end
 
--- A unit's names from every API that gives one.
+-- Returns a unit's names from every API that gives one.
 local function Names(unit)
     -- secret: only passed on to GetPlayerInfoByGUID when plain
     local guid = UnitGUID(unit)
@@ -108,7 +108,7 @@ Probes.Define({
     {
         accumulates = true,
         -- The shape of each chat event's 18th payload value, discordInfo, heard since load (the docs say it's never
-        -- nil; h:FireChat sends what the client did). fields holds each field's shapes when it's a table. A message
+        -- nil, and h:FireChat sends what the client did). fields holds each field's shapes when it's a table. A message
         -- bridged from Discord would add its own shapes.
         name = "names.chatDiscordInfo",
         needs = { "heardChat" },

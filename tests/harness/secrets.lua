@@ -1,14 +1,14 @@
 -- Secret values and the addon restriction model of the fake client (see wow.lua for the rest).
 --
 -- A secret is a userdata proxy (newproxy), as opaque as the client's: indexing it, taking its length, comparing it with
--- another secret, arithmetic and calling it all throw, and pairs/ipairs/tonumber/print refuse it (the env wraps the
--- last two). As in the client (secrets.operations), concatenation, tostring and string.format (the env's, and the
+-- another secret, arithmetic, and calling it all throw, and pairs/ipairs/tonumber/print refuse it (the env wraps the
+-- last two). As in the client (secrets.operations), concatenation, tostring, and string.format (the env's, and the
 -- string methods') accept secrets and return secret strings. The env's type() reports the underlying type, like the
 -- client. Four misuses the client refuses but Lua 5.1 can't route through a metamethod aren't caught here, so the
 -- static SECRET rule covers them: a boolean test (`if secret then`, always true; the client refuses it only for a
 -- secret boolean), `secret == nonSecret` (mixed types compare false without consulting __eq), a secret compared with
--- itself (`x == x` is true without __eq; the client refuses it, secrets.rawOperations: compare) and a secret as a table
--- key (the client refuses it, secrets.rawOperations: tableKey).
+-- itself (`x == x` is true without __eq; the client refuses it, secrets.rawOperations: compare), and a secret as a
+-- table key (the client refuses it, secrets.rawOperations: tableKey).
 --
 -- Restrictions (h.restrictions) mirror Enum.AddOnRestrictionType: Combat, Encounter, ChallengeMode, PvPMatch, Map,
 -- Chat. Whether a flagged API returns secrets is decided per call by the predicate for each of its flags. [D] marks a
@@ -98,10 +98,9 @@
 --                        rule reads too) lists functions the docs don't mark protected that addon
 --                        code must never call: the Forever client refused them, or calling one
 --                        led to a freeze (C_SettingsUtil.OpenSettingsPanel), each with its
---                        evidence. A
---                        freeze can't be modeled, so the harness forbids them like
+--                        evidence. A freeze can't be modeled, so the harness forbids them like
 --                        IsProtectedFunction globals, which fails any test that calls one. Which of
---                        the two events the client fired wasn't captured; FORBIDDEN is a guess.
+--                        the two events the client fired wasn't captured. FORBIDDEN is a guess.
 --                        A method on a protected widget (a Secure template, or a parent of
 --                        one) is blocked during combat lockdown: ADDON_ACTION_BLOCKED.
 --     HasRestrictions    the docs don't say what the restriction is. With a specific marker the
@@ -566,7 +565,7 @@ end
 Harness.FORBIDDEN_IN_GAME = (((type(__forbidden) == "string") and assert(loadstring("return " .. __forbidden))()) or {})
 
 -- The client's response to a blocked call: the call does nothing, the event fires, and the caller keeps running.
--- h.blocked records every blocked or forbidden call; h.forbidden the latter.
+-- h.blocked records every blocked or forbidden call, and h.forbidden the latter.
 function Harness:BlockAction(event, name)
     self.blocked[#self.blocked + 1] = name
 

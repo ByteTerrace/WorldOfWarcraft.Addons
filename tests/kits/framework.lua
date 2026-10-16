@@ -31,8 +31,8 @@ local function Start(h)
     h:Fire("ADDON_LOADED", "TestApp", false)
 end
 
---- Starts an addon whose declarations are invalid and returns the refusal. Compile refuses; the refusal reaches the
---- error handler (the ADDON_LOADED dispatch isolates it) and the addon never starts.
+--- Starts an addon whose declarations are invalid and returns the refusal. Compile refuses, the refusal reaches the
+--- error handler (the ADDON_LOADED dispatch isolates it), and the addon never starts.
 local function StartRefused(h, addon)
     h:ExpectErrors(1)
     Start(h)

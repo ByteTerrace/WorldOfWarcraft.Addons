@@ -3,16 +3,16 @@ local addonName, ns = ...
 -- Journal: a session journal that celebrates what you did, per character.
 --
 --   Welcome back   at login after 30+ minutes away, a card recalls your last session (where you
---                  were, how long, what you got done) and the rested XP you built up while away.
+--                  were, how long, and what you got done) and the rested XP you built up while away.
 --   Ding!          at level-up, a card sums up the level you just finished, with a milestone line
 --                  every tenth level and at max level.
 --   /tlk journal   this session's highlights so far.
 --
--- Cards come from ns.Cards (Cards.lua): they wait out combat, hold on hover, dismiss on click. Deaths come from the
+-- Cards come from ns.Cards (Cards.lua): they wait out combat, hold on hover, and dismiss on click. Deaths come from the
 -- death fact (death.count), which runs while the journal does.
 --
--- The session lives in per-character rows. A /reload continues it; the next login looks back on it. Played time is
--- summed from GetTime deltas while the journal runs; time away is server time.
+-- The session lives in per-character rows. A /reload continues it, and the next login looks back on it. The journal
+-- sums played time from GetTime deltas while it runs. Time away is server time.
 
 local ContinueWindowSeconds = 120
 local DingIcon = "Interface\\Icons\\Spell_Holy_SurgeOfLight"
@@ -181,7 +181,7 @@ local function StartSession()
     SaveSeen()
 end
 
--- "1 quest" or "3 quests"; nil for none, so Line leaves it out.
+-- "1 quest" or "3 quests", or nil for none, so Line leaves it out.
 local function Tally(number, item)
     return (((number ~= 0) and Count(number, item)) or nil)
 end

@@ -1,4 +1,4 @@
--- Warband: the ledger of grudges, marks and champions, sightings, vengeance, rallies and intel.
+-- Warband: the ledger of grudges, marks and champions, sightings, vengeance, rallies, and intel.
 
 local Kit = use("toolkit")
 

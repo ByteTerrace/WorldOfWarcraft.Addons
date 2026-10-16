@@ -1,17 +1,17 @@
--- Widgets of the fake client: frames, regions and animations. Every method must exist in the snapshot's widget API
--- tables for the widget's type; each call is counted and runs through Harness:WrapApi (secrets.lua) with the method's
--- snapshot entry. Methods with a behavior below keep the state tests and addons read back; the rest only record the
+-- Widgets of the fake client: frames, regions, and animations. Every method must exist in the snapshot's widget API
+-- tables for the widget's type. Each call is counted and runs through Harness:WrapApi (secrets.lua) with the method's
+-- snapshot entry. Methods with a behavior below keep the state tests and addons read back. The rest only record the
 -- call.
 --
 -- A widget is an empty table with a method metatable, like the client's: the addon owns every field on it (button.text,
--- f.shown, bar.value, g.events are the addon's). The harness keeps a widget's state in a weak side table; tests read it
+-- f.shown, bar.value, g.events are the addon's). The harness keeps a widget's state in a weak side table. Tests read it
 -- with Harness.State(widget) (or h:WidgetState(widget)): { widgetType, name, template, parent, children, shown, alpha,
 -- text, value, min, max, width, height, points, scripts, events, calls, secretAspects, protected, ... }.
 --
 -- Sizes (GetWidth, GetHeight, a FontString's string size and lines) come from layout.lua's deterministic stand-ins: a
 -- FontString's text is 7 px per character by 14 px per line.
 --
--- A frame's strata is its own (SetFrameStrata), else its parent's, else MEDIUM; its level is its own (SetFrameLevel),
+-- A frame's strata is its own (SetFrameStrata), else its parent's, else MEDIUM. Its level is its own (SetFrameLevel),
 -- else one above its parent's, else 0. Keyboard input (h:Key) follows them.
 --
 -- GetChildren / GetNumChildren list a frame's child frames and GetRegions / GetNumRegions its font strings and
@@ -23,7 +23,7 @@
 -- descendants depth first in creation order. Reparenting (SetParent) runs neither.
 --
 -- Moving (warcraft.wiki.gg Frame:StartMoving, Frame:RegisterForDrag): SetMovable / IsMovable, SetClampedToScreen /
--- IsClampedToScreen ([G] clamping itself isn't modeled), SetUserPlaced / IsUserPlaced and RegisterForDrag(...buttons)
+-- IsClampedToScreen ([G] clamping itself isn't modeled), SetUserPlaced / IsUserPlaced, and RegisterForDrag(...buttons)
 -- (none clears; each call replaces the last) keep their state. [D] StartMoving on a frame that isn't movable is an
 -- error ("Frame is not movable"); otherwise it marks the frame user placed and moving, and the frame follows the mouse
 -- (h:Drag, input.lua) until StopMovingOrSizing or until it stops being visible. [G] The client re-anchors a moved frame
@@ -65,9 +65,9 @@ local WidgetApis = {
     Button = Chain("SimpleButtonAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
     FontString = Chain("SimpleFontStringAPI", "SimpleRegionAPI", ScriptRegion, FrameScriptObject),
     Frame = Chain("SimpleFrameAPI", ScriptRegion, FrameScriptObject),
-    -- The client's own frames of these types (GameTooltip, nameplates); addons don't create them here.
+    -- The client's own frames of these types (GameTooltip, nameplates). Addons don't create them here.
     GameTooltip = Chain("FrameAPITooltip", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
-    -- A mask shapes the textures it's added to; it has a texture's base API but no drawing of its own.
+    -- A mask shapes the textures it's added to. It has a texture's base API but no drawing of its own.
     MaskTexture = Chain("SimpleTextureBaseAPI", "SimpleRegionAPI", ScriptRegion, FrameScriptObject),
     NamePlate = Chain("FrameAPINamePlate", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
     Scale = Chain("SimpleAnimScaleAPI", "SimpleAnimAPI", FrameScriptObject),
@@ -274,7 +274,7 @@ local function VisibleTree(h, widget, out)
     return out
 end
 
--- A texture keeps its masks in the order they were added; adding one twice keeps one.
+-- A texture keeps its masks in the order they were added. Adding one twice keeps one.
 function Behaviors.AddMaskTexture(s, _, mask)
     s.masks = (s.masks or {})
 

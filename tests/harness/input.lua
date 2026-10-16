@@ -1,8 +1,8 @@
--- Keyboard, controller state, mouse coverage and random numbers of the fake client (see wow.lua).
+-- Keyboard, controller state, mouse coverage, and random numbers of the fake client (see wow.lua).
 --
 --   * h:Key(key, down) dispatches OnKeyDown/OnKeyUp to visible, keyboard-enabled frames, topmost
 --     first (strata, then level, then newest). A frame that doesn't propagate keyboard input
---     (the default) consumes the key; unconsumed keys land in h.propagatedKeys.
+--     (the default) consumes the key. Unconsumed keys land in h.propagatedKeys.
 --   * h:WorldClickBlocked() is true while a visible, mouse-enabled frame covers the screen.
 --   * h:Drag(frame, dx, dy [, button]) drags a frame with the mouse (see Harness:Drag).
 --   * h:MouseWheel(frame, delta) turns the mouse wheel over a frame (see Harness:MouseWheel).
@@ -61,7 +61,7 @@ end
 -- registered the button with RegisterForDrag starts a drag ([D] RegisterForDrag's page: dragging needs EnableMouse,
 -- since OnDragStart doesn't imply it). The press runs OnMouseDown(frame, button) ([G]), then OnDragStart(frame,
 -- button); if the frame is then moving (StartMoving), it follows the mouse: each anchor shifts by dx, dy (widgets.lua's
--- header says why). The release runs OnDragStop(frame); OnMouseUp and OnClick don't run ([D] "Blocks OnMouseUp and
+-- header says why). The release runs OnDragStop(frame). OnMouseUp and OnClick don't run ([D] "Blocks OnMouseUp and
 -- OnClick when dragging with a registered button"). A frame the scripts leave moving keeps following the mouse until
 -- StopMovingOrSizing, so a later h:Drag moves it again. Returns whether the drag started.
 function Harness:Drag(frame, dx, dy, button)
@@ -114,9 +114,9 @@ function Harness:GamePadMappedState(id)
     }
 end
 
--- Presses (down = true) or releases a keyboard key like "W", "1", "ESCAPE" or "ENTER". Visible frames (every ancestor
+-- Presses (down = true) or releases a keyboard key like "W", "1", "ESCAPE", or "ENTER". Visible frames (every ancestor
 -- shown) with the keyboard enabled get it topmost first: higher frame strata, then higher frame level, then newest.
--- Each runs its OnKeyDown (or OnKeyUp) script if it has one; one that doesn't propagate keyboard input
+-- Each runs its OnKeyDown (or OnKeyUp) script if it has one. One that doesn't propagate keyboard input
 -- (SetPropagateKeyboardInput(false), the default) consumes the key, read after its script runs, so a script may decide
 -- per key. One that propagates passes it on. A key no frame consumes goes to the game's bindings and is recorded in
 -- h.propagatedKeys. Returns whether a frame consumed it.
@@ -162,7 +162,7 @@ function Harness:Key(key, down)
 end
 
 -- Turns the mouse wheel over a frame: delta 1 is a notch up, -1 a notch down ([D] OnMouseWheel's delta). A visible
--- frame with the mouse wheel enabled runs its OnMouseWheel(frame, delta); [G] the wheel over any other frame does
+-- frame with the mouse wheel enabled runs its OnMouseWheel(frame, delta). [G] The wheel over any other frame does
 -- nothing here (the client offers it to the frames beneath). Returns whether the frame took it.
 function Harness:MouseWheel(frame, delta)
     local s = Harness.State(frame)
@@ -231,8 +231,8 @@ function Harness:SeedRandom(n)
 end
 
 -- True when a visible, mouse-enabled frame covers the screen, so a click can't reach the world. A simple model:
--- covering is SetAllPoints(UIParent) or corner anchors to it (see CoversScreen); a frame sized to the screen with
--- SetSize, alpha, strata and hit rect insets aren't considered.
+-- covering is SetAllPoints(UIParent) or corner anchors to it (see CoversScreen). A frame sized to the screen with
+-- SetSize, alpha, strata, and hit rect insets aren't considered.
 function Harness:WorldClickBlocked()
     for _, frame in ipairs(self.frames) do
         local state = Harness.State(frame)

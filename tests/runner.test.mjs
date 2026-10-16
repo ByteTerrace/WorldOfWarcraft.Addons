@@ -1,5 +1,5 @@
 // The test runner's own tests (tools/verbs/test.mjs), run over the fixture test folders in
-// tests/fixtures/runner*: the order files start in, filters, timeouts, test names and pending tests.
+// tests/fixtures/runner*: the order files start in, filters, timeouts, test names, and pending tests.
 
 import { join } from "node:path";
 import { FIXTURES, assert, tlk } from "../tools/lib/test-support.mjs";
@@ -18,7 +18,7 @@ export const tests = [
     },
     {
         // The timeout counts from the end of a worker's setup, so a loaded machine can't time out
-        // the quick file; the hanging one never finishes, however long the timeout.
+        // the quick file. The hanging one never finishes, however long the timeout.
         name: "the test runner fails on an unmatched filter and times out a hanging file without stopping the rest",
         run: async () => {
             const none = tlk(["test", "--dir", join(FIXTURES, "runner"), "no test is named this"]);

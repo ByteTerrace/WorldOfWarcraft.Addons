@@ -2,13 +2,13 @@ local addonName, ns = ...
 
 -- The reading generators: one function per reading kind in ScholarWords.kinds, registered in Kit.Generators for
 -- Generate (ScholarPuzzles.lua, which loads first). Their text and word banks are ns.ScholarReadingWords
--- (ScholarReadingWords.lua) and their stories ns.ScholarStoryWords (ScholarStoryWords.lua), which load first too. Pure
--- like ScholarPuzzles.lua.
+-- (ScholarReadingWords.lua) and their stories ns.ScholarStoryWords (ScholarStoryWords.lua), which load first too. Like
+-- ScholarPuzzles.lua, they're pure.
 --
 -- Every riddle teaches: each wrong choice carries why it's wrong, and the wrong choices are the real confusions where a
 -- bank has them: a word that starts like the target but ends differently, a letter whose sound is close, the same
 -- letters turned around, a word with the new letter in the wrong place, the opposite in a synonym riddle, one letter of
--- a letter team or a team split into two sounds, a blend with a letter dropped. A why never names the answer.
+-- a letter team or a team split into two sounds, and a blend with a letter dropped. A why never names the answer.
 --
 -- A heard story (reading.listenStory) is never shown: its speech is the story and the question, and its text sets
 -- speakChoices, so ScholarView says each choice after it.
@@ -18,7 +18,7 @@ local Digraphs = { ch = true, kn = true, ph = true, sh = true, th = true, wh = t
 -- A three-letter word's why templates, by the first place a look-alike differs from it.
 local Places = { "whyStart", "whyMiddle", "whyEnd" }
 
--- How a riddle names the two places a letter team can be in a word; swap is the other place.
+-- How a riddle names the two places a letter team can be in a word, and swap is the other place.
 local TeamPlaces = {
     finish = { has = "ends with", place = "end", swap = "start", which = "last" },
     start = { has = "starts with", place = "start", swap = "finish", which = "first" },
@@ -117,7 +117,7 @@ local function Letters(word)
     return list
 end
 
--- Each look-alike of target with why it isn't target: the first place it differs, from text's whyStart, whyMiddle or
+-- Each look-alike of target with why it isn't target: the first place it differs, from text's whyStart, whyMiddle, or
 -- whyEnd ({has} is its letter there, {want} target's).
 local function LookAlikeWhys(text, target, words)
     local out = {}
@@ -323,7 +323,7 @@ local function Advanced(state, bank)
     return Pick(state, Tier(bank, max(1, cap - 1), cap))
 end
 
--- Distractors never look like rhymes (no shared last two letters or rime), so the ear decides; one starts like the
+-- Distractors never look like rhymes (no shared last two letters or rime), so the ear decides. One starts like the
 -- target, when a bank has such a word, for the child who matches the start instead of the end.
 Generators["reading.rhyme"] = function(state)
     local text = Text.rhyme
@@ -398,8 +398,8 @@ Generators["reading.sight"] = function(state)
     return Finish(state, "reading.sight", text, vars, word, wrongs)
 end
 
--- Blending sounds ("c - a - t"), or at higher levels changing one letter ("cat" to "hat"). A short word is said aloud;
--- the four choices are it and three words that look alike.
+-- Blending sounds ("c - a - t"), or at higher levels changing one letter ("cat" to "hat"). A short word is said aloud.
+-- The four choices are it and three words that look alike.
 Generators["reading.listen"] = function(state)
     local text = Text.listen
     local target = Pick(state, ScholarReadingWords.cvc)
@@ -411,7 +411,7 @@ Generators["reading.listen"] = function(state)
     return Finish(state, "reading.listen", text, vars, target, wrongs)
 end
 
--- A word is said aloud; the four choices are its first letter and three others, one of them a letter whose sound is
+-- A word is said aloud. The four choices are its first letter and three others, one of them a letter whose sound is
 -- close, when there is one.
 Generators["reading.listenSound"] = function(state)
     local text = Text.listenSound
@@ -456,7 +456,7 @@ Generators["reading.cvc"] = function(state)
 end
 
 -- The wrong choices are near misses: the same length, sharing all but a letter or two with the scrambled ones, so only
--- unscrambling finds the answer; the clue is the second miss's step.
+-- unscrambling finds the answer. The clue is the second miss's step.
 Generators["reading.unscramble"] = function(state)
     local text = Text.unscramble
     local tier = (((state.grade == 2) and ({ 1, 1, 2 })[state.level]) or ({ 2, 3, 3 })[state.level])
@@ -565,10 +565,10 @@ Generators["reading.blank"] = function(state)
     return Finish(state, "reading.blank", Text.blank, vars, entry[2], { entry[3], entry[4], entry[5] })
 end
 
--- Level 1 asks each story's first (most literal) question. A question's type (literal, inference, main, sequence or
--- vocab) picks its hint, step, explanation and praise; its clue is the part of the story that holds the answer. Grades
--- 2 and 3 read the short stories (tier 1), grades 4 to 6 the longer ones; grade 3's level 3 reaches up to the longer
--- ones, and the older grades' level 1 reaches down to the short ones.
+-- Level 1 asks each story's first (most literal) question. A question's type (literal, inference, main, sequence, or
+-- vocab) picks its hint, step, explanation, and praise. Its clue is the part of the story that holds the answer. Grades
+-- 2 and 3 read the short stories (tier 1), and grades 4 to 6 the longer ones. Grade 3's level 3 reaches up to the
+-- longer ones, and the older grades' level 1 reaches down to the short ones.
 Generators["reading.story"] = function(state)
     local lo = ((((state.grade >= 4) and (state.level > 1)) and 2) or 1)
     local hi = ((((state.grade <= 2) or ((state.grade == 3) and (state.level < 3))) and 1) or 2)
@@ -642,7 +642,7 @@ local function TeamOf(word)
     end
 end
 
--- Which letters spell a word's first (or last) sound: the team, among one of its letters, a near sound and another
+-- Which letters spell a word's first (or last) sound: the team, among one of its letters, a near sound, and another
 -- team.
 local function TeamSpell(state, text)
     local team = Pick(state, ScholarReadingWords.digraphs)
@@ -694,7 +694,7 @@ local function With(vars, extra)
 end
 
 -- Which word starts (or ends) with a team's sound. The wrong choices are words with only one of its letters there, a
--- near sound, another team, or the team at the other end; the step tries the first of them.
+-- near sound, another team, or the team at the other end. The step tries the first of them.
 local function TeamPlace(state, text)
     local riddle = Pick(state, PlaceRiddles)
     local team = riddle[1]
@@ -854,7 +854,7 @@ local function TeamJoin(state, text)
     return Finish(state, "reading.digraph", text.join, vars, target, wrongs)
 end
 
--- Letter teams (sh, ch, th, wh, ck, ng): level 1 blends a word or finds where a team's sound is; higher levels also
+-- Letter teams (sh, ch, th, wh, ck, ng): level 1 blends a word or finds where a team's sound is. Higher levels also
 -- spell a sound and split a word into its sounds.
 Generators["reading.digraph"] = function(state)
     local variants = { TeamJoin, TeamPlace, TeamSpell, TeamSplit }
@@ -862,7 +862,7 @@ Generators["reading.digraph"] = function(state)
     return variants[state.roll(1, ((state.level == 1) and 2) or 4)](state, Text.digraph)
 end
 
--- Whether a letter is a consonant; y counts as a vowel, and no blend word has one.
+-- Whether a letter is a consonant: y counts as a vowel, and no blend word has one.
 local function Consonant(letter)
     return not find("aeiouy", letter, 1, true)
 end

@@ -17,7 +17,7 @@
 //   node tools/tlk.mjs probes --check --warn-builds
 //                                                 the same, but a record from another build is
 //                                                 a warning (exit 0), as in CI, where no client
-//                                                 can re-run it; the other two still fail.
+//                                                 can re-run it. The other two still fail.
 //
 // An import folds each imported record into the saved one by the rules /btdev probe follows
 // (keepRecord, Probes.lua's header): the same result adds its contexts, another result or a newer
@@ -25,7 +25,7 @@
 // saved record from the same build, so a fresh session never shrinks it. It keeps the others, and
 // drops records of probes that no longer exist or were made by another version of their probe. A
 // record saved in the old one-context format ({ build, context = {...}, result }) is skipped, in one
-// line for them all, since the next run of its probe replaces it; any other record that isn't
+// line for them all, since the next run of its probe replaces it. Any other record that isn't
 // { build, contexts = { ["idle/none"] = true, ... }, result } is refused.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -149,7 +149,7 @@ async function harnessAnswers(definitions, probesPath) {
     }, probesPath);
 }
 
-// The report: a table of probe, needs and status, each followed by the client's and the harness's
+// The report: a table of probe, needs, and status, each followed by the client's and the harness's
 // answers (one line when they match).
 async function report(values, definitions) {
     const { probes } = readProbes(values.out);
@@ -257,7 +257,7 @@ async function importRecords(values, positionals, definitions) {
 }
 
 // --check: 1 when a record is stale. With --warn-builds, a record from another build than the
-// API snapshot's is a warning instead (CI, where no client can re-run it); a record of a probe
+// API snapshot's is a warning instead (CI, where no client can re-run it). A record of a probe
 // that's gone or of another probe version still fails.
 function checkRecords(values, definitions) {
     const { probes } = readProbes(values.out);

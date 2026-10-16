@@ -1,7 +1,7 @@
 -- Settings: ByteTerrace.SettingsPages lays out pages from the state schema, and SettingsWindow.lua draws them in the
 -- addon's own window. Labeled persisted rows appear in declaration order.
 --
--- The main page is named by the addon's title. A module's page puts its settings on a subpage of that name; subpages
+-- The main page is named by the addon's title. A module's page puts its settings on a subpage of that name. Subpages
 -- appear in first-declared order. A module's section, or else its label, supplies its section header. A row's section
 -- starts a header before that row. A header that repeats its page's name is left out.
 --
@@ -12,9 +12,9 @@
 local ByteTerrace = ByteTerrace
 local ipairs = ipairs
 
---- The page layout the addon's window draws: the main page (named by the addon's title), then each subpage in the order
---- its first setting is declared. A page is { name, entries }, and an entry is { header = text } or { id, name, spec }
---- for a setting row.
+--- Returns the page layout the addon's window draws: the main page (named by the addon's title), then each subpage in
+--- the order its first setting is declared. A page is { name, entries }, and an entry is { header = text } or { id,
+--- name, spec } for a setting row.
 ---@param addon table the AddOn, compiled
 ---@return table[] pages
 local function SettingsPages(addon)

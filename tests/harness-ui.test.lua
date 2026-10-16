@@ -169,7 +169,7 @@ test("a unit tooltip runs post calls (all types first) with GameTooltip and the 
         tooltip:AddDoubleLine("Kills", "3")
     end)
 
-    -- TooltipDataProcessor.AllTypes is "ALL"; the harness doesn't fake the member, since no addon names it.
+    -- TooltipDataProcessor.AllTypes is "ALL". The harness doesn't fake the member, since no addon names it.
     env.TooltipDataProcessor.AddTooltipPostCall("ALL", function() order[#order + 1] = "all" end)
     env.TooltipDataProcessor.AddTooltipPostCall(env.Enum.TooltipDataType.Item, function() order[#order + 1] = "item" end)
     local plate = h:AddNamePlate(EnemyPlayer())

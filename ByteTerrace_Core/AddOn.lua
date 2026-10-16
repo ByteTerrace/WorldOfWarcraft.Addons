@@ -21,23 +21,23 @@
 --       OnDisable = function(module) ... end,
 --   })
 --
--- Everything declares at file load; the addon compiles once on ADDON_LOADED. A module's rows and commands are named
--- "<Module>.<name>". A module with a label gets an "<Module>.enabled" row (default spec.default ~= false); toggle =
--- false removes it. A module runs while its enabled row is true and its active rule holds. What a module creates
--- through its methods (Module.lua) belongs to it and is removed when it stops, so a stopped module registers no events
--- and runs no code. Rows with scope = "character" persist per character. A module's collections are
--- module.Records.<name>, usable once the addon has loaded. uses must name demand modules and can't form a cycle; start
--- refuses anything else.
+-- Everything declares at file load, and the addon compiles once on ADDON_LOADED. A module's rows and commands are named
+-- "<Module>.<name>". A module with a label gets an "<Module>.enabled" row (default spec.default ~= false). Setting
+-- toggle = false removes it. A module runs while its enabled row is true and its active rule holds. What a module
+-- creates through its methods (Module.lua) belongs to it and is removed when it stops, so a stopped module registers no
+-- events and runs no code. Rows with scope = "character" persist per character. A module's collections are
+-- module.Records.<name>, usable once the addon has loaded. A module's uses must name demand modules and can't form a
+-- cycle. Start refuses anything else.
 --
 -- Settings pages (Settings.lua): modules without a page share the main page, in declaration order, and addon.debug
 -- closes it under an "Advanced" header.
 --
 -- Built-in commands: bare slash (the settings window, SettingsWindow.lua), help, version, debug [status | events | work
--- | rows | trace | cpu | profile | reset] (Diagnostics.lua), set <row> <value>, toggle <row>.
+-- | rows | trace | cpu | profile | reset] (Diagnostics.lua), set <row> <value>, and toggle <row>.
 --
 -- Public members: Name, Title, Version, Slash, State, Events, Commands, Input, SettingsWindow, Modules ([name] =
--- Module, Module.lua), Started, Work (the work record of what the framework runs for no module: built-in commands,
--- module switching; Core.lua) and Profiling (whether dispatches are timed, debug profile).
+-- Module, Module.lua), Started, Work, and Profiling. Work is the work record (Core.lua) of what the framework runs for
+-- no module: built-in commands and module switching. Profiling is whether dispatches are timed (debug profile).
 
 -- Module and row names are identifiers: "." separates a module from its row, so it can't appear in either.
 local NamePattern = "^%a[%w_]*$"
@@ -77,10 +77,10 @@ local function ParseValue(kind, text)
     return text
 end
 
--- Who already registered alias ("SLASH_KEYn"), or nil. Read the way Blizzard's chat code reads slash commands
--- (ChatFrameUtil.lua's ImportListToHash): each SlashCmdList key's numbered SLASH_ globals, never a walk of every global
--- (8 ms in game). The chat frame moves commands out of SlashCmdList into hash_SlashCmdList (keyed by the uppercased
--- alias) once any is typed.
+-- Returns who already registered alias ("SLASH_KEYn"), or nil. It reads registrations the way Blizzard's chat code
+-- reads slash commands (ChatFrameUtil.lua's ImportListToHash): each SlashCmdList key's numbered SLASH_ globals, never a
+-- walk of every global (8 milliseconds in game). The chat frame moves commands out of SlashCmdList into
+-- hash_SlashCmdList (keyed by the uppercased alias) once any is typed.
 local function TakenBy(alias)
     local wanted = alias:lower()
 
@@ -163,7 +163,7 @@ function AddOn:DefineBuiltinCommands()
     })
 end
 
---- Declares a module before the addon starts. Preparations that fail register nothing and claim no saved data; see the
+--- Declares a module before the addon starts. Preparations that fail register nothing and claim no saved data. See the
 --- file header for the spec.
 ---@param name string an identifier, unique in the addon
 ---@param spec table
@@ -404,8 +404,9 @@ function AddOn:ResolveUses()
     return usesOf
 end
 
---- Batch for work the framework runs on a module's behalf (timers, commands, deferred actions): while profiling, fn's
---- time, not the publish after it, adds to work.time. The caller counts the run in work's field for its kind.
+--- Runs fn as one batch for work the framework runs on a module's behalf (timers, commands, and deferred actions).
+--- While profiling, fn's time, not the publish after it, adds to work.time. The caller counts the run in work's field
+--- for its kind.
 ---@param work table a work record (Core.lua)
 ---@param fn function
 ---@return boolean ok false when fn errored (the error reaches the error handler)
@@ -458,7 +459,7 @@ function AddOn:SetFromText(arg)
     self:Print(name, "=", tostring(value))
 end
 
---- The settings' names in declaration order, comma separated.
+--- Returns the settings' names in declaration order, comma separated.
 ---@param kind string? only rows of this kind
 ---@return string
 function AddOn:SettingNames(kind)
@@ -477,7 +478,7 @@ function AddOn:SettingNames(kind)
 end
 
 --- Compiles every declaration, loads SavedVariables, creates the settings window and slash commands, then starts the
---- modules in one batch. ADDON_LOADED calls it; a refused declaration raises before anything starts. Declarations close
+--- modules in one batch. ADDON_LOADED calls it. A refused declaration raises before anything starts. Declarations close
 --- as it begins, so none follows even a refused start.
 function AddOn:Start()
     self.m_sealed = true
@@ -592,7 +593,7 @@ function ByteTerrace.NewAddOn(options)
         m_moduleOrder = {},
         m_savedVariable = options.savedVariable,
         m_savedVariablePerCharacter = options.savedVariablePerCharacter,
-        -- True once Start begins; nothing declares after that.
+        -- True once Start begins. Nothing declares after that.
         m_sealed = false,
         Modules = {},
         Name = options.name,

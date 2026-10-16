@@ -87,7 +87,7 @@ end)
 test("a quest giver whose name is secret is left out, and the quest is still recorded", function()
     local h, addon = LoadKid()
 
-    -- an escort that starts inside a boss encounter
+    -- An escort starts inside a boss encounter.
     h:SetRestriction("Encounter", true)
     Accept(h, Wolves)
     eq(Quests(addon):Field("33", "title"), "Wolves Across the Border")
@@ -97,7 +97,7 @@ end)
 test("a quest the client can't name isn't recorded", function()
     local h, addon = LoadKid()
 
-    -- not in the log, so GetTitleForQuestID has no title for it
+    -- It isn't in the log, so GetTitleForQuestID has no title for it.
     h:Fire("QUEST_ACCEPTED", 4242)
     falsy(Quests(addon):Has("4242"))
 end)
@@ -117,7 +117,7 @@ test("a quest the book never saw is recorded when turned in, from its reward pan
     eq(record.endPlace, "Eastvale Logging Camp")
     truthy(record.turnedIn)
     eq(record.giver, "", "nobody saw who gave it")
-    -- a hidden tracking quest: no panel named it
+    -- A hidden tracking quest: no panel named it.
     h:Fire("QUEST_TURNED_IN", 9001, 0, 0)
     falsy(Quests(addon):Has("9001"))
 end)
@@ -238,7 +238,7 @@ test("a quest nothing can be asked about counts as asked, and the riddle falls b
     local h, addon, ns = LoadKid()
     local shown = Watch(ns)
 
-    -- a title and nothing else
+    -- A title and nothing else.
     Quests(addon):Set("99", { fresh = true, seen = 1, title = "Hmm" })
 
     -- Everything to ask about, but a title too long to show in a riddle.
@@ -327,9 +327,9 @@ end)
 test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-pad, and the riddle fits", function()
     local h, _, ns = LoadKid()
 
-    -- a controller is connected
+    -- A controller is connected.
     h.labelStyle = "Letters"
-    -- a short screen: the harness's 14 px lines are shorter than the real font's
+    -- A short screen: the harness's 14 px lines are shorter than the real font's.
     h.env.UIParent:SetSize(1366, 600)
 
     local paragraph = ("Greetings, rogue. I can see you've got the look of an adventurer about you. This is good. "
@@ -411,7 +411,7 @@ end)
 test("on a tall screen the quest book is a page of at most BookHeight, scrolling the rest, not the screen's height", function()
     local h, _, ns = LoadKid()
 
-    -- a small UI scale: far more room than the book needs
+    -- A small UI scale: far more room than the book needs.
     h.env.UIParent:SetSize(2560, 1440)
 
     Accept(h, { goal = "Read it all.", header = "Tirisfal Glades", id = 36, objectives = {},
@@ -738,7 +738,7 @@ test("objectives saved without a name or a kind are never asked about or offered
 end)
 
 test("a flight, a quest turned in or a death brings the next riddle once it's half due", function()
-    -- Under half the interval (30 minutes), the moment passes; over it, a riddle comes.
+    -- Under half the interval (30 minutes), the moment passes. Over it, a riddle comes.
     local h = LoadKid()
 
     Accept(h, Wolves)

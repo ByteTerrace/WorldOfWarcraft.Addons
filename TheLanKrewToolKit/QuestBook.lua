@@ -1,26 +1,28 @@
 local addonName, ns = ...
 
 -- QuestBook: every quest the player has been shown, remembered per character so the Scholar's challenge can ask about
--- it (ScholarQuests.lua writes the riddles). A demand module: it records while the challenge runs (Scholar uses it).
+-- it (ScholarQuests.lua writes the riddles). It's a demand module: it records while the challenge runs (Scholar uses
+-- it).
 --
 -- A quest is recorded when it's accepted, from what the client showed: the giver's offer (QUEST_DETAIL: the title, the
--- quest's text and goal, the giver's name), or the quest log alone for a quest an area trigger accepted, whose text the
--- player reads by opening the log. Its objectives come from the log (each with its kind: item, monster, ...), and where
--- it began from the subzone (with the zone around it, never a wrong answer for where). Turning it in (QUEST_COMPLETE,
--- then QUEST_TURNED_IN) adds who took it, where, and the reward text. Each exposure, accepting and turning in, makes
--- the quest fresh: something new to ask about. Only these events read the quest APIs, out of combat as quests are, and
--- a secret answer is left out rather than stored.
+-- quest's text and goal, and the giver's name), or the quest log alone for a quest an area trigger accepted, whose text
+-- the player reads by opening the log. Its objectives come from the log (each with its kind: item, monster, ...), and
+-- where it began from the subzone (with the zone around it, never a wrong answer for where). Turning it in
+-- (QUEST_COMPLETE, then QUEST_TURNED_IN) adds who took it, where, and the reward text. Each exposure, accepting and
+-- turning in, makes the quest fresh: something new to ask about. Only these events read the quest APIs, out of combat
+-- as quests are, and the book leaves a secret answer out rather than storing it.
 --
 -- When the book starts (the challenge switched on mid-game, or a login), the quests already in the log are recorded as
--- the log shows them: title, text and objectives, not fresh, with no giver or place, since nobody saw them given. The
+-- the log shows them: title, text, and objectives, not fresh, with no giver or place, since nobody saw them given. The
 -- log may still be empty at login, so the first QUEST_LOG_UPDATE after the start looks again.
 --
 -- An objective is named in the client's own words: its text is read with the locale's GlobalStrings
--- (QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, QUEST_OBJECTS_FOUND), so "0/8 Wolf Pelt" names "Wolf Pelt" and "0/10
+-- (QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, and QUEST_OBJECTS_FOUND), so "0/8 Wolf Pelt" names "Wolf Pelt" and "0/10
 -- Kobold Vermin slain" names "Kobold Vermin" on enUS, and the same on any other client. One the client hasn't named yet
 -- (its item or creature not loaded: "0/5 " for "0/5 Duskbat Pelt") isn't recorded: the quest waits (unnamed) and its
 -- objectives are read again on QUEST_LOG_UPDATE until every one has a name, it leaves the log, or MaxNameReads updates
--- pass, when the book gives up on the missing names. A named book reads no objectives then.
+-- pass, when the book gives up on the missing names. While no quest waits for its names, QUEST_LOG_UPDATE reads no
+-- objectives.
 --
 --   ns.QuestBook.Order()            every key in the order to ask about them: fresh quests, newest
 --                                   first, then the rest for review, the one asked longest ago first
@@ -29,12 +31,12 @@ local addonName, ns = ...
 --   ns.QuestBook.All()              every record, as copies with their key, newest first
 --
 -- Records are QuestBook.quests, keyed by the quest ID as text, up to Limit of them (the oldest seen go first). Texts
--- are whole, keep their line breaks and lose the client's escape codes (a link keeps its text, a texture goes); an
+-- are whole, keep their line breaks, and lose the client's escape codes (a link keeps its text, a texture goes). An
 -- objective is what it names, with its required count beside it ("0/8 Wolf Pelt" is "Wolf Pelt", with 8 its required
 -- count).
 
 local Limit = 30
--- How many bytes of a title, name, place, goal or objective are kept.
+-- How many bytes of a title, name, place, goal, or objective are kept.
 local MaxLine = 120
 -- How many QUEST_LOG_UPDATEs an unnamed quest's objectives are read on before the book gives up.
 local MaxNameReads = 20
@@ -115,7 +117,7 @@ local TurnIn
 -- The keys of quests whose objectives wait for their names (ObjectiveFields' unnamed), each with the reads it has left.
 local Unnamed = {}
 
---- Every record, newest first, each a copy with its key.
+--- Returns every record, newest first, each a copy with its key.
 ---@return table[]
 local function All()
     local quests = QuestBookModule.Records.quests
@@ -151,8 +153,8 @@ local function Asked(key, kind)
     end
 end
 
---- Every quest's key in the order to ask about them: the fresh ones (shown and not asked about since), newest first,
---- then the others for review, the one asked longest ago first.
+--- Returns every quest's key in the order to ask about them: the fresh ones (shown and not asked about since), newest
+--- first, then the others for review, the one asked longest ago first.
 ---@return string[]
 local function Order()
     local quests = QuestBookModule.Records.quests
@@ -185,10 +187,10 @@ local function Order()
     return keys
 end
 
--- A text the client gave, plain: "" for a secret or a non-string; its escape codes undone (a link keeps its text, a
--- texture goes, |n is a line break), other control characters but line breaks removed and trimmed. With length (a
--- one-line field), it's cut to length bytes, at the last whole sentence (else word) that fits; a quest's text is kept
--- whole, as the log shows it.
+-- A text the client gave, plain. It's "" for a secret or a non-string. Otherwise, its escape codes are undone (a link
+-- keeps its text, a texture goes, |n is a line break), control characters other than line breaks are removed, and it's
+-- trimmed. With length (a one-line field), it's cut to length bytes, at the last whole sentence (else word) that fits.
+-- A quest's text is kept whole, as the log shows it.
 local function Plain(text, length)
     if issecretvalue(text) or (type(text) ~= "string") then
         return ""
@@ -220,8 +222,8 @@ local function NameOf(unit)
     return Plain(name, MaxLine)
 end
 
--- What an objective names (its item, creature or task), from the log's text in the client's own forms; a text without a
--- count is its own name. "" while the client hasn't loaded the name.
+-- What an objective names (its item, creature, or task), from the log's text in the client's own forms. A text without
+-- a count is its own name. It's "" while the client hasn't loaded the name.
 local function ObjectiveName(text, kind)
     text = Plain(text, MaxLine)
 
@@ -269,7 +271,7 @@ local function ObjectiveFields(questID, values)
     return values
 end
 
--- GetQuestID and the quest events' IDs are plain numbers (the snapshot flags none of them; probes quest.offerIdentity
+-- GetQuestID and the quest events' IDs are plain numbers. The snapshot flags none of them (probes quest.offerIdentity
 -- and quest.turnInIdentity).
 local function OnOffer()
     Offer = {
@@ -283,7 +285,7 @@ local function OnTurnInPanel()
         title = Plain(GetTitleText(), MaxLine) }
 end
 
--- Where you are: the subzone, else the zone; and the zone.
+-- Where you are: the subzone (else the zone), and the zone.
 local function Place()
     local subZone = Plain(GetSubZoneText(), MaxLine)
     local zone = Plain(GetRealZoneText(), MaxLine)

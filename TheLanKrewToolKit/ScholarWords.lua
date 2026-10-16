@@ -1,13 +1,13 @@
 local addonName, ns = ...
 
 -- Word banks and flavor text for the Scholar puzzles, as ns.ScholarWords: the puzzle files (ScholarPuzzles.lua and its
--- generators) read it; this file only holds data. Everything is original, kid-friendly plain ASCII. The reading
+-- generators) read it. This file only holds data. Everything is original, kid-friendly plain ASCII. The reading
 -- riddles' text and banks are ns.ScholarReadingWords (ScholarReadingWords.lua) and ns.ScholarStoryWords
--- (ScholarStoryWords.lua), and the math riddles' are ns.ScholarMathWords (ScholarMathWords.lua); their kinds and titles
+-- (ScholarStoryWords.lua), and the math riddles' are ns.ScholarMathWords (ScholarMathWords.lua). Their kinds and titles
 -- are here.
 --
--- Word problems use {hero} and {place}; the stock ones below fill in when the player's context doesn't. Quest riddles
--- (ScholarQuests.lua) ask about the player's own quests, in the words below; their banks are wrong answers to mix in
+-- Word problems use {hero} and {place}. The stock ones below fill in when the player's context doesn't. Quest riddles
+-- (ScholarQuests.lua) ask about the player's own quests, in the words below. Their banks are wrong answers to mix in
 -- when the player's own quests don't give three.
 
 -- order: grouped by subject and grade, beside the words each group's puzzles read
@@ -150,8 +150,8 @@ ns.ScholarWords = {
     -- Quest riddle text. {title} is the quest's title, and the quest book holds every answer: a hint says where to look
     -- in it, a step walks to the line, and an explanation quotes it. A prompt names the quest by its title, or (bare)
     -- as the quest in the book when the title would give the answer away. A wrong choice says why: one from another of
-    -- the player's quests by from (where it came from, {other}), this quest's own giver, taker or place asked the other
-    -- way round by mixup, and any other by the kind's wrong.
+    -- the player's quests by from (where it came from, {other}), this quest's own giver, taker, or place asked the
+    -- other way round by mixup, and any other by the kind's wrong.
     quest = {
         blank = {
             bare = "From the quest in your quest book:\n\"{sentence}\"\nWhich word is missing?",
@@ -283,7 +283,7 @@ ns.ScholarWords = {
     },
     -- Wrong answers for quest riddles, by the player's faction (Alliance when it's unknown): the real givers, quests
     -- (each with its real giver, so one is never offered as another quest of the riddle's own giver), places (never a
-    -- whole zone, which could be true of the right place too) and objectives of the lands a new character of that
+    -- whole zone, which could be true of the right place too), and objectives of the lands a new character of that
     -- faction quests in. nameWords and placeWords are single words of those names and places: a capitalized word of a
     -- quest's text in one of them can be its missing word, with the others of its list as wrong answers.
     questBanks = {
@@ -292,7 +292,7 @@ ns.ScholarWords = {
                 "Kobold Vermin", "Young Wolf", "Defias Thug", "Murloc Forager", "Mangy Wolf", "Kobold Worker",
                 "Kobold Laborer", "Frostmane Troll Whelp",
             },
-            -- Objectives of each kind: items to bring, foes to defeat, tasks.
+            -- Objectives of each kind: items to bring, foes to defeat, and tasks.
             items = {
                 "Tough Wolf Meat", "Kobold Candle", "Gold Dust", "Murloc Fin", "Linen Cloth", "Red Burlap Bandana",
                 "Milly's Harvest", "Wolf Fang",
@@ -375,9 +375,9 @@ ns.ScholarWords = {
     },
     -- How ScholarQuests.lua tells a missing word's kind, so its wrong answers are the same kind (a noun for a noun): a
     -- word right after a nounStarts word ("the ___") is a noun when punctuation or a nounEnds word follows it ("the ___
-    -- will"), and otherwise describes the noun after it and isn't asked; one ending in -ed, -ing or -ly is that kind;
-    -- and one ending in -er is a comparing word when it's a comparable word plus -er ("bold", "bolder"). kinds holds
-    -- wrong answers of each kind, for when the quest's own text has too few.
+    -- will"), and otherwise describes the noun after it and isn't asked. One ending in -ed, -ing, or -ly is that kind.
+    -- One ending in -er is a comparing word when it's a comparable word plus -er ("bold", "bolder"). kinds holds wrong
+    -- answers of each kind, for when the quest's own text has too few.
     questWords = {
         comparable = {
             angry = true, big = true, bold = true, brave = true, bright = true, calm = true, clever = true,

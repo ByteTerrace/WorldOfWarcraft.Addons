@@ -1,5 +1,5 @@
 // The Lua the test runner runs before each test file (tools/lib/test-worker.mjs): test, eq, truthy,
-// falsy, throws, pending and use, and the runner's own __names and __run. check reads it too, for the
+// falsy, throws, pending, and use, plus the runner's own __names and __run. check reads it too, for the
 // globals it defines (tools/lib/check-tests.mjs).
 
 export const PRELUDE = `

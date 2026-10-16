@@ -1,4 +1,4 @@
--- The harness's fidelity rules for keyboard input, mouse coverage, frame strata and random numbers
+-- The harness's fidelity rules for keyboard input, mouse coverage, frame strata, and random numbers
 -- (tests/harness/input.lua, widgets.lua).
 
 test("keyboard input: a keyboard-enabled frame consumes keys unless it propagates them", function()

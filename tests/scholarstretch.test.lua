@@ -8,7 +8,7 @@ local LoadKid = Kit.LoadKid
 local Watch = Kit.Watch
 local WrongAnswer = Kit.WrongAnswer
 
--- Asks riddles (answering each right) until one is a stretch, or tries runs out; the stretch riddle is left on screen.
+-- Asks riddles (answering each right) until one is a stretch, or tries runs out. The stretch riddle stays on screen.
 local function UntilStretch(h, shown, tries)
     for _ = 1, tries do
         h:Slash("/tlk puzzle")

@@ -2,14 +2,14 @@
 -- a module that uses it runs (uses = { "kills" }). React to a kill with module:OnIncrease on a count.
 --
 --   kills.honorable  honorable kills this session, one per kill message. The client gives addons no
---                    combat log; CHAT_MSG_COMBAT_HONOR_GAIN is how it says you got credit for a
+--                    combat log. CHAT_MSG_COMBAT_HONOR_GAIN is how it says you got credit for a
 --                    kill, and everyone in your group nearby gets the same credit, whoever landed it.
 --   kills.victim     the last honorable kill's victim as the message printed it (a player's
 --                    "First Last", Names.lua). It's set in the same publish that bumps
 --                    kills.honorable.
 --   kills.blows      your killing blows on players this session (yours or your pet's), from
 --                    PARTY_KILL, the event killing-blow addons read since the combat log closed. Its
---                    GUIDs are secret while unit identity is restricted (in instances); those don't
+--                    GUIDs are secret while unit identity is restricted (in instances). Those don't
 --                    count.
 
 local ByteTerrace = ByteTerrace
@@ -32,7 +32,7 @@ end
 
 local HonorPatterns = { Pattern(COMBATLOG_HONORGAIN), Pattern(COMBATLOG_HONORGAIN_NO_RANK) }
 
--- The victim's name in an honorable kill message, or nil (bonus honor names no one).
+-- Returns the victim's name in an honorable kill message, or nil (bonus honor names no one).
 local function Victim(text)
     for _, pattern in ipairs(HonorPatterns) do
         local victim = text:match(pattern)

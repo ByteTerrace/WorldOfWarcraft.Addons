@@ -1,16 +1,16 @@
 local addonName, ns = ...
 
--- The stories Scholar's reading riddles ask about, as ns.ScholarStoryWords: ScholarReading.lua reads it; this file only
+-- The stories Scholar's reading riddles ask about, as ns.ScholarStoryWords: ScholarReading.lua reads it. This file only
 -- holds data. Everything is original, kid-friendly plain ASCII. Kinds and titles stay in ScholarWords.lua.
 --
 -- `stories` are read on screen (reading.story): tier 1 is two to four short sentences in simple words, with a literal
--- question and one inference question, for younger readers; tier 2 is longer and asks why, in what order, what a word
--- means and what it's mostly about. `heard` stories are said aloud by the Owl Sage, never shown (reading.listenStory):
--- two to four very short sentences for children still learning to read, with short choices that are said aloud too.
--- `text` holds each question type's riddle text, like ScholarReadingWords.text.
+-- question and one inference question, for younger readers. Tier 2 is longer and asks why, in what order, what a word
+-- means, and what it's mostly about. The Owl Sage says `heard` stories aloud and never shows them
+-- (reading.listenStory): two to four tiny sentences for children still learning to read, with short choices that are
+-- said aloud too. `text` holds each question type's riddle text, like ScholarReadingWords.text.
 ns.ScholarStoryWords = {
     -- Each heard story is { text, questions... }. A question is { question, answer, three wrong answers, type =
-    -- literal, inference or sequence, clue = the part of the story that holds the answer }; a wrong answer the story
+    -- literal, inference, or sequence, clue = the part of the story that holds the answer }. A wrong answer the story
     -- mentions is { text, why = ... }. A literal or inference question's clue never holds its answer, so the step can
     -- quote it, and the first question is the most literal.
     heard = {
@@ -105,8 +105,8 @@ ns.ScholarStoryWords = {
             { "How did Tink probably feel?", "Proud", "Grumpy", "Afraid", "Bored", type = "inference", clue = "It floated!" } },
     },
     -- Each story is { text, questions... }, with optional hero and place defaults. A question is { question, answer,
-    -- three wrong answers, type = literal, inference, main, sequence or vocab, clue = the part of the story that holds
-    -- the answer }; a wrong answer the story mentions is { text, why = ... }. The first question is the most literal.
+    -- three wrong answers, type = literal, inference, main, sequence, or vocab, clue = the part of the story that holds
+    -- the answer }. A wrong answer the story mentions is { text, why = ... }. The first question is the most literal.
     -- The tier (t) is 1 for younger readers and 2 for older ones.
     stories = {
         { t = 2, "Pip the gnome built a tiny robot named Bolt. Bolt could sweep floors, but it always swept the dust under the rug! Pip laughed and gave it a dustpan.",
@@ -302,11 +302,11 @@ ns.ScholarStoryWords = {
             { "What did Tavi's brother do at first?", "Covered his ears", "Danced", "Sang along", "Played his own drum", type = "literal", clue = "Her baby brother covered his ears." },
             { "Why did Tavi play softly?", "So her brother could rest", "Her drum broke", "She was tired", "It was raining", type = "inference", clue = "Her baby brother covered his ears." } },
     },
-    -- Riddle text by question type ({name} is filled from the generator's variables).
+    -- Riddle text by question type (the generator's variables fill {name}).
     text = {
-        -- A heard story's question type picks its text. The speech is the story and the question; speakChoices has the
-        -- choices said after it with their keys, so a child who can't read yet hears them too. The prompt never shows
-        -- the story, and {line} is the sentence (or sentences) of the story that hold the clue.
+        -- A heard story's question type picks its text. The speech is the story and the question, and speakChoices has
+        -- the choices said after it with their keys, so a child who can't read yet hears them too. The prompt never
+        -- shows the story, and {line} is the sentence (or sentences) of the story that hold the clue.
         heard = {
             inference = {
                 explain = "The story didn't say it in words, but this part shows it: \"{line}\"",

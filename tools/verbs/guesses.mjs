@@ -5,7 +5,8 @@
 //
 // Each guess prints as `path:line [G] claim`, then the client names it's about, the shipped addons' files that use
 // them, the test files that call the harness methods it models, and the probes that cite it or read the same API.
-// Ranked by addon files, then test files. --json prints one JSON record per guess. Exit 0; 2 on a usage error.
+// Guesses rank by addon files, then test files. --json prints one JSON record per guess. It exits 0, or 2 on a
+// usage error.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";

@@ -1,8 +1,8 @@
 local addonName, ns = ...
 
 -- Sounds: player-supplied sounds bound to game moments. The addon ships no audio: players drop files named after each
--- sound into the Media folder (ByteTerrace_Core's SoundBank.lua has the rules: .ogg or .mp3, numbered variants, a
--- restart to see new files).
+-- sound into the Media folder. ByteTerrace_Core's SoundBank.lua has the rules: .ogg or .mp3, numbered variants, and a
+-- restart to see new files.
 --
 -- ns.SoundBank is the toolkit's bank, the one way any feature plays them. Define sounds at file load, before a module's
 -- state uses SoundBank:Row.

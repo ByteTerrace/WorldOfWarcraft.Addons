@@ -6,7 +6,7 @@
 --   Listen(kind, fn, work)      fn(sender, fields) for each valid message of kind; sender is the
 --                               sender's full name ("First Last", Names.lua) and fields an array
 --                               of strings. Each delivery counts in work (the listening module's;
---                               this module's by default). Returns a handle for Unlisten; feature
+--                               this module's by default). Returns a handle for Unlisten. Feature
 --                               code uses module:Listen(comms, kind, fn) in OnEnable for automatic
 --                               teardown.
 --
@@ -16,21 +16,22 @@
 --
 -- It plays by Blizzard's addon rules (no "excessive use of the chat system"), so every feature that talks to the group
 -- gets them without having to know them:
---   * Your own group only (party, raid, instance chat), never whispers, public channels or
---     visible chat; received messages must arrive on a group channel too.
---   * At most one message per interval (default and least 1 second: the client regains one
---     message a second per prefix, so a faster transport only meets its throttle) from a small
---     bounded queue (default 8): beyond it messages are dropped, never retried forever. An urgent
+--   * Your own group only (party, raid, and instance chat), never whispers, public channels, or
+--     visible chat. Received messages must arrive on a group channel too.
+--   * At most one message per interval, from a small bounded queue (default 8). The interval
+--     defaults to 1 second and can't be less: the client regains one message a second per
+--     prefix, so a faster transport only meets its throttle. Messages beyond the queue's size are
+--     dropped, never retried forever. An urgent
 --     message goes first, and into a full queue it takes the place of the newest message that
 --     isn't urgent. A dropped message is named in debug output only.
 --   * The client's answer decides what happens to the message: a throttle keeps it queued for the
 --     next turn, GeneralError keeps it until MaxErrors such answers, and AddOnMessageLockdown
 --     drops the queue. A send that raises reaches the error handler, and the queue moves on
 --     without it.
---   * A number field goes as tostring writes it; one that wouldn't read back as itself is refused.
---   * Nothing during chat messaging lockdown (encounters, Mythic+, PvP matches). The queue is
+--   * A number field goes as tostring writes it. One that wouldn't read back as itself is refused.
+--   * Nothing during chat messaging lockdown (encounters, Mythic+, and PvP matches). The queue is
 --     dropped then, and when you leave your group: what it held would be stale later.
---   * A payload that arrives secret (lockdown) is ignored, as boss mods do; so are your own
+--   * A payload that arrives secret (lockdown) is ignored, as boss mods do. So are your own
 --     messages, which the client echoes back.
 --   * Messages are parsed strictly: an uppercase kind, then tab-separated fields. A message longer
 --     than the client's limit is a caller bug and raises an error.
@@ -83,7 +84,7 @@ Comms.__index = Comms
 --- The longest message Send accepts, "KIND:" and separators included: the client's limit.
 Comms.MaxMessage = MaxMessage
 
--- The group channel messages go to, or nil when you're not in a group.
+-- Returns the group channel messages go to, or nil when you're not in a group.
 local function Channel()
     if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
         return "INSTANCE_CHAT"
@@ -295,7 +296,7 @@ function Comms:Open()
         Report(("%s: message prefix %s can't be registered: %s"):format(self.m_module.Addon.Name, self.m_prefix, reason))
     end
 
-    -- Your name, nil while it's secret; each message looks it up again until it isn't.
+    -- Your name, nil while it's secret. Each message looks it up again until it isn't.
     local me = Names.Mine()
     local module = self.m_module
     local prefix = self.m_prefix
@@ -306,7 +307,7 @@ function Comms:Open()
     local session = self.m_session
 
     local function Receive(received, text, channel, sender)
-        -- Every addon's messages arrive here; the prefix test comes first, so theirs cost one check.
+        -- Every addon's messages arrive here. The prefix test comes first, so theirs cost one check.
         if issecretvalue(received) or (received ~= prefix) then
             return
         end
@@ -385,21 +386,22 @@ function Comms:Open()
     end)
 end
 
---- How many messages wait to be sent.
+--- Returns how many messages wait to be sent.
 ---@return integer
 function Comms:Queued()
     return #self.m_queue
 end
 
---- Whether a message sent now would go out: the module runs, you're in a group, and chat messaging isn't locked down.
+--- Returns whether a message sent now would go out: the module runs, you're in a group, and chat messaging isn't locked
+--- down.
 ---@return boolean
 function Comms:Ready()
     return (self.m_open and (Channel() ~= nil) and not C_ChatInfo.InChatMessagingLockdown())
 end
 
---- Queues a message for the group. Dropped while the module is stopped, when you're not in a group, during chat
---- lockdown, or when the queue is full. An urgent message is dropped only when every queued message is urgent too;
---- otherwise it takes the newest ordinary message's place.
+--- Queues a message for the group. The message is dropped while the module is stopped, when you're not in a group,
+--- during chat lockdown, or when the queue is full. An urgent message is dropped only when every queued message is
+--- urgent too. Otherwise, it takes the newest ordinary message's place.
 ---@param kind string uppercase letters only
 ---@param fields any? a plain string, finite number, boolean, or a dense array of these
 ---@param urgent boolean? goes to the front of the queue

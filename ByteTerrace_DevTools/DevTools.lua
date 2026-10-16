@@ -1,47 +1,53 @@
 local addonName, ns = ...
 
--- Development only; never shipped. Two commands record facts about the client, and /reload afterwards writes them to
--- WTF\Account\<account>\SavedVariables\ByteTerrace_DevTools.lua:
+-- It's for development only and never ships. Two commands record facts about the client, and /reload afterwards writes
+-- them to WTF\Account\<account>\SavedVariables\ByteTerrace_DevTools.lua:
 --
 --   /btdev dump        every global the client exposes (name, type, and for plain tables their
 --                      member names), plus the build it came from, for
 --                      `node tools/tlk.mjs api-sync --globals <that file>` (tools/api/forever.json).
 --   /btdev probe       every calibration probe (Probes.lua and the files it names) whose needs are
 --                      met right now, folded into the probes already recorded (Probes.Keep: the
---                      same result adds its context, another result replaces the record, an
+--                      same result adds its context, another result replaces the record, and an
 --                      accumulating probe's result merges), for
 --                      `node tools/tlk.mjs probes --import` (tools/api/probes.json). Probes it
 --                      skips are printed with what they need.
 --   /btdev probe list  the probes with no result for this build yet, grouped by what they need,
 --                      in the order one play session in a starting zone reaches them (Probes.Steps).
 --   /btdev probe auto  on or off: whether probes record themselves as you play (on unless turned
---                      off; the setting is saved). Every SweepSeconds a sweep records each probe
+--                      off, and the setting is saved). Every SweepSeconds a sweep records each probe
 --                      whose needs are met and that has no result for this build in this context
 --                      yet, the same way /btdev probe does, and names the new and changed ones.
 --                      An accumulating probe runs in every sweep its needs are met, merging
 --                      quietly. A probe that fails in a sweep is printed once and not retried
 --                      until the next /reload.
---   /btdev rumble      plays four vibration types in turn (ProbesInput.lua), for gamePad.vibration;
+--   /btdev rumble      plays four vibration types in turn (ProbesInput.lua), for gamePad.vibration.
 --                      /btdev rumble <type> [intensity] [seconds] plays one, and stop stops it.
 --                      What a vibration feels like is for the player to say.
 --
--- From load it also listens for UNIT_COMBAT on the player and the target, for the unitCombat.seen probe
--- (Probes.NoteUnitCombat keeps the payloads' shapes), for the kill events, for kills.seen (Probes.NoteKill), and for
--- chat events' senders, for names.chatSenders (Probes.NoteSender keeps their shapes, never the names) and their
--- discordInfo, for names.chatDiscordInfo (Probes.NoteDiscordInfo), for addon messages' field shapes, for
--- comms.addonMessageInLockdown (Probes.NoteAddonMessage), for UNIT_AURA on the player and the target, for
--- units.secretTokenInAuraEvent (Probes.NoteAuraToken), for the steps into and out of combat and every restriction
--- change, for combat.edges and the restrictions the others key by (Probes.NoteCombatEdge, NoteRestriction,
--- SyncRestrictions), for leaving combat in a PvP match, for damageMeter.pvpSecrecy (Probes.NotePvPLeftCombat reads the
--- meter's totals then and a few seconds later), for your deaths and the damage meter's updates after them, for
--- damageMeter.afterDeath (Probes.NoteDeath, NoteMeterUpdate), and for boss encounters' starts and warnings, for
--- encounterWarning.seen (Probes.NoteEncounterStart, NoteEncounterWarning), for controller and interface events, for
--- input.events (Probes.NoteInputEvent), for combat's state at each death and each new damage meter session, for
--- death.combatState and damageMeter.currentSession (Probes.NoteDeathState, NoteCurrentSession), for nameplates coming
--- and going, for namePlates.events (Probes.NoteNamePlate), and for quests turned in, for questLog.titleAfterTurnIn
--- (Probes.NoteTurnIn).
+-- From load, it also listens for these events, each for a probe:
+--   * UNIT_COMBAT on the player and the target, for the unitCombat.seen probe (Probes.NoteUnitCombat keeps the
+--     payloads' shapes).
+--   * The kill events, for kills.seen (Probes.NoteKill).
+--   * Chat events' senders, for names.chatSenders (Probes.NoteSender keeps their shapes, never the names), and their
+--     discordInfo, for names.chatDiscordInfo (Probes.NoteDiscordInfo).
+--   * Addon messages' field shapes, for comms.addonMessageInLockdown (Probes.NoteAddonMessage).
+--   * UNIT_AURA on the player and the target, for units.secretTokenInAuraEvent (Probes.NoteAuraToken).
+--   * The steps into and out of combat and every restriction change, for combat.edges and the restrictions the others
+--     key by (Probes.NoteCombatEdge, NoteRestriction, and SyncRestrictions).
+--   * Leaving combat in a PvP match, for damageMeter.pvpSecrecy. Probes.NotePvPLeftCombat reads the meter's totals
+--     then and a few seconds later.
+--   * Your deaths and the damage meter's updates after them, for damageMeter.afterDeath (Probes.NoteDeath and
+--     NoteMeterUpdate).
+--   * Boss encounters' starts and warnings, for encounterWarning.seen (Probes.NoteEncounterStart and
+--     NoteEncounterWarning).
+--   * Controller and interface events, for input.events (Probes.NoteInputEvent).
+--   * Combat's state at each death and each new damage meter session, for death.combatState and
+--     damageMeter.currentSession (Probes.NoteDeathState and NoteCurrentSession).
+--   * Nameplates coming and going, for namePlates.events (Probes.NoteNamePlate).
+--   * Quests turned in, for questLog.titleAfterTurnIn (Probes.NoteTurnIn).
 --
--- On entering the world it says, in a line each, when the dump is from another build than the client's, and how many
+-- On entering the world, it says, in a line each, when the dump is from another build than the client's, and how many
 -- probes have no result for this build yet.
 --
 -- Only the client's own names are dumped. A global or table member any addon set is tainted by that addon
@@ -51,8 +57,8 @@ local addonName, ns = ...
 -- Tables listed in Nested are dumped one level deeper: `tables` maps each member that is itself a table to its member
 -- names, so the gate can check Enum.PowerType.Energy.
 --
--- ByteTerraceDevToolsDB holds build, globals and skipped (the dump, what api-sync reads) and probes (probe name ->
--- record, what `tlk probes` reads). Each command replaces only its own part.
+-- ByteTerraceDevToolsDB holds build, globals, and skipped (the dump, which api-sync reads), and probes (probe name ->
+-- record, which `tlk probes` reads). Each command replaces only its own part.
 
 local Nested = { Enum = true }
 local Prefix = "ByteTerrace DevTools: "
@@ -65,7 +71,7 @@ local Skipped
 -- [probe name] = true for each probe that failed in a sweep this session.
 local SweepFailed = {}
 
--- Files a probe under the play-session step that meets all its needs, and a text.
+-- Files a probe under the play-session step that meets all its needs, and under a text.
 local function AddToGroup(groups, probe, text)
     local step = Probes.Step(probe)
 
@@ -74,7 +80,7 @@ local function AddToGroup(groups, probe, text)
     table.insert(groups[step][text], probe.name)
 end
 
--- A set of contexts as text, sorted and joined by "; " (a context's restrictions hold commas).
+-- Returns a set of contexts as text, sorted and joined by "; " (a context's restrictions hold commas).
 local function ContextList(contexts)
     return Probes.Joined(contexts, "; ")
 end
@@ -85,7 +91,7 @@ local function Database()
     return ByteTerraceDevToolsDB
 end
 
--- Whether the saved record holds this build's result from this version of the probe.
+-- Returns whether the saved record holds this build's result from this version of the probe.
 local function HasBuildResult(probe, saved, build)
     return (Probes.IsCurrent(probe, saved) and (saved.build == build))
 end
@@ -116,7 +122,7 @@ local function Say(text)
     print(Prefix .. text)
 end
 
--- /btdev probe auto, with "on", "off" or nothing (which says the setting).
+-- Runs /btdev probe auto with "on", "off", or nothing (which says the setting).
 local function AutoCommand(args)
     local db = Database()
 
@@ -174,7 +180,7 @@ local function ListProbes()
     PrintGroups(missing)
 end
 
--- /btdev rumble's arguments, as typed (vibration types may be case-sensitive).
+-- Runs /btdev rumble with its arguments as typed, since vibration types may be case-sensitive.
 local function RumbleCommand(args)
     if args == "" then
         Say("playing High, Low, LTrigger and RTrigger, 1.5 seconds apart: note what each one felt like, then /btdev probe.")
@@ -261,7 +267,7 @@ local function RunProbes()
                 failed = (failed + 1)
                 Say(("probe %s failed: %s"):format(probe.name, problem))
             else
-                -- A changed answer is news; a new context alone (combat now, idle before) is only counted, so it
+                -- A changed answer is news. A new context alone (combat now, idle before) is only counted, so it
                 -- doesn't bury the answers that did change.
                 local kept, outcome, differences = Probes.Keep(probe, saved, record)
 
@@ -295,8 +301,8 @@ local function Skip(taintedBy)
     Skipped[owner] = ((Skipped[owner] or 0) + 1)
 end
 
--- Secure string keys of a table, sorted. A table whose keys can't be read securely (a forbidden or proxied table)
--- records none.
+-- Returns a table's secure string keys, sorted. A table whose keys can't be read securely (a forbidden or proxied
+-- table) records none.
 local function SecureKeys(tbl)
     local keys = {}
 
@@ -381,8 +387,8 @@ local function Dump()
     Say(("recorded %d client globals from %s (%s). /reload to write them."):format(count, version, build))
 end
 
--- One sweep of /btdev probe auto: records each probe whose needs are met and that has no result for this build in this
--- context (or accumulates), and names the new and changed ones.
+-- Runs one sweep of /btdev probe auto: records each probe whose needs are met and that has no result for this build in
+-- this context (or accumulates), and names the new and changed ones.
 local function Sweep()
     local db = Database()
 
@@ -426,7 +432,7 @@ local function Sweep()
     end
 end
 
--- How many probes have no result for build.
+-- Returns how many probes have no result for build.
 local function Unrecorded(build)
     local probes = (((type(ByteTerraceDevToolsDB) == "table") and (type(ByteTerraceDevToolsDB.probes) == "table")
         and ByteTerraceDevToolsDB.probes) or {})
@@ -483,7 +489,7 @@ SlashCmdList.BYTETERRACEDEVTOOLS = function(input)
     end
 end
 
--- UNIT_COMBAT for unitCombat.seen, from load; RegisterUnitEvent keeps it to the two units.
+-- Hears UNIT_COMBAT for unitCombat.seen, from load. RegisterUnitEvent keeps it to the two units.
 local CombatListener = CreateFrame("Frame")
 
 CombatListener:RegisterUnitEvent("UNIT_COMBAT", "player", "target")
@@ -492,7 +498,7 @@ CombatListener:SetScript("OnEvent", function(_, _, ...)
     Probes.NoteUnitCombat(...)
 end)
 
--- Chat events' senders for names.chatSenders, from load.
+-- Hears chat events' senders for names.chatSenders, from load.
 local ChatListener = CreateFrame("Frame")
 
 for _, event in ipairs({ "CHAT_MSG_ADDON", "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_CHANNEL", "CHAT_MSG_PARTY",
@@ -514,8 +520,8 @@ ChatListener:SetScript("OnEvent", function(_, event, ...)
     end
 end)
 
--- The restrictions in force, kept from load for the listeners that key by them, and the steps into and out of combat
--- for combat.edges.
+-- Keeps the restrictions in force from load, for the listeners that key by them, and hears the steps into and out of
+-- combat for combat.edges.
 Probes.SyncRestrictions()
 local RestrictionListener = CreateFrame("Frame")
 
@@ -542,7 +548,7 @@ RestrictionListener:SetScript("OnEvent", function(_, event, kind, state)
     end
 end)
 
--- UNIT_AURA's unit token for units.secretTokenInAuraEvent; RegisterUnitEvent keeps it to two units.
+-- Hears UNIT_AURA's unit token for units.secretTokenInAuraEvent. RegisterUnitEvent keeps it to two units.
 local AuraListener = CreateFrame("Frame")
 
 AuraListener:RegisterUnitEvent("UNIT_AURA", "player", "target")
@@ -551,8 +557,8 @@ AuraListener:SetScript("OnEvent", function(_, _, unit)
     Probes.NoteAuraToken(unit)
 end)
 
--- Your deaths and the damage meter's updates after them, for damageMeter.afterDeath, and combat's state at each death
--- and each new current session, for death.combatState and damageMeter.currentSession, from load.
+-- Hears your deaths and the damage meter's updates after them, for damageMeter.afterDeath, and combat's state at each
+-- death and each new current session, for death.combatState and damageMeter.currentSession, from load.
 local MeterListener = CreateFrame("Frame")
 
 MeterListener:RegisterEvent("PLAYER_DEAD")
@@ -570,7 +576,8 @@ MeterListener:SetScript("OnEvent", function(_, event, meterType)
     end
 end)
 
--- Nameplates coming and going, for namePlates.events, and quests turned in, for questLog.titleAfterTurnIn, from load.
+-- Hears nameplates coming and going, for namePlates.events, and quests turned in, for questLog.titleAfterTurnIn, from
+-- load.
 local PlateListener = CreateFrame("Frame")
 
 PlateListener:RegisterEvent("NAME_PLATE_UNIT_ADDED")
@@ -585,7 +592,7 @@ PlateListener:SetScript("OnEvent", function(_, event, value)
     end
 end)
 
--- The kill events for kills.seen, from load.
+-- Hears the kill events for kills.seen, from load.
 local KillListener = CreateFrame("Frame")
 
 KillListener:RegisterEvent("PARTY_KILL")
@@ -596,8 +603,8 @@ KillListener:SetScript("OnEvent", function(_, event, ...)
     Probes.NoteKill(event, ...)
 end)
 
--- Controller and interface events for input.events, from load, and the first PLAYER_ENTERING_WORLD, so it can say which
--- fired before it.
+-- Hears controller and interface events for input.events, from load, and the first PLAYER_ENTERING_WORLD, so it can say
+-- which fired before it.
 local InputListener = CreateFrame("Frame")
 
 for _, event in ipairs(Probes.InputEvents) do
@@ -615,7 +622,7 @@ InputListener:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
--- Boss encounters' starts and warnings for encounterWarning.seen, from load.
+-- Hears boss encounters' starts and warnings for encounterWarning.seen, from load.
 local EncounterListener = CreateFrame("Frame")
 
 EncounterListener:RegisterEvent("ENCOUNTER_START")
@@ -629,7 +636,7 @@ EncounterListener:SetScript("OnEvent", function(_, event, info)
     end
 end)
 
--- On entering the world: what's stale, then the sweeps of /btdev probe auto, once.
+-- On entering the world, says what's stale, then starts the sweeps of /btdev probe auto, once.
 local SweepListener = CreateFrame("Frame")
 
 SweepListener:RegisterEvent("PLAYER_ENTERING_WORLD")

@@ -1,5 +1,5 @@
--- The sound bank's variants, the Mortal Kombat announcer and the Unreal Tournament kill streaks, end to end through the
--- real addon files.
+-- The sound bank's variants, the Mortal Kombat announcer, and the Unreal Tournament kill streaks, end to end through
+-- the real addon files.
 
 local Kit = use("toolkit")
 
@@ -29,7 +29,7 @@ local function Heard(h)
     return table.concat(names, " ")
 end
 
--- A fight with an enemy player that dies while targeted; hit makes it not flawless.
+-- A fight with an enemy player that dies while targeted. With hit set, it isn't flawless.
 local function Kill(h, enemy, hit)
     if not h.inCombat then
         h:EnterCombat()

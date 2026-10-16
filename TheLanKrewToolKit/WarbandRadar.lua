@@ -1,19 +1,19 @@
 local addonName, ns = ...
 
 -- WarbandRadar: the nearby-enemies window. It lists enemy players seen in the last NearbySeconds, by you (nameplates,
--- target, mouseover, through Warband.OnNearby) or by the Krew (NEARBY messages). Each row shows the player's standing
--- icon, class-colored name, level, how long ago, and who saw them; right-click for the Krew's choices (mark, grudge,
--- glory, war on their guild). Drag it anywhere; it shows itself when there's someone to list, and hides when there
--- isn't.
+-- target, and mouseover, through Warband.OnNearby) or by the Krew (NEARBY messages). Each row shows the player's
+-- standing icon, class-colored name, level, how long ago, and who saw them. Right-click a row for the Krew's choices
+-- (mark, grudge, glory, and war on their guild). Drag the window anywhere. It shows itself when there's someone to
+-- list, and hides when there isn't.
 --
--- The window is the global frame TheLanKrewToolKitRadar: Title, then Rows (MaxRows buttons, each with Icon, Name and
--- Detail). While it shows, a once-a-second tick redraws it; a sighting only updates its entry, and draws at once only
+-- The window is the global frame TheLanKrewToolKitRadar: Title, then Rows (MaxRows buttons, each with Icon, Name, and
+-- Detail). While it shows, a once-a-second tick redraws it. A sighting only updates its entry, and draws at once only
 -- when the window is hidden. A redraw sets only what changed: a row keeps what it shows and sets a region only when its
 -- entry's value differs, so a tick where nobody came or went touches only the Detail texts whose "ago" moved.
 --
 -- Sharing: enemies you see for the first time in a while are batched and sent to the Krew at most once per
 -- ShareInterval, only while there's something new: no timer runs when nothing is. A NEARBY message is "NEARBY:" then
--- entries "First Last;CLASS;level", as many as fit in Comms' MaxMessage bytes; the rest wait for the next one.
+-- entries "First Last;CLASS;level", as many as fit in Comms' MaxMessage bytes. The rest wait for the next one.
 
 local MaxMessage = ByteTerrace.Comms.MaxMessage
 local MaxRows = 10
@@ -204,7 +204,7 @@ local function Note(info, by)
     entry.time = GetTime()
 
     if not Ticker then
-        -- The window is hidden, so show it now; while it shows, the tick draws.
+        -- The window is hidden, so show it now. While it shows, the tick draws.
         Render()
     end
 end
@@ -296,7 +296,7 @@ local function CreateWindow()
     return frame
 end
 
--- Expires old entries and redraws what changed; hides the window and stops the tick when nobody is left. The window
+-- Expires old entries and redraws what changed. It hides the window and stops the tick when nobody is left. The window
 -- shows exactly while the tick runs.
 function Render()
     local now = GetTime()

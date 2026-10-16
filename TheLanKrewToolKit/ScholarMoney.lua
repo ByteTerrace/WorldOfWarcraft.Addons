@@ -1,8 +1,8 @@
 local addonName, ns = ...
 
 -- The money generators: math.coins (copper within 100) and math.money (silver and copper), registered in Kit.Generators
--- like ScholarMath.lua's, which loads right before this file and lends the functions they build with. Pure like
--- ScholarPuzzles.lua. Both sometimes count with the player's own purse (state.context.copper).
+-- like ScholarMath.lua's, which loads right before this file and lends the functions they build with. Like
+-- ScholarPuzzles.lua, they're pure. Both sometimes count with the player's own purse (state.context.copper).
 
 local floor = math.floor
 local insert = table.insert
@@ -18,7 +18,7 @@ local Generators = Kit.Generators
 local Numeric = Kit.Numeric
 local With = Kit.With
 
--- Copper within 100; sometimes the player's own copper when they have less than 90.
+-- Copper within 100. It's sometimes the player's own copper, when they have less than 90.
 Generators["math.coins"] = function(state)
     local mine = state.context.copper
     local a = nil
@@ -71,7 +71,7 @@ Generators["math.coins"] = function(state)
         options)
 end
 
--- Silver and copper; sometimes the player's own purse when it's under 100 silver.
+-- Silver and copper. It's sometimes the player's own purse, when it's under 100 silver.
 Generators["math.money"] = function(state)
     local mine = state.context.copper
 

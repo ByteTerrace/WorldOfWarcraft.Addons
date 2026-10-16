@@ -249,7 +249,7 @@ end)
 test("the client's echo of our own message is ours, though it names us with our surname", function()
     local h = Load()
 
-    -- We say hello; the echo arrives as "Tester Doe", while UnitName says "Tester", "Doe".
+    -- We say hello. The echo arrives as "Tester Doe", while UnitName says "Tester", "Doe".
     h:JoinGroup("party", { "Bob" })
     h:Advance(3)
     h:Slash("/tlk krew")

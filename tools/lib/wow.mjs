@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 export const DEFAULT_WOW_ROOT = "C:/Program Files (x86)/World of Warcraft";
 
-// WoW: Forever reports game version 1.60+; Classic Era is 1.15.x.
+// WoW: Forever reports game version 1.60 or later, and Classic Era reports 1.15.x.
 function isForever(major, minor) {
     return major === 1 && minor >= 60;
 }

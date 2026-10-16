@@ -1,6 +1,6 @@
-// The NAMING, COMMENT and HYGIENE rules of the check verb: Puck's C# conventions, mapped to Lua (see
-// docs/Conventions.md), and luacheck's warnings. Only what a parser can decide is enforced; field
-// naming (PascalCase public members, m_ private fields) is a review rule.
+// The NAMING, COMMENT, and HYGIENE rules of the check verb: Puck's C# conventions, mapped to Lua (see
+// docs/Conventions.md), and luacheck's warnings. The rules enforce only what a parser can decide.
+// Field naming (PascalCase public members, m_ private fields) is a review rule.
 
 import { analyze, parse, walk } from "./lua-scope.mjs";
 
@@ -9,16 +9,16 @@ const GLOBAL_PASCAL = /^[A-Z][A-Za-z0-9_]*$/; // client-facing globals may carry
 const CAMEL = /^_?[a-z][A-Za-z0-9]*$|^_$/;
 const SCREAMING = /^[A-Z][A-Z0-9]*_[A-Z0-9_]*$|^[A-Z]{2,}[0-9]*$/;
 const BANNER = /[-=*#_~]{4,}/;
-// Debt markers are the conventional capitalized words; "hack" or "revisit" in prose isn't one.
+// Debt markers are the conventional capitalized words, so "hack" or "revisit" in prose isn't one.
 const DEBT = /\b(?:TODO|FIXME|HACK|XXX|KLUDGE|REVISIT)\b|\b[Ff]or now\b/;
 
-// A comment paragraph's first word: anything but a lower-case word of prose (a capital, a digit,
-// punctuation, or code such as ns.Krew, h:Fire, powerToken, docs/Conventions.md or `level`;
-// "lower-case" and "it's" are prose).
+// A comment paragraph's first word: anything but a lower-case word of prose. It can be a capital,
+// a digit, punctuation, or code such as ns.Krew, h:Fire, powerToken, docs/Conventions.md, or
+// `level`. Words such as "lower-case" and "it's" are prose.
 const SENTENCE_START = /^(?:[^a-z]|[a-z]+[A-Z0-9_.:([=/])/;
 // Its last line's end: a sentence's punctuation, maybe inside closing quotes or brackets.
 const SENTENCE_END = /[.!?:]["')\]`]*$/;
-// Comment lines kept as written: aligned columns and indented items, ---@ annotations, list items
+// Comment lines kept as written: aligned columns and indented items, ---@ annotations, list items,
 // and the annotations the gates read.
 const VERBATIM = /^(?: {2,}|@|[-*+] |\d+[.)] |(?:secret|protected|global|order):)/;
 
@@ -71,7 +71,7 @@ function pascalHint(name) {
 }
 
 // A local declared at the chunk's top level, or inside top-level `do` blocks that only scope it,
-// is file-level state; one inside a function, loop or branch is a local.
+// is file-level state. One inside a function, loop, or branch is a local.
 function isFileLevel(ancestors) {
     return ancestors.every((ancestor) => ancestor.type === "DoStatement");
 }
@@ -97,7 +97,7 @@ function functionBindings(ast) {
     return { scope, bindings };
 }
 
-// The statement lists of a chunk: its body, and every function, branch, loop and do body in it.
+// The statement lists of a chunk: its body, and every function, branch, loop, and do body in it.
 function blocks(ast) {
     const lists = [ast.body];
     walk(ast.body, (node) => {
@@ -127,7 +127,7 @@ const KEEP = "rename it to _, since a later one is read and keeps its position";
 const isCall = (node) => node?.type === "CallExpression" || node?.type === "StringCallExpression" || node?.type === "TableCallExpression";
 
 // HYGIENE: luacheck's warnings, as far as a parser can decide them. Names starting with `_` are
-// exempt, and so is a file's own `local addonName, ns = ...`; an empty function body is a no-op
+// exempt, and so is a file's own `local addonName, ns = ...`. An empty function body is a no-op
 // callback, not an empty block. A local function is used when something outside its own body
 // reads it. A callback's `state` parameter may shadow an outer `state` (docs/Conventions.md).
 function checkHygiene(ast, file, report) {

@@ -8,7 +8,7 @@
 --     next raid index; subgroups fill five at a time in raid order, and party1-4 are the other
 --     members of the player's subgroup (member.partyUnit).
 -- A party holds at most 4 others and a raid 39. A token set with h:SetUnit wins over the group's.
--- LE_PARTY_CATEGORY_HOME (1) covers party and raid, LE_PARTY_CATEGORY_INSTANCE (2) the instance group; the harness
+-- LE_PARTY_CATEGORY_HOME (1) covers party and raid, LE_PARTY_CATEGORY_INSTANCE (2) the instance group. The harness
 -- models one group at a time. Removing the last member disbands the group (GROUP_LEFT), like the client. partyGUID is a
 -- deterministic stand-in ("Party-0-<hex>"). Joining or leaving fires RAID_TARGET_UPDATE after GROUP_ROSTER_UPDATE (its
 -- event page says it fires when the player joins or leaves a party or raid).
@@ -21,7 +21,7 @@
 --       InvalidPrefix        empty, not a string, or longer than 16 characters. Sending doesn't
 --                            need a registered prefix (only receiving does), like the client.
 --       InvalidMessage       longer than 255 bytes, or holds a NUL byte
---       InvalidChatType      not PARTY, RAID, INSTANCE_CHAT, GUILD, OFFICER or WHISPER. CHANNEL,
+--       InvalidChatType      not PARTY, RAID, INSTANCE_CHAT, GUILD, OFFICER, or WHISPER. CHANNEL,
 --                            SAY and YELL aren't modeled: calling with them is a harness error.
 --       AddOnMessageLockdown C_ChatInfo.InChatMessagingLockdown() (the SecretInChatMessagingLockdown
 --                            restrictions: Encounter, ChallengeMode, PvPMatch, Map, Chat)
@@ -39,9 +39,9 @@
 --     (default 1). answer is the SendAddonMessageResult name the client hands back instead of
 --     Success: GeneralError (the documented catch-all), or AddOnMessageLockdown (lockdown taking
 --     hold between the caller's check and the send). "raise" makes the call raise a Lua error
---     instead, as the client does for an argument it can't take; a raising call isn't recorded.
+--     instead, as the client does for an argument it can't take. A raising call isn't recorded.
 --     A failed send spends no allowance and isn't echoed.
---   * Echo: the client delivers your own PARTY, RAID, INSTANCE_CHAT, GUILD and OFFICER messages
+--   * Echo: the client delivers your own PARTY, RAID, INSTANCE_CHAT, GUILD, and OFFICER messages
 --     (and a whisper to yourself) back to you through CHAT_MSG_ADDON, with your own name as the
 --     sender, so an addon must ignore its own messages. The harness echoes by default
 --     (h:Echo(false) turns it off) and delivers the echo on the next h:Advance, like a server
@@ -279,7 +279,7 @@ function Harness:Echo(enabled)
     self.echo = (enabled ~= false)
 end
 
--- The member with this name ("First", "First Last" or either with "-Realm"), and its index.
+-- The member with this name ("First", "First Last", or either with "-Realm"), and its index.
 function Harness:FindMember(name)
     local full = self:FullName(name)
 
@@ -359,7 +359,7 @@ function Harness:InGroupCategory(category)
     return ((current ~= nil) and ((category == nil) or (category == current)))
 end
 
--- Joins a group of kind ("party", "raid" or "instance") with the given members (each "Name", "First Last", either with
+-- Joins a group of kind ("party", "raid", or "instance") with the given members (each "Name", "First Last", either with
 -- "-Realm", or a unit table with a name), then fires GROUP_JOINED(category, partyGUID) and GROUP_ROSTER_UPDATE.
 function Harness:JoinGroup(kind, names)
     assert(GroupKinds[kind], "JoinGroup: kind must be party, raid or instance, got " .. tostring(kind))
@@ -415,7 +415,7 @@ function Harness:ReceiveAddonMessage(prefix, text, channel, sender, target)
     return true
 end
 
--- Removes a member and fires GROUP_ROSTER_UPDATE; removing the last one disbands the group (LeaveGroup's events).
+-- Removes a member and fires GROUP_ROSTER_UPDATE. Removing the last one disbands the group (LeaveGroup's events).
 function Harness:RemoveMember(name)
     local _, index = self:FindMember(name)
 

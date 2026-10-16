@@ -1,20 +1,20 @@
 // Behavioral tests: tests/*.test.lua run in real Lua 5.1 against the fake client in
 // tests/harness, and tests/*.test.mjs test the tooling itself. Each test file runs in its own
-// worker thread (and Lua VM) with a timeout, so a hang fails that file instead of the run; files
-// start longest first, by how long each took last time (orderJobs). The
-// timeout counts from when the worker finishes its setup (Lua VM, snapshot, harness, test file),
-// which has its own, generous limit (SETUP_MS), so load on the machine can't fail a quick test.
+// worker thread (and Lua VM) with a timeout, so a hang fails that file instead of the run. Files
+// start longest first, by how long each took last time (orderJobs). The timeout counts from when
+// the worker finishes its setup (Lua VM, snapshot, harness, test file), which has its own,
+// generous limit (SETUP_MS), so load on the machine can't fail a quick test.
 //
 //   node tools/tlk.mjs test [filters... | test files...] [--timeout <seconds>] [--dir <folder>] [--coverage]
 //
 // Test file paths (tests/krew.test.lua) run exactly those files, and one that doesn't exist
-// fails the run. Otherwise each filter is a substring of "<file> > <test name>"; the tests
+// fails the run. Otherwise each filter is a substring of "<file> > <test name>", and the tests
 // matching any of them run. Filters or files that match nothing fail the run, and so does a
-// --timeout that isn't a positive number of seconds. Besides the files, the run checks that every harness fake
-// names a global the client dump has ("harness > every fake names a real client global").
+// --timeout that isn't a positive number of seconds. Besides the files, the run checks that every
+// harness fake names a global the client dump has ("harness > every fake names a real client global").
 //
 // A Lua test file calls test(name, fn). Assertions: eq(actual, expected, message),
-// truthy(value, message), falsy(value, message), throws(fn, pattern, message). A test fails when
+// truthy(value, message), falsy(value, message), and throws(fn, pattern, message). A test fails when
 // a harness it created saw errors it didn't declare with h:ExpectErrors(count | patterns...).
 // pending(reason) ends a test that can't decide anything yet (a probe with no observed result):
 // it prints "PEND <file> > <name>: <reason>", counts as pending, and doesn't fail the run.

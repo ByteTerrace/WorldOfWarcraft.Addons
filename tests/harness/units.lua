@@ -1,5 +1,5 @@
 -- Units of the fake client beyond the player and target: enemy players, nameplates, mouseover, the player's death,
--- combo points, raid target icons, realms and aura sounds (see wow.lua for the rest).
+-- combo points, raid target icons, realms, and aura sounds (see wow.lua for the rest).
 --
 -- A unit table (h.player, h:SetTarget, h:SetUnit, h:AddNamePlate, h:SetMouseover) holds:
 --   name, surname (players default to Harness.DEFAULT_SURNAME; UnitName returns name, surname,
@@ -11,13 +11,13 @@
 --   isEnemy defaults to canAttack), inCombat (UnitAffectingCombat; the player's is h.inCombat),
 --   dead, ghost, health, maxHealth, inGroup, guid (generated on first use when absent),
 --   classification (UnitClassification: "normal" when unset; "elite", "rareelite", "worldboss",
---   "rare", "trivial" or "minus"; level -1 is a skull-level unit), comboPoints (the player's on
+--   "rare", "trivial", or "minus"; level -1 is a skull-level unit), comboPoints (the player's on
 --   this unit; set through h:SetComboPoints), boss (UnitIsBossMob),
 --   and guild, guildRank,
---   guildRankIndex and guildRealm (nil = the player's realm) for a guild member (Harness.New
+--   guildRankIndex, and guildRealm (nil = the player's realm) for a guild member (Harness.New
 --   takes the same four for the player).
--- The secret predicates (secrets.lua) stay authoritative: a player-controlled unit's name, class, race and GUID are
--- readable; an NPC's identity is secret.
+-- The secret predicates (secrets.lua) stay authoritative: a player-controlled unit's name, class, race, and GUID are
+-- readable. An NPC's identity is secret.
 --
 -- Modeling decisions ([D] documented, [G] a guess where the docs are silent):
 --   Nameplates  [D] NAME_PLATE_UNIT_ADDED / _REMOVED carry the unit in nameplateN form (the event
@@ -33,7 +33,7 @@
 --               NAME_PLATE_UNIT_ADDED, and h:RemoveNamePlate hides it after
 --               NAME_PLATE_UNIT_REMOVED, once the unit is gone (namePlates.events). Frames an addon parents to a plate
 --               hide and show with it, running OnHide / OnShow like any visibility change
---               (widgets.lua); a recycled plate is the same frame, so its children come back.
+--               (widgets.lua). A recycled plate is the same frame, so its children come back.
 --   Mouseover   [D] UPDATE_MOUSEOVER_UNIT fires when the mouseover changes to a unit, and not when
 --               it clears (warcraft.wiki.gg: "Does not fire when UnitExists('mouseover') becomes
 --               nil"). h:SetMouseover models a 3D unit in the world.
@@ -48,7 +48,7 @@
 --               turns false. h:TakeFlight() and h:Land().
 --   Raid icons  SetRaidTarget is forbidden to addon code (verified in game; see
 --               Harness.FORBIDDEN_IN_GAME in secrets.lua, and the wiki says it's protected from
---               12.0.0). Players set icons through Blizzard's UI; nothing reads them, so icons
+--               12.0.0). Players set icons through Blizzard's UI. Nothing reads them, so icons
 --               aren't modeled.
 --   Combo points [D] They sit on the target: Blizzard's Forever ComboFrame reads
 --               GetComboPoints("player", "target") on UNIT_POWER_FREQUENT and PLAYER_TARGET_CHANGED.
@@ -64,7 +64,7 @@
 --               A GUID's unit (h:UnitTokenForGUID) is the first token that names it, in the order
 --               player, target, focus, mouseover, pet, vehicle, party, raid, nameplate ([G]).
 --               [D] GetPlayerInfoByGUID(guid) returns localizedClass, englishClass, localizedRace,
---               englishRace, sex, name and realmName ("" on your own realm) (warcraft.wiki.gg
+--               englishRace, sex, name, and realmName ("" on your own realm) (warcraft.wiki.gg
 --               API_GetPlayerInfoByGUID). [G] The client knows every player unit a test gave a
 --               GUID (sex defaults to 2), and nothing about any other GUID.
 --   Realms      [D] GetNormalizedRealmName drops spaces and hyphens.
@@ -74,14 +74,14 @@
 --               (Ketho/BlizzardInterfaceResources' forever GlobalAPI) the docs don't cover, so it
 --               takes no secret arguments and [G] returns no secrets: players' identity isn't
 --               secret anyway, and an NPC has no guild. [G] The rank defaults to "Member", index 1.
---               The client only knows a nearby unit's guild; the harness answers for any unit.
+--               The client only knows a nearby unit's guild. The harness answers for any unit.
 --               [D] IsInGuild() (no secret flags) is whether the player has a guild. Guild
 --               rosters and PLAYER_GUILD_UPDATE aren't modeled.
 --   Aura sounds [D] C_UnitAuras.AddAuraSound(trigger, sound) registers a sound for an aura event
 --               and returns its auraSoundID (Nilable), and RemoveAuraSound(auraSoundID) undoes it
 --               (UnitAuraDocumentation). trigger is an Enum.UnitAuraSoundTrigger value; sound is a
 --               UnitAuraSoundInfo: unitToken and spellID (not Nilable), soundFileName,
---               soundFileID, outputChannel and throttleSeconds (Nilable). [D] A throttleSeconds
+--               soundFileID, outputChannel, and throttleSeconds (Nilable). [D] A throttleSeconds
 --               outside 0 to 5 "rejects registration": no ID. [G] A trigger that isn't an enum
 --               value, or a sound without its unitToken or spellID, is an error; the sound file
 --               isn't checked when it registers; IDs count up from 1 per harness; removing an ID
@@ -180,7 +180,7 @@ local function Tokens()
 end
 
 -- Gives the unit (a unit table, as h:SetUnit takes it) the lowest free nameplateN token, fires NAME_PLATE_CREATED for a
--- new plate frame, shows the plate, fires NAME_PLATE_UNIT_ADDED(token) and returns the token.
+-- new plate frame, shows the plate, fires NAME_PLATE_UNIT_ADDED(token), and returns the token.
 function Harness:AddNamePlate(unit)
     assert(type(unit) == "table", "AddNamePlate: pass a unit table")
 
@@ -291,7 +291,7 @@ function Harness:NamePlateFrame(token)
     return frame
 end
 
--- Releases the spirit: the player becomes a ghost (UnitIsDeadOrGhost, not UnitIsDead); PLAYER_ALIVE.
+-- Releases the spirit: the player becomes a ghost (UnitIsDeadOrGhost, not UnitIsDead), and PLAYER_ALIVE fires.
 function Harness:ReleaseSpirit()
     assert(self.player.dead, "ReleaseSpirit: the player isn't dead")
     self.player.dead, self.player.ghost = false, true

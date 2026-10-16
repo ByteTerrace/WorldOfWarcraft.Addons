@@ -6,19 +6,19 @@
 -- PlayStation, B on Switch.
 --
 --   Bind(map, source, command)  before compile. A map binds one module's commands (or the
---                               addon's own); compile refuses one that mixes modules.
---   SetActiveMaps(maps)         activates exactly these maps; later ones win a source two of them
+--                               addon's own). Compile refuses one that mixes modules.
+--   SetActiveMaps(maps)         activates exactly these maps. Later ones win a source two of them
 --                               bind. While any is active, the capture frame takes every controller
 --                               button: bound ones run their commands, the rest do nothing. The
---                               client ignores a gamepad script's return value, so capture can't
+--                               client ignores a controller button script's return value, so capture can't
 --                               pass a button on (seen in game: the d-pad never reached the game
 --                               under Scholar's riddle). Any active map is modal for the controller.
---   Release(module)             deactivates the maps of a stopping module; Module.lua calls it, so
+--   Release(module)             deactivates the maps of a stopping module. Module.lua calls it, so
 --                               a stopped feature never keeps the controller, even when its own
 --                               OnDisable fails.
 --
 -- A release always goes to the command its press went to, even if the maps changed in between. A held command whose map
--- is deactivated while its button is down receives "cancel"; when its own press is what changed the maps, the cancel
+-- is deactivated while its button is down receives "cancel". When its own press is what changed the maps, the cancel
 -- comes after that press's "down" returns. Captured input is insecure: bind commands, never protected actions.
 
 -- Each entry is { source, WoW key, label key }.
@@ -82,8 +82,8 @@ local Input = {}
 ByteTerrace.Input = Input
 Input.__index = Input
 
--- A button press: a bound button runs its command; any other does nothing. A cancel its own command caused by changing
--- the maps is delivered once its "down" has returned.
+-- A button press: a bound button runs its command, and any other does nothing. A cancel its own command caused by
+-- changing the maps is delivered once its "down" has returned.
 local function Down(self, key)
     local id = self.m_active[key]
 
@@ -138,8 +138,8 @@ local function CaptureFrame(self)
     return frame
 end
 
--- Turns capture on while any binding is active. EnableGamePadButton is flagged protected, but like Show and Hide that
--- only restricts protected (Secure) frames; the capture frame is a plain frame, so this works in combat too.
+-- Turns capture on while any binding is active. EnableGamePadButton is flagged protected, but, like Show and Hide, that
+-- restricts only protected (Secure) frames. The capture frame is a plain frame, so this works in combat too.
 local function ApplyCapture(self)
     local wanted = (next(self.m_active) ~= nil)
 
@@ -172,7 +172,7 @@ function ByteTerrace.NewInput(addon)
     }, Input)
 end
 
---- A source's printed name for a label style (default: the connected controller's).
+--- Returns a source's printed name for a label style (default: the connected controller's).
 ---@param source string e.g. "gamepad.south"
 ---@param style string? a label style; an unknown one reads as Generic
 ---@return string? label nil for an unknown source
@@ -186,8 +186,8 @@ function Input.Label(source, style)
     return (DirectionalPadLabels[key] or (Labels[style or Input.LabelStyle()] or Labels.Generic)[key])
 end
 
---- The connected controller's label style (a key of Labels: "Letters", "Shapes", "Reverse"), or "Generic" when none is
---- connected.
+--- Returns the connected controller's label style (a key of Labels: "Letters", "Shapes", or "Reverse"), or "Generic"
+--- when none is connected.
 ---@return string
 function Input.LabelStyle()
     local ok, mapped = pcall(C_GamePad.GetDeviceMappedState, C_GamePad.GetActiveDeviceID())
@@ -275,7 +275,7 @@ function Input:Release(module)
     end
 end
 
---- Activates exactly these maps; later maps win a source two of them bind. A held command whose button stops routing to
+--- Activates exactly these maps. Later maps win a source two of them bind. A held command whose button stops routing to
 --- it gets "cancel", after the new maps are in place, so a cancel handler that switches maps again wins. An unknown map
 --- is an error.
 ---@param maps string[]

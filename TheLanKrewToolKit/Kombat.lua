@@ -5,9 +5,9 @@ local addonName, ns = ...
 -- Sounds, each with a Kombat.* setting (the five combo point sounds share Kombat.comboPoints):
 --   chooseYourDestiny  a living enemy player becomes your target, or your target becomes one (a
 --                      duel starts). At most every 10 seconds.
---   testYourMight      a living, attackable elite, rare elite, world boss, boss or skull-level enemy
---                      (a player 10 or more levels above you, too) becomes your target; it plays
---                      instead of destiny. At most every 10 seconds.
+--   testYourMight      a living, attackable elite, rare elite, world boss, boss, or skull-level
+--                      enemy (a player 10 or more levels above you, too) becomes your target. It
+--                      plays instead of destiny. At most every 10 seconds.
 --   finishHim          your enemy player target is in finishing range, once per target: Execute is
 --                      usable (warriors: below 20% health), or you have 5 combo points on it.
 --   comboPoint1-5      each combo point you add to your target. At 5 on an enemy player not yet
@@ -20,26 +20,26 @@ local addonName, ns = ...
 -- A kill plays one victory sound: flawless, else fatality, else superb, the first that's on. A duel only plays
 -- flawless: a duel you were hit in may be one you lost.
 --
--- Modules, each running only while a sound needs it (their active rules come from SoundBank:WhileOn). Adapters (event
--- handlers) are the only code that reads the WoW API; the sounds are rules over the rows they publish. What your target
+-- The modules each run only while a sound needs it (their active rules come from SoundBank:WhileOn). Adapters (event
+-- handlers) are the only code that reads the WoW API. The sounds are rules over the rows they publish. What your target
 -- is comes from ByteTerrace_Core's target fact (target.serial, target.enemyPlayer, target.formidable, target.alive,
--- target.died, target.duelEnded), which runs only while a module here uses it. DUEL_FINISHED doesn't say who won, but
--- you can't lose a duel you took no damage in, so Victory only counts a flawless one.
+-- target.died, and target.duelEnded), which runs only while a module here uses it. DUEL_FINISHED doesn't say who won,
+-- but you can't lose a duel you took no damage in, so Victory only counts a flawless one.
 --   Kombat    the settings, and class facts: Kombat.execute (warriors), Kombat.combo (rogues and
---             druids) and Kombat.finisher (either).
+--             druids), and Kombat.finisher (either).
 --   Destiny   plays choose your destiny and test your might as your target changes.
---   Finish    Finish.comboPoints (yours on the target), Finish.ready (in finishing range) and
+--   Finish    Finish.comboPoints (yours on the target), Finish.ready (in finishing range), and
 --             Finish.announced (the target.serial finishing range was last reached on).
 --   Victory   Victory.flawless: you're in combat and haven't been hit. Addons can never read your
 --             health (UnitHealth is always secret, probed in game), so the signal is UNIT_COMBAT on
 --             you with action "WOUND", the event Blizzard's player frame shows hits from: heals and
---             regeneration don't count, nor a hit fully absorbed, blocked or resisted (amount 0).
+--             regeneration don't count, nor a hit fully absorbed, blocked, or resisted (amount 0).
 --             A hit in the second before combat starts (an ambush) counts for the fight.
---             Victory.flawlessWins: flawless victories this session; Krew shares them. The sound
---             plays at the kill; the victory counts when the fight ends, unless Blizzard's damage
+--             Victory.flawlessWins: flawless victories this session, which Krew shares. The sound
+--             plays at the kill. The victory counts when the fight ends, unless Blizzard's damage
 --             meter says you took damage. Its numbers are secret only under the Combat
 --             restriction, which lifts before PLAYER_REGEN_ENABLED (probed: combat.edges), so
---             they're readable when the fight ends; a meter that's off, or still secret, can't say.
+--             they're readable when the fight ends. A meter that's off, or still secret, can't say.
 --   DeathTaunt  plays deathTaunt on PLAYER_DEAD.
 
 local ExecuteSpellID = 5308
@@ -63,7 +63,7 @@ local Addon = ns.Addon
 local SoundBank = ns.SoundBank
 
 -- Whether a UNIT_COMBAT payload on you is a hit that got through: a WOUND, unless its amount is a plain 0 (fully
--- absorbed, blocked or resisted).
+-- absorbed, blocked, or resisted).
 local function IsHit(action, amount)
     if issecretvalue(action) or (action ~= "WOUND") then
         return false
@@ -78,7 +78,7 @@ end
 
 -- The damage you took in the fight that just ended, from Blizzard's damage meter, or nil when the meter can't say (it's
 -- off, or its numbers are secret). The session's combatSources list stays a plain table in combat (probed:
--- damageMeter.currentInCombat); only the numbers in it turn secret.
+-- damageMeter.currentInCombat). Only the numbers in it turn secret.
 local function DamageTakenLastFight()
     if not C_DamageMeter.IsDamageMeterAvailable() then
         return nil
@@ -185,7 +185,7 @@ Addon:Module("Destiny", {
         local alive = module:Id("target.alive")
 
         -- A foe worth announcing appears as the target: a new target, or the same one becoming attackable. Test your
-        -- might wins over destiny; if it's off or has no file, destiny plays.
+        -- might wins over destiny. If it's off or has no file, destiny plays.
         local lastSerial = module:Get(serial)
         local wasMighty = false
         local wasEnemy = module:Get(enemy)
@@ -220,7 +220,7 @@ Addon:Module("Finish", {
         local executeName = (state:Get("Kombat.execute") and C_Spell.GetSpellName(ExecuteSpellID))
         local combo = state:Get("Kombat.combo")
 
-        -- Usable only; insufficientPower isn't proof of range (the client may check rage first).
+        -- Usable only: insufficientPower isn't proof of range, because the client may check rage first.
         local function Update()
             local inRange = false
 
@@ -246,8 +246,8 @@ Addon:Module("Finish", {
             state:Set(points, (not issecretvalue(count) and count) or 0)
         end
 
-        -- Execute's usability only matters while an enemy player target lives; SPELL_UPDATE_USABLE fires on every rage
-        -- change, so it's heard only then.
+        -- Execute's usability only matters while an enemy player target lives. SPELL_UPDATE_USABLE fires on every rage
+        -- change, so the module listens for it only then.
         if executeName then
             local usable
 
@@ -281,7 +281,7 @@ Addon:Module("Finish", {
 
         module:Watch({ enemy, alive, serial, points }, Update)
 
-        -- A callout for each point added to the same target; spending or losing them is silent.
+        -- Each point added to the same target gets a callout. Spending or losing them is silent.
         local lastPoints = state.Values[points]
         local pointsSerial = state.Values[serial]
 

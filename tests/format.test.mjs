@@ -359,7 +359,7 @@ export const tests = [
         },
     },
     {
-        // F reads G, so G stays before it; H read a global G2 before G2 was declared, so it stays before G2.
+        // F reads G, so G stays before it. H read a global G2 before G2 was declared, so it stays before G2.
         name: "format sorts a file-level run of functions, locals first, never past a function whose name another reads",
         run: () => {
             formats(lua(

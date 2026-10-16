@@ -1,14 +1,15 @@
 local addonName, ns = ...
 
 -- WarbandBadges: a raid-target icon above the nameplate of anyone with a standing in the Krew (skull: marked for death,
--- cross: grudge, square: guild at war, star: champion). The ledger is shared, so every Krew member sees the same
--- badges. Addons can't set real raid icons in this client; a badge is our own texture on the plate, visible only to
+-- cross: grudge, square: guild at war, and star: champion). The ledger is shared, so every Krew member sees the same
+-- badges. Addons can't set real raid icons in this client. A badge is our own texture on the plate, visible only to
 -- you.
 --
--- One badge frame per nameplate frame, parented to it, so it hides and recycles with the plate; its texture is
--- badge.Icon. Badges refresh when a plate appears and when the ledger or the wars change; nothing polls. A plate that
--- appears is read once, by Warband.lua, which hands the info to Warband.OnPlate while this module runs; a ledger or war
--- change repaints from those readings. A plate without a readable player (a creature) wears no badge and costs nothing.
+-- Each nameplate frame gets one badge frame, parented to it, so it hides and recycles with the plate. Its texture is
+-- badge.Icon. Badges refresh when a plate appears and when the ledger or the wars change, and nothing polls.
+-- Warband.lua reads a plate that appears once, and hands the info to Warband.OnPlate while this module runs. A ledger
+-- or war change repaints from those readings. A plate without a readable player (a creature) wears no badge and costs
+-- nothing.
 
 local BadgeSize = 24
 -- Nameplate unit tokens run from nameplate1 to nameplate40.
@@ -72,7 +73,7 @@ local function RefreshAll()
     end
 end
 
--- A nameplate appeared; info is what Warband.Identify read from it (nil for no readable player).
+-- A nameplate appeared: info is what Warband.Identify read from it (nil for no readable player).
 local function Show(unit, info)
     if not info then
         return

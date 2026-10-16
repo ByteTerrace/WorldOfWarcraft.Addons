@@ -8,15 +8,15 @@
 --                        already in progress.
 --   OffAll(handles)      Off for many handles, rebuilding each affected event once.
 --
--- An event is registered with the client only while a handler wants it, so a disabled module costs no dispatch; the
--- registration is only touched when what's wanted actually changes. Unit filters compile to RegisterUnitEvent when at
--- most two units are wanted. Handler lists are copy-on-write: registration allocates, dispatch never does. Each handler
--- is isolated (an error reaches the error handler with its stack, and the rest still run), and a whole dispatch is one
--- state batch, so the rows it writes publish once.
+-- An event is registered with the client only while a handler wants it, so a disabled module costs no dispatch. The
+-- registration is touched only when what's wanted changes. Unit filters compile to RegisterUnitEvent when at most two
+-- units are wanted. Handler lists are copy-on-write: registration allocates, dispatch never does. Each handler is
+-- isolated: an error reaches the error handler with its stack, and the rest still run. A whole dispatch is one state
+-- batch, so the rows it writes publish once.
 --
--- Frame, the dispatcher frame, is public so tests can ask what's registered, and Counts ([event] = dispatches since
--- load or the last debug reset) feeds debug events. Handles are opaque. SetProfiling swaps in a dispatch that also
--- times each handler, so with profiling off a dispatch does exactly the counting and nothing more.
+-- Frame, the dispatcher frame, is public so tests can ask what's registered. Counts ([event] = dispatches since load or
+-- the last debug reset) feeds debug events. Handles are opaque. SetProfiling swaps in a dispatch that also times each
+-- handler, so with profiling off a dispatch does exactly the counting and nothing more.
 
 local ByteTerrace = ByteTerrace
 local CreateFrame = CreateFrame
@@ -49,7 +49,7 @@ local function Run(self, call, event, ...)
     counts[event] = ((counts[event] or 0) + 1)
     local state = self.m_addon.State
     local unit = ...
-    -- A unit token that is itself secret can't be compared; filtered handlers can't claim it.
+    -- A unit token that is itself secret can't be compared. Filtered handlers can't claim it.
     local comparable = (not self.m_filtered[event] or not issecretvalue(unit))
 
     state:BeginBatch()
@@ -73,8 +73,8 @@ local function ProfiledDispatch(self, event, ...)
     Run(self, TimedCall, event, ...)
 end
 
--- The registration an event's handlers want: "all", a "unit1|unit2" key (units in sorted order, so the same set always
--- gives the same key), or nil for none. Also whether any handler filters.
+-- Returns the registration an event's handlers want: "all", a "unit1|unit2" key (units in sorted order, so the same set
+-- always gives the same key), or nil for none. It also returns whether any handler filters.
 local function Wanted(list)
     if not list then
         return nil
@@ -183,7 +183,7 @@ function Events:Dispatch(event, ...)
     Run(self, PlainCall, event, ...)
 end
 
---- How many live handlers an event has.
+--- Returns how many live handlers an event has.
 ---@param event string
 ---@return integer
 function Events:HandlerCount(event)
@@ -192,7 +192,7 @@ function Events:HandlerCount(event)
     return ((list and #list) or 0)
 end
 
---- Removes a handler, effective immediately; removing one twice does nothing.
+--- Removes a handler, effective immediately. Removing one twice does nothing.
 ---@param handle table from On
 function Events:Off(handle)
     handle.dead = true
@@ -250,7 +250,8 @@ function Events:On(event, fn, unit, work)
     return handle
 end
 
---- The client registration of every event some handler wants: [event] = "all" or "unit1|unit2". A fresh table.
+--- Returns the client registration of every event some handler wants, as a fresh table: [event] = "all" or
+--- "unit1|unit2".
 ---@return table
 function Events:Registrations()
     local registrations = {}

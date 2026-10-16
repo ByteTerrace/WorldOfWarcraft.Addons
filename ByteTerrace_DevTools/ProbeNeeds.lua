@@ -1,10 +1,10 @@
 local addonName, ns = ...
 
 -- The situations calibration probes need (Probes.lua's header says what a need holds), added with Probes.AddNeeds. Keys
--- are what probes name in their needs; step places each in one play session in a starting zone (Probes.Steps). A check
--- only reads, and its harness setup recreates the situation in the fake client from the harness's own scripting
--- (h:SetTarget, h:MeterFight). NamePlateToken and FirstBagItem are shared with the probes that read the same things,
--- and PvPLaterSeconds with ProbesCombat.lua's PvP listener.
+-- are what probes name in their needs. Each need's step places it in one play session in a starting zone
+-- (Probes.Steps). A check only reads, and its harness setup recreates the situation in the fake client from the
+-- harness's own scripting (h:SetTarget, h:MeterFight). NamePlateToken and FirstBagItem are shared with the probes that
+-- read the same things, and PvPLaterSeconds with ProbesCombat.lua's PvP listener.
 
 -- The restrictions that make auras secret (SecretPredicatesDocumentation's SecretWhenAurasRestricted).
 local AuraRestrictions = { "Combat", "Encounter", "ChallengeMode", "PvPMatch" }
@@ -25,7 +25,7 @@ local function CalmWith(restrictions)
     return (not InCombatLockdown() and not UnitAffectingCombat("player") and (Probes.Restrictions() == restrictions))
 end
 
---- The backpack's first item (C_Container.GetContainerItemInfo), or nil.
+--- Returns the backpack's first item (C_Container.GetContainerItemInfo), or nil.
 local function FirstBagItem()
     local bag = Enum.BagIndex.Backpack
 
@@ -40,7 +40,7 @@ local function FirstBagItem()
     return nil
 end
 
--- Event-kind probes wait for an actual sample; no spell in a recap isn't spell-field evidence.
+-- Event-kind probes wait for an actual sample. No spell in a recap isn't spell-field evidence.
 local function HasRecapEvent(kind)
     for _, event in ipairs(C_DeathRecap.GetRecapEvents()) do
         local eventKind = event.event
@@ -53,7 +53,7 @@ local function HasRecapEvent(kind)
     return false
 end
 
--- Whether the damage meter's current session of a type has a source: someone in it.
+-- Returns whether the damage meter's current session of a type has a source: someone in it.
 local function HasSources(meterType)
     local current = Enum.DamageMeterSessionType.Current
     -- secret: only the sources list is read, checked with issecretvalue
@@ -62,7 +62,7 @@ local function HasSources(meterType)
     return (not issecretvalue(sources) and (type(sources) == "table") and (sources[1] ~= nil))
 end
 
--- Whether a UNIT_AURA was heard while auras were restricted: a restriction text AuraTokens keys by names one of
+-- Returns whether a UNIT_AURA was heard while auras were restricted: a restriction text AuraTokens keys by names one of
 -- AuraRestrictions.
 local function HeardAuraRestricted()
     for text in pairs(AuraTokens) do
@@ -76,8 +76,8 @@ local function HeardAuraRestricted()
     return false
 end
 
---- The nameplate token of a non-player unit on screen that the player can attack (enemy true) or can't (enemy false),
---- or nil.
+--- Returns the nameplate token of a non-player unit on screen that the player can attack (enemy true) or can't (enemy
+--- false), or nil.
 local function NamePlateToken(enemy)
     for i = 1, 40 do
         local token = ("nameplate" .. i)

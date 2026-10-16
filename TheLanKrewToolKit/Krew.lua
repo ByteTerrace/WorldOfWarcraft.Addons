@@ -3,8 +3,8 @@ local addonName, ns = ...
 -- Krew: share fun moments with friends in your group who also run the toolkit.
 --
 --   Hello      when you group up (or /reload in a group), you say hello once: "HELLO:<version>\t0".
---              Each hello that isn't a reply gets one reply ("...\t1") within ReplyDelay, a burst
---              of them one between them, and a reply gets none, so two Krews never ping-pong. A
+--              Hellos that aren't replies get one reply ("...\t1") within ReplyDelay (a burst of
+--              them shares one), and a reply gets none, so two Krews never ping-pong. A
 --              card shows who's here, and /tlk krew lists them with the version each runs. Once
 --              per group, when NewerQuorum members run a newer version than yours (compared as
 --              numbers, major.minor.patch), chat says so.
@@ -12,23 +12,23 @@ local addonName, ns = ...
 --   Flawless   so do your flawless victories (Victory.flawlessWins, Kombat.lua).
 --   Scholar    and the riddles a young scholar solves (Scholar.stars).
 --
--- ns.Krew is the Krew module's Comms (ByteTerrace_Core's Comms.lua): every feature that talks to the Krew (Warband's
--- marks, sightings and rallies; Streaks' sprees) sends and listens through it, so they all play by Blizzard's addon
--- rules the same way: hidden messages to your own group only, rare and rate-limited, never during chat messaging
--- lockdown, parsed strictly, and never heard or sent while the Krew module is off. Received messages only ever show a
--- card or an alert, update the ledger, or (a rally, with Warband.rallyWaypoint on) set a map waypoint; none acts on
--- your behalf.
+-- ns.Krew is the Krew module's Comms (ByteTerrace_Core's Comms.lua). Every feature that talks to the Krew (Warband for
+-- its marks, sightings, and rallies, and Streaks for its sprees) sends and listens through it, so they all play by
+-- Blizzard's addon rules the same way: hidden messages to your own group only, rare and rate-limited, never during chat
+-- messaging lockdown, parsed strictly, and never heard or sent while the Krew module is off. Received messages only
+-- ever show a card or an alert, update the ledger, or (a rally, with Warband.rallyWaypoint on) set a map waypoint. None
+-- acts on your behalf.
 --
 -- ns.KrewFields cleans the fields of received messages for every feature that listens:
---   CleanText(text)         a zone, subzone or name to show, or "".
+--   CleanText(text)         a zone, subzone, or name to show, or "".
 --   CleanCount(text, max)   a whole number from 1 to max written in digits, or nil.
 --   MaxLevel                the highest level a message may carry.
--- Neither passes a "|" or a control character: someone else's message never puts a link, texture or color on your
+-- Neither passes a "|" or a control character: someone else's message never puts a link, texture, or color on your
 -- screen.
 --
--- Krew members are the group members whose hello you heard; one who leaves the group leaves the Krew once the roster
--- settles: a raid forming fires a burst of roster updates, and the roster is read once, PruneDelay after the last of
--- them. Showing or listing the Krew reads it first.
+-- Krew members are the group members whose hello you heard. One who leaves the group leaves the Krew once the roster
+-- settles: a raid forming fires a burst of roster updates, and the module reads the roster once, PruneDelay after the
+-- last of them. Showing or listing the Krew reads it first.
 
 local KrewIcon = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend"
 -- The highest level accepted from a message.
@@ -90,8 +90,8 @@ local Said = false
 -- Whether this group heard that a newer version is out.
 local ToldNewer = false
 
---- A count from a message: a whole number from 1 to max written in digits only (no sign, exponent, hex or "inf"), or
---- nil.
+--- Returns a count from a message: a whole number from 1 to max written in digits only (no sign, exponent, hex, or
+--- "inf"), or nil.
 ---@param text string?
 ---@param max integer
 ---@return integer?
@@ -105,8 +105,8 @@ local function CleanCount(text, max)
     return ((((count >= 1) and (count <= max)) and count) or nil)
 end
 
---- A text field from a message (a zone, a subzone, a name), or "" when it's missing, longer than MaxText, or holds a
---- "|" or a control character.
+--- Returns a text field from a message (a zone, a subzone, or a name), or "" when it's missing, longer than MaxText, or
+--- holds a "|" or a control character.
 ---@param text string?
 ---@return string
 local function CleanText(text)
@@ -193,8 +193,8 @@ local function PruneWhenQuiet()
     Prune()
 end
 
--- A roster update: the roster is pruned once updates stop for PruneDelay. One timer serves a burst; it waits out the
--- updates that came after it was set.
+-- A roster update: the roster is pruned once updates stop for PruneDelay. One timer serves a burst, and it waits out
+-- the updates that came after it was set.
 local function RosterChanged()
     RosterAt = GetTime()
 
@@ -207,7 +207,7 @@ local function SendHello(reply)
     Messages:Send("HELLO", { (Addon.Version or "?"), ((reply and "1") or "0") })
 end
 
--- Says hello to this group, once; a group the messages can't reach yet (lockdown) waits for the next roster update.
+-- Says hello to this group, once. A group the messages can't reach yet (lockdown) waits for the next roster update.
 local function SayHello()
     if not Said and Messages:Ready() then
         Said = true

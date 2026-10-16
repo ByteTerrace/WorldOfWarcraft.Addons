@@ -46,7 +46,7 @@ export const tests = [
         }),
     },
     {
-        // Nilable = true and a Default both mean the position may be nil; the rest may not.
+        // Nilable = true and a Default both mean the position may be nil. The rest may not.
         name: "api-sync records which argument and payload positions may be nil",
         run: async () => withTemp(async (dir) => {
             const filler = Array.from({ length: MIN_DOC_FUNCTIONS }, (_, i) => `{ Name = "F${i}", Type = "Function" },`).join("\n");

@@ -1,4 +1,4 @@
--- The addon's settings view (ByteTerrace_Core/SettingsWindow.lua): its two hosts, page layout, controls, state changes
+-- The addon's settings view (ByteTerrace_Core/SettingsWindow.lua): its two hosts, page layout, controls, state changes,
 -- and bare slash commands. Blizzard's panel gets one canvas page that the controller UI ignores and no setting
 -- controls, whose focus freezes the client on close (tools/api/forbidden.json).
 
@@ -51,7 +51,7 @@ test("Blizzard's panel gets one canvas page, kept out of controller focus, and n
     eq(h.category.name, "Test App")
     eq(h.category.canvas, window.Canvas, "the page is the view's canvas")
     truthy(window.Canvas.smartNavigationIgnored, "SmartNavigation ignores the canvas and every child")
-    -- Blizzard setting controls, whose focus froze controller players, aren't in the harness at all.
+    -- Blizzard setting controls, whose focus freezes the client for controller players, aren't in the harness at all.
     eq(#h.categories, 1, "one page; the view draws its own subpages")
 end)
 

@@ -1,7 +1,7 @@
 -- Names: players' names as Forever gives them, the one way every ByteTerrace addon reads them.
 --
--- Forever's character names are unique in the region and carry a surname (RegionalUniqueNames- Enabled() is true).
--- UnitName, UnitNameUnmodified and UnitFullName return (first, surname) where retail returns (name, realm);
+-- Forever's character names are unique in the region and carry a surname (RegionalUniqueNamesEnabled() is true).
+-- UnitName, UnitNameUnmodified, and UnitFullName return (first, surname) where retail returns (name, realm).
 -- GetPlayerInfoByGUID's name and chat's sender are "First Last" with no realm (all probed in game). Blizzard's frames
 -- show "First Last" joined with Constants.CharacterNameSeparatorConsts.CHARACTERNAME_SURNAME_SEPARATOR (a space), and
 -- read a name up to its first "-" (Camelot NameUtil.lua), so a "-Realm" suffix never tells two players apart. A
@@ -22,7 +22,7 @@ local UnitName = UnitName
 local Separators = Constants.CharacterNameSeparatorConsts
 local Separator = ((Separators and Separators.CHARACTERNAME_SURNAME_SEPARATOR) or " ")
 
---- "First Last", or first alone when there's no surname (an NPC).
+--- Returns "First Last", or first alone when there's no surname (an NPC).
 ---@param first string
 ---@param surname string?
 ---@return string
@@ -34,7 +34,7 @@ local function Full(first, surname)
     return first
 end
 
---- The unit's full name, or nil when there's no unit or its name is secret.
+--- Returns the unit's full name, or nil when there's no unit or its name is secret.
 ---@param unit string
 ---@return string?
 local function OfUnit(unit)
@@ -47,13 +47,13 @@ local function OfUnit(unit)
     return Full(first, surname)
 end
 
---- Your full name, or nil while it's secret.
+--- Returns your full name, or nil while it's secret.
 ---@return string?
 local function Mine()
     return OfUnit("player")
 end
 
---- A name from text without its "-Realm" suffix, if any.
+--- Returns a name from text without its "-Realm" suffix, if any.
 ---@param text string
 ---@return string
 local function Plain(text)

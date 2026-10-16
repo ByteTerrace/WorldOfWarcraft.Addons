@@ -209,8 +209,8 @@ export const tests = [
         },
     },
     {
-        // The client loads <Name>_Forever.toc and <Name>_Camelot.toc; with both, the tools read
-        // _Forever.toc (its ## Title says so) and check reports the other.
+        // The client loads <Name>_Forever.toc and <Name>_Camelot.toc. With both, the tools read
+        // _Forever.toc (its ## Title says so), and check reports the other.
         name: "check, findAddons and the harness read either Forever TOC suffix, and check reports a folder with both",
         run: async () => {
             const root = join(FIXTURES, "toc");
@@ -286,7 +286,7 @@ export const tests = [
         }),
     },
     {
-        // check runs FORMAT over the repository root only; formatFindings is what it reports.
+        // check runs FORMAT over the repository root only, and formatFindings is what it reports.
         name: "check's FORMAT names a file's first line the format verb would change, and leaves fixtures alone",
         run: async () => withTemp(async (dir) => {
             mkdirSync(join(dir, "tests", "fixtures"), { recursive: true });

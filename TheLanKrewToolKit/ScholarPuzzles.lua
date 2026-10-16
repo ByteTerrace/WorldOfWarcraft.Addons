@@ -3,10 +3,10 @@ local addonName, ns = ...
 -- Scholar puzzles: math and reading questions for kids, kindergarten to grade 6, and questions about their own quests.
 -- Pure: no UI, no WoW API, and no randomness but options.random, so the same options and random sequence give the same
 -- puzzle. The shared text (kinds by grade, titles, praise, and the quest riddles' text and banks) lives in
--- ScholarWords.lua (ns.ScholarWords), which loads first; each subject's own text and banks live in
--- ScholarMathWords.lua, ScholarNumberWords.lua, ScholarReadingWords.lua and ScholarStoryWords.lua, which load before
--- the generators that read them. The generators live in ScholarMath.lua, ScholarReading.lua and ScholarQuests.lua,
--- which load after this file and register themselves in Kit.Generators; the "quest" subject asks through Kit.AskQuest
+-- ScholarWords.lua (ns.ScholarWords), which loads first. Each subject's own text and banks live in
+-- ScholarMathWords.lua, ScholarNumberWords.lua, ScholarReadingWords.lua, and ScholarStoryWords.lua, which load before
+-- the generators that read them. The generators live in ScholarMath.lua, ScholarReading.lua, and ScholarQuests.lua,
+-- which load after this file and register themselves in Kit.Generators. The "quest" subject asks through Kit.AskQuest
 -- (ScholarQuests.lua) about one of the player's quests.
 --
 --   ns.Puzzles.Grades     { id, label } from { 0, "Kindergarten" } to { 6, "Grade 6" }, in order.
@@ -17,8 +17,8 @@ local addonName, ns = ...
 --   ns.Puzzles.MaxChoice  the longest choice, in bytes, a riddle may offer (ScholarQuests.lua cuts its lines to it).
 --                         Kit.Generators[kind] is function(state) -> puzzle.
 --
--- A generator's state is one generation's record: roll (options.random), subject, grade, level and a sanitized context.
--- The Kit functions that only draw (Pick, Chance, Shuffle, WrongNumbers) read nothing but state.roll.
+-- A generator's state is one generation's record: roll (options.random), subject, grade, level, and a sanitized
+-- context. The Kit functions that only draw (Pick, Chance, Shuffle, WrongNumbers) read nothing but state.roll.
 
 -- The factions a context may name, as UnitFactionGroup names them.
 local Factions = { Alliance = true, Horde = true }
@@ -53,12 +53,12 @@ end
 
 local Generators = {}
 
---- True one time in n.
+--- Returns true one time in n.
 local function Chance(state, n)
     return (state.roll(1, n) == 1)
 end
 
---- An amount of copper as it's spoken: "45 copper", "2 silver", "1 silver 5 copper".
+--- Returns an amount of copper as it's spoken: "45 copper", "2 silver", "1 silver 5 copper".
 local function Coins(copper)
     local silver = floor(copper / 100)
     local rest = (copper % 100)
@@ -66,25 +66,25 @@ local function Coins(copper)
     return (((silver == 0) and (rest .. " copper")) or (silver .. " silver" .. (((rest > 0) and (" " .. rest .. " copper")) or "")))
 end
 
---- "1 apple" or "3 apples".
+--- Returns n counted with item: "1 apple" or "3 apples".
 ---@param item table { one, many }
 local function Count(n, item)
     return (n .. " " .. (((n == 1) and item[1]) or item[2]))
 end
 
---- Replaces each {key} in text with vars[key]; a key vars doesn't have stays as it is.
+--- Replaces each {key} in text with vars[key]. A key vars doesn't have stays as it is.
 local function Fill(text, vars)
     return (gsub(text, "{(%w+)}", function(key)
         return (((vars[key] ~= nil) and tostring(vars[key])) or nil)
     end))
 end
 
---- Whether text contains word as a whole word, ignoring case.
+--- Returns whether text contains word as a whole word, ignoring case.
 local function Mentions(text, word)
     return (find(lower(text), "%f[%w]" .. gsub(lower(word), "%p", "%%%0") .. "%f[%W]") ~= nil)
 end
 
---- One entry of list, drawn with state.roll.
+--- Returns one entry of list, drawn with state.roll.
 local function Pick(state, list)
     return list[state.roll(1, #list)]
 end
@@ -119,7 +119,7 @@ local function Place(state)
     return ((state.context.zone and Chance(state, 3) and state.context.zone) or Pick(state, ScholarWords.places))
 end
 
---- A shuffled copy of list; list itself is left alone.
+--- Returns a shuffled copy of list, and leaves list itself alone.
 local function Shuffle(state, list)
     local out = {}
 
@@ -176,7 +176,7 @@ local function Arrange(state, correct, wrongs)
     return choices, answer, whys
 end
 
---- Returns text, trimmed, when it's plain and at most maxLength long: no control characters, escape codes or template
+--- Returns text, trimmed, when it's plain and at most maxLength long: no control characters, escape codes, or template
 --- braces. Anything else is nil.
 local function Clean(text, maxLength)
     text = (((type(text) == "string") and Trim(text)) or "")
@@ -212,8 +212,8 @@ local function GivesAway(template, prompt, vars, correct)
     return false
 end
 
---- Word problem variables: a copy of vars plus {Hero} (first mention), {hero}, {place}, {item} and {items}. Each number
---- {a} also comes counted with the item as {A} ("3 apples").
+--- Returns word problem variables: a copy of vars plus {Hero} (first mention), {hero}, {place}, {item}, and {items}.
+--- Each number {a} also comes counted with the item as {A} ("3 apples").
 local function Vars(state, vars)
     local hero = Hero(state)
     local item = Item(state, hero.mine)
@@ -257,7 +257,7 @@ local function SafeContext(context)
 end
 
 -- Pictures for small numbers in the early grades: what ScholarPictures draws as icons of item. a and b are the riddle's
--- two numbers; groups riddles put a groups of b.
+-- two numbers, and groups riddles put a groups of b.
 local Pictures = {
     ["math.add"] = function(vars, item)
         return ((((vars.a + vars.b) <= 20) and { a = vars.a, b = vars.b, item = item, kind = "join" }) or nil)
@@ -278,8 +278,8 @@ local function Clamp(n, lo, hi, default)
     return (((n and (n == n)) and max(lo, min(hi, floor(n)))) or default)
 end
 
--- The item a riddle counts (vars.item) when its prompt names it; nil for a bare sum ("What is 5 - 2?"), which is drawn
--- with stars.
+-- The item a riddle counts (vars.item) when its prompt names it, or nil for a bare sum ("What is 5 - 2?"), which is
+-- drawn with stars.
 local function Counted(prompt, vars)
     if vars.item and (Mentions(prompt, vars.item) or Mentions(prompt, vars.items)) then
         return vars.item
@@ -287,8 +287,8 @@ local function Counted(prompt, vars)
 end
 
 --- Builds a puzzle of kind from its text entry (prompt or prompts, hint, explain, expr) and variables. vars.v (or
---- vars.report) becomes the puzzle's value; vars.r and vars.terms its remainder and terms. A hint that would give the
---- answer away is replaced by a stock one.
+--- vars.report) becomes the puzzle's value, and vars.r and vars.terms become its remainder and terms. It replaces a
+--- hint that would give the answer away with a stock one.
 local function Finish(state, kind, text, vars, correct, wrongs)
     local choices, answer, whys = Arrange(state, correct, wrongs)
     local promptText = (text.prompt or Pick(state, text.prompts))
@@ -340,9 +340,9 @@ local function Fits(puzzle)
     return ((#puzzle.prompt <= MaxPrompt) and (max(#choices[1], #choices[2], #choices[3], #choices[4]) <= MaxChoice))
 end
 
---- The puzzle kinds of a subject ("math" or "reading") at a grade (clamped to 0..6), in a fresh array. Without canHear,
---- the kinds that are heard rather than read (ScholarWords.heard) are left out, and without hasQuests the kinds built
---- from the player's quests (ScholarWords.fromQuests).
+--- Returns the puzzle kinds of a subject ("math" or "reading") at a grade (clamped to 0..6), in a fresh array. Without
+--- canHear, it leaves out the kinds that are heard rather than read (ScholarWords.heard), and without hasQuests, the
+--- kinds built from the player's quests (ScholarWords.fromQuests).
 ---@param subject string
 ---@param grade number
 ---@param canHear boolean whether the client can say a riddle aloud
@@ -366,7 +366,7 @@ local function Kinds(subject, grade, canHear, hasQuests)
     return out
 end
 
---- What makes two riddles the same to a child: the kind and the prompt (its numbers and words).
+--- Returns what makes two riddles the same to a child: the kind and the prompt (its numbers and words).
 ---@param puzzle table
 ---@return string
 local function Signature(puzzle)
@@ -374,7 +374,7 @@ local function Signature(puzzle)
 end
 
 --- Generates a puzzle. Every math and reading puzzle fits the length limits, with any context SafeContext admits. Bad
---- options (no random, an unknown subject) raise an error; grade and level are read as numbers and clamped. A quest
+--- options (no random, an unknown subject) raise an error. It reads grade and level as numbers and clamps them. A quest
 --- puzzle ignores grade and level, and is nil when no question fits the quest.
 ---@param options table subject ("math" | "reading" | "quest"), grade (0..6), level (1..3, easiest first), random
 ---                     (function(m, n) returning an integer from m to n), an optional context { name, class, level,
@@ -433,11 +433,11 @@ local function Generate(options)
     return puzzle
 end
 
---- Three distinct plausible wrong numbers from lo to hi, and each one's why (or nil). A candidate is a number or { n,
---- why = text, required = true }: required ones always come first (the misconception a riddle exists to catch), then
---- the other candidates and near misses, chosen so the answer's rank among the four values is as even as the required
---- ones allow. lo defaults to 1 (0 when value is 0); hi to twice value or value plus 10, whichever is larger, and never
---- less than lo plus 6.
+--- Returns three distinct plausible wrong numbers from lo to hi, and each one's why (or nil). A candidate is a number
+--- or { n, why = text, required = true }: required ones always come first (the misconception a riddle exists to catch),
+--- then the other candidates and near misses, chosen so the answer's rank among the four values is as even as the
+--- required ones allow. lo defaults to 1 (0 when value is 0). hi defaults to twice value or value plus 10, whichever is
+--- larger, and is never less than lo plus 6.
 ---@return number[] wrongs
 ---@return table whys by index into wrongs
 local function WrongNumbers(state, value, candidates, lo, hi)

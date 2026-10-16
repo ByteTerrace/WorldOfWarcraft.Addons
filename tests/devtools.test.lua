@@ -1,7 +1,7 @@
 -- ByteTerrace_DevTools' probe commands: /btdev probe records the probes whose needs are met into
--- ByteTerraceDevToolsDB.probes and lists what the rest need; /btdev probe list shows what's left, in play-session
+-- ByteTerraceDevToolsDB.probes and lists what the rest need. /btdev probe list shows what's left, in play-session
 -- order. DevTools also collects, from load, what the listening probes need: UNIT_COMBAT payloads, the steps into and
--- out of combat, UNIT_AURA tokens, addon messages and chat payloads.
+-- out of combat, UNIT_AURA tokens, addon messages, and chat payloads.
 
 -- A record's contexts, sorted and joined by spaces.
 local function Contexts(record)
@@ -908,7 +908,7 @@ test("chat events' discordInfo is kept as shapes, with a table's fields, for nam
 end)
 
 test("leaving combat in a PvP match keeps the meter's totals' shapes then and later, for damageMeter.pvpSecrecy", function()
-    -- The sweeps' probes read the meter too; this counts the listener's reads alone.
+    -- The sweeps' probes read the meter too. This counts the listener's reads alone.
     local h = Load({ ByteTerraceDevToolsDB = { autoProbe = false } })
     local Probes = h.ns.Probes
     local probe = h.ns.Probes.ByName["damageMeter.pvpSecrecy"]

@@ -5,8 +5,8 @@ local addonName, ns = ...
 -- checked against what the client answered.
 --
 -- This file is the probe engine: the shape helpers probes record with, running and recording a probe, and comparing
--- records. ProbeNeeds.lua defines the situations probes need (Probes.AddNeeds); ProbesWorld.lua, ProbesUnits.lua,
--- ProbesCombat.lua, ProbesNames.lua, ProbesInput.lua and ProbesOrder.lua define the probes (Probes.Define), in the
+-- records. ProbeNeeds.lua defines the situations probes need (Probes.AddNeeds). ProbesWorld.lua, ProbesUnits.lua,
+-- ProbesCombat.lua, ProbesNames.lua, ProbesInput.lua, and ProbesOrder.lua define the probes (Probes.Define), in the
 -- order they run and print.
 --
 -- A probe is { name, needs = { need key, ... }, run, harness }:
@@ -15,10 +15,10 @@ local addonName, ns = ...
 --     play session that reaches it (an index into Steps, the order `/btdev probe list` prints
 --     in), a check that decides it from the live client, and a harness setup(h) that recreates it
 --     in the fake client. A need without a setup carries `harness`, the reason the harness can't
---     model it; its probes run in game only.
+--     model it. Its probes run in game only.
 --   * run returns the result: a table with string keys whose values are strings, booleans,
---     finite numbers or such tables. Results describe shapes (a type, an empty string, a color's
---     bytes), never data that differs between characters, targets or sessions, so any player's
+--     finite numbers, or such tables. Results describe shapes (a type, an empty string, a color's
+--     bytes), never data that differs between characters, targets, or sessions, so any player's
 --     run compares with any other's. The exceptions are the accumulating probes below, which list
 --     what sessions happened to show (unitCombat.seen, kills.seen, names.chatSenders, names.chatDiscordInfo,
 --     combat.edges, comms.addonMessageInLockdown, units.secretTokenInAuraEvent, questLog.objectives,
@@ -30,46 +30,48 @@ local addonName, ns = ...
 --     session, and each /reload, adds to what earlier ones saw.
 --   * version (optional, 1 when absent) goes up whenever the result's shape changes: a record
 --     made by another version answered a different question, so it's no evidence for this one.
---     Probes.IsCurrent tells them apart; /btdev probe list, the import and the tests ignore it.
+--     Probes.IsCurrent tells them apart, and /btdev probe list, the import, and the tests ignore it.
 -- A probe only reads. It never calls a protected or restricted function, never changes game state, and never compares,
--- computes with or stores a secret: a secret becomes the marker { secret = true, type = <its type> } (Value, Shape,
+-- computes with, or stores a secret: a secret becomes the marker { secret = true, type = <its type> } (Value, Shape,
 -- Text), checked with issecretvalue first.
 -- textures.used draws on hidden textures of a frame of its own, made the first time it runs.
 -- auraSound.api alone registers something, and removes it at once (ProbesUnits.lua says why).
 --
 -- UNIT_COMBAT can't be asked for after the fact, so DevTools.lua listens for it from load (for the player and the
--- target only) and passes each payload to Probes.NoteUnitCombat, which keeps the shapes of every payload per unit and
--- action in Probes.UnitCombat; unitCombat.seen records them. The kill events (PARTY_KILL, PLAYER_TARGET_DIED,
--- UNIT_DIED) go to Probes.NoteKill the same way, for kills.seen, chat events' senders to Probes.NoteSender, for
--- names.chatSenders, their discordInfo to Probes.NoteDiscordInfo, for names.chatDiscordInfo, addon messages' fields to
--- Probes.NoteAddonMessage, for comms.addonMessageInLockdown, the player's and the target's UNIT_AURA tokens to
--- Probes.NoteAuraToken, for units.secretTokenInAuraEvent, and your deaths and the damage meter's updates to
--- Probes.NoteDeath and NoteMeterUpdate, for damageMeter.afterDeath. Each keeps sets of the shapes it saw (a secret is
--- "secret"), joined when its probe runs, so a shape seen before costs a table lookup: these run on every chat message,
--- hit and aura change. The last three key what they hear by the restrictions in force, which Probes.NoteRestriction
--- follows from ADDON_RESTRICTION_STATE_CHANGED rather than asking the client each time. The steps into and out of
--- combat go to Probes.NoteCombatEdge, for combat.edges: the order of PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED and
--- the Combat restriction's state changes, and what InCombatLockdown, UnitAffectingCombat and IsAddOnRestrictionActive
--- said at each.
+-- target only) and passes each payload to Probes.NoteUnitCombat. It keeps the shapes of every payload per unit and
+-- action in Probes.UnitCombat, and unitCombat.seen records them. These go to their own Note functions the same way:
+--   * The kill events (PARTY_KILL, PLAYER_TARGET_DIED, and UNIT_DIED) go to Probes.NoteKill, for kills.seen.
+--   * Chat events' senders go to Probes.NoteSender, for names.chatSenders.
+--   * Their discordInfo goes to Probes.NoteDiscordInfo, for names.chatDiscordInfo.
+--   * Addon messages' fields go to Probes.NoteAddonMessage, for comms.addonMessageInLockdown.
+--   * The player's and the target's UNIT_AURA tokens go to Probes.NoteAuraToken, for units.secretTokenInAuraEvent.
+--   * Your deaths and the damage meter's updates go to Probes.NoteDeath and NoteMeterUpdate, for
+--     damageMeter.afterDeath.
+-- Each keeps sets of the shapes it saw (a secret is "secret"), joined when its probe runs, so a shape seen before costs
+-- a table lookup: these run on every chat message, hit, and aura change. NoteAddonMessage and NoteAuraToken key what
+-- they hear by the restrictions in force, which Probes.NoteRestriction follows from ADDON_RESTRICTION_STATE_CHANGED
+-- rather than asking the client each time. The steps into and out of combat go to Probes.NoteCombatEdge, for
+-- combat.edges: the order of PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED, and the Combat restriction's state changes,
+-- and what InCombatLockdown, UnitAffectingCombat, and IsAddOnRestrictionActive said at each.
 --
 -- A record is { build = "1.60.1 (70009)", contexts = { ["idle/none"] = true }, result, version? }: the version of the
 -- probe that made it (absent for version 1), the build, the result, and the contexts the build gave that result in. A
 -- context (Probes.Context) is "idle" or "combat" for whether combat lockdown held, a slash, and the active addon
--- restrictions ("none", or their Enum.AddOnRestrictionType names sorted and joined by commas): "idle/none",
--- "combat/Combat".
--- contexts is a set, since a record holds string keys only; its keys sort when saved. A record holds no time, so
+-- restrictions ("none", or their Enum.AddOnRestrictionType names sorted and joined by commas), for example "idle/none"
+-- or "combat/Combat".
+-- contexts is a set, since a record holds string keys only. Its keys sort when saved. A record holds no time, so
 -- running a probe twice in the same situation gives the same record. Probes.Keep folds a run into the saved record
 -- (tools/lib/probes.mjs's keepRecord does the same on import):
---   * the same result in a new context adds the context; in a known one, nothing changes;
---   * a different result, or a run on another build, replaces the record, contexts and all: the
---     client or the situation changed, so the earlier contexts no longer vouch for the result;
---   * an accumulating probe's result merges into the saved one, and its contexts join, while the
+--   * The same result in a new context adds the context. In a known one, nothing changes.
+--   * A different result, or a run on another build, replaces the record, contexts and all: the
+--     client or the situation changed, so the earlier contexts no longer vouch for the result.
+--   * An accumulating probe's result merges into the saved one, and its contexts join, while the
 --     build stays the same.
 --
--- Every probe file (all the TOC lists before DevTools.lua) defines data and functions only; nothing runs at load, so
+-- Every probe file (all the TOC lists before DevTools.lua) defines data and functions only. Nothing runs at load, so
 -- `tlk probes` can read the probe names and needs in plain Lua.
 
--- The steps of one play session in a starting zone, in the order it reaches them; each need names one.
+-- The steps of one play session in a starting zone, in the order it reaches them. Each need names one.
 local Steps = {
     "anywhere",
     "at a quest giver",
@@ -90,13 +92,13 @@ local List = {}
 local Needs = {}
 
 -- The UNIT_COMBAT payloads seen since load (Probes.NoteUnitCombat): units[unit][action] holds a set per payload field
--- (action, flagText, amount, schoolMask) of the shapes seen (a secret action keys "secret"); actions and flagTexts are
--- the plain strings seen, as sets; amountInCombat is the last amount on you in combat: its type, or "secret".
+-- (action, flagText, amount, schoolMask) of the shapes seen (a secret action keys "secret"). actions and flagTexts are
+-- the plain strings seen, as sets. amountInCombat is the last amount on you in combat: its type, or "secret".
 local UnitCombat = { actions = {}, flagTexts = {}, units = { player = {}, target = {} } }
 
 -- The kill events seen since load (Probes.NoteKill): sets of whose blow and what kind of unit, for PARTY_KILL
--- (partyKill = { attacker, target, attackerKind }) and UNIT_DIED (unitDied = { unit }), each nil until its event fires;
--- and whether PLAYER_TARGET_DIED fired.
+-- (partyKill = { attacker, target, attackerKind }) and UNIT_DIED (unitDied = { unit }), each nil until its event fires.
+-- It also holds whether PLAYER_TARGET_DIED fired.
 local Kills = { partyKill = nil, targetDied = false, unitDied = nil }
 
 -- The set of sender name shapes per chat event since load (Probes.NoteSender).
@@ -112,7 +114,7 @@ local AfterDeath = { diedAt = nil, types = {} }
 local Restricted = { active = {}, seen = {}, text = "none" }
 
 -- The steps of your latest entering and leaving of combat (Probes.NoteCombatEdge): enter and leave are lists of step
--- strings, current the edge the last step belonged to.
+-- strings, and current is the edge the last step belonged to.
 local CombatEdges = { current = nil, enter = {}, leave = {} }
 
 -- The most steps an edge keeps: entering and leaving take a few each.
@@ -133,7 +135,7 @@ local AddonMessages = {}
 -- it's a table.
 local DiscordInfo = { fields = {}, shapes = {} }
 
---- A list's first entry, or nil for an empty, missing or secret list.
+--- Returns a list's first entry, or nil for an empty, missing, or secret list.
 local function First(list)
     if issecretvalue(list) or (type(list) ~= "table") then
         return nil
@@ -142,7 +144,7 @@ local function First(list)
     return list[1]
 end
 
--- A value as an item of a string union: a secret's marker is "secret".
+-- Returns a value as an item of a string union: a secret's marker is "secret".
 local function Item(value)
     if (type(value) == "table") and (value.secret == true) then
         return "secret"
@@ -151,7 +153,7 @@ local function Item(value)
     return value
 end
 
---- A set's keys, sorted and joined by separator (a comma unless given).
+--- Returns a set's keys, sorted and joined by separator (a comma unless given).
 local function Joined(set, separator)
     local keys = {}
 
@@ -164,12 +166,12 @@ local function Joined(set, separator)
     return table.concat(keys, (separator or ","))
 end
 
---- The marker a secret is recorded as.
+--- Returns the marker a secret is recorded as.
 local function Marker(value)
     return { secret = true, type = type(value) }
 end
 
---- A 0-1 color channel as a byte (0-255), or the marker for a secret.
+--- Returns a 0-1 color channel as a byte (0-255), or the marker for a secret.
 local function Byte(channel)
     if issecretvalue(channel) then
         return Marker(channel)
@@ -180,9 +182,9 @@ local function Byte(channel)
     return math.floor((channel * 255) + 0.5)
 end
 
--- Two values of the kind a record holds, as one: a string meets a string or a secret's marker as the sorted union of
--- their comma-separated items (the marker as "secret", so neither side is lost), tables merge key by key, two booleans
--- are true if either is, and otherwise b stands.
+-- Merges two values of the kind a record holds into one: a string meets a string or a secret's marker as the sorted
+-- union of their comma-separated items (the marker as "secret", so neither side is lost), tables merge key by key, two
+-- booleans are true if either is, and otherwise b stands.
 local function Merge(a, b)
     local itemA = Item(a)
     local itemB = Item(b)
@@ -218,8 +220,9 @@ local function Merge(a, b)
     return b
 end
 
---- A name's shape: each run of letters (accented ones too) becomes "Aa" and each run of digits "0", so "Dh Taketwo-Area
---- 52" is "Aa Aa-Aa 0"; "empty", the type name, or the marker for a secret otherwise. No name survives.
+--- Returns a name's shape: each run of letters (accented ones too) becomes "Aa" and each run of digits "0", so "Dh
+--- Taketwo-Area 52" is "Aa Aa-Aa 0". Otherwise, it's "empty", the type name, or the marker for a secret. No name
+--- survives.
 local function NameShape(value)
     if issecretvalue(value) then
         return Marker(value)
@@ -230,8 +233,8 @@ local function NameShape(value)
     return (((value == "") and "empty") or (value:gsub("[%a\128-\255]+", "Aa"):gsub("%d+", "0")))
 end
 
--- Why a result can't be saved and compared, or nil: only string keys, and strings, booleans, finite numbers and tables
--- of them.
+-- Returns why a result can't be saved and compared, or nil: only string keys, and strings, booleans, finite numbers,
+-- and tables of them.
 local function Problem(value, path)
     local kind = type(value)
 
@@ -260,7 +263,7 @@ local function Problem(value, path)
     return nil
 end
 
---- Whether two values are equal, or "secret" when either is one (secrets are never compared).
+--- Returns whether two values are equal, or "secret" when either is one (secrets are never compared).
 local function Same(a, b)
     if issecretvalue(a) or issecretvalue(b) then
         return "secret"
@@ -269,7 +272,7 @@ local function Same(a, b)
     return (a == b)
 end
 
---- The value's type name ("nil" for nothing), or the marker for a secret.
+--- Returns the value's type name ("nil" for nothing), or the marker for a secret.
 local function Shape(value)
     if issecretvalue(value) then
         return Marker(value)
@@ -278,7 +281,7 @@ local function Shape(value)
     return type(value)
 end
 
---- A table's string keys, sorted and joined by commas; the Shape of anything else.
+--- Returns a table's string keys, sorted and joined by commas, or the Shape of anything else.
 local function Fields(tbl)
     if issecretvalue(tbl) or (type(tbl) ~= "table") then
         return Shape(tbl)
@@ -297,7 +300,7 @@ local function Fields(tbl)
     return table.concat(keys, ",")
 end
 
---- A table's string keys, each with its value's Shape.
+--- Returns a table's string keys, each with its value's Shape.
 local function FieldShapes(tbl)
     local shapes = {}
 
@@ -344,7 +347,7 @@ local function Differences(a, b, path, out)
     return out
 end
 
---- "text", "empty" or the type name for a text an API returns, or the marker for a secret.
+--- Returns "text", "empty", or the type name for a text an API returns, or the marker for a secret.
 local function Text(value)
     if issecretvalue(value) then
         return Marker(value)
@@ -355,7 +358,7 @@ local function Text(value)
     return (((value == "") and "empty") or "text")
 end
 
---- The value itself, or the marker for a secret.
+--- Returns the value itself, or the marker for a secret.
 local function Value(value)
     if issecretvalue(value) then
         return Marker(value)
@@ -369,7 +372,7 @@ Probes.List = List
 --- The needs by key ({ label, text, step, check, setup | harness }), and the probes in run order and by name.
 Probes.Needs = Needs
 
---- The steps of a starting-zone play session, in order; a need's step indexes it.
+--- The steps of a starting-zone play session, in order. A need's step indexes it.
 Probes.Steps = Steps
 
 --- The UNIT_COMBAT payload shapes seen since load (UnitCombat above), for unitCombat.seen.
@@ -385,7 +388,7 @@ Probes.Senders = Senders
 Probes.AfterDeath, Probes.AfterDeathSeconds = AfterDeath, AfterDeathSeconds
 Probes.NameShape = NameShape
 
---- The restrictions in force as the client last said, and every one seen since load (Restricted above); the steps of
+--- The restrictions in force as the client last said and every one seen since load (Restricted above), and the steps of
 --- your latest entering and leaving of combat, for combat.edges.
 Probes.Restricted, Probes.CombatEdges = Restricted, CombatEdges
 
@@ -398,7 +401,7 @@ Probes.First, Probes.Joined, Probes.Merge = First, Joined, Merge
 --- The shape helpers probes record with (documented above).
 Probes.Marker, Probes.Shape, Probes.Text, Probes.Value = Marker, Shape, Text, Value
 
--- An enum's name for a value, or nil.
+-- Returns an enum's name for a value, or nil.
 local function EnumName(enum, value)
     for name, known in pairs(enum) do
         if known == value then
@@ -409,12 +412,12 @@ local function EnumName(enum, value)
     return nil
 end
 
--- A boolean an API answered, as text: "true", "false" or "secret".
+-- Returns a boolean an API answered, as text: "true", "false", or "secret".
 local function Flag(value)
     return ((issecretvalue(value) and "secret") or tostring(value))
 end
 
--- A GUID's kind ("Player", "Creature", "Pet"...), "secret", or its shape when it isn't a string.
+-- Returns a GUID's kind ("Player", "Creature", "Pet", and so on), "secret", or its shape when it isn't a string.
 local function GUIDKind(guid)
     if issecretvalue(guid) then
         return "secret"
@@ -447,12 +450,12 @@ local function RestrictedText()
     return (((#names > 0) and table.concat(names, ",")) or "none")
 end
 
--- A payload field's shape as a set item: "secret", or its Text ("text", "empty", a type name).
+-- Returns a payload field's shape as a set item: "secret", or its Text ("text", "empty", a type name).
 local function Token(value)
     return ((issecretvalue(value) and "secret") or Text(value))
 end
 
--- Whose a GUID is, as seen from you: "you", "pet", "other", or "secret".
+-- Returns whose a GUID is, as seen from you: "you", "pet", "other", or "secret".
 local function Whose(guid)
     if issecretvalue(guid) then
         return "secret"
@@ -472,7 +475,7 @@ local function Whose(guid)
     return "other"
 end
 
---- Adds needs ({ [key] = need }); a key that's already defined is an error.
+--- Adds needs ({ [key] = need }). A key that's already defined is an error.
 function Probes.AddNeeds(needs)
     for key, need in pairs(needs) do
         assert(not Needs[key], "duplicate need " .. key)
@@ -480,14 +483,14 @@ function Probes.AddNeeds(needs)
     end
 end
 
---- The client build as "<version> (<build>)".
+--- Returns the client build as "<version> (<build>)".
 function Probes.Build()
     local version, build = GetBuildInfo()
 
     return ("%s (%s)"):format(version, build)
 end
 
---- Whether the probe's needs are met right now.
+--- Returns whether the probe's needs are met right now.
 ---@return boolean met
 ---@return string? unmet the first unmet need's text
 function Probes.Check(probe)
@@ -503,13 +506,13 @@ function Probes.Check(probe)
     return true, nil
 end
 
---- The situation a probe runs in: "combat" or "idle" for combat lockdown, a slash, and the active restrictions
+--- Returns the situation a probe runs in: "combat" or "idle" for combat lockdown, a slash, and the active restrictions
 --- (Probes.Restrictions), as in "idle/none" or "combat/Combat".
 function Probes.Context()
     return (((InCombatLockdown() and "combat/") or "idle/") .. Probes.Restrictions())
 end
 
---- Adds probes to the end of the run order; a duplicate name or an unknown need is an error.
+--- Adds probes to the end of the run order. A duplicate name or an unknown need is an error.
 function Probes.Define(probes)
     for _, probe in ipairs(probes) do
         assert(not ByName[probe.name], "duplicate probe " .. probe.name)
@@ -559,7 +562,7 @@ end
 --- PLAYER_REGEN_ENABLED, and ADDON_RESTRICTION_STATE_CHANGED with the Combat restriction's state):
 --- "<step>[lockdown=<InCombatLockdown()> affecting=<UnitAffectingCombat ("player")>
 --- restricted=<IsAddOnRestrictionActive(Combat)>]". PLAYER_REGEN_DISABLED and the restriction's Activating and Active
---- enter, the rest leave; a step of the other edge than the last one's starts that edge over.
+--- enter, and the rest leave. A step of the other edge than the last one's starts that edge over.
 ---@param state number? the Combat restriction's Enum.AddOnRestrictionState
 function Probes.NoteCombatEdge(event, state)
     local label = event
@@ -653,8 +656,8 @@ function Probes.NoteMeterUpdate(meterType)
 end
 
 --- Follows an ADDON_RESTRICTION_STATE_CHANGED (DevTools.lua passes each): a restriction counts from Activating, which
---- the client enforces once that dispatch ends, until Inactive. Cheaper than Probes.Restrictions for the listeners that
---- key what they hear by it.
+--- the client enforces once that dispatch ends, until Inactive. It's cheaper than Probes.Restrictions for the listeners
+--- that key what they hear by it.
 function Probes.NoteRestriction(kind, state)
     local name = EnumName(Enum.AddOnRestrictionType, kind)
 
@@ -711,7 +714,8 @@ function Probes.NoteUnitCombat(unit, action, flagText, amount, schoolMask)
     end
 end
 
---- The active addon restrictions: "none", or their Enum.AddOnRestrictionType names, sorted and joined by commas.
+--- Returns the active addon restrictions: "none", or their Enum.AddOnRestrictionType names, sorted and joined by
+--- commas.
 function Probes.Restrictions()
     local active = {}
 
@@ -726,8 +730,8 @@ function Probes.Restrictions()
     return (((#active > 0) and table.concat(active, ",")) or "none")
 end
 
---- The step of the play session that meets all of the probe's needs: the latest of their steps, or the first step for a
---- probe that runs anywhere.
+--- Returns the step of the play session that meets all of the probe's needs: the latest of their steps, or the first
+--- step for a probe that runs anywhere.
 function Probes.Step(probe)
     local step = 1
 
@@ -757,7 +761,7 @@ end
 --- The listeners' helpers, for the probe files' own listeners (ProbesCombat.lua's and ProbesOrder.lua's).
 Probes.EnumName, Probes.Flag, Probes.Note, Probes.Token = EnumName, Flag, Note, Token
 
--- The probe's needs' field (text or label) joined with " + ", or none for a probe that runs anywhere.
+-- Returns the probe's needs' field (text or label) joined with " + ", or none for a probe that runs anywhere.
 local function NeedsJoined(probe, field, none)
     local parts = {}
 
@@ -768,13 +772,13 @@ local function NeedsJoined(probe, field, none)
     return (((#parts > 0) and table.concat(parts, " + ")) or none)
 end
 
---- Where two records (or any values of the kind a record holds) differ: a list of { path, a, b }, sorted by path; empty
---- when they're equal.
+--- Returns where two records (or any values of the kind a record holds) differ: a list of { path, a, b }, sorted by
+--- path, which is empty when they're equal.
 function Probes.Diff(a, b)
     return Differences(a, b, "", {})
 end
 
---- Why the harness can't run the probe, or nil when it can.
+--- Returns why the harness can't run the probe, or nil when it can.
 function Probes.HarnessGap(probe)
     if probe.harness then
         return probe.harness
@@ -789,13 +793,14 @@ function Probes.HarnessGap(probe)
     return nil
 end
 
---- Whether a record was made by the probe's current version, so it answers the probe's question.
+--- Returns whether a record was made by the probe's current version, so it answers the probe's question.
 ---@param record table? a record, or nil
 function Probes.IsCurrent(probe, record)
     return ((type(record) == "table") and ((record.version or 1) == Probes.Version(probe)))
 end
 
---- Shape sets (Note's) as a record holds them: each set joined by commas, a table of sets likewise, key by key.
+--- Returns shape sets (Note's) as a record holds them: each set joined by commas, and a table of sets likewise, key by
+--- key.
 ---@param sets table
 ---@return table
 function Probes.JoinSets(sets)
@@ -810,9 +815,9 @@ function Probes.JoinSets(sets)
     return out
 end
 
---- Folds a new record into the saved one by the rules in the header: the record to save, and how it differs from the
---- saved one: "new" (nothing current was saved), "changed" (another result), "confirmed" (the same result in a new
---- context or on another build) or "same".
+--- Folds a new record into the saved one by the rules in the header. Returns the record to save, and how it differs
+--- from the saved one: "new" (nothing current was saved), "changed" (another result), "confirmed" (the same result in a
+--- new context or on another build), or "same".
 ---@param previous table? the saved record, or nil
 ---@param record table a record Probes.Record just made; Keep may change it
 ---@return table saved
@@ -842,12 +847,12 @@ function Probes.Keep(probe, previous, record)
     return record, (((#Differences(previous, record, "", {}) > 0) and "confirmed") or "same"), differences
 end
 
---- The needs' short labels joined with " + ", or "anywhere" for a probe that runs anywhere.
+--- Returns the needs' short labels joined with " + ", or "anywhere" for a probe that runs anywhere.
 function Probes.NeedsLabel(probe)
     return NeedsJoined(probe, "label", "anywhere")
 end
 
---- The needs' texts joined with " + ", or "nothing" for a probe that runs anywhere.
+--- Returns the needs' texts joined with " + ", or "nothing" for a probe that runs anywhere.
 function Probes.NeedsText(probe)
     return NeedsJoined(probe, "text", "nothing")
 end
@@ -882,7 +887,7 @@ function Probes.Setup(probe, h)
     end
 end
 
---- A value of the kind a record holds, as text.
+--- Returns a value of the kind a record holds, as text.
 function Probes.Show(value)
     if type(value) == "string" then
         return ("%q"):format(value)
@@ -899,7 +904,7 @@ function Probes.Show(value)
     return ("{ " .. table.concat(parts, ", ") .. " }")
 end
 
---- The probe's version: probe.version, or 1.
+--- Returns the probe's version: probe.version, or 1.
 function Probes.Version(probe)
     return (probe.version or 1)
 end

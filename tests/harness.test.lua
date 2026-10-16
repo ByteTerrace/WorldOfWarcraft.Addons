@@ -31,8 +31,8 @@ test("secret values are opaque userdata that refuse every computation", function
     eq(Reveal(health), 100)
 end)
 
--- secrets.operations: the client lets addon code concatenate, tostring and format a secret, and each result is a secret
--- string.
+-- secrets.operations: the client lets addon code concatenate, tostring, and format a secret, and each result is a
+-- secret string.
 test("concatenation, tostring and format turn a secret into a secret string", function()
     local h = Harness.New()
     local env = h.env
@@ -184,7 +184,7 @@ test("SetFormattedText formats a secret into a secret string", function()
     eq(Reveal(text:GetText()), "42%")
 end)
 
--- Blizzard_Game routes ADDON_ACTION_BLOCKED to a "blocked" message and ADDON_ACTION_FORBIDDEN to a popup; the client
+-- Blizzard_Game routes ADDON_ACTION_BLOCKED to a "blocked" message and ADDON_ACTION_FORBIDDEN to a popup. The client
 -- itself skips the call and the caller keeps running.
 local function WatchBlocked(h)
     local seen = {}

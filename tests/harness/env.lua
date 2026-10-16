@@ -1,6 +1,6 @@
 -- The global environment an addon sees inside the harness: fakes for the WoW API it uses, backed by the Harness world
--- state (see wow.lua). Every fake names a real global (the test runner checks each against the client dump); every
--- global and C_* fake is wrapped by Harness:WrapFunction, so secret returns, secret arguments and restrictions follow
+-- state (see wow.lua). Every fake names a real global (the test runner checks each against the client dump).
+-- Harness:WrapFunction wraps every global and C_* fake, so secret returns, secret arguments, and restrictions follow
 -- its snapshot entry, and an undocumented one (PlaySoundFile, PlaySound, StopSound) refuses secret arguments.
 --
 -- Formatting helpers (GetMoneyString, SecondsToTime) are deterministic stand-ins, not Blizzard's exact output (no coin
@@ -47,7 +47,7 @@ local Soundkits = {
     RAID_WARNING = 8959, READY_CHECK = 8960, UI_EPICLOOT_TOAST = 31578,
 }
 
--- Lua libraries, limited to the members the client has (it removes some, e.g. string.dump).
+-- Lua libraries, limited to the members the client has (it removes some, such as string.dump).
 local Libraries = {
     math = { "abs", "acos", "asin", "atan", "atan2", "ceil", "cos", "cosh", "deg", "exp", "floor", "fmod", "frexp",
         "huge", "ldexp", "log", "log10", "max", "min", "modf", "pi", "pow", "rad", "random", "sin", "sinh", "sqrt", "tan", "tanh" },
@@ -205,8 +205,8 @@ function Harness:BuildEnvironment()
 
     -- order: grouped by the part of the client each fake models
     local fakes = {
-        -- Lua, as the client exposes it. type() reports a secret's underlying type, like the client; tostring,
-        -- tonumber, print and string.format refuse secrets.
+        -- Lua, as the client exposes it. type() reports a secret's underlying type, like the client. tostring and
+        -- string.format turn a secret into a secret string (secrets.lua), and tonumber and print refuse one.
         assert = assert, error = error, ipairs = ipairs, next = next, pairs = pairs, pcall = pcall,
         select = select, setmetatable = setmetatable, getmetatable = getmetatable, rawget = rawget, rawset = rawset,
         rawequal = rawequal, unpack = unpack,
@@ -283,7 +283,7 @@ function Harness:BuildEnvironment()
         -- Units.
         UnitExists = function(u) return Field(u, "exists", false) end,
         UnitIsPlayer = function(u) return Field(u, "isPlayer", false) end,
-        -- Hostility, death, combat, race, faction, GUIDs and raid icons: units.lua.
+        -- Hostility, death, combat, race, faction, GUIDs, and raid icons: units.lua.
         UnitIsFeignDeath = function(u) return Field(u, "feign", false) end,
         UnitIsAFK = function(u) return Field(u, "afk", false) end,
         UnitHealth = function(u) return Field(u, "health", 0) end,
@@ -501,7 +501,7 @@ function Harness:BuildEnvironment()
         UpdateAddOnMemoryUsage = function() h.memoryUpdates = (h.memoryUpdates + 1) end,
         GetAddOnMemoryUsage = function(name) return (h.profiler.memory[name] or 0) end,
 
-        -- Addon messages (group.lua); the rest of C_ChatInfo is merged in below.
+        -- Addon messages (group.lua). The rest of C_ChatInfo is merged in below.
         C_ChatInfo = h:AddonMessageFakes(),
 
         -- Restrictions. IsAddOnRestrictionActive is false during ADDON_RESTRICTION_STATE_CHANGED (its doc).
@@ -554,7 +554,7 @@ function Harness:BuildEnvironment()
     -- (h.env.UIParent:SetSize).
     Harness.State(fakes.UIParent).width, Harness.State(fakes.UIParent).height = 1366, 768
     -- Blizzard's settings frame carries SettingsPanelMixin (Blizzard_SettingsPanel.lua). Addon code that opened it
-    -- froze the client when it closed, so Open and OpenToCategory are forbidden (tools/api/forbidden.json); the player
+    -- froze the client when it closed, so Open and OpenToCategory are forbidden (tools/api/forbidden.json). The player
     -- opens it from Esc > Options.
     fakes.SettingsPanel = h:CreateWidget("Frame", "SettingsPanel", fakes.UIParent)
 
@@ -566,7 +566,7 @@ function Harness:BuildEnvironment()
         h:BlockAction("ADDON_ACTION_FORBIDDEN", "SettingsPanel:OpenToCategory")
     end
 
-    -- units.lua, world.lua, ui.lua, meter.lua, speech.lua and quests.lua; a name defined twice is a harness bug.
+    -- units.lua, world.lua, ui.lua, meter.lua, speech.lua, and quests.lua. A name defined twice is a harness bug.
     local sources = {
         h:UnitFakes(), h:WorldFakes(), h:InterfaceFakes(fakes.UIParent), h:MeterFakes(), h:SpeechFakes(),
         h:QuestFakes(fakes.UIParent),
@@ -607,7 +607,7 @@ end
 
 -- Settings panel fake, after Blizzard_Settings_Shared (forever branch), for what the addons call:
 -- - RegisterCanvasLayoutCategory(frame, name) returns a category whose page is the addon's own frame
---   (Blizzard shows it when the player chooses the category; tests show it directly) and its layout.
+--   (Blizzard shows it when the player selects the category; tests show it directly) and its layout.
 -- - RegisterAddOnCategory(category) lists it under Esc > Options > AddOns.
 -- - OpenToCategory calls C_SettingsUtil.OpenSettingsPanel, as Blizzard_Settings.lua does, which
 --   addon code must never call (tools/api/forbidden.json).

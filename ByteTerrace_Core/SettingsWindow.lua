@@ -9,31 +9,32 @@
 --   * The addon's own window, which the bare slash command toggles. It's an ordinary insecure
 --     frame, so it opens in combat too, and addon code never has to open Blizzard's panel.
 --
--- Controls are plain buttons, textures and font strings:
---   boolean  a box that holds a check while on; a click flips it.
---   enum     a dropdown: a button showing the value's label and a chevron. A click opens the
---            list of every value under it, the current one checked; picking one sets it and
---            closes the list, and so does a click anywhere else on the view, another page, or
---            hiding the view. A locked row says so instead of opening.
+-- Controls are plain buttons, textures, and font strings:
+--   boolean  a box that holds a check while on. Selecting it flips it.
+--   enum     a dropdown: a button showing the value's label and a chevron. Selecting it opens the
+--            list of every value under it, with the current one checked. Picking one sets it
+--            and closes the list, and so does selecting anywhere else on the view or another
+--            page, or hiding the view. A locked row says so instead of opening.
 --   number   "-" and "+" step by the row's step, within its min and max.
 -- The dropdown is the view's own, not Blizzard's (MenuUtil): with the controller UI on, a Blizzard menu takes
--- controller focus as it opens (FrameControlsManager's MenuProxy.OnShow calls FrameShown on it), and opened from addon
--- code that taints what the controller UI remembers, as an addon control in the settings panel does. Every change goes
+-- controller focus as it opens (FrameControlsManager's MenuProxy.OnShow calls FrameShown on it), and, opened from addon
+-- code, that taints what the controller UI remembers, as an addon control in the settings panel does. Every change goes
 -- through State:Set as one batch, so a locked row is refused with a message and keeps its value. A change made anywhere
--- refreshes that row's control while its page shows; only the shown page's rows are watched, so a hidden view or page
+-- refreshes that row's control while its page shows. Only the shown page's rows are watched, so a hidden view or page
 -- costs nothing and catches up when it shows. Hovering a setting shows its description.
 --
--- The view is built the first time a host shows it. The window is sized to the page it shows; drag it to move it, and
--- the close button or the command hides it.
+-- The view is built the first time a host shows it. The window is sized to the page it shows. Drag it to move it. The
+-- close button or the command hides it.
 --
 --   ByteTerrace.NewSettingsWindow(addon, pages)  the settings for SettingsPages' pages
 --   window:Register()                             registers the canvas page with Blizzard's panel
 --   window:Toggle(), window:Show(page?), window:Hide(), window:IsShown()   the standalone window
 --   window:Page()                                 the index of the page the view shows
 -- Public members: Frame (the window, nil until first shown), Canvas (the settings-panel page), View (nil until first
--- shown), Pages, Controls ([row id] = the row's control button: its Label is the value shown, Check the boolean's
--- check, Minus and Plus the number's steppers) and Dropdown (the view's dropdown list, nil until the view is built:
--- Options are its option buttons, each with a Label and a Check, and Catcher the click-away layer under it).
+-- shown), Pages, Controls, and Dropdown. Controls maps [row id] to the row's control button: its Label is the value
+-- shown, Check the boolean's check, and Minus and Plus the number's steppers. Dropdown is the view's dropdown list, nil
+-- until the view is built. Its Options are its option buttons, each with a Label and a Check, and Catcher is the
+-- click-away layer under it.
 
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local CanvasInset = 16
@@ -152,7 +153,7 @@ local function Follow(window)
     end
 end
 
--- A flat button with a label, the window's one button style.
+-- Creates a flat button with a label, the window's one button style.
 local function NewButton(parent, width, text)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
 
@@ -167,7 +168,7 @@ local function NewButton(parent, width, text)
     return button
 end
 
--- Builds the window: the backdrop, the title (dragging moves the window) and the close button.
+-- Builds the window: the backdrop, the title (dragging moves the window), and the close button.
 local function BuildFrame(window)
     local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
 
@@ -194,7 +195,7 @@ local function BuildFrame(window)
     frame.Close:SetScript("OnClick", function() window:Hide() end)
 end
 
---- Creates the window; its frame is built the first time it shows.
+--- Creates the window. Its frame is built the first time it shows.
 ---@param addon table the AddOn
 ---@param pages table[] ByteTerrace.SettingsPages(addon)
 ---@return table window
@@ -229,8 +230,9 @@ local function ShowPage(window, index)
     Follow(window)
 end
 
--- A number one step from value. With a step, it moves along the row's grid (multiples of step from min) and stops at
--- the last grid value inside the bounds, so State always admits it; without one it moves by 1 and stops at min and max.
+-- Returns a number one step from value. With a step, it moves along the row's grid (multiples of step from min) and
+-- stops at the last grid value inside the bounds, so State always admits it. Without one, it moves by 1 and stops at
+-- min and max.
 local function StepNumber(spec, value, delta)
     local low = spec.min
     local high = spec.max
@@ -256,8 +258,8 @@ local function StepNumber(spec, value, delta)
     return (base + (index * step))
 end
 
--- A value as the window shows it: an enum's label, a number without trailing zeros. Only enums and numbers show text; a
--- boolean shows a check.
+-- Returns a value as the window shows it: an enum's label, or a number without trailing zeros. Only enums and numbers
+-- show text. A boolean shows a check.
 local function ValueText(spec, value)
     if spec.values then
         return ((spec.valueLabels and spec.valueLabels[value]) or tostring(value))
@@ -283,7 +285,7 @@ local function Write(window, entry, value)
 end
 
 -- Opens the dropdown list under a dropdown's control: an option per value, the current one checked, as wide as its
--- widest label needs. Picking one writes it and closes the list; clicking the open dropdown again closes it. A locked
+-- widest label needs. Picking one writes it and closes the list. Selecting the open dropdown again closes it. A locked
 -- row says so instead.
 local function OpenList(window, entry, control)
     local list = window.Dropdown
@@ -543,13 +545,13 @@ function SettingsWindow:Hide()
     end
 end
 
---- Whether the window shows.
+--- Returns whether the window shows.
 ---@return boolean
 function SettingsWindow:IsShown()
     return ((self.Frame ~= nil) and self.Frame:IsShown())
 end
 
---- The index of the page the view shows (or last showed).
+--- Returns the index of the page the view shows (or last showed).
 ---@return integer
 function SettingsWindow:Page()
     return self.m_page
@@ -581,7 +583,7 @@ function SettingsWindow:Show(page)
     self.Frame:Show()
 end
 
---- Shows the window if it's hidden, else hides it.
+--- Shows the window if it's hidden, and otherwise hides it.
 function SettingsWindow:Toggle()
     if self:IsShown() then
         self:Hide()

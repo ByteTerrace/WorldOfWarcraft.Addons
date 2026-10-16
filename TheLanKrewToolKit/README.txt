@@ -4,17 +4,17 @@ INSTALL
 1. Quit the game.
 2. Extract the zip into the Interface\AddOns folder of your Forever install, for example
    World of Warcraft\_classic_beta_\Interface\AddOns
-   You should end up with two folders there: ByteTerrace_Core and TheLanKrewToolKit.
+   That leaves two folders there: ByteTerrace_Core and TheLanKrewToolKit.
    To update, delete both old folders first, but save your sounds in TheLanKrewToolKit\Media.
-3. Start the game. At character select, AddOns should list The Lan Krew ToolKit, switched on.
+3. Start the game. At character select, AddOns lists The Lan Krew ToolKit, switched on.
 
 GETTING AROUND
   /tlk            settings (also under Esc > Options > AddOns, but with a controller, use /tlk)
   /tlk help       every command
-  /tlk sound      the sounds you can add; the addon ships none (see Media\README.txt)
+  /tlk sound      the sounds you can add. The addon ships none (see Media\README.txt)
   /tlk journal    this session's highlights
   /tlk krew       who in your group runs the toolkit
-  /tlk ledger     the Warband's marks, grudges, champions and wars
+  /tlk ledger     the Warband's marks, grudges, champions, and wars
   /tlk rally      calls the Krew to you
 
 The Krew and Warband features need friends in your group who run the toolkit too.

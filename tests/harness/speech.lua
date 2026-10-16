@@ -10,12 +10,12 @@
 --         before every alert. [G] While disabled, SpeakText speaks nothing and returns nothing
 --         (the doc says it MayReturnNothing). Harness.New{ combatAudioAlerts = true } or
 --         h.combatAudioAlerts turns it on. Recorded: { api = "C_CombatAudioAlert.SpeakText",
---         text, category, allowOverlap, utteranceID }; utterance IDs count up from 1.
+--         text, category, allowOverlap, utteranceID }. Utterance IDs count up from 1.
 --     [G] The player's per-category voice, volume and speed apply in the client; the harness
 --         doesn't model them.
 --   C_VoiceChat.SpeakText(voiceID, text, rate, volume [, overlap = false]) returns nothing.
 --     [D] SecretArguments AllowedWhenTainted, text ConditionalSecret: addon code may speak a
---         secret text (a name read in combat). voiceID, rate, volume and overlap are NeverSecret:
+--         secret text (a name read in combat). voiceID, rate, volume, and overlap are NeverSecret:
 --         a secret one is an error ([G] that the client refuses it rather than ignoring it).
 --     [D] Blizzard's chat narration (TextToSpeechFrame.lua) speaks with the player's settings:
 --         voiceID from C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard) (falling back

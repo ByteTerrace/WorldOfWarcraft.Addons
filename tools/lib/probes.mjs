@@ -3,9 +3,9 @@
 // and imported by `tlk probes --import`. tests/probes.test.lua compares the harness's answers with it.
 //
 // Format: pretty-printed JSON, probes sorted by name, each record's result first, then the set of
-// contexts the client gave it in (Probes.Context in ByteTerrace_DevTools' Probes.lua: "idle" or
-// "combat", a slash, the active restrictions). The file's build is the newest record's; a record
-// from another build names its own.
+// contexts the client gave it in. A context is what Probes.Context in ByteTerrace_DevTools'
+// Probes.lua writes: "idle" or "combat", a slash, and the active restrictions. The file's build is
+// the newest record's, and a record from another build names its own.
 //
 //   {
 //     "build": "1.60.1 (70009)",
@@ -57,7 +57,7 @@ const WIDTH = 110;
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 // A value with sorted keys (or the given order): on one line when it fits in WIDTH at this indent,
-// else one key per line.
+// otherwise one key per line.
 function pretty(value, indent, forceOpen = false, keys = null) {
     if (!isObject(value)) return JSON.stringify(value);
     const order = keys ?? Object.keys(value).sort();
@@ -109,8 +109,8 @@ export function luaLiteral(value) {
     throw new Error(`luaLiteral: unsupported value ${JSON.stringify(value)}`);
 }
 
-// Lua that encodes a value of the kind a record holds (string keys; strings, booleans, finite
-// numbers and tables of them) as JSON, or returns "!" and the problem.
+// Lua that encodes a value of the kind a record holds (strings, booleans, finite numbers, and
+// tables of them with string keys) as JSON, or returns "!" and the problem.
 export const ENCODE_JSON = `
     local function quote(s)
         return '"' .. s:gsub('[%c"\\\\]', function(c)

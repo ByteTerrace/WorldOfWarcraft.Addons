@@ -4,9 +4,9 @@ local addonName, ns = ...
 -- energy. /tlk fom turns the module off and on again.
 --
 -- The player's primary power is secret in combat and out (probed: power.player), so energy never enters state:
--- UnitPower/UnitPowerMax results go straight to the bar and text (both accept secrets) and are never compared or
--- computed with. Power events are registered only while the meter is visible. The bar eases toward each new value
--- (Enum.StatusBarInterpolation.ExponentialEaseOut) in the same SetValue call: no extra work per tick.
+-- UnitPower and UnitPowerMax results go straight to the bar and text (both accept secrets), and nothing compares or
+-- computes with them. The meter registers power events only while it's visible. The bar eases toward each new value
+-- (Enum.StatusBarInterpolation.ExponentialEaseOut) in the same SetValue call, with no extra work per tick.
 --
 -- The meter frame is the global TheLanKrewToolKitFuckOMeter: its name (Label) centered on the bar, and the energy in
 -- Bar and in Value at the bar's right end.
@@ -67,7 +67,7 @@ local function CreateMeter()
     return frame
 end
 
--- Power events carry the power token; other resources (a druid's mana) are ignored.
+-- Power events carry the power token. These handlers ignore other resources (a druid's mana).
 local function UpdateRange(_, powerToken)
     if (powerToken == nil) or (powerToken == "ENERGY") then
         -- secret: widget sink

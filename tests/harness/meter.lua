@@ -1,5 +1,5 @@
 -- Blizzard's damage meter (C_DamageMeter) and death recaps (C_DeathRecap) in the fake client (see wow.lua for the
--- rest). Sources: DamageMeterDocumentation.lua, DamageMeterConstantsDocumentation.lua and DeathRecapDocumentation.lua,
+-- rest). Sources: DamageMeterDocumentation.lua, DamageMeterConstantsDocumentation.lua, and DeathRecapDocumentation.lua,
 -- and how Blizzard_DamageMeter and Blizzard_DeathRecap (the forever branch of Gethe/wow-ui-source) consume them. [D]
 -- marks a documented decision, [G] a guess where the docs and Blizzard's code are silent.
 --
@@ -7,17 +7,17 @@
 --   [G] Every combat is a session: h:EnterCombat starts one (the next sessionID, counting from 1)
 --       after PLAYER_REGEN_DISABLED and fires DAMAGE_METER_CURRENT_SESSION_UPDATED; h:LeaveCombat
 --       ends it before PLAYER_REGEN_ENABLED, freezing its duration (damageMeter.currentSession asks the client). A relog clears every session
---       and recap; a /reload keeps them (they're the client's, not the UI's).
+--       and recap. A /reload keeps them (they're the client's, not the UI's).
 --   [G] Current is the latest session, in progress or ended, until the next combat starts one.
 --       [E] Expired is empty after ordinary fights (damageMeter.typesIdle: no sources and no
---       duration, idle after two kills); what it holds later isn't known yet. Overall merges every session:
+--       duration, idle after two kills). What it holds later isn't known yet. Overall merges every session:
 --       sources merge by GUID (else creature ID, else name), amounts add up, and its duration is
 --       the sum of the sessions' durations.
 --   [G] GetAvailableCombatSessions lists every session oldest first ({ sessionID, name,
 --       durationSeconds }; third-party meters read the newest as the last). [E] name is never
---       empty in the client (damageMeter.sessions); its format isn't known, so it's what the test
+--       empty in the client (damageMeter.sessions). Its format isn't known, so it's what the test
 --       gave (h:MeterFight's name), else "Combat <id>".
---       The client's cap on kept sessions is unknown; the harness keeps them all.
+--       The client's cap on kept sessions is unknown. The harness keeps them all.
 --   [D] Adding data fires DAMAGE_METER_COMBAT_SESSION_UPDATED twice per changed type: (type, 0)
 --       for Overall, then (type, sessionID) for the current session (DamageMeterSessionWindow.lua:
 --       "Two events are always dispatched"). [G] A DamageDone change also fires for Dps and a
@@ -65,17 +65,17 @@
 --       treats the first as the killing blow). [E] DeathRecapEventInfo is a combat log event
 --       (deathRecap.events): timestamp, event, hideCaster, sourceGUID, sourceName, sourceFlags,
 --       sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, amount, overkill, school,
---       critical, glancing, crushing, isOffHand and currentHP, all plain, for a mob's melee
---       killing blow; [E] spell events add spellId, spellName, spellSchool, avoidable and deadly
---       (deathRecap.events, a mob's spell before its melee killing blow); [D] environmental ones
---       add environmentalType (what Blizzard_DeathRecap.lua reads), and absorbed, resisted and
+--       critical, glancing, crushing, isOffHand, and currentHP, all plain, for a mob's melee
+--       killing blow. [E] Spell events add spellId, spellName, spellSchool, avoidable, and deadly
+--       (deathRecap.events, a mob's spell before its melee killing blow). [D] Environmental ones
+--       add environmentalType (what Blizzard_DeathRecap.lua reads), and absorbed, resisted, and
 --       blocked may appear. A death without scripted events gets one per DamageTaken spell: the
 --       Auto Attack spell (6603) is a SWING_DAMAGE with no spell fields, any other a
 --       SPELL_DAMAGE. Scripted SWING_DAMAGE also omits spell fields: Blizzard_DeathRecap's
 --       GetEventInfo supplies the swing's display spell itself. [G] school 1 unless the spell
---       gives one, critical, glancing, crushing and
+--       gives one, critical, glancing, crushing, and
 --       isOffHand false, raid flags 0, flags 0xA48 for a hostile mob, 0x548 for a hostile player,
---       0x1148 for a hostile player's pet and 0x511 for the player dying, and currentHP the health left after the hit (0
+--       0x1148 for a hostile player's pet, and 0x511 for the player dying, and currentHP the health left after the hit (0
 --       for the killing blow). An unknown ID returns no events and max health 0.
 --       [D] A nil ID means your latest death: Blizzard's death popup calls HasRecapEvents() and
 --       OpenDeathRecapUI() with none (GameDialogDefs.lua). [G] Deaths of other units don't count.
@@ -572,7 +572,7 @@ function Harness:MeterAdd(spec, fightLeft)
     return record, recapID
 end
 
--- Ends the session in progress (h:LeaveCombat calls this); fires nothing.
+-- Ends the session in progress (h:LeaveCombat calls this) and fires nothing.
 function Harness:MeterEndSession()
     local session = self:MeterActive()
 
@@ -610,7 +610,7 @@ function Harness:MeterFight(spec)
         local isLocal = (source.isLocalPlayer or ((source.isLocalPlayer == nil) and ((source.unit == "player") or (source.unit == self.player))))
 
         if source.death and isLocal and alive and (spec.endCombat ~= false) and not dying then
-            -- What you dealt reaches the meter in the fight; the hits on you and your death after PLAYER_DEAD.
+            -- What you dealt reaches the meter in the fight. The hits on you and your death reach it after PLAYER_DEAD.
             local during
 
             during, dying = SplitDamageTaken(source)

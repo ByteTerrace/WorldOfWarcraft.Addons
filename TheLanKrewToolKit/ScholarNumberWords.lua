@@ -1,14 +1,14 @@
 local addonName, ns = ...
 
--- The text and word banks of ScholarNumbers.lua's riddles (place value, telling time, the number line and math from the
--- player's quests), as ns.ScholarNumberWords: ScholarNumbers.lua reads it; this file only holds data. Everything is
+-- The text and word banks of ScholarNumbers.lua's riddles (place value, telling time, the number line, and math from
+-- the player's quests), as ns.ScholarNumberWords: ScholarNumbers.lua reads it. This file only holds data. Everything is
 -- original, kid-friendly plain ASCII. The titles live with the others in ScholarWords.lua.
 --
--- A text has ScholarMathWords' shape: {name} is filled from the riddle's variables (in word problems a number {a} also
--- comes counted with an item as {A}, plus {Hero}, {hero}, {place} and {items}); expr is the calculation behind the
--- answer, hint the strategy, step a worked first step (never the answer), explain the working, praise the strategy,
--- whys what mistake each named wrong answer comes from, wrong the why for any other ({choice} names it), and cases the
--- variants a generator picks by what the numbers need.
+-- A text has ScholarMathWords' shape: the riddle's variables fill {name}. In word problems, a number {a} also comes
+-- counted with an item as {A}, plus {Hero}, {hero}, {place}, and {items}. expr is the calculation behind the answer,
+-- hint the strategy, step a worked first step (never the answer), explain the working, praise the strategy, whys what
+-- mistake each named wrong answer comes from, wrong the why for any other ({choice} names it), and cases the variants a
+-- generator picks by what the numbers need.
 --
 -- Hints and steps name only numbers the riddle shows or numbers that can't be the answer, so the giveaway check in
 -- ScholarPuzzles.lua keeps them. A clock time in a text is the answer's {clock} only in an explanation.
@@ -45,7 +45,7 @@ ns.ScholarNumberWords = {
         },
         wrong = "{choice} isn't it. Put each digit in its own place: ones on the right.",
     },
-    -- The number line. {t} is the number to get close to; {listed} each choice's distance from it.
+    -- The number line. {t} is the number to get close to, and {listed} each choice's distance from it.
     closest = {
         explain = "From {t}: {listed}. The closest is {v}, only {gap} away.",
         expr = "{t} {sign} {gap}",
@@ -82,7 +82,7 @@ ns.ScholarNumberWords = {
     },
     -- Times-of-day riddles' places: dungeons a group runs, and rides that leave on time.
     dungeons = { "the Deadmines", "Ragefire Chasm", "Wailing Caverns", "Shadowfang Keep", "the Stockade", "Blackfathom Deeps" },
-    -- A spot a fraction of the way along: {frac} names the fraction, {j} its equal parts and {k} how many of them.
+    -- A spot a fraction of the way along: {frac} names the fraction, {j} its equal parts, and {k} how many of them.
     fraction = {
         cases = {
             unit = {
@@ -125,7 +125,7 @@ ns.ScholarNumberWords = {
         },
         wrong = "{choice} isn't the middle. Halfway is just as far from {lo} as from {hi}.",
     },
-    -- A star on a line of equal jumps from 0 to {e}: {row} is the line as text, {j} its jumps and {k} the star's.
+    -- A star on a line of equal jumps from 0 to {e}: {row} is the line as text, {j} its jumps, and {k} the star's.
     mark = {
         explain = "From 0 to {e} is {j} equal jumps, so each jump is {e} / {j} = {s}. The star is {k} jumps from 0: {k} x {s} = {v}.",
         expr = "{e} / {j} x {k}",
@@ -144,8 +144,8 @@ ns.ScholarNumberWords = {
         },
         wrong = "{choice} isn't it. Find how much one jump is worth, then count the jumps to the star.",
     },
-    -- Math from the player's quests. {ask}, {so} and {list} are filled in from the quest book first: who wants how many
-    -- of what. The stock cases tell the same riddles about a stock hero, giver and item.
+    -- Math from the player's quests. {ask}, {so}, and {list} are filled in from the quest book first: who wants how
+    -- many of what. The stock cases tell the same riddles about a stock hero, giver, and item.
     questAsks = {
         foe = {
             giver = "Your quest book says {giver} wants {r} {objective} defeated",
@@ -250,7 +250,7 @@ ns.ScholarNumberWords = {
         "The boat from Auberdine to Menethil Harbor", "The zeppelin from Orgrimmar to Undercity",
         "The zeppelin from Orgrimmar to Grom'gol", "The tram from Stormwind to Ironforge",
     },
-    -- {s} is 10 or 100; {placeWord} names the digit it changes, {bigWord} the place past it and {nextWord} the place a
+    -- {s} is 10 or 100. {placeWord} names the digit it changes, {bigWord} the place past it, and {nextWord} the place a
     -- carry or trade reaches.
     tenMore = {
         cases = {
@@ -327,7 +327,7 @@ ns.ScholarNumberWords = {
         },
         wrong = "{choice} isn't it. Split {n} into tens and ones, and count the tens.",
     },
-    -- Telling time. {h} is the hour, {h1} the hour after it and {h0} the one before; {clock} is the answer.
+    -- Telling time. {h} is the hour, {h1} the hour after it, and {h0} the one before. {clock} is the answer.
     timeElapsed = {
         cases = {
             cross = {
@@ -412,7 +412,7 @@ ns.ScholarNumberWords = {
         },
         wrong = "{choice} isn't it. Count up from {start} to {stop}.",
     },
-    -- Times said in words: {said} is the phrase ("quarter to 5"), {m} its minutes past the hour and {k} the minutes to
+    -- Times said in words: {said} is the phrase ("quarter to 5"), {m} its minutes past the hour, and {k} the minutes to
     -- the next one.
     timeWords = {
         cases = {

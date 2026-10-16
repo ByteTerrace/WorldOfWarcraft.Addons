@@ -1,14 +1,14 @@
 local addonName, ns = ...
 
 -- WarbandDeaths: who killed you, for the Krew's grudges. ByteTerrace_Core's death fact reads your killer from
--- Blizzard's death recap (death.killer and the rows beside it); this turns it into a rivalry record and a card.
+-- Blizzard's death recap (death.killer and the rows beside it). This file turns it into a rivalry record and a card.
 --
 --   A player        their kill of you counts in their rivalry record (and their guild's war tally),
 --                   and a card names them and the killing blow: "Slain by Bob. Ambush for 700."
 --   A creature      nothing: there's no one to hold a grudge against. Nor for your own blow.
 --   Unknown or pet  a card asks about the prime suspect (Warband.TakeFoe): "Slain by Bob?"
 -- On either card, a left-click holds a grudge with the Krew and a right-click lets it go. The cards need
--- Warband.deathPrompt; the record counts regardless.
+-- Warband.deathPrompt, but the record counts regardless.
 
 local SOUNDKIT = SOUNDKIT
 
@@ -98,7 +98,8 @@ Addon:Module("Slain", {
     end,
     OnEnable = function(module)
         -- The death fact's PLAYER_DEAD handler runs first (a module's dependencies start before it). When it already
-        -- named the killer, OnKiller took the suspect then; otherwise take it now, before you target someone else.
+        -- named the killer, OnKiller took the suspect then. Otherwise, the handler takes it now, before you target
+        -- someone else.
         module:On("PLAYER_DEAD", function()
             if module:Get("death.attributed") < module:Get("death.count") then
                 Taken, Suspect = true, Warband.TakeFoe()

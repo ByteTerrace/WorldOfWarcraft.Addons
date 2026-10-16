@@ -9,13 +9,13 @@
 //   with --no-test).
 //
 //   Versions: when HEAD is tagged vX.Y.Z (`git describe --tags --exact-match`), every shipped
-//   addon's ## Version is X.Y.Z; otherwise each keeps its own ## Version with -dev+<short sha>
+//   addon's ## Version is X.Y.Z. Otherwise each keeps its own ## Version with -dev+<short sha>
 //   added (0.1.0-dev+79e5013). Either way the version is written into the zipped TOCs only, never
 //   the working tree. A tag that isn't exactly vX.Y.Z counts as no tag.
 //
 //   The named addon's folder in the zip also holds CHANGELOG.txt: the subjects of the commits
 //   since the previous vX.Y.Z tag (the one before HEAD's own, when HEAD is tagged), newest first,
-//   merges left out; every commit's when there's no earlier tag.
+//   merges left out. Without an earlier tag, it holds every commit's subject.
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -93,7 +93,7 @@ export function planPackage(all, names, tracked, dirty) {
 }
 
 // An addon's shipped version: X.Y.Z when tag (HEAD's, or null) is exactly vX.Y.Z, else its TOC's
-// ## Version (tocVersion) plus -dev+<commit>; null when there's neither a tag nor a ## Version.
+// ## Version (tocVersion) plus -dev+<commit>, or null when there's neither a tag nor a ## Version.
 export function releaseVersion(tag, tocVersion, commit) {
     const release = RELEASE_TAG.exec(tag ?? "")?.[1];
     if (release) return release;

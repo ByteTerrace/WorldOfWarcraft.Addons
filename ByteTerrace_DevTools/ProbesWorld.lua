@@ -2,11 +2,11 @@ local addonName, ns = ...
 
 -- Calibration probes about the client itself and the world around the player: chat colors and strings, addon messages,
 -- fonts, realm, faction, guild, map, quest dialogs and the quest log, text to speech, XP, resting and flights, bags,
--- vendors and trainers, and the textures the addons draw. Probes.lua's header is the contract; ProbeNeeds.lua defines
--- the needs named here.
+-- vendors and trainers, and the textures the addons draw. Probes.lua's header is the contract, and ProbeNeeds.lua
+-- defines the needs named here.
 
--- Every texture the addons draw (TheLanKrewToolKit's views, cards and ScholarPictures' ItemIcons), for textures.used;
--- keep it in step with those files. MissingTexture names no file, so its answer shows what a missing file looks like.
+-- Every texture the addons draw (TheLanKrewToolKit's views, cards and ScholarPictures' ItemIcons), for textures.used.
+-- Keep it in step with those files. MissingTexture names no file, so its answer shows what a missing file looks like.
 local MissingTexture = "Interface\\ByteTerrace\\NoSuchTexture"
 
 local TexturePaths = {
@@ -59,7 +59,7 @@ local Value = Probes.Value
 local TextureFrame
 local Textures = {}
 
--- The quest log's first quest (not a header) and its log index, or nil; and whether a header came before it.
+-- Returns the quest log's first quest (not a header) and its log index, or nil, and whether a header came before it.
 local function FirstQuest()
     local sawHeader = false
 
@@ -76,8 +76,8 @@ local function FirstQuest()
     return nil, nil, sawHeader
 end
 
--- The open quest dialog's GetQuestID and its NPC's name (UnitName("questnpc"), what QuestFrame titles itself with), as
--- shapes.
+-- Returns the open quest dialog's GetQuestID and its NPC's name (UnitName("questnpc"), what QuestFrame titles itself
+-- with), as shapes.
 local function QuestIdentity()
     local questID = GetQuestID()
     -- secret: recorded by Shape as a marker
@@ -89,7 +89,7 @@ local function QuestIdentity()
     }
 end
 
--- A number's sign ("positive", "zero", "negative"), its type when it isn't one, or the marker for a secret.
+-- Returns a number's sign ("positive", "zero", or "negative"), its type when it isn't one, or the marker for a secret.
 local function Sign(value)
     if issecretvalue(value) then
         return Marker(value)
@@ -100,7 +100,7 @@ local function Sign(value)
     return (((value > 0) and "positive") or ((value < 0) and "negative") or "zero")
 end
 
--- What SetTexture answers for a path on a hidden texture of its own, and what the texture reports afterwards.
+-- Returns what SetTexture answers for a path on a hidden texture of its own, and what the texture reports afterwards.
 local function TextureAnswer(path)
     local texture = Textures[path]
 
@@ -244,7 +244,7 @@ Probes.Define({
         accumulates = true,
         harness = "it asks whether others' addon messages arrive; h:ReceiveAddonMessage sends what a test says",
         -- Whether CHAT_MSG_ADDON arrives during a restriction, and whether any field is secret then (its docs give it
-        -- no secret flags; ByteTerrace_Core's Comms.lua guards it anyway): heard holds each field's shapes per
+        -- no secret flags, but ByteTerrace_Core's Comms.lua guards it anyway): heard holds each field's shapes per
         -- restriction text a message came under, and restrictionsSeen every restriction active since load, so one seen
         -- with no messages heard under it says none arrived.
         name = "comms.addonMessageInLockdown",
@@ -291,7 +291,7 @@ Probes.Define({
     },
     {
         harness = "the harness doesn't know which files the client has",
-        -- DBM checks external sounds with C_UIFileAsset.IsKnownFile before playing them; this asks whether it knows
+        -- DBM checks external sounds with C_UIFileAsset.IsKnownFile before playing them. This asks whether it knows
         -- loose files in an addon's folder, a shipped file, and a missing one.
         name = "sound.knownFile",
         needs = {},
@@ -403,7 +403,7 @@ Probes.Define({
     },
     {
         accumulates = true,
-        -- Where objective texts put their count: "leading" ("0/8 Wolf Pelt"), "trailing" ("Wolf Pelt: 0/8") or "none",
+        -- Where objective texts put their count: "leading" ("0/8 Wolf Pelt"), "trailing" ("Wolf Pelt: 0/8"), or "none",
         -- over every objective in the log.
         name = "questLog.countForm",
         needs = { "questLog" },
@@ -490,8 +490,8 @@ Probes.Define({
     {
         name = "trainer.services",
         needs = { "trainer" },
-        -- Forever's GetTrainerServiceInfo returns name, serviceType ("available", "unavailable", "used"), texture,
-        -- reqLevel, serviceSubText, category, and GetTrainerServiceCost returns moneyCost, isProfession
+        -- Forever's GetTrainerServiceInfo returns name, serviceType ("available", "unavailable", or "used"), texture,
+        -- reqLevel, serviceSubText, and category, and GetTrainerServiceCost returns moneyCost and isProfession
         -- (Blizzard_TrainerUI/Mainline/Blizzard_TrainerUI.lua).
         run = function()
             local count = GetNumTrainerServices()

@@ -6,15 +6,15 @@ local addonName, ns = ...
 --
 --   First blood  your first killing blow of the session, unless a Krew member drew it first.
 --   Multi kills  kills each within MultiKillWindow of the last: double (2), multi (3), mega (4),
---                ultra (5), monster (6), ludicrous (7), holy shit (8 and on).
+--                ultra (5), monster (6), ludicrous (7), and holy shit (8 and on).
 --   Sprees       kills without dying: killing spree (5), rampage (10), dominating (15),
---                unstoppable (20), godlike (25), wicked sick (30).
+--                unstoppable (20), godlike (25), and wicked sick (30).
 -- A kill announces one of them: a spree it reaches, else a multi kill, else first blood. You see it as a raid warning
--- and hear its sound (Streaks.* settings; the master sound switch applies). With Streaks.share on, the Krew sees your
--- first blood, each spree, and the end of a spree when you die, with who ended it when the death recap names them (the
--- death fact's death.killer). A Krew member's first blood takes yours for the session. Krew messages only show a raid
--- warning. Whether first blood is drawn, and your kills since you last died, are saved per character, so a /reload
--- continues the session; the next login, or switching streaks off, starts them over.
+-- and hear its sound. The Streaks.* settings and the master sound switch apply. With Streaks.share on, the Krew sees
+-- your first blood, each spree, and the end of a spree when you die, with who ended it when the death recap names them
+-- (the death fact's death.killer). A Krew member's first blood takes yours for the session. Krew messages only show a
+-- raid warning. Whether first blood is drawn, and your kills since you last died, are saved per character, so a /reload
+-- continues the session. The next login, or switching streaks off, starts them over.
 
 -- The largest count accepted from a Krew message.
 local MaxCount = 9999
@@ -29,9 +29,9 @@ local MultiKills = {
     { file = "HolyShit", key = "holyShit", label = "Holy shit", word = "holy" },
 }
 
--- The longest gap, in seconds, between the kills of one multi kill; Unreal's 4 is too short for WoW's fights.
+-- The longest gap, in seconds, between the kills of one multi kill. Unreal's 4 is too short for WoW's fights.
 local MultiKillWindow = 10
--- The fewest kills in a run whose end is news; a shorter run ending isn't.
+-- The fewest kills in a run whose end is news. A shorter run ending isn't.
 local SpreeEndMinimum = 5
 
 local Sprees = {
@@ -139,7 +139,7 @@ local function OnKill(added)
     end
 end
 
--- Reports the spree your last death ended; killer is who ended it, "" when unknown.
+-- Reports the spree your last death ended, with killer as who ended it ("" when unknown).
 local function ReportEnd(killer)
     if EndedAt then
         local by = (((killer ~= "") and (" " .. killer .. " ended it.")) or "")
@@ -150,7 +150,7 @@ local function ReportEnd(killer)
     end
 end
 
--- A death ends the streak and any multi kill at once; its report waits for the killer.
+-- A death ends the streak and any multi kill at once. Its report waits for the killer.
 local function OnDeath()
     -- Reports first an earlier death whose killer never came.
     ReportEnd("")

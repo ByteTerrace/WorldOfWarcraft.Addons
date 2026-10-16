@@ -1,4 +1,4 @@
--- The harness's fidelity rules for the world (tests/harness/world.lua): location, maps and waypoints, honor and raid
+-- The harness's fidelity rules for the world (tests/harness/world.lua): location, maps and waypoints, honor, and raid
 -- warnings.
 
 local Kit = use("harness")

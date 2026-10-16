@@ -47,7 +47,7 @@ test("mixed unit filters check secret tokens regardless of registration order an
         eq(published, 1, "the unfiltered handler's write publishes")
         general:Set("count", 2)
         eq(published, 2, "the event batch closes, so subsequent writes still publish")
-        -- Lua 5.1 cannot trap secret == string; the API count proves dispatch checks the token.
+        -- Lua 5.1 can't trap secret == string. The API count proves dispatch checks the token.
         eq(secretChecks, 1, "a later unit filter still requires a secrecy check")
         h:Fire("UNIT_AURA", "player", {})
         eq(filtered, 1, "a plain matching token still reaches the filtered handler")

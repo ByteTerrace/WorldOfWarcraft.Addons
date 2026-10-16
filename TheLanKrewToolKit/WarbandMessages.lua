@@ -4,8 +4,8 @@ local addonName, ns = ...
 -- Warband.lua sends the messages and owns the collections and rules these use.
 --
 -- Messages from the Krew only update the collections, show an alert or card, and (a rally, with rallyWaypoint on) set a
--- map waypoint; none acts on your behalf, and none is heard while Warband is off. Every hello (a Krew member joining,
--- coming back, or reloading, and the replies to yours) brings your SyncCount most recent marks and wars; a burst of
+-- map waypoint. None acts on your behalf, and none is heard while Warband is off. Every hello (a Krew member joining,
+-- coming back, or reloading, and the replies to yours) brings your SyncCount most recent marks and wars. A burst of
 -- hellos gets one sync, and what a member already knows changes nothing for them. A sync packs the marks into MARKS
 -- messages, entries "First Last;CLASS;level;faction", and the wars into WARS messages, one guild key per field, each as
 -- few as fit Comms' MaxMessage bytes. A mark or war placed live goes as one MARK or WAR (Warband.lua), and both forms
@@ -65,7 +65,7 @@ local Where = Warband.Where
 -- The pending timer that answers a burst of hellos with one sync.
 local SyncTimer
 
--- A mark from the Krew: fields are key, class, level and faction (InfoFrom).
+-- A mark from the Krew: fields are key, class, level, and faction (InfoFrom).
 local function HeardMark(sender, fields)
     local info = InfoFrom(fields)
 
@@ -170,7 +170,7 @@ local function Sync()
     SendPacked("WARS", declared)
 end
 
---- Forgets the pending sync; OnDisable calls it after subscriptions are removed.
+--- Forgets the pending sync. OnDisable calls it after the subscriptions are removed.
 function Warband.DisableMessages()
     -- The module's timers stop with it, so only the handles are forgotten.
     SyncTimer = nil

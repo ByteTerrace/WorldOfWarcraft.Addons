@@ -46,7 +46,7 @@ export function findMisnamedAddons(root = repoRoot) {
 }
 
 // Addon folders holding more than one Forever TOC: { name, files } with files in TOC_SUFFIXES
-// order. The tools read the first; which one the client loads isn't documented.
+// order. The tools read the first. Which one the client loads isn't documented.
 export function findAmbiguousAddons(root = repoRoot) {
     return topFolders(root)
         .map((name) => ({ name, files: tocFilesOf(name, root) }))
@@ -68,8 +68,8 @@ function dependenciesOf(metadata) {
     return names;
 }
 
-// An addon's TOC: its first Forever TOC file (tocFile, its name; tocPath), ## metadata, listed
-// files, dependencies and SavedVariables.
+// An addon's TOC: its first Forever TOC file (tocFile, its name, and tocPath), ## metadata, listed
+// files, dependencies, and SavedVariables.
 export function readToc(name, root = repoRoot) {
     const dir = join(root, name);
     const tocFile = tocFilesOf(name, root)[0];

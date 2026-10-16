@@ -1,9 +1,9 @@
-// The GLOBAL rule for the tests' Lua (tests/*.lua, tests/kits and tests/harness, which run in the
-// test runner's Lua, not the client's): every global read is one that world defines. That is Lua
-// 5.1's own library, the runner's preludes (test, eq, use; tools/lib/test-worker.mjs and
-// coverage.mjs), the values the runner hands the Lua (lua.ctx.__snapshot and the rest), and every
-// global some tests' Lua file assigns. An undefined global reads nil there, so a misspelled or
-// moved name fails far from its cause.
+// The GLOBAL rule for the tests' Lua: every global read is one that world defines. The tests' Lua
+// (tests/*.lua, tests/kits, and tests/harness) runs in the test runner's Lua, not the client's.
+// That world is Lua 5.1's own library, the runner's preludes (tools/lib/test-worker.mjs and
+// coverage.mjs) such as test, eq, and use, the values the runner hands the Lua
+// (lua.ctx.__snapshot and the rest), and every global some tests' Lua file assigns. An undefined
+// global reads nil there, so a misspelled or moved name fails far from its cause.
 
 import { analyze, parse, walk } from "./lua-scope.mjs";
 

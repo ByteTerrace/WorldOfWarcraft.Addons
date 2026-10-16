@@ -5,7 +5,7 @@ local addonName, ns = ...
 --
 --   Warband.MenuEntries(root, info)  adds the Krew's choices for a player to a menu description
 --                                    (the unit popup, and the nearby-enemies window's menu).
---   Warband.EnableMenus()            hooks the menus and tooltips on the first call; menu and
+--   Warband.EnableMenus()            hooks the menus and tooltips on the first call. Menu and
 --   Warband.DisableMenus()           tooltip hooks can't be removed, so these only gate them.
 --   Warband.PrintLedger()            lists the ledger and the wars (/tlk ledger).
 --   Warband.PrintRival(arg)          your record against a player (/tlk rival).
@@ -70,7 +70,7 @@ local function MenuSubject(contextData)
         return Warband.Identify(unit)
     end
 
-    -- UnitPopupManager fills name and surname from UnitNameUnmodified; a chat link's name is already the full name
+    -- UnitPopupManager fills name and surname from UnitNameUnmodified. A chat link's name is already the full name
     -- (Blizzard_UnitPopupShared). A secret surname leaves no full name.
     local name = (contextData and contextData.name)
     local surname = (contextData and contextData.surname)

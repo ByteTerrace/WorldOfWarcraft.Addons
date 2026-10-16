@@ -1,14 +1,14 @@
 local addonName, ns = ...
 
--- The reading riddles' text and word banks, as ns.ScholarReadingWords: ScholarReading.lua reads it; this file only
--- holds data. Everything is original, kid-friendly plain ASCII. Kinds, heard kinds and titles stay in ScholarWords.lua,
--- and the stories are ns.ScholarStoryWords (ScholarStoryWords.lua).
+-- The reading riddles' text and word banks, as ns.ScholarReadingWords: ScholarReading.lua reads it. This file only
+-- holds data. Everything is original, kid-friendly plain ASCII. Kinds, heard kinds, and titles stay in
+-- ScholarWords.lua, and the stories are ns.ScholarStoryWords (ScholarStoryWords.lua).
 --
 -- `text` holds each kind's riddle text: a prompt (or prompts), the hint (the strategy, on the first miss), the step (a
 -- worked first step, on the second miss), the explanation (the working, after a right answer), praise for the strategy
 -- on a first-try right, and whys for the wrong choices ({choice} names the one picked). A why never names the answer,
--- and a heard riddle's hint, step and whys never name its word. A tier (t) scales difficulty inside a grade band: 1 is
--- easiest, but a grade never fences content off: steps and explanations make the hard ones approachable.
+-- and a heard riddle's hint, step, and whys never name its word. A tier (t) scales difficulty inside a grade band: 1 is
+-- easiest, but a grade never fences content off. Steps and explanations make the hard ones approachable.
 ns.ScholarReadingWords = {
     -- Each entry is { sentence with ___, answer, three words that fit the grammar but not the meaning, clue = the words
     -- that decide it }.
@@ -85,9 +85,9 @@ ns.ScholarReadingWords = {
     -- Letter teams (digraphs): two letters that spell one sound. Each is { letters, note = what the team does, sound =
     -- how a riddle names its sound, start and finish = words it starts or ends, spell = three wrong spellings of its
     -- sound, each { letters, why = ... }, other = the teams a reader mixes it up with }, and for the wrong choices of a
-    -- riddle about where its sound is: alone and half (words with only its first or only its second letter there) and
+    -- riddle about where its sound is: alone and half (words with only its first or only its second letter there), and
     -- close (letters, words with a near sound there, and why). A team whose first letter alone spells the same sound
-    -- (like: w for wh, k for ck) is never asked where its sound is.
+    -- (like w for wh, or k for ck) is never asked where its sound is.
     digraphs = {
         {
             "sh", note = "\"s\" and \"h\" team up to make one sound: the quiet one in \"shhh\".",
@@ -173,7 +173,7 @@ ns.ScholarReadingWords = {
             },
         },
     },
-    -- Words to blend with one letter team (a digraph) at the start or the end; every other letter makes one sound. Each
+    -- Words to blend with one letter team (a digraph) at the start or the end. Every other letter makes one sound. Each
     -- is { word, three real words a reader might pick instead }: at least one is the team's mistake: only one of its
     -- letters (sip or hip for ship), or another team or a near sound in its place (chip, fin for thin).
     digraphWords = {
@@ -250,7 +250,7 @@ ns.ScholarReadingWords = {
         { t = 2, "once", "The dragon visits ___ a year.", "one", "ones", "nice", heart = "It starts with a \"w\" sound, but there's no \"w\" in it." },
     },
     -- First sounds: { letter, words that start with that sound }, with near (letters whose sounds are close, for a
-    -- wrong choice that tests the ear), like (a letter spelling the same sound, which never makes a wrong choice) and
+    -- wrong choice that tests the ear), like (a letter spelling the same sound, which never makes a wrong choice), and
     -- name (how a vowel's sound is named). No blends, digraphs, silent letters, soft c or g, or long vowels.
     sounds = {
         { "b", near = "pd", "ball", "bat", "bear", "boat", "bug", "bell" },
@@ -397,7 +397,7 @@ ns.ScholarReadingWords = {
         { t = 2, "piece", "part", "whole", near = { "pile", "set" } },
         { t = 2, "stop", "halt", "go", near = { "wait", "rest" } },
     },
-    -- Riddle text by kind ({name} is filled from the generator's variables).
+    -- Riddle text by kind (the generator's variables fill {name}).
     text = {
         antonym = {
             explain = "\"{word}\" and \"{correct}\" are opposites, as different as up and down.",
@@ -426,7 +426,7 @@ ns.ScholarReadingWords = {
             whyStart = "\"{choice}\" starts with \"{has}\", but the first sound is \"{want}\".",
         },
         -- Consonant blends: blending a word's sounds (join), or adding a blend's missing sound to a word (add). The
-        -- whys name what a wrong choice did to the blend; {pair} is the blend, and {letter} the sound dropped or added.
+        -- whys name what a wrong choice did to the blend. {pair} is the blend, and {letter} the sound dropped or added.
         consonantBlend = {
             add = {
                 explain = "\"{from}\" with \"{letter}\" {where} makes \"{target}\": {sounds}. In \"{pair}\", both sounds are said, one right after the other.",

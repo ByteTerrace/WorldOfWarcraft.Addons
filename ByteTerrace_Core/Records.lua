@@ -12,9 +12,9 @@
 --   people:Set("Bob-Realm", { deaths = people:Field("Bob-Realm", "deaths") + 1 })
 --
 -- Fields are declared like rows (kind, default, values, min / max / step) and every write goes through the same
--- admission check, so a record never holds a secret, a NaN or an off-enum value. Keys are plain strings of 1 to
+-- admission check, so a record never holds a secret, a NaN, or an off-enum value. Keys are plain strings of 1 to
 -- MaxKeyLength bytes. A keep function that errors protects nothing: its error reaches the error handler, and loading
--- goes on. A collection is usable once its addon has loaded; earlier use is an error.
+-- goes on. A collection is usable once its addon has loaded. Earlier use is an error.
 --
 -- A collection is also a runtime number row of the same name: its version, which moves on every change. Watchers and
 -- rules read that row like any other, so a change publishes with its batch. Eviction and replacement publish together,
@@ -24,7 +24,7 @@
 -- validates (or no longer exists) is reset, and a collection over its limit (a lowered limit) is trimmed by eviction.
 -- Only fields that differ from their default are stored.
 --
--- Public members: Name (the full "<Module>.<name>"), Limit and Keep (the spec's keep function, or nil).
+-- Public members: Name (the full "<Module>.<name>"), Limit, and Keep (the spec's keep function, or nil).
 
 local FieldPattern = "^%a[%w_]*$"
 local MaxKeyLength = 64
@@ -56,8 +56,8 @@ local function Bump(self)
     state:Set(id, state.Values[id] + 1)
 end
 
--- Whether keep protects key. The keep function is the feature's code, so an error in it reaches the error handler and
--- leaves the key unprotected: a broken keep can't stop the addon loading.
+-- Returns whether keep protects key. The keep function is the feature's code, so an error in it reaches the error
+-- handler and leaves the key unprotected: a broken keep can't stop the addon loading.
 local function Kept(keep, key)
     local ok, kept = SafeCall(keep, key)
 
@@ -136,7 +136,7 @@ function ByteTerrace.NewRecords(addon, name, spec)
     }, Records)
 end
 
---- How many records there are.
+--- Returns how many records there are.
 ---@return integer
 function Records:Count()
     Loaded(self)
@@ -144,8 +144,8 @@ function Records:Count()
     return self.m_count
 end
 
---- The key with the lowest evict field (ties by key, so eviction is deterministic), skipping keys Keep protects. Only a
---- collection with an evict field has one.
+--- Returns the key with the lowest evict field (ties by key, so eviction is deterministic), skipping keys Keep
+--- protects. Only a collection with an evict field has one.
 ---@return string? key nil when every key is kept
 function Records:EvictionCandidate()
     local store = Loaded(self)
@@ -172,8 +172,8 @@ function Records:EvictionCandidate()
     return best
 end
 
---- Every key in eviction order: unkept keys first, then kept ones, each by the lowest evict field then by key. One
---- sort, so trimming a collection far over its limit stays cheap.
+--- Returns every key in eviction order: unkept keys first, then kept ones, each by the lowest evict field then by key.
+--- It sorts once, so trimming a collection far over its limit stays cheap.
 ---@return string[]
 function Records:EvictionOrder()
     local store = Loaded(self)
@@ -207,8 +207,8 @@ function Records:EvictionOrder()
     return keys
 end
 
---- A field's value for key, or the field's default when the record (or field) is absent. An undeclared field is an
---- error.
+--- Returns a field's value for key, or the field's default when the record (or field) is absent. An undeclared field is
+--- an error.
 ---@param key string
 ---@param field string
 function Records:Field(key, field)
@@ -228,7 +228,7 @@ function Records:Field(key, field)
     return value
 end
 
---- A copy of the record with every field filled in, or nil.
+--- Returns a copy of the record with every field filled in, or nil.
 ---@param key string
 ---@return table?
 function Records:Get(key)
@@ -253,13 +253,13 @@ function Records:Get(key)
     return copy
 end
 
---- Whether a record exists for key.
+--- Returns whether a record exists for key.
 ---@return boolean
 function Records:Has(key)
     return (Loaded(self)[key] ~= nil)
 end
 
---- Every key, sorted, in a fresh array.
+--- Returns every key, sorted, in a fresh array.
 ---@return string[]
 function Records:Keys()
     local keys = {}
@@ -348,7 +348,7 @@ function Records:Remove(key)
 end
 
 --- Creates or updates the record for key, merging the given fields. Every value is validated before anything is
---- written, so a bad write changes nothing. At the limit, a new key evicts the lowest record by the evict field; with
+--- written, so a bad write changes nothing. At the limit, a new key evicts the lowest record by the evict field. With
 --- nothing to evict, it's an error.
 ---@param key string 1 to 64 characters
 ---@param values table field = value

@@ -1,9 +1,9 @@
 // Lua 5.1 AST helpers for the static gate: parsing, lexical scope resolution and static naming.
 //
 // analyze(ast) binds every Identifier to the local that declares it (or to nothing: a global),
-// following Lua's scoping (a local is visible after its statement; `local function f` sees
-// itself; parameters and loop variables are scoped to their body; `repeat ... until cond` sees
-// the body's locals). A binding records whether it's ever reassigned, so aliases are trusted only
+// following Lua's scoping: a local is visible after its statement, `local function f` sees
+// itself, parameters and loop variables are scoped to their body, and `repeat ... until cond`
+// sees the body's locals. A binding records whether it's ever reassigned, so aliases are trusted only
 // when they can't change: conservative about shadowing and reassignment. It also records what the
 // HYGIENE rule reads: each binding's declaring node, the local its declaration hides, and which
 // references write rather than read.
@@ -45,7 +45,7 @@ export function isFunction(node) {
 // reads(binding) -> the references that read it, all() -> every binding in declaration order }.
 // binding = { name, kind: "local" | "function" | "param" | "for", init, depth, reassigned,
 //   identifier (the declaring Identifier; null for a method's implicit self), statement (the
-//   LocalStatement, loop or FunctionDeclaration that declares it), shadows (the visible local it
+//   LocalStatement, loop, or FunctionDeclaration that declares it), shadows (the visible local it
 //   hides, or undefined), redefines (whether that local is in the same scope) }
 export function analyze(ast) {
     const bindings = new Map();
@@ -225,8 +225,8 @@ export function analyze(ast) {
 
 // The static path an expression names, seeing through locals that alias a global or a member
 // and are never reassigned (`local UnitPower = UnitPower`, `local E = Enum.PowerType`):
-// "UnitHealth", "Enum.PowerType.Energy", "_G". String-literal indexes count (`C_Spell["X"]`), and
-// `getfenv()` / `getfenv(0|1)` name "_G", and `getglobal("X")` names "X". Returns null for
+// "UnitHealth", "Enum.PowerType.Energy", "_G". String-literal indexes count (`C_Spell["X"]`),
+// `getfenv()` and `getfenv(0|1)` name "_G", and `getglobal("X")` names "X". Returns null for
 // anything dynamic.
 export function staticPath(node, scope, seen = new Set()) {
     if (!node) return null;
@@ -258,7 +258,7 @@ export function staticPath(node, scope, seen = new Set()) {
     return null;
 }
 
-// "_G.X" and "_G" paths name the global X; everything else is unchanged.
+// "_G.X" and "_G" paths name the global X. Everything else is unchanged.
 export function globalPath(path) {
     if (path === null) return null;
     return path.startsWith("_G.") ? path.slice(3) : path;

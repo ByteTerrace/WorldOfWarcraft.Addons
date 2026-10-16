@@ -1,5 +1,5 @@
 -- ByteTerrace framework: what a module owns beyond handlers and watchers (timers, rising counts, demand dependencies,
--- group messages, sounds), names, slash registration and the debug command.
+-- group messages, sounds), names, slash registration, and the debug command.
 
 local Kit = use("framework")
 
@@ -550,7 +550,7 @@ test("debug cpu reads the client's addon profiler and memory", function()
     h.printed = {}
     h:Slash("/test debug cpu")
     local text = Printed(h)
-    -- Blizzard's AddOn list share: 0.5 / (10 - 1 + 0.5).
+    -- Blizzard's addon list share: 0.5 / (10 - 1 + 0.5).
     truthy(text:find("recent 0.500 ms (5.26%)", 1, true), text)
     truthy(text:find("5 ms: 2", 1, true), text)
     truthy(text:find("Memory: 321 KB", 1, true), text)

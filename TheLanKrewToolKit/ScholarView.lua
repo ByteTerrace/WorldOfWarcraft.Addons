@@ -10,14 +10,14 @@ local addonName, ns = ...
 --             feedback
 --   picture   for small numbers in the early grades, the riddle drawn as icons: groups in bags,
 --             two piles to join, or a pile with some taken away
---   question  the actual question, the largest text, on its own band
+--   question  the question itself, the largest text, on its own band
 --   answers   a 2 x 2 grid of big answers, each with its key (1-4 or a controller face button) on a
 --             raised keycap at its edge; hover glows, a wrong answer turns red and shakes, the right
---             one turns green and a "+1" rises from the star counter
+--             one turns green, and a "+1" rises from the star counter
 --   book      on a quest riddle, Need a hint? is the quest book: it puts the quest's whole text, as
 --             the player saw it, on a page in the story's place, and closes again the same way. The
 --             page is at most BookHeight tall (less on a screen without the room), and longer text
---             scrolls, like the quest log: the mouse wheel, the Up and Down arrows or the D-pad
+--             scrolls, like the quest log: the mouse wheel, the Up and Down arrows, or the D-pad
 --             (held, it keeps going), with a slim bar showing where you are
 --   footer    Need a hint? and how to answer; feedback (the hint, or the working) replaces it in
 --             place, growing down to fit its text. Every button names its key: the controller's
@@ -25,12 +25,12 @@ local addonName, ns = ...
 --             aloud, Back skips), the keyboard's otherwise
 --
 -- The panel is opaque and sized to its content, never taller than the screen (less ScreenMargin above and below), over
--- a dark shade. The screen only draws; Scholar.lua owns the rules and gives it handlers through ns.ScholarView.Init
--- before the first Show. Its colors, textures and backdrop come from ns.ScholarStyle (ScholarPictures.lua).
+-- a dark shade. The screen only draws. Scholar.lua owns the rules and gives it handlers through ns.ScholarView.Init
+-- before the first Show. Its colors, textures, and backdrop come from ns.ScholarStyle (ScholarPictures.lua).
 
 local AnswerGap = 14
 local AnswerHeight = 72
--- The most of the open quest book shown at once, in pixels; the rest scrolls.
+-- The most of the open quest book shown at once, in pixels. The rest scrolls.
 local BookHeight = 240
 -- The room between the quest book's page and its text.
 local BookInset = 14
@@ -47,7 +47,7 @@ local RightIcon = "Interface\\RAIDFRAME\\ReadyCheck-Ready"
 -- The least room, in pixels, above and below the panel.
 local ScreenMargin = 20
 local ScrollBarWidth = 6
--- How many pixels the quest book scrolls per wheel notch, arrow key or D-pad press.
+-- How many pixels the quest book scrolls per wheel notch, arrow key, or D-pad press.
 local ScrollStep = 48
 local SpeakerIcon = "Interface\\Common\\VoiceChat-Speaker"
 -- Riddles whose wrong choices are misspellings: Read aloud spells their choices.
@@ -352,7 +352,7 @@ local function CreateAnswer(panel, i)
     button.Key = button:CreateFontString(nil, "OVERLAY", "Game18Font")
     button.Key:SetPoint("CENTER", top, "CENTER", 0, 1)
 
-    -- The answer centers on the whole button; the keycap sits at its edge.
+    -- The answer centers on the whole button. The keycap sits at its edge.
     button.Text = button:CreateFontString(nil, "OVERLAY", "Game30Font")
     button.Text:SetPoint("LEFT", KeycapSize + 24, 0)
     button.Text:SetPoint("RIGHT", -(KeycapSize + 24), 0)
@@ -478,7 +478,7 @@ local function Create()
 end
 
 -- The quest book's scroll bar: a thumb along the book's right edge, as long as the share of the text in view and as far
--- down as the book is scrolled; hidden when the text fits. The view keeps the book's numbers itself (Layout,
+-- down as the book is scrolled. It's hidden when the text fits. The view keeps the book's numbers itself (Layout,
 -- ScrollBook): m_bookView tall, m_bookRange to scroll, at m_bookOffset.
 local function PlaceThumb()
     local thumb = Overlay.Thumb
@@ -587,13 +587,13 @@ local function Layout(hasStory, puzzle)
     return height
 end
 
--- Text as the voice should say it: a blank ("___", or a math riddle's "__") is "blank".
+-- Text as the voice says it: a blank ("___", or a math riddle's "__") is "blank".
 local function Sayable(text)
     return (text:gsub("_+", "blank"))
 end
 
--- Shows a message in the footer's place: the hint (gold) or the working (green); said is the message as plain text, for
--- Read aloud.
+-- Shows a message in the footer's place: the hint (gold) or the working (green), and said is the message as plain text,
+-- for Read aloud.
 local function ShowFeedback(text, good, said)
     Overlay.m_said = said
     local banner = Overlay.Feedback
@@ -606,7 +606,7 @@ local function ShowFeedback(text, good, said)
 
     banner.Text:SetText(text)
     banner:Show()
-    -- On a quest riddle the hint is the quest book, which stays a click away beside the banner.
+    -- On a quest riddle, the hint is the quest book, which stays a click away beside the banner.
     local book = (Overlay.m_puzzle and Overlay.m_puzzle.book)
 
     Overlay.Hint:SetShown(book ~= nil)
@@ -673,11 +673,6 @@ local function Split(prompt)
     return story, (prompt:sub(cut + 1):gsub("^%s+", ""))
 end
 
---- What a child hears when they press Read aloud: the story and the question, then each choice with the key that picks
---- it ("Press A for cat."). A spelling riddle's choices are misspelled on purpose, so the voice spells each letter by
---- letter rather than saying a wrong spelling as if it were the word. A heard riddle says only its speech.
----@param puzzle table
----@return string
 -- What read-aloud says for choice i: the button that picks it, then the choice (spelled out for a spelling riddle), or
 -- nil for a riddle that's heard, whose choices are for reading (unless it speaks its choices, as a heard story does).
 local function SpokenChoice(puzzle, i)
@@ -696,8 +691,12 @@ local function SpokenChoice(puzzle, i)
     return ("Press %s for %s."):format(key, Sayable(choice))
 end
 
--- What read-aloud says for a riddle: a heard riddle's own speech, else its prompt, then each choice with its button. A
--- heard riddle that speaks its choices says its speech, then the choices.
+--- Returns what a child hears when they press Read aloud: the story and the question, then each choice with the key
+--- that picks it ("Press A for cat."). A spelling riddle's choices are misspelled on purpose, so the voice spells each
+--- letter by letter rather than saying a wrong spelling as if it were the word. A heard riddle says only its speech, or
+--- its speech and then its choices when it speaks them.
+---@param puzzle table
+---@return string
 local function Spoken(puzzle)
     if puzzle.speech and not puzzle.speakChoices then
         return Sayable(puzzle.speech)
@@ -712,9 +711,9 @@ local function Spoken(puzzle)
     return concat(spoken, " ")
 end
 
--- The footer row: help on the left (Need a hint?, or the feedback banner in its place; on a quest riddle the quest book
--- stays, with the banner beside it), Skip and Read aloud on the right. The banner stretches to whichever right-hand
--- button comes first, and grows down to fit its text. Returns the footer's height.
+-- The footer row: help on the left (Need a hint?, or the feedback banner in its place), and Skip and Read aloud on the
+-- right. On a quest riddle, the quest book stays, with the banner beside it. The banner stretches to whichever
+-- right-hand button comes first, and grows down to fit its text. Returns the footer's height.
 function PlaceFooter()
     local y = Overlay.FooterTop
 
@@ -768,13 +767,13 @@ ScholarView.Emphasize = Emphasize
 ScholarView.Split = Split
 ScholarView.Spoken = Spoken
 
---- Whether the quest book is open.
+--- Returns whether the quest book is open.
 ---@return boolean
 function ScholarView.BookOpen()
     return ((Overlay ~= nil) and (Overlay.m_bookOpen == true))
 end
 
---- Marks answer i right, dims the others, shows the working and celebrates the new star.
+--- Marks answer i right, dims the others, shows the working, and celebrates the new star.
 ---@param i integer
 ---@param explanation string
 ---@param info table the new progress, as for Show
@@ -791,36 +790,36 @@ function ScholarView.Correct(i, explanation, info)
     ShowProgress(info)
 end
 
---- The full-screen overlay, or nil before the first Show. Among its children: Buttons[1..4] (each with Key, Keycap,
---- Text, Mark, Shake and State: "normal", "hover", "wrong", "right" or "dim"), Portrait, Asks, Tag, Stars, StarIcon,
---- Progress, Rank, Streak, Gain (raised by Rise), Story, Speak, Pictures (Icons, Cards, Tiles), Clue, Question, Hint,
---- Skip and Feedback (a banner with Text).
+--- Returns the full-screen overlay, or nil before the first Show. Among its children: Buttons[1..4] (each with Key,
+--- Keycap, Text, Mark, Shake, and State: "normal", "hover", "wrong", "right", or "dim"), Portrait, Asks, Tag, Stars,
+--- StarIcon, Progress, Rank, Streak, Gain (raised by Rise), Story, Speak, Pictures (Icons, Cards, Tiles), Clue,
+--- Question, Hint, Skip, and Feedback (a banner with Text).
 ---@return table?
 function ScholarView.Frame()
     return Overlay
 end
 
---- Hides the screen; the caller gives the keyboard back.
+--- Hides the screen. The caller gives the keyboard back.
 function ScholarView.Hide()
     if Overlay then
         Overlay:Hide()
     end
 end
 
---- Shows the hint in the footer's place (no penalty; asking for help is part of learning).
+--- Shows the hint in the footer's place (no penalty: asking for help is part of learning).
 ---@param hint string
 function ScholarView.Hint(label, hint)
     ShowFeedback(NumberColor .. label .. ":|r  " .. Emphasize(HintText(hint)), false, (label .. ": " .. HintText(hint)))
 end
 
---- Sets the handlers the screen calls back: choose(i) for an answer clicked, skip() for Skip, hint() for Need a hint?,
---- speak() for Read aloud, key(key) for every key pressed while the screen has the keyboard.
+--- Sets the handlers the screen calls back: choose(i) for an answer selected, skip() for Skip, hint() for Need a hint?,
+--- speak() for Read aloud, and key(key) for every key pressed while the screen has the keyboard.
 ---@param handlers table { choose, skip, hint, speak, key }
 function ScholarView.Init(handlers)
     Callbacks = handlers
 end
 
---- Whether the screen is showing.
+--- Returns whether the screen is showing.
 ---@return boolean
 function ScholarView.IsShown()
     return ((Overlay ~= nil) and Overlay:IsShown())
@@ -897,8 +896,8 @@ function ScholarView.Show(puzzle, info)
     return Overlay
 end
 
---- What Read aloud says for what the screen shows now: the open quest book, else the feedback shown (the hint or the
---- working), else the riddle (Spoken). Only while a riddle is on screen.
+--- Returns what Read aloud says for what the screen shows now: the open quest book, else the feedback shown (the hint
+--- or the working), else the riddle (Spoken). Call it only while a riddle is on screen.
 ---@return string
 function ScholarView.Speech()
     if Overlay.m_bookOpen then
@@ -908,8 +907,8 @@ function ScholarView.Speech()
     return ((Overlay.m_said and Sayable(Overlay.m_said)) or Spoken(Overlay.m_puzzle))
 end
 
---- What read-aloud says for choice i of the riddle on screen ("Press A for cat."), or nil for a riddle that's heard,
---- whose choices are for reading. Only while a riddle is on screen.
+--- Returns what read-aloud says for choice i of the riddle on screen ("Press A for cat."), or nil for a riddle that's
+--- heard, whose choices are for reading. Call it only while a riddle is on screen.
 ---@param i integer
 ---@return string?
 function ScholarView.SpokenChoice(i)
@@ -917,8 +916,8 @@ function ScholarView.SpokenChoice(i)
 end
 
 --- Opens the quest book in the story's place, or closes it again: the quest's text, as the player saw it, holds every
---- answer to a quest riddle. It opens at the top, as tall as its text, BookHeight or the room the screen leaves,
---- whichever is least, and scrolls the rest (ScrollBook). Only while a puzzle with a book is on screen.
+--- answer to a quest riddle. It opens at the top, as tall as its text, BookHeight, or the room the screen leaves,
+--- whichever is least, and scrolls the rest (ScrollBook). Call it only while a puzzle with a book is on screen.
 function ScholarView.ToggleBook()
     local puzzle = Overlay.m_puzzle
     local open = not Overlay.m_bookOpen

@@ -1,6 +1,6 @@
 -- Scholar puzzles (TheLanKrewToolKit/ScholarWords.lua, ScholarPuzzles.lua, ScholarMathWords.lua, ScholarMath.lua,
--- ScholarMoney.lua, ScholarNumberWords.lua, ScholarNumbers.lua, ScholarReadingWords.lua and ScholarReading.lua):
--- property tests across seeds, every grade, every level and both subjects. The reading banks' own checks are in
+-- ScholarMoney.lua, ScholarNumberWords.lua, ScholarNumbers.lua, ScholarReadingWords.lua, and ScholarReading.lua):
+-- property tests across seeds, every grade, every level, and both subjects. The reading banks' own checks are in
 -- scholarreading.test.lua.
 --
 -- The puzzle files load on their own, not with the whole addon, so concurrent edits to other files can't break these
@@ -72,7 +72,7 @@ local function HasWord(text, word)
     return (text:lower():find("%f[%w]" .. Escape(word:lower()) .. "%f[%W]") ~= nil)
 end
 
--- Park and Miller's minimal standard LCG; every product stays exact in a double.
+-- Park and Miller's minimal standard LCG. Every product stays exact in a double.
 local function Rng(seed)
     local state = ((seed % 2147483646) + 1)
 
@@ -521,7 +521,7 @@ end
 
 local function CheckReading(p, options)
     local correct = p.choices[p.answer]
-    -- A heard riddle's speech ends with its word; a heard story's speech is the story, and its choices are said.
+    -- A heard riddle's speech ends with its word. A heard story's speech is the story, and its choices are said.
     local heard = (p.speech and not p.speakChoices and p.speech:match("(%a+)%.$"))
 
     CheckTeaching(p, options, heard)

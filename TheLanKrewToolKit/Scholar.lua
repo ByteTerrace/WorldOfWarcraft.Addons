@@ -2,9 +2,9 @@ local addonName, ns = ...
 
 -- Scholar's challenge: riddles for young players about their own quests, and math and reading, set up by a parent.
 --
--- Off by default and per character: a parent turns it on for a child's character, picks a grade, and can lock the
--- settings with a PIN (/tlk lock 1234; /tlk unlock 1234 for the session). While locked the PIN can't be changed, and
--- after three wrong PINs unlocking waits a minute.
+-- It's off by default and per character: a parent turns it on for a child's character, picks a grade, and can lock the
+-- settings with a PIN (/tlk lock 1234; /tlk unlock 1234 for the session). While settings are locked, the PIN can't be
+-- changed, and after three wrong PINs unlocking waits a minute.
 --
 --   What     quest riddles are preferred: two in a row, then math or reading takes a turn. A quest
 --            riddle asks about one the player was shown (accepted, or turned in): the newest not
@@ -15,19 +15,19 @@ local addonName, ns = ...
 --   When     every N minutes of play (saved per character, so relogging doesn't skip one), and
 --            optionally at each level-up. Time AFK, or with every subject off, doesn't count. A good
 --            moment brings the next riddle forward once half its minutes are played: a flight path
---            (free time), a quest turned in (asked about while it's fresh) or a death (waiting to
---            come back); each can be switched off.
---   Where    a riddle covers the screen and holds the mouse and keyboard until it's solved; in
---            Gentle mode a Skip appears after one try. Never during combat: a riddle waits for the
+--            (free time), a quest turned in (asked about while it's fresh), or a death (waiting to
+--            come back). Each can be switched off.
+--   Where    a riddle covers the screen and holds the mouse and keyboard until it's solved. In
+--            Gentle mode, a Skip appears after one try. Never during combat: a riddle waits for the
 --            fight to end, and one on screen steps aside if a fight starts and comes back after.
 --            Never over Blizzard's windows either: one that comes due while a quest dialog,
---            gossip, a vendor, the mailbox, a bank, the auction house, a trainer or the flight
+--            gossip, a vendor, the mailbox, a bank, the auction house, a trainer, or the flight
 --            map is open waits for it to close (a quest chain's next offer included). One already
 --            on screen when such a window opens stays.
---   How      answer with 1-4, a click, or the controller's face buttons; Need a hint? (the quest
---            book, on a quest riddle) is H or the left shoulder, Read aloud is R or the right
---            shoulder, Skip is Esc or Back. The open quest book scrolls with the wheel, the Up and
---            Down arrows or the D-pad. Read aloud reads what the screen shows: the riddle, the
+--   How      answer with 1-4, the mouse, or the controller's face buttons. Need a hint? (the
+--            quest book, on a quest riddle) is H or the left shoulder, Read aloud is R or the right
+--            shoulder, and Skip is Esc or Back. The open quest book scrolls with the wheel, the Up
+--            and Down arrows, or the D-pad. Read aloud reads what the screen shows: the riddle, the
 --            open quest book, or the feedback after an answer or a hint.
 --   Aloud    the readAloud setting says riddles as they appear (kindergarten and grade 1 by
 --            default), each choice with the key that picks it, and a hovered choice again. A heard
@@ -37,7 +37,7 @@ local addonName, ns = ...
 --            grade (math and reading only: a quest riddle never changes it).
 --
 -- Limits, honestly: a controller's sticks still move the character, and a determined child can turn the addon off at
--- character select. Blizzard's parental controls (play time limits) are the place for hard limits; this is meant to be
+-- character select. Blizzard's parental controls (play time limits) are the place for hard limits. This is meant to be
 -- fun.
 
 -- The screen's other actions: their controller buttons and keyboard keys.
@@ -47,7 +47,7 @@ local AnswerSources = { "gamepad.south", "gamepad.east", "gamepad.west", "gamepa
 local FinishDelay = 1.8
 -- How long, in seconds, after losing control to look for a flight path (UnitOnTaxi).
 local FlightCheck = 1
--- The windows Blizzard's interaction manager opens that a riddle waits for (by Enum.PlayerInteractionType name); the
+-- The windows Blizzard's interaction manager opens that a riddle waits for (by Enum.PlayerInteractionType name). The
 -- quest dialog and gossip have their own events.
 local HeldInteractions = {}
 local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NUMPAD2 = 2, NUMPAD3 = 3, NUMPAD4 = 4 }
@@ -57,7 +57,7 @@ local PinWaitSeconds = 60
 -- How many quest riddles come in a row before math or reading takes a turn.
 local QuestShare = 2
 local Ranks = { { 0, "Apprentice" }, { 10, "Journeyman" }, { 25, "Adept" }, { 50, "Sage" }, { 100, "Archmage" } }
--- The open quest book scrolls with the arrow keys and the D-pad; held, the D-pad keeps going.
+-- The open quest book scrolls with the arrow keys and the D-pad. Held, the D-pad keeps going.
 local ScrollKeys = { DOWN = 1, UP = -1 }
 -- How long, in seconds, between notches while a D-pad direction is held.
 local ScrollRepeat = 0.12
@@ -133,11 +133,11 @@ local Counting = false
 local Current = nil
 local LastSubject
 local Missed = {}
--- The module is assigned at the end of the file.
+-- The end of the file assigns the module.
 local Scholar
 -- The GetTime() the running stretch of play started at.
 local SegmentStart
--- Blizzard's windows open now that a riddle waits for: "quest", "gossip" and interaction types.
+-- Blizzard's windows open now that a riddle waits for: "quest", "gossip", and interaction types.
 local Windows = {}
 local Wrongs = 0
 
@@ -156,7 +156,7 @@ local function CanHear()
     return (next(C_VoiceChat.GetTtsVoices() or {}) ~= nil)
 end
 
--- Hides the riddle and gives input back; the riddle stays current until it's solved.
+-- Hides the riddle and gives input back. The riddle stays current until it's solved.
 local function Close()
     if ScholarView.IsShown() then
         ScholarView.Frame():EnableKeyboard(false)
@@ -224,7 +224,7 @@ local function Help()
     return "Hint", Current.hint
 end
 
--- Need a hint? shows the rung the riddle is on; on a quest riddle it opens (or closes) the quest book instead.
+-- Need a hint? shows the rung the riddle is on. On a quest riddle, it opens (or closes) the quest book instead.
 local function Hint()
     if Current and Current.book then
         ScholarView.ToggleBook()
@@ -284,7 +284,7 @@ local function Rank(stars)
     return name
 end
 
--- Ends the riddle, solved (after its celebration) or skipped; either way the timer starts over.
+-- Ends the riddle, solved (after its celebration) or skipped. Either way, the timer starts over.
 local function Finish(solved)
     local before = Scholar:Get("stars")
 
@@ -307,7 +307,7 @@ local function Finish(solved)
     end
 end
 
--- What the screen shows about progress: stars, rank, the next rank and how far along, the streak.
+-- What the screen shows about progress: stars, rank, the next rank and how far along, and the streak.
 local function Progress(extra)
     local stars = Scholar:Get("stars")
     local info = { rank = Rank(stars), stars = stars, streak = Scholar:Get("streak") }
@@ -343,8 +343,8 @@ local function Choose(i)
     local runRow = (Current.subject .. "Run")
 
     if i == Current.answer then
-        -- The riddle stops being due now, so a /reload during the celebration doesn't ask another; solved holds the
-        -- screen until Finish closes it.
+        -- The riddle stops being due now, so a /reload during the celebration doesn't ask another. The solved row holds
+        -- the screen until Finish closes it.
         Scholar:Set("solved", true)
         Scholar:Set("pending", false)
         Scholar:Set("elapsed", 0)
@@ -404,14 +404,14 @@ local function ReadsAloud()
     return (CanHear() and ((mode == "always") or ((mode == "young") and (tonumber(Scholar:Get("grade")) <= 1))))
 end
 
--- Reads what the screen shows aloud (the riddle, the open quest book, or the feedback) with the player's text-to-speech
--- voice, rate and volume. Says text with the player's text-to-speech voice, rate and volume.
+-- Says text aloud (what the screen shows: the riddle, the open quest book, or the feedback) with the player's
+-- text-to-speech voice, rate, and volume.
 local function Say(text)
     C_VoiceChat.SpeakText(C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard), text, C_TTSSettings.GetSpeechRate(),
         C_TTSSettings.GetSpeechVolume(), false)
 end
 
--- A Blizzard window opened (open) or closed: window is whether any a riddle waits for is open.
+-- A Blizzard window opened (open) or closed. The window row is whether any window a riddle waits for is open.
 local function SetWindow(name, open)
     Windows[name] = (open or nil)
     Scholar:Set("window", next(Windows) ~= nil)
@@ -477,7 +477,7 @@ local function Open()
     Addon.Input:SetActiveMaps({ "scholar" })
     C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN)
 
-    -- A heard riddle always speaks; any other as readAloud says.
+    -- A heard riddle always speaks. Any other speaks as readAloud says.
     if Current.speech or ReadsAloud() then
         Speak()
     end
@@ -505,8 +505,8 @@ local function Without(list, except)
     return out
 end
 
--- The next riddle. Quest riddles are preferred: QuestShare of them in a row, then math or reading takes a turn
--- (alternating when both are on), whenever any of those is on. nil when there's nothing to ask.
+-- The next riddle, or nil when there's nothing to ask. It prefers quest riddles: QuestShare of them in a row, then math
+-- or reading takes a turn (alternating when both are on), whenever any of those is on.
 local function NextPuzzle()
     local others = (Scholar:Get("math") or Scholar:Get("reading"))
 
@@ -640,8 +640,8 @@ local Rows = {
         kind = "string", label = "Riddle style", lockedBy = LockedBy, name = "mode", scope = "character",
         valueLabels = { gate = "Solve to keep playing", gentle = "Gentle (Skip after one try)" },
         values = { "gate", "gentle" } },
-    -- Progress, per character. elapsed is seconds of play toward the next riddle; questRun the quest riddles asked
-    -- since math or reading last took a turn.
+    -- Progress, per character. elapsed is seconds of play toward the next riddle, and questRun is the quest riddles
+    -- asked since math or reading last took a turn.
     { default = 0, kind = "number", name = "stars", scope = "character" },
     { default = 0, kind = "number", name = "streak", scope = "character" },
     -- Each subject's difficulty (1 to 3), its first-try rights in a row (every third makes it harder), and how many of
@@ -666,7 +666,7 @@ local Rows = {
     -- The parent's PIN (a hash; 0 = none), account-wide, and whether settings are locked right now.
     { default = 0, kind = "number", lockedBy = LockedBy, name = "pin" },
     { default = false, kind = "boolean", name = "locked", persist = false },
-    -- The parent unlocked this session: saved, so a /reload keeps it; the next login locks again.
+    -- The parent unlocked this session: it's saved, so a /reload keeps it. The next login locks again.
     { default = false, kind = "boolean", name = "unlocked" },
     -- Wrong unlock PINs since the last wait, and the server time unlocking waits until. Saved, so a /reload doesn't buy
     -- more tries.
@@ -842,9 +842,9 @@ Scholar = Addon:Module("Scholar", {
         module:On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", OnInteractionHidden)
         module:On("TAXIMAP_CLOSED", function() SetWindow(TaxiNode, false) end)
 
-        -- The play clock counts toward the next riddle while none is due, you're not AFK and a subject is on. It writes
-        -- nothing while it runs: one timer fires when the interval is up, and play is saved when the clock stops, at
-        -- logout and as the module stops.
+        -- The play clock counts toward the next riddle while none is due, you're not AFK, and a subject is on. It
+        -- writes nothing while it runs: one timer fires when the interval is up, and play is saved when the clock
+        -- stops, at logout, and as the module stops.
         local due
 
         local function Schedule()

@@ -4,7 +4,7 @@
 //
 //   Before linking, deploy runs the gates: `check`, then `test` (skip the tests with --no-test).
 //   --addon <name> limits it to those addons and the addons they depend on (linking the toolkit
-//   links ByteTerrace_Core too); an unknown name is an error. The AddOns folder must exist.
+//   links ByteTerrace_Core too). An unknown name is an error. The AddOns folder must exist.
 //
 //   A link to the same addon in another worktree of this repository (`git worktree list`) is this
 //   repo's own too: deploy repoints it to this checkout and says from where to where. So is a
@@ -63,7 +63,7 @@ export function parseWorktrees(porcelain) {
     return roots;
 }
 
-// This repository's worktrees, this checkout among them; just this checkout without git.
+// This repository's worktrees, this checkout among them, or only this checkout without git.
 function repoWorktrees() {
     try {
         return parseWorktrees(execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: repoRoot, encoding: "utf8" }));
@@ -101,12 +101,12 @@ function linkTarget(path) {
     }
 }
 
-// Linking includes dependencies; unlinking selects only the addons explicitly requested.
+// Linking includes dependencies. Unlinking selects only the addons explicitly requested.
 export function selectAddons(all, names, includeDependencies = true) {
     const wanted = new Set(names ?? all.map((addon) => addon.name));
     if (names && includeDependencies) {
         const byName = new Map(all.map((addon) => [addon.name, addon]));
-        // Set iteration visits newly added entries too; already visited names cannot cycle.
+        // Set iteration visits newly added entries too. Already visited names can't cycle.
         for (const name of wanted) {
             for (const dependency of byName.get(name)?.dependencies ?? []) wanted.add(dependency);
         }

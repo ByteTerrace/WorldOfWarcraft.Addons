@@ -1,18 +1,18 @@
 local addonName, ns = ...
 
 -- Cards: the toolkit's notices on your screen. Celebratory pop-ups (journal, Krew, Scholar, Warband) show one at a time
--- at the top of the screen; news that can't wait is a raid warning.
+-- at the top of the screen. News that can't wait is a raid warning.
 --
 --   ns.Cards.Show(entry)         queues a card: { icon, title, body, sound, onClick }.
 --   ns.Cards.Alert(text, sound)  a raid warning on your own screen, now, in combat too.
 --
--- The queue holds at most MaxQueued cards; beyond that new cards are dropped, so a chatty group can't bury the screen.
+-- The queue holds at most MaxQueued cards. Beyond that, it drops new cards, so a chatty group can't bury the screen.
 -- Cards never interrupt a fight: during combat they wait in the queue and appear when it ends, and a card showing when
--- combat starts hides and goes back to the front of the queue. Hovering a card holds it; clicking dismisses it (and
--- shows the next); otherwise it hides after CardSeconds. A card with onClick is a question: a left-click runs onClick()
--- in a state batch and dismisses it, a right-click (or the timeout) dismisses it without acting.
+-- combat starts hides and goes back to the front of the queue. Hovering a card holds it. Clicking dismisses it and
+-- shows the next. Otherwise, it hides after CardSeconds. A card with onClick is a question: a left-click runs onClick()
+-- in a state batch and dismisses it, and a right-click (or the timeout) dismisses it without acting.
 --
--- The card frame is the global TheLanKrewToolKitCard, created with the first card; its Icon, Title and Body regions
+-- The card frame is the global TheLanKrewToolKitCard, created with the first card. Its Icon, Title, and Body regions
 -- show the current entry.
 
 local CardSeconds = 12
@@ -81,7 +81,7 @@ end
 
 local ShowNext
 
---- A raid warning on your own screen.
+--- Shows a raid warning on your own screen.
 ---@param text string
 ---@param sound integer? a SOUNDKIT id
 local function Alert(text, sound)
@@ -102,7 +102,7 @@ local function StartTimer()
     HideTimer = Cards:After(CardSeconds, ShowNext)
 end
 
---- Queues a card, showing it now unless another card is up or combat holds it. Dropped when the queue is full.
+--- Queues a card, showing it now unless another card is up or combat holds it. Drops the card when the queue is full.
 ---@param entry table { icon, title, body, sound, onClick }: sound is a SOUNDKIT id or nil; onClick
 ---                   makes the card a question
 local function Show(entry)
@@ -159,7 +159,7 @@ function ShowNext()
     Card.Icon:SetTexture(entry.icon)
     Card.Title:SetText(entry.title)
     Card.Body:SetText(entry.body)
-    -- Fit the text: 20px top, the title, 6px, the body, 18px bottom; never shorter than the icon.
+    -- Fit the text: 20px top, the title, 6px, the body, and 18px bottom, never shorter than the icon.
     -- secret: card text is built from plain strings, so its fontstrings hold no secret aspect
     local height = ((((20 + Card.Title:GetStringHeight()) + 6) + Card.Body:GetStringHeight()) + 18)
 

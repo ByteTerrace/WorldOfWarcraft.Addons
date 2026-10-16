@@ -3,12 +3,12 @@
 // or { error }. A pending result passed nothing and failed nothing: the Lua test called
 // pending(reason), and err holds the reason. Jobs:
 //   { kind: "lua", file, filter, coverage }
-//                                   a tests/*.test.lua file in a fresh Lua 5.1 VM with the harness;
-//                                   with coverage, the addons' files load instrumented and the
+//                                   a tests/*.test.lua file in a fresh Lua 5.1 VM with the harness.
+//                                   With coverage, the addons' files load instrumented, and the
 //                                   message also carries coverage: the statements its tests ran
-//                                   in them (see tools/lib/coverage.mjs); use(name) in it runs
+//                                   in them (see tools/lib/coverage.mjs). use(name) in it runs
 //                                   the kits/<name>.lua beside it once and returns its result:
-//                                   the helpers test files share
+//                                   the helpers test files share.
 //   { kind: "mjs", file, filter }   a tests/*.test.mjs module exporting tests = [{ name, run }]
 //   { kind: "fakes", filter }       every harness fake names a global (or member) the client dump has,
 //                                   and every fake function is one an addon calls
@@ -33,7 +33,7 @@ function readKits(dir) {
         .map((file) => [file.slice(0, -4), readFileSync(join(kits, file), "utf8")]));
 }
 
-// A job's filters are substrings of "<file> > <test name>"; a test matching any of them runs.
+// A job's filters are substrings of "<file> > <test name>", and a test matching any of them runs.
 const matches = (filters, label, name) => !filters?.length || filters.some((filter) => `${label} > ${name}`.includes(filter));
 
 // Undoes the prelude's escape(): \\ \t \r \n.
@@ -90,9 +90,9 @@ async function runModule(job) {
 const FAKES_TEST = "every fake names a real client global";
 
 // Members of client tables the dump records no members for, each with the Blizzard source that
-// defines it. Only these pass without a recorded member list; any other member still fails.
+// defines it. Only these pass without a recorded member list. Any other member still fails.
 // ChatTypeInfo has a metatable in game and fills its entries on first read, so a dump (which
-// walks keys) finds none; ChatTypeInfo.RAID_WARNING was read in game.
+// walks keys) finds none. ChatTypeInfo.RAID_WARNING was read in game.
 const UNRECORDED_MEMBERS = {
     ChatTypeInfo: { RAID_WARNING: "Blizzard_ChatFrameBase/Shared/ChatTypeInfoConstants.lua" },
 };
@@ -121,7 +121,7 @@ function addonIdentifiers() {
     return names;
 }
 
-// A fake that isn't in the client dump models an API that doesn't exist; a fake function no addon
+// A fake that isn't in the client dump models an API that doesn't exist. A fake function no addon
 // calls (by its last dotted segment) models nothing the addons need.
 async function runFakes(job, snapshot) {
     const checkNames = matches(job.filter, "harness", FAKES_TEST);

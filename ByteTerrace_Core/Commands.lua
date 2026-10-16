@@ -1,15 +1,15 @@
 -- Commands: named intents. A command is declared once and every driver runs the same definition: slash text, key
--- bindings, controller buttons (Input.lua) and UI controls.
+-- bindings, controller buttons (Input.lua), and UI controls.
 --
 --   Define(spec)  before compile. spec: name (unique), label, run(arg, phase, source),
 --                 slash (the lowercase word after the slash command; "" for a bare slash command),
 --                 held (true to also receive "up" and "cancel" phases).
 --   Run(ref, arg, phase, source)
---                 ref is an id (hot path) or a name. phase defaults to "down"; a command that
+--                 ref is an id (hot path) or a name. phase defaults to "down". A command that
 --                 isn't held ignores other phases. Each run is one state batch, so a command that
 --                 writes several rows publishes once, and counts in its module's work record
---                 (the addon's own for built-in commands). Returns false for an unknown command
---                 or a stopped module or run that errored (the error reaches the error handler).
+--                 (the addon's own for built-in commands). Returns false for an unknown command,
+--                 a stopped module, or a run that errored (the error reaches the error handler).
 --
 -- After compile, Ids maps each name to its id (Input.lua resolves bindings through it).
 --
@@ -93,7 +93,7 @@ function Commands:Define(spec)
     self.m_declared[spec.name] = own
 end
 
---- The module a command belongs to, or nil for the addon's own (help, settings, debug...).
+--- Returns the module a command belongs to, or nil for the addon's own (help, settings, debug, and so on).
 ---@param id integer
 ---@return table? module
 function Commands:ModuleOf(id)

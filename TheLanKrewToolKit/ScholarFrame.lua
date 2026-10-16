@@ -351,6 +351,19 @@ local function CreateBody(frame, panel)
     frame.Thumb:SetWidth(ScrollBarWidth)
     Fill(frame.Thumb, Palette.gold, 0.7)
     frame.Book, frame.BookCase, frame.BookPage = book, case, page
+
+    -- How to scroll the book: a tab on its bottom edge, shown while its text doesn't fit (ScholarView.lua).
+    local hint = CreateFrame("Frame", nil, case, "BackdropTemplate")
+
+    Backdrop(hint, 8)
+    BackdropColors(hint, Palette.pill, Palette.edge)
+    hint:SetHeight(26)
+    hint:SetPoint("CENTER", case, "BOTTOMRIGHT", -90, 0)
+    hint:SetFrameLevel(case:GetFrameLevel() + 5)
+    hint.Label = hint:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hint.Label:SetPoint("CENTER")
+    hint:Hide()
+    frame.ScrollHint = hint
     frame.Speak = CreatePill(panel, "Read aloud", SpeakerIcon)
     frame.Speak:SetScript("OnClick", function() Callbacks.speak() end)
 

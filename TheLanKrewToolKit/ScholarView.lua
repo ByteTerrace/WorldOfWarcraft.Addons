@@ -154,6 +154,13 @@ local function PlaceThumb()
 
     Overlay.Track:SetShown(scrolls)
     thumb:SetShown(scrolls)
+    -- And the tab saying how to scroll it.
+    local hint = Overlay.ScrollHint
+
+    hint.Label:SetText((Overlay.m_scrollKeys or "") .. "  Scroll")
+    -- secret: the hint is built from fixed words and controller glyphs, so it holds no secret aspect
+    hint:SetWidth(hint.Label:GetStringWidth() + 20)
+    hint:SetShown(scrolls)
 
     if scrolls then
         local size = max((view * view) / (view + range), 24)
@@ -604,6 +611,9 @@ function ScholarView.Show(puzzle, info)
 
     local actions = (info.actions or {})
 
+    -- The quest book's scroll keys, for its scroll hint.
+    Overlay.m_scrollKeys = actions.scroll
+
     Overlay.Speak.m_text = ((puzzle.speech and "Hear it again") or "Read aloud")
     LabelPill(Overlay.Speak, actions.speak)
     Overlay.Hint.m_text, Overlay.Hint.m_key = ((info.book and "Quest book") or "Need a hint?"), actions.hint
@@ -657,6 +667,10 @@ function ScholarView.ToggleBook()
     Overlay.Hint.m_text = ((open and "Close book") or "Quest book")
     LabelPill(Overlay.Hint, Overlay.Hint.m_key)
     Refit()
+
+    if not open then
+        Overlay.ScrollHint:Hide()
+    end
 end
 
 --- Makes the answers still open wait seconds before they can be picked (the pause after a miss), dimmed, with their

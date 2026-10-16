@@ -144,6 +144,11 @@ test("with a controller, the footer shows the controller UI's glyphs for each ac
     h:Slash("/tlk wishes")
     local frame = Window(h)
 
+    truthy(frame.Choose:IsShown(), "with more than one wish, it says the D-pad chooses")
+
+    truthy(Text(frame.Choose):find("|A:gamepad-xbox1-paddup-normal", 1, true) and Text(frame.Choose):find("Choose", 1, true),
+        Text(frame.Choose))
+
     truthy(Text(frame.Act.Label):find("|A:gamepad-xbox1-pad1-normal", 1, true), Text(frame.Act.Label))
     truthy(Text(frame.Close.Label):find("|A:gamepad-xbox1-pad2-normal", 1, true), Text(frame.Close.Label))
 end)

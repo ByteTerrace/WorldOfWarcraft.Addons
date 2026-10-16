@@ -422,6 +422,15 @@ local function KeyLabel(i)
     return tostring(i)
 end
 
+-- What scrolls the open quest book: the D-pad's up and down glyphs, or the arrow keys.
+local function ScrollLabel()
+    if UsingController() then
+        return (ByteTerrace.Input.Prompt(ScrollSources.scrollUp, 18) .. ByteTerrace.Input.Prompt(ScrollSources.scrollDown, 18))
+    end
+
+    return "Up/Down"
+end
+
 -- The answers left on screen wait left seconds, counted down a second at a time on their keycaps and in pauseLeft.
 -- Close stops the count where it is, for Open to take up again.
 local function Wait(left)
@@ -520,8 +529,8 @@ end
 -- answers wait out the pause's seconds left (pauseLeft).
 local function Open()
     local frame = ScholarView.Show(Current, Progress({
-        actions = { hint = ActionLabel("hint"), later = ActionLabel("later"), skip = ActionLabel("skip"),
-            speak = ActionLabel("speak"), wishes = ActionLabel("wishes") },
+        actions = { hint = ActionLabel("hint"), later = ActionLabel("later"), scroll = ScrollLabel(),
+            skip = ActionLabel("skip"), speak = ActionLabel("speak"), wishes = ActionLabel("wishes") },
         book = (Current.book ~= nil), canSkip = ((Scholar:Get("style") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
         controller = UsingController(), gentle = (Scholar:Get("style") == "gentle"),
         keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, reveal = (select(3, Help())), wrong = Missed,

@@ -27,6 +27,7 @@ test("the quest book opens below the riddle with the quest's text, and closes th
     truthy(ns.ScholarView.BookOpen())
     truthy(Reveal(Harness.State(overlay.BookText).text):find("Stonefield", 1, true), "the quest's text")
     truthy(overlay.Book:IsShown())
+    falsy(overlay.ScrollHint:IsShown(), "a quest that fits has nothing to scroll, and says nothing about it")
     h:Key("H", true)
     falsy(ns.ScholarView.BookOpen())
 end)
@@ -76,6 +77,12 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
     local range = book:GetVerticalScrollRange()
 
     truthy(range > 0, "more text than room")
+    truthy(overlay.ScrollHint:IsShown(), "so the book says how to scroll it")
+    local hint = Reveal(Harness.State(overlay.ScrollHint.Label).text)
+
+    truthy(hint:find("|A:gamepad-xbox1-paddup-normal", 1, true) and hint:find("|A:gamepad-xbox1-padddown-normal", 1, true)
+        and hint:find("Scroll", 1, true), "with the D-pad's up and down glyphs: " .. hint)
+
     eq(book:GetVerticalScroll(), 0, "it opens at the top")
 
     local function Offset() return book:GetVerticalScroll() end
@@ -298,4 +305,23 @@ test("the panel casts a shadow, and each answer has a bevel", function()
     for _, button in ipairs(overlay.Buttons) do
         truthy(button.Shine:IsShown() and button.Shade:IsShown(), "a lit top edge and a shaded bottom one")
     end
+end)
+
+test("without a controller, the book's scroll hint names the arrow keys, and closing the book hides it", function()
+    local h, _, ns = LoadKid()
+
+    h.env.UIParent:SetSize(1366, 600)
+    Watch(ns)
+
+    Accept(h, { goal = "Read every word.", id = 77, objectives = { { required = 1, text = "Patience" } },
+        text = string.rep("The road is long and the wolves are many. ", 40), title = "A Very Long Story" })
+
+    h:Slash("/tlk puzzle")
+    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
+
+    h:Key("H", true)
+    truthy(overlay.ScrollHint:IsShown())
+    eq(Reveal(Harness.State(overlay.ScrollHint.Label).text), "Up/Down  Scroll")
+    h:Key("H", true)
+    falsy(overlay.ScrollHint:IsShown(), "a closed book has no hint")
 end)

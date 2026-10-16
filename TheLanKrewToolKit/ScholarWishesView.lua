@@ -11,7 +11,8 @@ local addonName, ns = ...
 --   ns.ScholarWishesView.Init(handlers)  { select(i), act(), no(), close(), key(key) -> used }
 --   ns.ScholarWishesView.Show(model)     { title, empty, rows = { { label, status, icon, ready } }, selected,
 --                                          act (its label, or nil for none), no (whether Not now applies),
---                                          prompts = { act, no, close } (each a glyph, or nil) }
+--                                          prompts = { act, no, close, choose } (each a glyph, or nil:
+--                                          choose is the D-pad's up and down, shown with more than one row) }
 --   ns.ScholarWishesView.Hide()
 
 local MaxRows = 14
@@ -84,6 +85,9 @@ local function Create()
         frame.Rows[i] = row
     end
 
+    -- How to choose a row with a controller, at the footer's left.
+    frame.Choose = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    frame.Choose:SetPoint("BOTTOMLEFT", 22, 24)
     frame.Act = FooterButton(frame, function() Callbacks.act() end)
     frame.NotNow = FooterButton(frame, function() Callbacks.no() end)
     frame.Close = FooterButton(frame, function() Callbacks.close() end)
@@ -155,6 +159,8 @@ local function Show(model)
         Label(Window.Act, prompts.act, model.act)
     end
 
+    Window.Choose:SetText(((prompts.choose and (prompts.choose .. "  Choose")) or ""))
+    Window.Choose:SetShown((prompts.choose ~= nil) and (count > 1))
     Window.NotNow:SetShown((model.no and true) or false)
     Label(Window.NotNow, prompts.no, "Not now")
     Label(Window.Close, prompts.close, "Close")

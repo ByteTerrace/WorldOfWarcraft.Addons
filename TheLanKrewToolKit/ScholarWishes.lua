@@ -488,7 +488,11 @@ local function Refresh()
         empty = ((scholar and ("No wishes yet. A grown-up can add one: " .. Addon.Slash[1] .. " wish 20 Pick our next "
             .. "adventure.")) or "No wishes are waiting for an answer."),
         no = ((row ~= nil) and (row.kind == "request")),
-        prompts = { act = Prompt("gamepad.south"), close = Prompt("gamepad.east"), no = Prompt("gamepad.west") },
+        prompts = {
+            act = Prompt("gamepad.south"),
+            choose = (Prompt("gamepad.dpadUp") and (Prompt("gamepad.dpadUp") .. Prompt("gamepad.dpadDown"))),
+            close = Prompt("gamepad.east"), no = Prompt("gamepad.west"),
+        },
         rows = rows,
         selected = (((#rows > 0) and Chosen) or nil),
         title = ((scholar and ("Wishes: " .. Stars(Balance()) .. " to spend")) or "Wishes waiting for you"),

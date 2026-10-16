@@ -21,7 +21,9 @@ local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local IconGap = 3
 local IconSize = 20
 -- A number line's jump, tick and star, in pixels.
-local JumpWidth, LineStarSize, TickHeight = 30, 18, 12
+local JumpWidth = 30
+local LineStarSize = 18
+local TickHeight = 12
 
 -- Icons for the items riddles count, by the item's name (ScholarWords.lua's items). An item not listed is drawn as a
 -- star.
@@ -72,8 +74,11 @@ local TileGap = 8
 local TileSize = 40
 local WrongIcon = "Interface\\RAIDFRAME\\ReadyCheck-NotReady"
 
-local ceil, floor, max, min = math.ceil, math.floor, math.max, math.min
+local ceil = math.ceil
 local CreateFrame = CreateFrame
+local floor = math.floor
+local max = math.max
+local min = math.min
 local tostring = tostring
 
 local ScholarPictures = {}
@@ -104,7 +109,8 @@ end
 
 -- Lays out a number line (see the header) under its star, with its ends labeled below; returns its width and height.
 local function DrawLine(pictures, picture)
-    local width, bar = (picture.jumps * JumpWidth), pictures.Bar
+    local width = (picture.jumps * JumpWidth)
+    local bar = pictures.Bar
 
     bar:ClearAllPoints()
     bar:SetPoint("TOPLEFT", 0, -(LineStarSize + 10))
@@ -174,7 +180,8 @@ end
 local function Grid(pictures, first, count, columns, x, y, texture, crossedFrom)
     for n = 1, count do
         local icon = PictureIcon(pictures, (first + n) - 1)
-        local column, row = ((n - 1) % columns), floor((n - 1) / columns)
+        local column = ((n - 1) % columns)
+        local row = floor((n - 1) / columns)
 
         icon:ClearAllPoints()
         icon:SetPoint("TOPLEFT", x + (column * (IconSize + IconGap)), -(y + (row * (IconSize + IconGap))))
@@ -187,7 +194,8 @@ local function Grid(pictures, first, count, columns, x, y, texture, crossedFrom)
         icon:Show()
     end
 
-    local columnsUsed, rows = min(count, columns), ceil(count / columns)
+    local columnsUsed = min(count, columns)
+    local rows = ceil(count / columns)
 
     return ((columnsUsed * (IconSize + IconGap)) - IconGap), ((rows * (IconSize + IconGap)) - IconGap)
 end
@@ -271,12 +279,15 @@ local function Draw(pictures, picture, tiles)
         return 0
     end
 
-    local texture, width, height = (ItemIcons[picture.item] or StarIcon), 0, 0
+    local texture = (ItemIcons[picture.item] or StarIcon)
+    local width = 0
+    local height = 0
 
     if picture.kind == "groups" then
         local columns = (((picture.each <= 6) and 3) or 5)
         local gridWidth = ((min(picture.each, columns) * (IconSize + IconGap)) - IconGap)
-        local cardWidth, x = (gridWidth + 16), 0
+        local cardWidth = (gridWidth + 16)
+        local x = 0
 
         for group = 1, picture.groups do
             local card = PictureCard(pictures, group)

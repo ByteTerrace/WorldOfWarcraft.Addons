@@ -15,6 +15,7 @@ ScholarWords.lua
 ScholarPuzzles.lua
 ScholarMathWords.lua
 ScholarMath.lua
+ScholarMoney.lua
 ScholarNumberWords.lua
 ScholarNumbers.lua
 ScholarReadingWords.lua

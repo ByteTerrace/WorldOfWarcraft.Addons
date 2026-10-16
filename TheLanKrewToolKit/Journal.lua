@@ -46,10 +46,23 @@ Rows[#Rows + 1] = { default = -1, kind = "number", name = "levelStartMoney", sco
 Rows[#Rows + 1] = { default = false, kind = "boolean", name = "levelFromDing", scope = "character" }
 Rows[#Rows + 1] = { default = "", kind = "string", name = "sessionZone", scope = "character" }
 
-local abs, concat, floor, issecretvalue = math.abs, table.concat, math.floor, issecretvalue
-local GetMaxPlayerLevel, GetMoney = GetMaxPlayerLevel, GetMoney
-local GetMoneyString, GetRealZoneText, GetServerTime, GetTime, GetXPExhaustion = GetMoneyString, GetRealZoneText, GetServerTime, GetTime, GetXPExhaustion
-local IsLoggedIn, SecondsToTime, SOUNDKIT, UnitLevel, UnitName, UnitXPMax = IsLoggedIn, SecondsToTime, SOUNDKIT, UnitLevel, UnitName, UnitXPMax
+local abs = math.abs
+local concat = table.concat
+local floor = math.floor
+local GetMaxPlayerLevel = GetMaxPlayerLevel
+local GetMoney = GetMoney
+local GetMoneyString = GetMoneyString
+local GetRealZoneText = GetRealZoneText
+local GetServerTime = GetServerTime
+local GetTime = GetTime
+local GetXPExhaustion = GetXPExhaustion
+local IsLoggedIn = IsLoggedIn
+local issecretvalue = issecretvalue
+local SecondsToTime = SecondsToTime
+local SOUNDKIT = SOUNDKIT
+local UnitLevel = UnitLevel
+local UnitName = UnitName
+local UnitXPMax = UnitXPMax
 
 local Addon = ns.Addon
 local Count = ns.Puzzles.Kit.Count
@@ -151,7 +164,8 @@ local function SaveSeen()
 end
 
 local function StartSession()
-    local level, money = UnitLevel("player"), GetMoney()
+    local level = UnitLevel("player")
+    local money = GetMoney()
 
     Journal:Set("sessionStart", GetServerTime())
     Journal:Set("sessionPlayed", 0)

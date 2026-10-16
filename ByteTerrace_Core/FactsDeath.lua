@@ -43,10 +43,18 @@ local RecapRetries = { 0.3, 1 }
 local RecapWait = 3
 
 local ByteTerrace = ByteTerrace
-local C_DamageMeter, C_DeathRecap, Enum = C_DamageMeter, C_DeathRecap, Enum
-local floor, ipairs, max, type = math.floor, ipairs, math.max, type
-local GetPlayerInfoByGUID, issecretvalue, UnitGUID = GetPlayerInfoByGUID, issecretvalue, UnitGUID
-local remove, sort = table.remove, table.sort
+local C_DamageMeter = C_DamageMeter
+local C_DeathRecap = C_DeathRecap
+local Enum = Enum
+local floor = math.floor
+local GetPlayerInfoByGUID = GetPlayerInfoByGUID
+local ipairs = ipairs
+local issecretvalue = issecretvalue
+local max = math.max
+local remove = table.remove
+local sort = table.sort
+local type = type
+local UnitGUID = UnitGUID
 
 local function Plain(value, kind)
     if issecretvalue(value) or (type(value) ~= kind) then
@@ -75,7 +83,8 @@ end
 
 -- The recap IDs of your deaths in the damage meter above after, oldest first.
 local function DeathsAfter(after)
-    local found, list = {}, {}
+    local found = {}
+    local list = {}
 
     if C_DamageMeter.IsDamageMeterAvailable() then
         local types = Enum.DamageMeterSessionType
@@ -103,7 +112,8 @@ local function Killer(recapID)
         return nil
     end
 
-    local guid, flags = Plain(blow.sourceGUID, "string"), Plain(blow.sourceFlags, "number")
+    local guid = Plain(blow.sourceGUID, "string")
+    local flags = Plain(blow.sourceFlags, "number")
 
     local killer = { class = "", damage = (Plain(blow.amount, "number") or 0), faction = "", kind = "",
         name = (Plain(blow.sourceName, "string") or ""), spell = (Plain(blow.spellName, "string") or "") }

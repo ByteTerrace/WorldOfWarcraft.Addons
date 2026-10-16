@@ -40,16 +40,23 @@ local WorkKinds = {
 }
 
 local ByteTerrace = ByteTerrace
-local C_AddOnProfiler, Enum, GetAddOnMemoryUsage = C_AddOnProfiler, Enum, GetAddOnMemoryUsage
-local concat, sort = table.concat, table.sort
-local ipairs, pairs, print, tostring = ipairs, pairs, print, tostring
+local C_AddOnProfiler = C_AddOnProfiler
+local concat = table.concat
+local Enum = Enum
+local GetAddOnMemoryUsage = GetAddOnMemoryUsage
+local ipairs = ipairs
+local pairs = pairs
+local print = print
+local sort = table.sort
+local tostring = tostring
 local UpdateAddOnMemoryUsage = UpdateAddOnMemoryUsage
 
 local AddOn = ByteTerrace.AddOn
 
 -- Rows whose names contain text, ignoring case, in name order.
 local function MatchingRows(state, text)
-    local wanted, ids = text:lower(), {}
+    local wanted = text:lower()
+    local ids = {}
 
     for name, id in pairs(state.Ids) do
         if name:lower():find(wanted, 1, true) then
@@ -67,15 +74,18 @@ local function Plural(count, word)
 end
 
 local function EventsReport(addon)
-    local events, counts = addon.Events, addon.Events.Counts
-    local registrations, names = events:Registrations(), {}
+    local events = addon.Events
+    local counts = addon.Events.Counts
+    local registrations = events:Registrations()
+    local names = {}
 
     for event in pairs(registrations) do
         names[#names + 1] = event
     end
 
     sort(names, function(a, b)
-        local countA, countB = (counts[a] or 0), (counts[b] or 0)
+        local countA = (counts[a] or 0)
+        local countB = (counts[b] or 0)
 
         if countA ~= countB then
             return (countA > countB)
@@ -135,7 +145,8 @@ local function Share(name, metric)
 end
 
 local function Cpu(addon)
-    local name, profiling = addon.Name, C_AddOnProfiler.IsEnabled()
+    local name = addon.Name
+    local profiling = C_AddOnProfiler.IsEnabled()
 
     if not profiling then
         addon:Print("The client's addon profiler is off.")
@@ -167,7 +178,11 @@ local function Cpu(addon)
 end
 
 local function Status(addon)
-    local running, stopped, timers, collections, queued = {}, {}, 0, {}, {}
+    local running = {}
+    local stopped = {}
+    local timers = 0
+    local collections = {}
+    local queued = {}
 
     for _, name in ipairs(ByteTerrace.SortedKeys(addon.Modules)) do
         local module = addon.Modules[name]
@@ -287,7 +302,10 @@ local function WorkTotal(work)
 end
 
 local function WorkReport(addon)
-    local records, names, totals, idle = WorkRecords(addon), {}, {}, {}
+    local records = WorkRecords(addon)
+    local names = {}
+    local totals = {}
+    local idle = {}
 
     for name, work in pairs(records) do
         totals[name] = WorkTotal(work)
@@ -319,7 +337,8 @@ local function WorkReport(addon)
             break
         end
 
-        local work, parts = records[name], {}
+        local work = records[name]
+        local parts = {}
 
         for _, kind in ipairs(WorkKinds) do
             if work[kind[1]] > 0 then

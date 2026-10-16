@@ -59,7 +59,8 @@ test("a sound plays one of its present variants at random, and /tlk sound can pi
         h:Slash("/tlk sound finish")
     end
 
-    local base, third = select(2, Heard(h):gsub("FinishHim%.ogg", "")), select(2, Heard(h):gsub("FinishHim3%.mp3", ""))
+    local base = select(2, Heard(h):gsub("FinishHim%.ogg", ""))
+    local third = select(2, Heard(h):gsub("FinishHim3%.mp3", ""))
 
     eq(base + third, 20, "every play found a present variant")
     truthy((base > 0) and (third > 0), "both variants play")

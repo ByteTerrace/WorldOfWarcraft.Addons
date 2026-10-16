@@ -111,10 +111,13 @@ end
 ---@param misses table[] the recent misses, newest first: { kind, prompt, chosen, right } each
 ---@return string[]
 local function Report(name, sections, misses)
-    local lines, asked, right = {}, 0, 0
+    local lines = {}
+    local asked = 0
+    local right = 0
 
     for _, section in ipairs(sections) do
-        local sectionAsked, sectionRight = 0, 0
+        local sectionAsked = 0
+        local sectionRight = 0
 
         for _, record in pairs(section.records) do
             sectionAsked, sectionRight = (sectionAsked + record.asked), (sectionRight + record.firstTry)
@@ -175,7 +178,8 @@ end
 ---@param random fun(m: integer, n: integer): integer
 ---@return string
 local function Choose(kinds, recordOf, count, random)
-    local weights, total = {}, 0
+    local weights = {}
+    local total = 0
 
     for i, kind in ipairs(kinds) do
         weights[i] = Weight(recordOf(kind), count)

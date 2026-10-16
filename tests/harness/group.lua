@@ -111,7 +111,8 @@ local function Retoken(h)
     local playerIndex = (#g.members + 1)
 
     g.playerUnit = ("raid" .. playerIndex)
-    local playerSubgroup, partyIndex = math.ceil(playerIndex / 5), 0
+    local playerSubgroup = math.ceil(playerIndex / 5)
+    local partyIndex = 0
 
     for i, member in ipairs(g.members) do
         member.unit, member.subgroup, member.partyUnit = ("raid" .. i), math.ceil(i / 5), nil
@@ -383,7 +384,8 @@ end
 -- Leaves the group: GROUP_LEFT(category, partyGUID), then GROUP_ROSTER_UPDATE.
 function Harness:LeaveGroup()
     assert(self.group.kind, "LeaveGroup: not in a group")
-    local category, guid = self:GroupCategory(), self.group.guid
+    local category = self:GroupCategory()
+    local guid = self.group.guid
 
     self.group.kind, self.group.members, self.group.guid, self.group.playerUnit = nil, {}, nil, nil
     self:Fire("GROUP_LEFT", category, guid)

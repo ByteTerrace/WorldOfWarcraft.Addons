@@ -22,14 +22,26 @@ local addonName, ns = ...
 
 -- The factions a context may name, as UnitFactionGroup names them.
 local Factions = { Alliance = true, Horde = true }
-local MaxChoice, MaxPrompt = 40, 240
+local MaxChoice = 40
+local MaxPrompt = 240
 -- How many times Generate draws again to avoid a riddle the child saw recently.
 local MaxRedraws = 8
 
-local error, ipairs, pairs, tonumber, tostring, type = error, ipairs, pairs, tonumber, tostring, type
-local find, gmatch, gsub, lower, upper = string.find, string.gmatch, string.gsub, string.lower, string.upper
-local floor, max, min = math.floor, math.max, math.min
+local error = error
+local find = string.find
+local floor = math.floor
+local gmatch = string.gmatch
+local gsub = string.gsub
 local insert = table.insert
+local ipairs = ipairs
+local lower = string.lower
+local max = math.max
+local min = math.min
+local pairs = pairs
+local tonumber = tonumber
+local tostring = tostring
+local type = type
+local upper = string.upper
 
 local ScholarWords = ns.ScholarWords
 
@@ -48,7 +60,8 @@ end
 
 --- An amount of copper as it's spoken: "45 copper", "2 silver", "1 silver 5 copper".
 local function Coins(copper)
-    local silver, rest = floor(copper / 100), (copper % 100)
+    local silver = floor(copper / 100)
+    local rest = (copper % 100)
 
     return (((silver == 0) and (rest .. " copper")) or (silver .. " silver" .. (((rest > 0) and (" " .. rest .. " copper")) or "")))
 end
@@ -133,7 +146,8 @@ end
 ---@return table choices four strings
 ---@return integer answer correct's position, 1 to 4
 local function Arrange(state, correct, wrongs)
-    local seen, pool = { [lower(Trim(correct))] = true }, {}
+    local seen = { [lower(Trim(correct))] = true }
+    local pool = {}
 
     for _, wrong in ipairs(wrongs) do
         local text = (((type(wrong) == "table") and wrong[1]) or wrong)
@@ -148,10 +162,12 @@ local function Arrange(state, correct, wrongs)
         error("ScholarPuzzles: too few distractors for " .. correct)
     end
 
-    local answer, picked = state.roll(1, 4), Shuffle(state, pool)
+    local answer = state.roll(1, 4)
+    local picked = Shuffle(state, pool)
 
     insert(picked, answer, { correct })
-    local choices, whys = {}, {}
+    local choices = {}
+    local whys = {}
 
     for i = 1, 4 do
         choices[i], whys[i] = picked[i][1], picked[i][2]
@@ -390,7 +406,8 @@ local function Generate(options)
         error("ScholarPuzzles.Generate: unknown subject " .. tostring(options.subject), 2)
     end
 
-    local kind, known = options.kind, false
+    local kind = options.kind
+    local known = false
 
     for _, listed in ipairs(kinds[state.grade]) do
         known = (known or (listed == kind))
@@ -426,8 +443,11 @@ end
 local function WrongNumbers(state, value, candidates, lo, hi)
     lo = (lo or (((value > 0) and 1) or 0))
     hi = max(hi or max(value * 2, value + 10), lo + 6)
-    local out, whys, seen = {}, {}, { [value] = true }
-    local required, optional = {}, {}
+    local out = {}
+    local whys = {}
+    local seen = { [value] = true }
+    local required = {}
+    local optional = {}
 
     for _, candidate in ipairs(candidates) do
         local entry = (((type(candidate) == "table") and candidate) or { candidate })
@@ -456,7 +476,8 @@ local function WrongNumbers(state, value, candidates, lo, hi)
     end
 
     -- How many of the four values sit below the answer: 0 to 3, each as likely, as far as lo and hi allow.
-    local below, above = 0, 0
+    local below = 0
+    local above = 0
 
     for _, n in ipairs(out) do
         if n < value then below = (below + 1) else above = (above + 1) end

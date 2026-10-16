@@ -169,7 +169,9 @@ end
 -- The sources of a list of sessions, merged by key in order of first appearance, and their total duration (nil for no
 -- sessions).
 local function Merge(h, sessions)
-    local records, order, duration = {}, {}, nil
+    local records = {}
+    local order = {}
+    local duration = nil
 
     for _, session in ipairs(sessions) do
         duration = ((duration or 0) + Duration(h, session))
@@ -324,7 +326,9 @@ end
 local function CombatSession(h, sessions, meterType, overall)
     local t = MeterType(meterType)
     local records, duration = Merge(h, sessions)
-    local sources, max, sum = {}, 0, 0
+    local sources = {}
+    local max = 0
+    local sum = 0
 
     for _, record in ipairs(records) do
         if t == Types.Deaths then
@@ -418,7 +422,8 @@ end
 
 -- A source spec split in two: everything but its DamageTaken and death, and its identity with only those.
 local function SplitDamageTaken(source)
-    local during, after = { amounts = {}, spells = {} }, { amounts = {}, death = source.death, spells = {} }
+    local during = { amounts = {}, spells = {} }
+    local after = { amounts = {}, death = source.death, spells = {} }
 
     for key, value in pairs(source) do
         if (key ~= "amounts") and (key ~= "spells") and (key ~= "death") then
@@ -500,7 +505,8 @@ function Harness:MeterAdd(spec, fightLeft)
         record[field] = value
     end
 
-    local touched, given = {}, {}
+    local touched = {}
+    local given = {}
 
     for key, amount in pairs(spec.amounts or {}) do
         local t = MeterType(key)
@@ -531,7 +537,8 @@ function Harness:MeterAdd(spec, fightLeft)
     local recapID
 
     if spec.death then
-        local m, death = self.meter, spec.death
+        local m = self.meter
+        local death = spec.death
 
         recapID = m.nextRecap
         m.nextRecap = (m.nextRecap + 1)
@@ -586,7 +593,8 @@ function Harness:MeterFight(spec)
     local session = assert(self:MeterActive(), "MeterFight: no damage meter session")
 
     session.name = (spec.name or session.name)
-    local fight, dying = { recaps = {}, sessionID = session.id }, nil
+    local fight = { recaps = {}, sessionID = session.id }
+    local dying = nil
 
     local function Add(source, fightLeft)
         local record, recapID = self:MeterAdd(source, fightLeft)

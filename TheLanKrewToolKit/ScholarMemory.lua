@@ -20,7 +20,9 @@ local MissPrompt = 160
 -- How many recent riddles the next one won't repeat.
 local RecentRiddles = 40
 
-local ByteTerrace, GetServerTime, ipairs = ByteTerrace, GetServerTime, ipairs
+local ByteTerrace = ByteTerrace
+local GetServerTime = GetServerTime
+local ipairs = ipairs
 
 local Puzzles = ns.Puzzles
 local Skills = ns.ScholarSkills
@@ -81,7 +83,8 @@ local Records = {
 
 -- The fact of kind most due again by count (the lowest box among the due), as { a, b }, or nil.
 local function DueFact(module, kind, count)
-    local facts, best = module.Records.facts, nil
+    local facts = module.Records.facts
+    local best = nil
 
     for _, key in ipairs(facts:Keys()) do
         local fact = facts:Get(key)
@@ -101,7 +104,8 @@ end
 
 -- The recent riddles' Signatures, as a set.
 local function Recent(module)
-    local recent, set = module.Records.recent, {}
+    local recent = module.Records.recent
+    local set = {}
 
     for _, key in ipairs(recent:Keys()) do
         set[recent:Field(key, "signature")] = true
@@ -161,7 +165,8 @@ local function Record(module, puzzle, i)
     end
 
     puzzle.recorded = true
-    local right, count = (i == puzzle.answer), 0
+    local right = (i == puzzle.answer)
+    local count = 0
 
     if puzzle.subject ~= "quest" then
         count = (module:Get(puzzle.subject .. "Count") + 1)
@@ -173,7 +178,8 @@ local function Record(module, puzzle, i)
     module.Records.skills:Set(puzzle.kind, Skills.Next(SkillOf(module, puzzle.kind), right, count, now))
 
     if puzzle.fact and (puzzle.subject ~= "quest") then
-        local key, facts = FactKey(puzzle.kind, puzzle.fact), module.Records.facts
+        local key = FactKey(puzzle.kind, puzzle.fact)
+        local facts = module.Records.facts
         local record = (facts:Get(key) or { asked = 0, box = 1, due = 0, firstTry = 0, lastAt = 0, recent = "" })
         local fields = Skills.Next(record, right, count, now)
 

@@ -57,7 +57,8 @@ end)
 
 test("the view moves to whichever host shows it, and works in both", function()
     local h, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
+    local window = addon.SettingsWindow
+    local state = addon.State
 
     window.Canvas:Show()
     local box = window.Controls[state:Id("Meter.enabled")]
@@ -86,7 +87,8 @@ end)
 
 test("window and external writes each refresh the changed control once", function()
     local h, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
+    local window = addon.SettingsWindow
+    local state = addon.State
 
     window:Show()
     local box = window.Controls[state:Id("Meter.enabled")]
@@ -120,7 +122,8 @@ end
 
 test("an enum is a dropdown: a click lists every value with the current one checked, and picking one sets it", function()
     local h, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
+    local window = addon.SettingsWindow
+    local state = addon.State
 
     window:Show()
     local button = window.Controls[state:Id("Meter.size")]
@@ -154,7 +157,8 @@ end)
 
 test("number steppers move by the row's step and stop at its bounds", function()
     local _, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
+    local window = addon.SettingsWindow
+    local state = addon.State
 
     window:Show()
     local control = window.Controls[state:Id("Meter.volume")]
@@ -175,7 +179,8 @@ end)
 
 test("the page list switches pages, and the window fits the page it shows", function()
     local _, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
+    local window = addon.SettingsWindow
+    local state = addon.State
 
     window:Show()
     local minutes = window.Controls[state:Id("Riddles.minutes")]
@@ -195,7 +200,8 @@ end)
 
 test("a hidden window, or a page not shown, costs nothing when its rows change", function()
     local h, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
+    local window = addon.SettingsWindow
+    local state = addon.State
 
     window:Show()
     window:Hide()
@@ -218,7 +224,8 @@ end)
 
 test("hovering a setting shows its label and description; leaving hides them", function()
     local h, addon = NewAddOn()
-    local window, state = addon.SettingsWindow, addon.State
+    local window = addon.SettingsWindow
+    local state = addon.State
 
     window:Show()
     local tooltip = h.env.GameTooltip
@@ -306,7 +313,8 @@ test("number steppers stay on the row's grid and inside its bounds, whatever the
         toggle = false })
 
     h:Fire("ADDON_LOADED", "TestApp", false)
-    local window, state = addon.SettingsWindow, addon.State
+    local window = addon.SettingsWindow
+    local state = addon.State
 
     window:Show()
     window.Controls[state:Id("M.share")].Plus:Click()

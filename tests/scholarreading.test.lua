@@ -34,7 +34,8 @@ end
 
 -- Every reading kind, in the order the grades list them.
 local function ReadingKinds(ns)
-    local out, seen = {}, {}
+    local out = {}
+    local seen = {}
 
     for grade = 0, 6 do
         for _, kind in ipairs(ns.ScholarWords.kinds.reading[grade]) do
@@ -77,7 +78,8 @@ end
 
 -- How many letters two words share, counting repeats.
 local function Shared(a, b)
-    local counts, n = {}, 0
+    local counts = {}
+    local n = 0
 
     for letter in a:gmatch(".") do
         counts[letter] = ((counts[letter] or 0) + 1)
@@ -354,7 +356,9 @@ end)
 
 test("rhyme families don't overlap, short words are three letters, and sounds start with their letter", function()
     local banks = Load().ScholarReadingWords
-    local family, letters, vowels = {}, {}, 0
+    local family = {}
+    local letters = {}
+    local vowels = 0
 
     for i, words in ipairs(banks.rhymes) do
         for _, word in ipairs(words) do
@@ -395,10 +399,14 @@ test("the answer is the longest choice, or the shortest, in at most 35% of each 
     local ns = Load()
 
     for _, kind in ipairs(ReadingKinds(ns)) do
-        local longest, shortest, total = 0, 0, 0
+        local longest = 0
+        local shortest = 0
+        local total = 0
 
         EachOfKind(ns, kind, 60, function(p)
-            local size, longer, shorter = #p.choices[p.answer], true, true
+            local size = #p.choices[p.answer]
+            local longer = true
+            local shorter = true
 
             for i, choice in ipairs(p.choices) do
                 if i ~= p.answer then
@@ -420,7 +428,10 @@ test("no one answer crowds a kind", function()
     local ns = Load()
 
     for _, kind in ipairs(ReadingKinds(ns)) do
-        local counts, total, top, most = {}, 0, 0, nil
+        local counts = {}
+        local total = 0
+        local top = 0
+        local most = nil
 
         EachOfKind(ns, kind, 60, function(p)
             local answer = p.choices[p.answer]
@@ -442,7 +453,8 @@ test("the real confusions turn up: a word that starts alike, a close sound, near
 
     -- How many of kind's riddles have a why that finds pattern.
     local function Share(kind, pattern)
-        local found, total = 0, 0
+        local found = 0
+        local total = 0
 
         EachOfKind(ns, kind, 40, function(p)
             local any = false
@@ -475,7 +487,8 @@ test("a heard riddle's prompt and speech vary, and the speech always ends with t
     local ns = Load()
 
     for _, kind in ipairs({ "reading.listen", "reading.listenSound" }) do
-        local prompts, speeches = {}, {}
+        local prompts = {}
+        local speeches = {}
 
         EachOfKind(ns, kind, 30, function(p)
             local word = p.speech:match("(%a+)%.$")
@@ -484,7 +497,8 @@ test("a heard riddle's prompt and speech vary, and the speech always ends with t
             speeches[p.speech:gsub(word, "")] = true
         end)
 
-        local promptCount, speechCount = 0, 0
+        local promptCount = 0
+        local speechCount = 0
 
         for _ in pairs(prompts) do
             promptCount = (promptCount + 1)
@@ -565,7 +579,9 @@ test("every word blended with a letter team holds one team, and offers the team'
     end
 
     for _, entry in ipairs(banks.digraphWords) do
-        local word, team, place = entry[1], nil, nil
+        local word = entry[1]
+        local team = nil
+        local place = nil
 
         for letters, candidate in pairs(teams) do
             for _, where in ipairs({ "start", "finish" }) do

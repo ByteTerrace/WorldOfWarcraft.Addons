@@ -1,6 +1,7 @@
 -- Scholar puzzles (TheLanKrewToolKit/ScholarWords.lua, ScholarPuzzles.lua, ScholarMathWords.lua, ScholarMath.lua,
--- ScholarNumberWords.lua, ScholarNumbers.lua, ScholarReadingWords.lua and ScholarReading.lua): property tests across
--- seeds, every grade, every level and both subjects. The reading banks' own checks are in scholarreading.test.lua.
+-- ScholarMoney.lua, ScholarNumberWords.lua, ScholarNumbers.lua, ScholarReadingWords.lua and ScholarReading.lua):
+-- property tests across seeds, every grade, every level and both subjects. The reading banks' own checks are in
+-- scholarreading.test.lua.
 --
 -- The puzzle files load on their own, not with the whole addon, so concurrent edits to other files can't break these
 -- tests. Their sources come from the runner (tools/lib/test-worker.mjs passes every TOC-listed file's source as
@@ -15,7 +16,7 @@ local Context = { class = "MAGE", copper = 4567, level = 12, name = "Tessa", zon
 local ReadBands = { ["math.numberLine"] = 9999, ["math.placeValue"] = 99999, ["math.time"] = 779 }
 
 local Files = {
-    "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarMathWords.lua", "ScholarMath.lua", "ScholarNumberWords.lua",
+    "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarMathWords.lua", "ScholarMath.lua", "ScholarMoney.lua", "ScholarNumberWords.lua",
     "ScholarNumbers.lua", "ScholarReadingWords.lua",
     "ScholarStoryWords.lua", "ScholarReading.lua",
 }
@@ -94,7 +95,8 @@ end
 
 local function Sources()
     local addon = assert(__addons.TheLanKrewToolKit, "TheLanKrewToolKit isn't an addon")
-    local sources, at = {}, {}
+    local sources = {}
+    local at = {}
 
     for i, name in ipairs(Files) do
         for j, file in ipairs(addon.files) do
@@ -161,7 +163,8 @@ end
 
 -- An independent evaluator for expressions: numbers (with decimals), + - x / and parentheses.
 local function Evaluate(text)
-    local tokens, i = {}, 1
+    local tokens = {}
+    local i = 1
 
     while i <= #text do
         local c = text:sub(i, i)
@@ -178,7 +181,8 @@ local function Evaluate(text)
         end
     end
 
-    local at, Sum = 1, nil
+    local at = 1
+    local Sum = nil
 
     local function Atom()
         local t = tokens[at]
@@ -396,7 +400,8 @@ local function CheckMath(p, options)
 
         Expect(counted == p.value, p, options, "%d symbols to count, not %d", counted, p.value)
     elseif p.kind == "math.remainder" then
-        local n, d = p.terms[1], p.terms[2]
+        local n = p.terms[1]
+        local d = p.terms[2]
 
         Expect(p.value == math.floor(n / d), p, options, "quotient")
         Expect(p.remainder == (n % d), p, options, "remainder")
@@ -716,7 +721,9 @@ test("the same options and random sequence give the same puzzle", function()
 end)
 
 test("every kind appears across seeds, and the answer lands in every position", function()
-    local seen, positions, total = { math = {}, reading = {} }, { 0, 0, 0, 0 }, 0
+    local seen = { math = {}, reading = {} }
+    local positions = { 0, 0, 0, 0 }
+    local total = 0
 
     Sweep(Load().Puzzles, 60, nil, function(p, options)
         seen[options.subject][options.grade .. p.kind] = true
@@ -757,7 +764,8 @@ test("each variant of a kind turns up", function()
 end)
 
 test("context personalizes some puzzles, never all, and only where it fits the grade", function()
-    local counts, total = {}, 0
+    local counts = {}
+    local total = 0
 
     local function Seen(label, yes)
         counts[label] = ((counts[label] or 0) + ((yes and 1) or 0))

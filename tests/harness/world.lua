@@ -233,7 +233,8 @@ local function MapFakes(h)
 
             if not h:CanSetWaypointOn(point.uiMapID) then return false end
 
-            local x, y = point.position.x, point.position.y
+            local x = point.position.x
+            local y = point.position.y
 
             h.waypoint = { uiMapID = point.uiMapID, x = x, y = y, z = point.z }
             h:Fire("USER_WAYPOINT_UPDATED")

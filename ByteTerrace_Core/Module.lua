@@ -21,9 +21,13 @@
 
 local ByteTerrace = ByteTerrace
 local C_Timer = C_Timer
-local ipairs, pairs, select, type, unpack = ipairs, pairs, select, type, unpack
+local ipairs = ipairs
+local pairs = pairs
 local remove = table.remove
 local SafeCall = ByteTerrace.SafeCall
+local select = select
+local type = type
+local unpack = unpack
 
 local Module = {}
 
@@ -92,7 +96,9 @@ end
 ---@return table timer for Cancel
 function Module:After(seconds, fn)
     self:CheckRunning()
-    local timers, addon, work = self.m_timers, self.Addon, self.Work
+    local timers = self.m_timers
+    local addon = self.Addon
+    local work = self.Work
     local timer
 
     timer = C_Timer.NewTimer(seconds, function()
@@ -119,7 +125,9 @@ function Module:Callback(fn, ...)
         error("Callback needs a function", 2)
     end
 
-    local generation, args, count = self.m_generation, { ... }, select("#", ...)
+    local generation = self.m_generation
+    local args = { ... }
+    local count = select("#", ...)
     local work = self.Work
 
     return function()
@@ -154,7 +162,8 @@ end
 ---@return table timer for Cancel
 function Module:Every(seconds, fn)
     self:CheckRunning()
-    local addon, work = self.Addon, self.Work
+    local addon = self.Addon
+    local work = self.Work
 
     local timer = C_Timer.NewTicker(seconds, function()
         work.timers = (work.timers + 1)
@@ -256,7 +265,8 @@ function Module:OnIncrease(row, fn)
     local last = self.Addon.State.Values[id]
 
     return self:Watch({ id }, function(state)
-        local count, previous = state.Values[id], last
+        local count = state.Values[id]
+        local previous = last
 
         last = count
 
@@ -328,7 +338,8 @@ end
 ---@return table watcher
 function Module:Rule(spec)
     self:CheckRunning()
-    local state, reads = self.Addon.State, self:ResolveRows(spec.reads, 2)
+    local state = self.Addon.State
+    local reads = self:ResolveRows(spec.reads, 2)
 
     state:BeginBatch()
 
@@ -358,7 +369,8 @@ function Module:SetEnabled(enabled)
         return
     end
 
-    local addon, spec = self.Addon, self.Spec
+    local addon = self.Addon
+    local spec = self.Spec
 
     addon.State:BeginBatch()
 
@@ -377,7 +389,8 @@ function Module:SetEnabled(enabled)
     end
 
     self.m_stopping = true
-    local handles, watchers = self.m_handles, self.m_watchers
+    local handles = self.m_handles
+    local watchers = self.m_watchers
 
     self.m_handles, self.m_watchers = {}, {}
 
@@ -425,7 +438,8 @@ end
 --- and its spec.active rule (if any) holds; that's how a module depends on other rows, so a switched-off feature
 --- registers nothing. A demand module waits for users.
 function Module:Start()
-    local spec, state = self.Spec, self.Addon.State
+    local spec = self.Spec
+    local state = self.Addon.State
 
     if spec.demand then
         return

@@ -14,7 +14,9 @@
 
 local ByteTerrace = ByteTerrace
 local ipairs = ipairs
-local issecretvalue, type, UnitGUID = issecretvalue, type, UnitGUID
+local issecretvalue = issecretvalue
+local type = type
+local UnitGUID = UnitGUID
 
 -- A Lua pattern from a client format string ("%s dies (Honorable Kill: %s). ..."): each %s is a capture, so the first
 -- capture is the victim's name. Both formats are GlobalStrings the client always defines (tools/api/forever.json).
@@ -47,7 +49,8 @@ ByteTerrace.Facts.kills = {
     demand = true,
     OnEnable = function(module)
         local state = module.Addon.State
-        local honorable, victim = module:Id("honorable"), module:Id("victim")
+        local honorable = module:Id("honorable")
+        local victim = module:Id("victim")
         local blows = module:Id("blows")
 
         module:On("CHAT_MSG_COMBAT_HONOR_GAIN", function(text)
@@ -65,7 +68,8 @@ ByteTerrace.Facts.kills = {
                 return
             end
 
-            local me, pet = UnitGUID("player"), UnitGUID("pet")
+            local me = UnitGUID("player")
+            local pet = UnitGUID("pet")
 
             if issecretvalue(me) or issecretvalue(pet) then
                 return

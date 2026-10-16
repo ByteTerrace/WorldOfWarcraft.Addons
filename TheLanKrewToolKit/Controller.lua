@@ -8,7 +8,8 @@ local addonName, ns = ...
 --
 -- Blizzard's gamepad UI uses neither, so nothing conflicts. Both are harmless with no controller connected.
 
-local C_GamePad, CreateColor = C_GamePad, CreateColor
+local C_GamePad = C_GamePad
+local CreateColor = CreateColor
 
 local CombatColor = CreateColor(1, 0, 0)
 local AFKColor = CreateColor(1, 1, 0)
@@ -22,7 +23,8 @@ ns.Addon:Module("LightBar", {
     end,
     OnEnable = function(module)
         local state = module.Addon.State
-        local combat, afk = module:Id("combat.active"), module:Id("afk.active")
+        local combat = module:Id("combat.active")
+        local afk = module:Id("afk.active")
 
         local function Apply()
             if state.Values[combat] then

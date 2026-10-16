@@ -116,7 +116,8 @@ local function Result(h, name) return h.env.Enum.SendAddonMessageResult[name] en
 
 test("prefixes register once, up to 16 characters", function()
     local h = Harness.New()
-    local chatInfo, results = h.env.C_ChatInfo, h.env.Enum.RegisterAddonMessagePrefixResult
+    local chatInfo = h.env.C_ChatInfo
+    local results = h.env.Enum.RegisterAddonMessagePrefixResult
 
     eq(chatInfo.RegisterAddonMessagePrefix("Krew"), results.Success)
     eq(chatInfo.RegisterAddonMessagePrefix("Krew"), results.DuplicatePrefix)

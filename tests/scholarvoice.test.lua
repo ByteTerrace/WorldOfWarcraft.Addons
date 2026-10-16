@@ -4,7 +4,8 @@
 -- and no heard riddle is asked.
 
 local Kit = use("scholar")
-local LoadKid, Watch = Kit.LoadKid, Kit.Watch
+local LoadKid = Kit.LoadKid
+local Watch = Kit.Watch
 
 local HeardKinds = { ["reading.listen"] = true, ["reading.listenSound"] = true, ["reading.listenStory"] = true }
 -- The heard kinds whose word is only spoken, and whose choices are for reading.

@@ -19,13 +19,18 @@ local AuraSoundSpellID = 1126
 local MaxAuraSoundThrottle = 5
 
 local Probes = ns.Probes
-local Joined, JoinSets, Shape, Value = Probes.Joined, Probes.JoinSets, Probes.Shape, Probes.Value
-local Kills, UnitCombat = Probes.Kills, Probes.UnitCombat
+local Joined = Probes.Joined
+local JoinSets = Probes.JoinSets
+local Kills = Probes.Kills
 local NamePlateToken = Probes.NamePlateToken
+local Shape = Probes.Shape
+local UnitCombat = Probes.UnitCombat
+local Value = Probes.Value
 
 -- A unit's UnitClassification and UnitLevel, as shapes; isSkull is a plain level of -1.
 local function Classification(unit)
-    local classification, level = UnitClassification(unit), UnitLevel(unit)
+    local classification = UnitClassification(unit)
+    local level = UnitLevel(unit)
     local plainClassification = (not issecretvalue(classification) and (type(classification) == "string"))
     local plainLevel = (not issecretvalue(level) and (type(level) == "number"))
 

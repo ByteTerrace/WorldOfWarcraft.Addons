@@ -51,7 +51,8 @@ local MenuResponse = { CloseAll = 4, Refresh = 2 }
 test("a disabled element does nothing; a checkbox answers Refresh; submenus nest", function()
     local h = Harness.New()
     local env = h.env
-    local clicks, checked = 0, false
+    local clicks = 0
+    local checked = false
 
     env.Menu.ModifyMenu("MENU_UNIT_TARGET", function(_, root)
         local off = root:CreateButton("Off", function() clicks = (clicks + 1) end)
@@ -269,7 +270,8 @@ test("MenuUtil.CreateContextMenu runs the generator, opens a menu to click, and 
     local h = Harness.New()
     local env = h.env
     local row = env.CreateFrame("Button", nil, env.UIParent)
-    local got, clicked = {}, 0
+    local got = {}
+    local clicked = 0
 
     local proxy = env.MenuUtil.CreateContextMenu(row, function(owner, root, extra)
         got.owner, got.extra = owner, extra

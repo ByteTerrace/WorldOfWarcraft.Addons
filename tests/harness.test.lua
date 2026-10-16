@@ -602,7 +602,8 @@ test("unit-filtered events with a secret payload are delivered; unit tokens aren
     local env = h.env
 
     h:SetTarget({})
-    local cast, castUnit = 0, nil
+    local cast = 0
+    local castUnit = nil
     local f = env.CreateFrame("Frame")
 
     f:RegisterUnitEvent("UNIT_SPELLCAST_START", "target")

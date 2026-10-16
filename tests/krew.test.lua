@@ -78,7 +78,8 @@ test("a late joiner learns the existing Krew and syncs their own marks and wars"
     dana:Slash("/tlk war Red Dawn")
     alice:JoinGroup("party", { "Cara" })
     cara:JoinGroup("party", { "Alice" })
-    local clients, delivered = { alice, cara }, { 0, 0, 0 }
+    local clients = { alice, cara }
+    local delivered = { 0, 0, 0 }
 
     local function Relay()
         for i, sender in ipairs(clients) do
@@ -234,7 +235,8 @@ test("a flood of Krew cards is capped", function()
         h:ReceiveAddonMessage(Prefix, "DING:" .. level, "PARTY", "Bob")
     end
 
-    local card, shown = rawget(h.env, "TheLanKrewToolKitCard"), 0
+    local card = rawget(h.env, "TheLanKrewToolKitCard")
+    local shown = 0
 
     while card:IsShown() and (shown < 50) do
         shown = (shown + 1)

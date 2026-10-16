@@ -10,7 +10,10 @@ local addonName, ns = ...
 -- Taketwo-Realm" records as "Aa Aa-Aa" and no character's name reaches the file.
 
 local Probes = ns.Probes
-local JoinSets, NameShape, Senders, Value = Probes.JoinSets, Probes.NameShape, Probes.Senders, Probes.Value
+local JoinSets = Probes.JoinSets
+local NameShape = Probes.NameShape
+local Senders = Probes.Senders
+local Value = Probes.Value
 
 -- Every return of a name API, as name shapes: { "Aa", "Aa" } for (name, surname).
 local function Returns(...)
@@ -80,7 +83,8 @@ Probes.Define({
                 return { secret = true }
             end
 
-            local realm, normalized = GetRealmName(), GetNormalizedRealmName()
+            local realm = GetRealmName()
+            local normalized = GetNormalizedRealmName()
 
             return {
                 unitFullNameIsRealm = ((fullSecond ~= nil) and ((fullSecond == realm) or (fullSecond == normalized))),

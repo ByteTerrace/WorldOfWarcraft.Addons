@@ -3,7 +3,10 @@
 -- difficulty; and the recent riddles, which the next one doesn't repeat.
 
 local Kit = use("scholar")
-local Banner, LoadKid, Watch, WrongAnswer = Kit.Banner, Kit.LoadKid, Kit.Watch, Kit.WrongAnswer
+local Banner = Kit.Banner
+local LoadKid = Kit.LoadKid
+local Watch = Kit.Watch
+local WrongAnswer = Kit.WrongAnswer
 
 -- Asks riddles (answering each right) until one is a stretch, or tries runs out; the stretch riddle is left on screen.
 local function UntilStretch(h, shown, tries)
@@ -36,7 +39,8 @@ test("a stretch riddle asks a kind from a grade or two up, says so, and its help
     local frame = rawget(h.env, "TheLanKrewToolKitScholar")
 
     truthy(Harness.State(frame.Tag).text:find("STRETCH", 1, true), "the tag says it's a stretch")
-    local level, stars = addon.State:Get("Scholar.mathLevel"), addon.State:Get("Scholar.stars")
+    local level = addon.State:Get("Scholar.mathLevel")
+    local stars = addon.State:Get("Scholar.stars")
     local first = WrongAnswer(puzzle)
 
     h:Key(tostring(first), true)

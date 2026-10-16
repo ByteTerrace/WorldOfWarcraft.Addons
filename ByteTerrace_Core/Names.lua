@@ -14,8 +14,10 @@
 --                                           without any "-Realm" suffix.
 
 local ByteTerrace = ByteTerrace
-local Constants, issecretvalue, UnitName = Constants, issecretvalue, UnitName
+local Constants = Constants
+local issecretvalue = issecretvalue
 local type = type
+local UnitName = UnitName
 
 local Separators = Constants.CharacterNameSeparatorConsts
 local Separator = ((Separators and Separators.CHARACTERNAME_SURNAME_SEPARATOR) or " ")

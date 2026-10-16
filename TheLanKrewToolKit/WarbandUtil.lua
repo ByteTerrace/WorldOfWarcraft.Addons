@@ -17,12 +17,28 @@ local addonName, ns = ...
 
 local Factions = { Alliance = true, Horde = true }
 
-local C_Map, C_SuperTrack = C_Map, C_SuperTrack
-local CleanCount, CleanText, MaxLevel = ns.KrewFields.CleanCount, ns.KrewFields.CleanText, ns.KrewFields.MaxLevel
-local floor, ipairs, issecretvalue, tonumber, tostring, type = math.floor, ipairs, issecretvalue, tonumber, tostring, type
-local GetGuildInfo, GetNormalizedRealmName, GetRealZoneText, GetSubZoneText, UiMapPoint = GetGuildInfo, GetNormalizedRealmName, GetRealZoneText, GetSubZoneText, UiMapPoint
+local C_Map = C_Map
+local C_SuperTrack = C_SuperTrack
+local CleanCount = ns.KrewFields.CleanCount
+local CleanText = ns.KrewFields.CleanText
+local floor = math.floor
+local GetGuildInfo = GetGuildInfo
+local GetNormalizedRealmName = GetNormalizedRealmName
+local GetRealZoneText = GetRealZoneText
+local GetSubZoneText = GetSubZoneText
+local ipairs = ipairs
+local issecretvalue = issecretvalue
+local MaxLevel = ns.KrewFields.MaxLevel
 local Names = ByteTerrace.Names
-local UnitClass, UnitFactionGroup, UnitIsEnemy, UnitIsPlayer, UnitLevel = UnitClass, UnitFactionGroup, UnitIsEnemy, UnitIsPlayer, UnitLevel
+local tonumber = tonumber
+local tostring = tostring
+local type = type
+local UiMapPoint = UiMapPoint
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local UnitIsEnemy = UnitIsEnemy
+local UnitIsPlayer = UnitIsPlayer
+local UnitLevel = UnitLevel
 
 --- A class file from a message (up to 12 capital letters), or "".
 ---@param class string?

@@ -145,8 +145,13 @@ function Harness:IsVisibleWidget(widget)
 end
 
 local Layout = Harness.Layout
-local Anchor, Anchored, Axes, LineHeight = Layout.Anchor, Layout.Anchored, Layout.Axes, Layout.LineHeight
-local Lines, Longest, Size = Layout.Lines, Layout.Longest, Layout.Size
+local Anchor = Layout.Anchor
+local Anchored = Layout.Anchored
+local Axes = Layout.Axes
+local LineHeight = Layout.LineHeight
+local Lines = Layout.Lines
+local Longest = Layout.Longest
+local Size = Layout.Size
 
 -- Each behavior is called as behavior(state, widget, ...args).
 local Behaviors = {}

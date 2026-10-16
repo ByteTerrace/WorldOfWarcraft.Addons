@@ -35,7 +35,8 @@ test("a stopped module's timers never fire, one-shot or repeating", function()
     local module = addon:Module("M", { label = "M" })
 
     Start(h)
-    local once, ticks = 0, 0
+    local once = 0
+    local ticks = 0
 
     module:After(5, function() once = (once + 1) end)
     module:Every(1, function() ticks = (ticks + 1) end)
@@ -355,7 +356,8 @@ end)
 
 test("finding taken aliases never walks every global", function()
     local h = Harness.New()
-    local walks, pairs = 0, h.env.pairs
+    local walks = 0
+    local pairs = h.env.pairs
 
     rawset(h.env, "pairs", function(t)
         if t == h.env then
@@ -401,7 +403,8 @@ end)
 
 test("debug toggles debug output, explains itself, and lists at most a screenful", function()
     local h, addon = NewAddOn()
-    local rows, events = {}, {}
+    local rows = {}
+    local events = {}
 
     for i = 1, 41 do
         rows[i] = { default = 0, kind = "number", name = ("row" .. i), persist = false }

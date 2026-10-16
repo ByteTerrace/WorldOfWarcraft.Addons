@@ -82,7 +82,8 @@ test("UnitHealthMissing is max minus health and UnitHealthPercent the fraction l
     local env = h.env
 
     h:SetTarget(EnemyPlayer({ health = 30, maxHealth = 120 }))
-    local missing, percent = env.UnitHealthMissing("target"), env.UnitHealthPercent("target", false)
+    local missing = env.UnitHealthMissing("target")
+    local percent = env.UnitHealthPercent("target", false)
 
     truthy(env.issecretvalue(missing) and env.issecretvalue(percent), "SecretReturns, like UnitHealth")
     eq(Reveal(missing), 90)

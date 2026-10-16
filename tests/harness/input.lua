@@ -46,7 +46,8 @@ local function CoversScreen(h, region, depth)
     end
 
     for _, pair in ipairs({ { "TOPLEFT", -1, 1, "BOTTOMRIGHT", 1, -1 }, { "TOPRIGHT", 1, 1, "BOTTOMLEFT", -1, -1 } }) do
-        local a, b = Corner(pair[1], pair[2], pair[3]), Corner(pair[4], pair[5], pair[6])
+        local a = Corner(pair[1], pair[2], pair[3])
+        local b = Corner(pair[4], pair[5], pair[6])
 
         if (a ~= nil) and (a == b) and CoversScreen(h, a, depth + 1) then
             return true
@@ -97,7 +98,9 @@ function Harness:GamePadMappedState(id)
 
     -- [E] gamePad.device's fields; [D] GamePadMappedState and GamePadStick in GamePadDocumentation.lua (forever). [G] A
     -- neutral pad with six axes and sixteen buttons.
-    local buttons, axes, sticks = {}, {}, {}
+    local buttons = {}
+    local axes = {}
+    local sticks = {}
 
     for i = 1, 16 do buttons[i] = false end
 

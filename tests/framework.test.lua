@@ -415,7 +415,9 @@ test("the settings window is generated from labeled persisted rows, in declarati
     } })
 
     Start(h)
-    local window, state, names = addon.SettingsWindow, addon.State, {}
+    local window = addon.SettingsWindow
+    local state = addon.State
+    local names = {}
 
     window:Show()
 
@@ -525,7 +527,8 @@ test("a handler removed mid-dispatch doesn't receive the rest of that dispatch",
     local m = addon:Module("M", { toggle = false })
 
     Start(h)
-    local ran, second = {}, nil
+    local ran = {}
+    local second = nil
 
     m:On("PLAYER_TARGET_CHANGED", function() ran[#ran + 1] = "a"; m:Off(second) end)
     second = m:On("PLAYER_TARGET_CHANGED", function() ran[#ran + 1] = "b" end)
@@ -578,7 +581,8 @@ test("a long watcher chain that settles isn't reported, and every version moves"
     local s = addon.State
 
     for i = 1, 8 do
-        local from, to = s:Id("C.r" .. i), s:Id("C.r" .. (i + 1))
+        local from = s:Id("C.r" .. i)
+        local to = s:Id("C.r" .. (i + 1))
 
         s:Watch({ from }, function(st) st:Set(to, st.Values[from]) end, true)
     end
@@ -593,7 +597,8 @@ test("a secret unit token in a payload can't break publication", function()
     local m = addon:Module("M", { state = { { default = 0, kind = "number", name = "x", persist = false } }, toggle = false })
 
     Start(h)
-    local seen, filtered = 0, 0
+    local seen = 0
+    local filtered = 0
 
     m:Watch({ "x" }, function() seen = (seen + 1) end, true)
 

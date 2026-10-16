@@ -49,8 +49,15 @@ local FullComboPoints = 5
 local OpeningHitWindow = 1
 local TargetCooldown = 10
 
-local C_DamageMeter, C_Spell, Enum, GetComboPoints, GetTime = C_DamageMeter, C_Spell, Enum, GetComboPoints, GetTime
-local ipairs, issecretvalue, type, UnitClass = ipairs, issecretvalue, type, UnitClass
+local C_DamageMeter = C_DamageMeter
+local C_Spell = C_Spell
+local Enum = Enum
+local GetComboPoints = GetComboPoints
+local GetTime = GetTime
+local ipairs = ipairs
+local issecretvalue = issecretvalue
+local type = type
+local UnitClass = UnitClass
 
 local Addon = ns.Addon
 local SoundBank = ns.SoundBank
@@ -134,7 +141,8 @@ Addon:Module("Kombat", {
             return
         end
 
-        local execute, combo = (class == "WARRIOR"), ((class == "ROGUE") or (class == "DRUID"))
+        local execute = (class == "WARRIOR")
+        local combo = ((class == "ROGUE") or (class == "DRUID"))
 
         module:Set("execute", execute)
         module:Set("combo", combo)
@@ -171,12 +179,16 @@ Addon:Module("Kombat", {
 Addon:Module("Destiny", {
     active = SoundBank:WhileOn("chooseYourDestiny", "testYourMight"),
     OnEnable = function(module)
-        local serial, enemy = module:Id("target.serial"), module:Id("target.enemyPlayer")
-        local formidable, alive = module:Id("target.formidable"), module:Id("target.alive")
+        local serial = module:Id("target.serial")
+        local enemy = module:Id("target.enemyPlayer")
+        local formidable = module:Id("target.formidable")
+        local alive = module:Id("target.alive")
 
         -- A foe worth announcing appears as the target: a new target, or the same one becoming attackable. Test your
         -- might wins over destiny; if it's off or has no file, destiny plays.
-        local lastSerial, wasMighty, wasEnemy = module:Get(serial), false, module:Get(enemy)
+        local lastSerial = module:Get(serial)
+        local wasMighty = false
+        local wasEnemy = module:Get(enemy)
 
         module:Watch({ serial, enemy, formidable, alive }, function(state)
             local fresh = (state.Values[serial] ~= lastSerial)
@@ -199,8 +211,12 @@ Addon:Module("Finish", {
     active = SoundBank:WhileOn("finishHim", "comboPoint1", "fatality"),
     OnEnable = function(module)
         local state = Addon.State
-        local points, ready, announced = module:Id("comboPoints"), module:Id("ready"), module:Id("announced")
-        local enemy, alive, serial = module:Id("target.enemyPlayer"), module:Id("target.alive"), module:Id("target.serial")
+        local points = module:Id("comboPoints")
+        local ready = module:Id("ready")
+        local announced = module:Id("announced")
+        local enemy = module:Id("target.enemyPlayer")
+        local alive = module:Id("target.alive")
+        local serial = module:Id("target.serial")
         local executeName = (state:Get("Kombat.execute") and C_Spell.GetSpellName(ExecuteSpellID))
         local combo = state:Get("Kombat.combo")
 
@@ -266,10 +282,12 @@ Addon:Module("Finish", {
         module:Watch({ enemy, alive, serial, points }, Update)
 
         -- A callout for each point added to the same target; spending or losing them is silent.
-        local lastPoints, pointsSerial = state.Values[points], state.Values[serial]
+        local lastPoints = state.Values[points]
+        local pointsSerial = state.Values[serial]
 
         module:Watch({ points, serial }, function(state)
-            local count, same = state.Values[points], (state.Values[serial] == pointsSerial)
+            local count = state.Values[points]
+            local same = (state.Values[serial] == pointsSerial)
 
             local finishing = ((count == FullComboPoints) and state.Values[enemy] and state.Values[alive]
                 and (state.Values[announced] ~= state.Values[serial]) and SoundBank:IsOn("finishHim"))
@@ -306,9 +324,12 @@ Addon:Module("Victory", {
     active = SoundBank:WhileOn("flawlessVictory", "fatality", "superbVictory"),
     OnEnable = function(module)
         local state = Addon.State
-        local flawless, combat = module:Id("flawless"), module:Id("combat.active")
-        local died, duelEnded = module:Id("target.died"), module:Id("target.duelEnded")
-        local serial, announced = module:Id("target.serial"), module:Id("Finish.announced")
+        local flawless = module:Id("flawless")
+        local combat = module:Id("combat.active")
+        local died = module:Id("target.died")
+        local duelEnded = module:Id("target.duelEnded")
+        local serial = module:Id("target.serial")
+        local announced = module:Id("Finish.announced")
         -- This fight's flawless kills, counted when it ends.
         local wins = 0
         -- The GetTime() of your last hit.

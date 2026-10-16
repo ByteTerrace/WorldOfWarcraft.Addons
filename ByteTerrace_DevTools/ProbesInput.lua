@@ -33,11 +33,18 @@ local InputEvents = {
 -- The label styles ByteTerrace_Core/Input.lua has labels for (its Labels table).
 local KnownLabelStyles = { Generic = true, Letters = true, Reverse = true, Shapes = true }
 
-local C_GamePad, C_InputInterfaceStyle, C_Timer = C_GamePad, C_InputInterfaceStyle, C_Timer
-local IsUsingGamepad, pcall, tostring = IsUsingGamepad, pcall, tostring
+local C_GamePad = C_GamePad
+local C_InputInterfaceStyle = C_InputInterfaceStyle
+local C_Timer = C_Timer
+local IsUsingGamepad = IsUsingGamepad
+local pcall = pcall
+local tostring = tostring
 
 local Probes = ns.Probes
-local EnumName, Fields, Joined, Shape = Probes.EnumName, Probes.Fields, Probes.Joined, Probes.Shape
+local EnumName = Probes.EnumName
+local Fields = Probes.Fields
+local Joined = Probes.Joined
+local Shape = Probes.Shape
 
 -- [event] = { payloads = { [shape] = true }, beforeWorld = whether it fired before the first PLAYER_ENTERING_WORLD }.
 local Heard = {}

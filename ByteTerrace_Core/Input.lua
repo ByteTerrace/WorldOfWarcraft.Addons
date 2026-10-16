@@ -59,16 +59,23 @@ local Labels = {
 }
 
 -- [source] = WoW key and [source] = label key, from Sources.
-local KeyOf, LabelKeyOf = {}, {}
+local KeyOf = {}
+local LabelKeyOf = {}
 
 for _, entry in ipairs(Sources) do
     KeyOf[entry[1]], LabelKeyOf[entry[1]] = entry[2], entry[3]
 end
 
 local ByteTerrace = ByteTerrace
-local C_GamePad, CreateFrame, pcall = C_GamePad, CreateFrame, pcall
-local ipairs, next, pairs, tostring, type = ipairs, next, pairs, tostring, type
+local C_GamePad = C_GamePad
+local CreateFrame = CreateFrame
+local ipairs = ipairs
+local next = next
+local pairs = pairs
+local pcall = pcall
 local Refuse = ByteTerrace.Refuse
+local tostring = tostring
+local type = type
 
 local Input = {}
 
@@ -209,10 +216,12 @@ end
 
 --- Resolves every binding, raising all problems at once. Runs after the commands compile.
 function Input:Compile()
-    local problems, commands = {}, self.m_addon.Commands
+    local problems = {}
+    local commands = self.m_addon.Commands
 
     for _, binding in ipairs(self.m_declared) do
-        local key, id = KeyOf[binding.source], commands.Ids[binding.command]
+        local key = KeyOf[binding.source]
+        local id = commands.Ids[binding.command]
 
         if not key then
             problems[#problems + 1] = ("%s: unknown source %s"):format(binding.map, tostring(binding.source))
@@ -232,7 +241,8 @@ function Input:Compile()
             end
 
             map[key] = id
-            local owner, known = (commands:ModuleOf(id) or false), self.m_owners[binding.map]
+            local owner = (commands:ModuleOf(id) or false)
+            local known = self.m_owners[binding.map]
 
             if known == nil then
                 self.m_owners[binding.map] = owner
@@ -249,7 +259,8 @@ end
 --- Deactivates the active maps that bind a stopping module's commands, keeping the rest active.
 ---@param module table
 function Input:Release(module)
-    local kept, dropped = {}, false
+    local kept = {}
+    local dropped = false
 
     for _, name in ipairs(self.m_activeMaps) do
         if self.m_owners[name] == module then
@@ -269,7 +280,8 @@ end
 --- is an error.
 ---@param maps string[]
 function Input:SetActiveMaps(maps)
-    local active, names = {}, {}
+    local active = {}
+    local names = {}
 
     for i, name in ipairs(maps) do
         local map = self.m_maps[name]

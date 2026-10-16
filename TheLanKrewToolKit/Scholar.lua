@@ -83,13 +83,30 @@ local DialogEvents = {
 -- The taxi node's map also closes with TAXIMAP_CLOSED.
 local TaxiNode = Enum.PlayerInteractionType.TaxiNode
 
-local byte, floor, issecretvalue, max, min, random, wipe = string.byte, math.floor, issecretvalue, math.max, math.min, math.random, wipe
+local byte = string.byte
 local ByteTerrace = ByteTerrace
-local C_Sound, C_TTSSettings, C_VoiceChat, GetMoney = C_Sound, C_TTSSettings, C_VoiceChat, GetMoney
-local GetLocale, GetRealZoneText, GetServerTime, GetTime = GetLocale, GetRealZoneText, GetServerTime, GetTime
-local IsLoggedIn, UnitFactionGroup, UnitOnTaxi = IsLoggedIn, UnitFactionGroup, UnitOnTaxi
+local C_Sound = C_Sound
+local C_TTSSettings = C_TTSSettings
+local C_VoiceChat = C_VoiceChat
+local floor = math.floor
+local GetLocale = GetLocale
+local GetMoney = GetMoney
+local GetRealZoneText = GetRealZoneText
+local GetServerTime = GetServerTime
+local GetTime = GetTime
+local IsLoggedIn = IsLoggedIn
+local issecretvalue = issecretvalue
+local max = math.max
+local min = math.min
 local next = next
-local SOUNDKIT, UnitClass, UnitLevel, UnitName = SOUNDKIT, UnitClass, UnitLevel, UnitName
+local random = math.random
+local SOUNDKIT = SOUNDKIT
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local UnitLevel = UnitLevel
+local UnitName = UnitName
+local UnitOnTaxi = UnitOnTaxi
+local wipe = wipe
 
 local Addon = ns.Addon
 local Memory = ns.ScholarMemory
@@ -99,7 +116,8 @@ local ScholarView = ns.ScholarView
 local Skills = ns.ScholarSkills
 local Words = ns.ScholarWords
 
-local GradeLabels, GradeValues = {}, {}
+local GradeLabels = {}
+local GradeValues = {}
 
 for _, grade in ipairs(Puzzles.Grades) do
     local id = tostring(grade.id)
@@ -112,14 +130,16 @@ end
 local Counting = false
 -- The riddle on screen (or waiting out a fight) until it's solved or skipped, how many tries missed, and which answers
 -- they picked ([i] = true), so a riddle that comes back keeps them.
-local Current, Missed, Wrongs = nil, {}, 0
+local Current = nil
 local LastSubject
+local Missed = {}
 -- The module is assigned at the end of the file.
 local Scholar
 -- The GetTime() the running stretch of play started at.
 local SegmentStart
 -- Blizzard's windows open now that a riddle waits for: "quest", "gossip" and interaction types.
 local Windows = {}
+local Wrongs = 0
 
 -- Saves the running stretch of play into elapsed, keeping its fraction of a second running.
 local function Bank()
@@ -147,7 +167,8 @@ end
 
 -- The child's own game, for personal word problems ("Tessa has 3 potions...").
 local function Context()
-    local name, class
+    local name
+    local class
     local rawName = UnitName("player")
 
     if not issecretvalue(rawName) then
@@ -227,7 +248,9 @@ end
 -- A riddle about a quest the player was shown, in QuestBook's order (fresh ones first, then the rest for review), or
 -- nil when none is recorded. A quest no question fits counts as asked.
 local function QuestPuzzle()
-    local known, byKey, context = QuestBook.All(), {}, Context()
+    local known = QuestBook.All()
+    local byKey = {}
+    local context = Context()
 
     for _, record in ipairs(known) do
         byKey[record.key] = record
@@ -316,7 +339,8 @@ local function Choose(i)
     local adapts = ((Current.questKey == nil) and not Current.stretch)
     local firstTry = Memory.Record(Scholar, Current, i)
     local earned = ((Current.stretch and 2) or 1)
-    local levelRow, runRow = (Current.subject .. "Level"), (Current.subject .. "Run")
+    local levelRow = (Current.subject .. "Level")
+    local runRow = (Current.subject .. "Run")
 
     if i == Current.answer then
         -- The riddle stops being due now, so a /reload during the celebration doesn't ask another; solved holds the
@@ -465,7 +489,8 @@ end
 
 -- The kinds in list that aren't in except.
 local function Without(list, except)
-    local skip, out = {}, {}
+    local skip = {}
+    local out = {}
 
     for _, kind in ipairs(except) do
         skip[kind] = true
@@ -517,8 +542,10 @@ local function NextPuzzle()
     end
 
     LastSubject = subject
-    local grade, known = tonumber(Scholar:Get("grade")), QuestBook.All()
-    local canHear, hasQuests = CanHear(), (#known > 0)
+    local grade = tonumber(Scholar:Get("grade"))
+    local known = QuestBook.All()
+    local canHear = CanHear()
+    local hasQuests = (#known > 0)
     -- A stretch asks a kind from a grade or two up that the child's own grade doesn't, at its easiest level.
     local stretch = ((grade < 6) and (random(1, StretchOdds) == 1))
     local asked = ((stretch and min(grade + random(1, 2), 6)) or grade)
@@ -797,9 +824,14 @@ Scholar = Addon:Module("Scholar", {
             module:Set("window", false)
         end)
 
-        local pending, solved, combat = module:Id("pending"), module:Id("solved"), module:Id("combat.active")
-        local afk, mathOn, readingOn = module:Id("afk.active"), module:Id("math"), module:Id("reading")
-        local questsOn, window = module:Id("quests"), module:Id("window")
+        local pending = module:Id("pending")
+        local solved = module:Id("solved")
+        local combat = module:Id("combat.active")
+        local afk = module:Id("afk.active")
+        local mathOn = module:Id("math")
+        local readingOn = module:Id("reading")
+        local questsOn = module:Id("quests")
+        local window = module:Id("window")
 
         -- Blizzard's windows a riddle waits for (see the header).
         for event, dialog in pairs(DialogEvents) do

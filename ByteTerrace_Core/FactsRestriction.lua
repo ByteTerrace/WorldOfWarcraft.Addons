@@ -20,7 +20,8 @@ local Restrictions = {
 }
 
 local ByteTerrace = ByteTerrace
-local C_RestrictedActions, Enum = C_RestrictedActions, Enum
+local C_RestrictedActions = C_RestrictedActions
+local Enum = Enum
 local ipairs = ipairs
 
 local Rows = {}
@@ -32,7 +33,8 @@ end
 ByteTerrace.Facts.restriction = {
     demand = true,
     OnEnable = function(module)
-        local state, inactive = module.Addon.State, Enum.AddOnRestrictionState.Inactive
+        local state = module.Addon.State
+        local inactive = Enum.AddOnRestrictionState.Inactive
         -- Maps each Enum.AddOnRestrictionType value to its row id.
         local ids = {}
 

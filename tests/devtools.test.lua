@@ -305,7 +305,8 @@ test("/btdev probe list prints its groups under the play-session steps, in order
         last = at
     end
 
-    local anywhere, questGiver = text:find("nothing: ", 1, true), text:find("a quest offer open", 1, true)
+    local anywhere = text:find("nothing: ", 1, true)
+    local questGiver = text:find("a quest offer open", 1, true)
 
     truthy(anywhere < questGiver, "a probe that runs anywhere comes before one that needs a quest giver")
     truthy(text:find("dead or a ghost after letting a mob kill you", 1, true) > text:find("  5. ", 1, true), text)
@@ -779,7 +780,8 @@ end)
 
 test("combat.edges keeps another order as it came, adds it to a saved record, and caps an edge's steps", function()
     local h = Load()
-    local types, states = h.env.Enum.AddOnRestrictionType, h.env.Enum.AddOnRestrictionState
+    local types = h.env.Enum.AddOnRestrictionType
+    local states = h.env.Enum.AddOnRestrictionState
 
     h:Fire("PLAYER_REGEN_DISABLED")
     h:Fire("PLAYER_REGEN_ENABLED")
@@ -819,7 +821,8 @@ test("UNIT_AURA's token is kept per restriction for two units, asking the client
     h:Slash("/btdev probe")
     eq(Records(h)["units.secretTokenInAuraEvent"], nil, "no aura restriction yet")
     h:EnterCombat()
-    local before, checks = ApiCalls(h), h:CountApiCalls("issecretvalue")
+    local before = ApiCalls(h)
+    local checks = h:CountApiCalls("issecretvalue")
 
     h:Fire("UNIT_AURA", "target", { isFullUpdate = true })
     h:Fire("UNIT_AURA", "party1", { isFullUpdate = true })
@@ -907,7 +910,8 @@ end)
 test("leaving combat in a PvP match keeps the meter's totals' shapes then and later, for damageMeter.pvpSecrecy", function()
     -- The sweeps' probes read the meter too; this counts the listener's reads alone.
     local h = Load({ ByteTerraceDevToolsDB = { autoProbe = false } })
-    local Probes, probe = h.ns.Probes, h.ns.Probes.ByName["damageMeter.pvpSecrecy"]
+    local Probes = h.ns.Probes
+    local probe = h.ns.Probes.ByName["damageMeter.pvpSecrecy"]
 
     local function Reads() return h:CountApiCalls("C_DamageMeter.GetCombatSessionFromType") end
 
@@ -946,7 +950,8 @@ test("auraSound.api registers an aura sound and removes it, idle only; the fake 
         .. 'removeAuraSound = "function" }', "a throttle past five seconds rejects registration without an error")
 
     eq(next(h.auraSounds), nil, "nothing stays registered")
-    local auras, triggers = h.env.C_UnitAuras, h.env.Enum.UnitAuraSoundTrigger
+    local auras = h.env.C_UnitAuras
+    local triggers = h.env.Enum.UnitAuraSoundTrigger
     local sound = { soundFileID = 1, spellID = 1126, throttleSeconds = 0, unitToken = "player" }
 
     falsy(pcall(auras.AddAuraSound, 7, sound), "a trigger that isn't an enum value")
@@ -966,13 +971,15 @@ end)
 
 test("ENCOUNTER_WARNING's payload is kept as field shapes once an encounter started, for encounterWarning.seen", function()
     local h = Load()
-    local Probes, probe = h.ns.Probes, h.ns.Probes.ByName["encounterWarning.seen"]
+    local Probes = h.ns.Probes
+    local probe = h.ns.Probes.ByName["encounterWarning.seen"]
 
     falsy((Probes.Check(probe)), "no encounter yet")
     h:StartEncounter({ name = "Hogger" })
     eq(Probes.Show(probe.run()), "{ featureAvailable = false, featureEnabled = false, heard = false }")
     local severity = h.env.Enum.EncounterEventSeverity
-    local before, checks = ApiCalls(h), h:CountApiCalls("issecretvalue")
+    local before = ApiCalls(h)
+    local checks = h:CountApiCalls("issecretvalue")
 
     h:EncounterWarning({ duration = 5, severity = severity.High, shouldPlaySound = false, text = "Hogger enrages!" })
     eq(ApiCalls(h) - before, h:CountApiCalls("issecretvalue") - checks, "a warning asks the client nothing else")

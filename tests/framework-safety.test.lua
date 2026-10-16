@@ -17,7 +17,9 @@ test("mixed unit filters check secret tokens regardless of registration order an
         local player = addon:Module("Player", { toggle = false })
 
         Start(h)
-        local published, filtered, secretChecks = 0, 0, 0
+        local published = 0
+        local filtered = 0
+        local secretChecks = 0
 
         general:Watch({ "count" }, function() published = (published + 1) end, true)
 
@@ -74,7 +76,8 @@ test("a rule registered while deferred rules take their first verdict gets its o
 
     addon:Module("M", { state = { { default = true, kind = "boolean", name = "a", persist = false } }, toggle = false })
     Start(h)
-    local state, lateRuns = addon.State, 0
+    local state = addon.State
+    local lateRuns = 0
     local Always = function() return true end
 
     state:BeginBatch()
@@ -98,7 +101,9 @@ test("a watcher registered mid-batch hears a row return to the value it register
     addon:Module("M", { state = { { default = 0, kind = "number", name = "n", persist = false } }, toggle = false })
     Start(h)
     local state = addon.State
-    local moved, seen, bounced = false, {}, false
+    local moved = false
+    local seen = {}
+    local bounced = false
 
     state:Watch({ "M.n" }, function(s)
         if (s:Get("M.n") == 1) and not moved then
@@ -292,7 +297,8 @@ test("a watcher registered mid-batch hears a row move back to the value the batc
 
     addon:Module("M", { state = { { default = 0, kind = "number", name = "n", persist = false } }, toggle = false })
     Start(h)
-    local state, seen = addon.State, {}
+    local state = addon.State
+    local seen = {}
 
     state:BeginBatch()
     state:Set("M.n", 1)
@@ -307,7 +313,8 @@ test("a count that went up, down and up again across a registration still counts
     local m = addon:Module("M", { state = { { default = 0, kind = "number", name = "count", persist = false } }, toggle = false })
 
     Start(h)
-    local state, rises = addon.State, 0
+    local state = addon.State
+    local rises = 0
 
     state:BeginBatch()
     state:Set("M.count", 1)
@@ -323,7 +330,8 @@ test("a rule registered in a batch's last publish round still takes its first ve
 
     addon:Module("M", { state = { { default = 0, kind = "number", name = "n", persist = false } }, toggle = false })
     Start(h)
-    local state, verdicts = addon.State, 0
+    local state = addon.State
+    local verdicts = 0
 
     state:Watch({ "M.n" }, function(s)
         local n = s:Get("M.n")
@@ -350,7 +358,8 @@ test("an extra EndBatch in a watcher is refused and leaves publishing intact", f
         toggle = false })
 
     Start(h)
-    local state, heard = addon.State, 0
+    local state = addon.State
+    local heard = 0
 
     state:Watch({ "M.a" }, function(s) s:EndBatch() end, true)
     state:Watch({ "M.b" }, function() heard = (heard + 1) end, true)

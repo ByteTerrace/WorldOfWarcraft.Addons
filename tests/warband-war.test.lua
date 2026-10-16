@@ -84,7 +84,8 @@ test("every enemy you meet gets a record: sightings, where, and the score", func
     h:RemoveNamePlate(plate)
     h:Advance(90)
     h:AddNamePlate(Enemy())
-    local people, key = Collection(addon, "people"), Key(h, "Bob")
+    local people = Collection(addon, "people")
+    local key = Key(h, "Bob")
 
     eq(people:Field(key, "sightings"), 2, "once per minute at most")
     eq(people:Field(key, "zone"), "Hillsbrad Foothills")
@@ -326,7 +327,8 @@ test("the window remembers where you drag it", function()
 
     h:AddNamePlate(Enemy())
     h:Drag(Window(h), -100, 50)
-    local x, y = addon.State:Get("Radar.x"), addon.State:Get("Radar.y")
+    local x = addon.State:Get("Radar.x")
+    local y = addon.State:Get("Radar.y")
 
     eq(x, -160)
     eq(y, 170)
@@ -397,7 +399,8 @@ end)
 
 -- Every call on the radar's window, its title and its rows' regions, summed.
 local function RadarCalls(h)
-    local window, total = Window(h), 0
+    local window = Window(h)
+    local total = 0
     local widgets = { window, window.Title }
 
     for _, row in ipairs(window.Rows) do
@@ -446,7 +449,8 @@ test("full rivalry records make room a hundred strangers at a time, keeping ledg
 
     people:Set("Old Doe", { seen = 0 })
     eq(people:Count(), 1000)
-    local keep, calls = people.Keep, 0
+    local keep = people.Keep
+    local calls = 0
 
     people.Keep = function(key)
         calls = (calls + 1)

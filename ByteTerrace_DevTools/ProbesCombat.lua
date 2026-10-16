@@ -23,10 +23,20 @@ local ConditionalRecapFields = {
 local RecapSpellFields = { "spellId", "spellName", "spellSchool", "avoidable", "deadly" }
 
 local Probes = ns.Probes
-local EnumName, Note, Restricted, Token = Probes.EnumName, Probes.Note, Probes.Restricted, Probes.Token
-local Fields, FieldShapes, Same = Probes.Fields, Probes.FieldShapes, Probes.Same
-local First, Joined, JoinSets = Probes.First, Probes.Joined, Probes.JoinSets
-local Marker, Shape, Text, Value = Probes.Marker, Probes.Shape, Probes.Text, Probes.Value
+local EnumName = Probes.EnumName
+local Fields = Probes.Fields
+local FieldShapes = Probes.FieldShapes
+local First = Probes.First
+local Joined = Probes.Joined
+local JoinSets = Probes.JoinSets
+local Marker = Probes.Marker
+local Note = Probes.Note
+local Restricted = Probes.Restricted
+local Same = Probes.Same
+local Shape = Probes.Shape
+local Text = Probes.Text
+local Token = Probes.Token
+local Value = Probes.Value
 
 -- The current DamageDone session's totals read on leaving combat in a PvP match (Probes.NotePvPLeftCombat): leftCombat
 -- (at PLAYER_REGEN_ENABLED) and later (PvPLaterSeconds on) each map where the read was ("<IsInInstance
@@ -60,7 +70,8 @@ local function NotePvPMeter(when)
     end
 
     Note(fields, "totalAmount", Token(session.totalAmount))
-    local localTotal, sources = "none", session.combatSources
+    local localTotal = "none"
+    local sources = session.combatSources
 
     if not issecretvalue(sources) and (type(sources) == "table") then
         for _, source in ipairs(sources) do
@@ -174,7 +185,8 @@ local function WhichSession(durationSeconds, sessions)
         return "none"
     end
 
-    local latest, previous = sessions[#sessions], sessions[#sessions - 1]
+    local latest = sessions[#sessions]
+    local previous = sessions[#sessions - 1]
 
     if latest and (Same(latest.durationSeconds, durationSeconds) == true) then
         return "latest"
@@ -244,7 +256,8 @@ Probes.Define({
         needs = { "idle", "twoFights" },
         run = function()
             local sessions = C_DamageMeter.GetAvailableCombatSessions()
-            local first, last = sessions[1], sessions[#sessions]
+            local first = sessions[1]
+            local last = sessions[#sessions]
             local oldestFirst = ((Same(first.sessionID, last.sessionID) == false) and (first.sessionID < last.sessionID))
 
             return {
@@ -262,7 +275,8 @@ Probes.Define({
             local current = CurrentSession(Enum.DamageMeterType.DamageDone)
             -- secret: fields go through Shape
             local expired = C_DamageMeter.GetCombatSessionFromType(types.Expired, Enum.DamageMeterType.DamageDone)
-            local currentShape, expiredShape = SessionShape(current), SessionShape(expired)
+            local currentShape = SessionShape(current)
+            local expiredShape = SessionShape(expired)
 
             currentShape.session = WhichSession(current.durationSeconds, sessions)
             expiredShape.session = WhichSession(expired.durationSeconds, sessions)
@@ -300,7 +314,8 @@ Probes.Define({
                 return { guid = Marker(guid) }
             end
 
-            local current, damageTaken = Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.DamageTaken
+            local current = Enum.DamageMeterSessionType.Current
+            local damageTaken = Enum.DamageMeterType.DamageTaken
             -- secret: fields go through Shape
             local source = C_DamageMeter.GetCombatSessionSourceFromType(current, damageTaken, guid)
             local spell = First(source.combatSpells)

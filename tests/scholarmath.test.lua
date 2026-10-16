@@ -11,7 +11,8 @@ local Numbers = Kit.Numbers
 
 -- The mistakes two-digit addition invites: leaving out the carry, adding only the tens, adding the tens as ones.
 local function AddMistakes(a, b)
-    local tens, out = (math.floor(a / 10) + math.floor(b / 10)), {}
+    local tens = (math.floor(a / 10) + math.floor(b / 10))
+    local out = {}
 
     if ((a % 10) + (b % 10)) >= 10 then
         out[1] = ((a + b) - 10)
@@ -125,7 +126,8 @@ end
 local Mistakes = {
     ["math.add"] = function(p, options)
         local a, b = unpack(Numbers(p.expression))
-        local v, big = p.value, math.max(a, b)
+        local v = p.value
+        local big = math.max(a, b)
 
         if options.grade >= 2 then
             return AddMistakes(a, b)
@@ -166,7 +168,8 @@ local Mistakes = {
         end
 
         local a, b = unpack(Numbers(p.expression))
-        local ta, tb = math.floor((a * 10) + 0.5), math.floor((b * 10) + 0.5)
+        local ta = math.floor((a * 10) + 0.5)
+        local tb = math.floor((b * 10) + 0.5)
 
         if p.expression:find("-", 1, true) and ((tb % 10) > (ta % 10)) then
             return { ((((math.floor(ta / 10) - math.floor(tb / 10)) * 10) + ((tb % 10) - (ta % 10))) / 10), (p.value * 10) }
@@ -215,7 +218,8 @@ local Mistakes = {
         local n = Numbers(p.expression)
 
         if p.prompt:find("closest") then
-            local t, any = Numbers(p.prompt)[1], { any = true }
+            local t = Numbers(p.prompt)[1]
+            local any = { any = true }
             local gap = math.abs(p.value - t)
 
             for i, choice in ipairs(p.choices) do
@@ -238,7 +242,8 @@ local Mistakes = {
     -- A digit's face value; the ones left over, or the tens digit alone; one more or less; the digits in the order they
     -- were said, backwards in place order, or without the empty tens place.
     ["math.placeValue"] = function(p)
-        local e, n = p.expression, Numbers(p.expression)
+        local e = p.expression
+        local n = Numbers(p.expression)
 
         if e:match("^%d+ x %d+$") then
             return { n[1] }
@@ -248,8 +253,11 @@ local Mistakes = {
             return { (n[1] + ((e:find("-", 1, true) and -1) or 1)) }
         end
 
-        local said, places = {}, { hundred = 3, hundreds = 3, one = 1, ones = 1, ten = 2, tens = 2 }
-        local inOrder, last, zero = true, 4, (p.prompt:find("hundred") and not p.prompt:find("%d tens?%f[%A]"))
+        local said = {}
+        local places = { hundred = 3, hundreds = 3, one = 1, ones = 1, ten = 2, tens = 2 }
+        local inOrder = true
+        local last = 4
+        local zero = (p.prompt:find("hundred") and not p.prompt:find("%d tens?%f[%A]"))
 
         for digit, place in p.prompt:gmatch("(%d+) (%a+)") do
             if places[place] then
@@ -269,7 +277,9 @@ local Mistakes = {
     -- Quest riddles' mistakes: adding the count done to the count wanted, or one of two counts alone.
     ["math.multiply"] = function(p, options)
         local a, b = unpack(Numbers(p.expression))
-        local v, big, small = p.value, math.max(a, b), math.min(a, b)
+        local v = p.value
+        local big = math.max(a, b)
+        local small = math.min(a, b)
 
         if options.grade >= 4 then
             local carry = math.floor(((a % 10) * b) / 10)
@@ -303,7 +313,8 @@ local Mistakes = {
     end,
     ["math.percent"] = function(p)
         local n = Numbers(p.expression)
-        local price, percent = n[1], n[#n - 1]
+        local price = n[1]
+        local percent = n[#n - 1]
         local off = ((price * percent) / 100)
 
         if p.expression:find("-", 1, true) then
@@ -316,12 +327,16 @@ local Mistakes = {
         local n = Numbers(p.expression)
 
         if p.expression:find("(", 1, true) then
-            local t, x, y = n[1], n[2], n[3]
+            local t = n[1]
+            local x = n[2]
+            local y = n[3]
 
             return { (x * (t / (x + y))) }
         end
 
-        local h, x, y = n[1], n[2], n[3]
+        local h = n[1]
+        local x = n[2]
+        local y = n[3]
 
         return { ((h + y) - x) }
     end,
@@ -331,7 +346,8 @@ local Mistakes = {
         return { { (p.value - 1), (p.remainder + d) } }
     end,
     ["math.skip"] = function(p)
-        local start, step = p.terms[1], p.terms[2]
+        local start = p.terms[1]
+        local step = p.terms[2]
 
         return { ((start + (3 * step)) + (((step < 0) and -1) or 1)) }
     end,
@@ -367,7 +383,8 @@ local Mistakes = {
         end
 
         if #times == 2 then
-            local m1, m2 = (times[1] % 60), (times[2] % 60)
+            local m1 = (times[1] % 60)
+            local m2 = (times[2] % 60)
 
             if math.floor(times[2] / 60) > math.floor(times[1] / 60) then
                 return { (p.value + 40) }
@@ -397,7 +414,8 @@ local Mistakes = {
 
 -- The first of the kind's mistakes that's a fair choice, or every fair one when any will do.
 local function Expected(p, options)
-    local list, out = Mistakes[p.kind](p, options), {}
+    local list = Mistakes[p.kind](p, options)
+    local out = {}
 
     -- Decimals count in tenths, so their least fair choice is 0.1.
     local least = (((p.value == 0) and 0) or ((p.kind == "math.decimal") and 0.1) or 1)
@@ -467,7 +485,8 @@ test("every math riddle offers its kind's known mistake, with a why that names i
     local _, _, ns = Kit.LoadKid()
 
     Sample(ns.Puzzles, 30, function(p, options)
-        local expected, found = Expected(p, options), false
+        local expected = Expected(p, options)
+        local found = false
 
         truthy(#expected > 0, "the kind invites a mistake that fits at " .. Where(p, options))
 
@@ -518,7 +537,8 @@ test("every math riddle has a worked first step, strategy praise and an explanat
         elseif (p.kind == "math.subtract") and (options.grade >= 2) and not p.prompt:find("You are level") and ((n[2] % 10) > (n[1] % 10)) then
             truthy(explanation:find("trade a ten"), "regrouping shows the trade at " .. where)
         elseif (p.kind == "math.multiply") and (options.grade >= 4) then
-            local a, b = n[1], n[2]
+            local a = n[1]
+            local b = n[2]
 
             truthy(explanation:find(tostring((a - (a % 10)) * b), 1, true) and explanation:find(tostring((a % 10) * b), 1, true),
                 "partial products at " .. where)
@@ -537,7 +557,9 @@ end)
 
 test("the answer's place among the numbers gives nothing away", function()
     local _, _, ns = Kit.LoadKid()
-    local middle, total, over = { all = 0 }, { all = 0 }, {}
+    local middle = { all = 0 }
+    local total = { all = 0 }
+    local over = {}
 
     Sample(ns.Puzzles, 120, function(p)
         -- Comparisons ask for an end by design, and remainders aren't one number. An answer needs three whole numbers
@@ -581,7 +603,9 @@ test("hints fit the riddle they're on", function()
     local _, _, ns = Kit.LoadKid()
 
     Sample(ns.Puzzles, 30, function(p, options)
-        local where, hint, n = Where(p, options), p.hint:lower(), ((p.expression and Numbers(p.expression)) or {})
+        local where = Where(p, options)
+        local hint = p.hint:lower()
+        local n = ((p.expression and Numbers(p.expression)) or {})
 
         if p.kind == "math.percent" then
             local percent = n[#n - 1]
@@ -618,7 +642,8 @@ test("a missing-number riddle offers the sum only as a near miss, and a remainde
                 falsy((Value(p, choice) == c) and ((c - p.value) > 2), "the sum is only ever a near miss at " .. Where(p, options))
             end
         elseif p.kind == "math.remainder" then
-            local quotients, remainders = 0, 0
+            local quotients = 0
+            local remainders = 0
 
             for _, choice in ipairs(p.choices) do
                 local value = Value(p, choice)
@@ -638,7 +663,10 @@ end)
 
 test("small sums are spread evenly, and the first times tables include 0, 1 and 10", function()
     local _, _, ns = Kit.LoadKid()
-    local sums, facts, factors, distinct = {}, {}, {}, 0
+    local sums = {}
+    local facts = {}
+    local factors = {}
+    local distinct = 0
 
     for seed = 1, 360 do
         math.randomseed(seed)

@@ -72,7 +72,8 @@ test("dragging runs OnMouseDown, OnDragStart and OnDragStop, not OnMouseUp or On
     local h = Harness.New()
     local env = h.env
     local frame = Movable(h)
-    local log, stopped = {}, nil
+    local log = {}
+    local stopped = nil
 
     frame:SetScript("OnMouseDown", function(_, button) log[#log + 1] = ("down:" .. button) end)
     frame:SetScript("OnMouseUp", Recorder(log, "up"))

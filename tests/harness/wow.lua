@@ -81,14 +81,16 @@ local function DecodeSnapshot(text)
     local snapshot = { enums = {}, events = {}, functions = {}, methods = {} }
 
     for line in text:gmatch("[^\n]+") do
-        local fields, i = {}, 0
+        local fields = {}
+        local i = 0
 
         for field in (line .. "\t"):gmatch("([^\t]*)\t") do
             i = (i + 1)
             fields[i] = field
         end
 
-        local kind, name = fields[1], fields[2]
+        local kind = fields[1]
+        local name = fields[2]
 
         if kind == "N" then
             local enum = {}
@@ -136,7 +138,8 @@ local function Sequence(t)
         return (t or {})
     end
 
-    local out, i = {}, 0
+    local out = {}
+    local i = 0
 
     while t[i] ~= nil do
         out[i + 1] = t[i]
@@ -753,7 +756,8 @@ end
 
 -- Runs fn(...) like the client runs a script: an error goes to the error handler.
 function Harness:Protect(fn, ...)
-    local args, n = { ... }, select("#", ...)
+    local args = { ... }
+    local n = select("#", ...)
     local ok, err = pcall(function() return fn(unpack(args, 1, n)) end)
 
     if not ok then
@@ -933,7 +937,8 @@ function Harness:Restart(isInitialLogin, isReloadingUi, whileAway)
         whileAway(self)
     end
 
-    local order, main = self.loadOrder, self.mainAddon
+    local order = self.loadOrder
+    local main = self.mainAddon
 
     self.frames, self.widgets, self.timers, self.loaded, self.loadOrder, self.declared = {}, {}, {}, {}, {}, {}
     -- The quest dialog closes with the old UI, and its giver with it.

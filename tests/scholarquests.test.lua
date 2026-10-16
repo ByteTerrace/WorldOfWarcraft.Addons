@@ -345,7 +345,8 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
     Accept(h, long, "Eleanor Shackleton")
     h:Slash("/tlk puzzle")
     local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
-    local book, screen = overlay.Book, h.env.UIParent:GetHeight()
+    local book = overlay.Book
+    local screen = h.env.UIParent:GetHeight()
 
     local function Fits(what)
         truthy(overlay.Panel:GetHeight() <= (screen - 40), ("%s: the panel (%d) fits the screen (%d)"):format(what,
@@ -496,7 +497,8 @@ end)
 
 -- The choices of puzzles of kind over many seeds, all wrong ones, as a set.
 local function WrongChoices(h, ns, kind, quest, known, context)
-    local wrongs, asked = {}, 0
+    local wrongs = {}
+    local asked = 0
 
     for seed = 1, 300 do
         h:SeedRandom(seed)
@@ -629,7 +631,9 @@ end)
 
 -- Every quest.objective puzzle about quest across seeds: { [prompt] = true }, and every choice.
 local function ObjectivePuzzles(h, ns, quest, known)
-    local prompts, choices, answers = {}, {}, {}
+    local prompts = {}
+    local choices = {}
+    local answers = {}
 
     for seed = 1, 300 do
         h:SeedRandom(seed)

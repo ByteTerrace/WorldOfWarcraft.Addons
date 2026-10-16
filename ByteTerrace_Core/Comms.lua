@@ -55,13 +55,25 @@ local MinInterval = 1
 local Separator = "\t"
 
 local ByteTerrace = ByteTerrace
-local C_ChatInfo, Enum, GetTime = C_ChatInfo, Enum, GetTime
-local concat, insert, remove = table.concat, table.insert, table.remove
+local C_ChatInfo = C_ChatInfo
+local concat = table.concat
+local Enum = Enum
+local GetTime = GetTime
 local huge = math.huge
-local IsInGroup, IsInRaid, LE_PARTY_CATEGORY_INSTANCE = IsInGroup, IsInRaid, LE_PARTY_CATEGORY_INSTANCE
-local issecretvalue, pairs, tostring, type, wipe = issecretvalue, pairs, tostring, type, wipe
+local insert = table.insert
+local IsInGroup = IsInGroup
+local IsInRaid = IsInRaid
+local issecretvalue = issecretvalue
+local LE_PARTY_CATEGORY_INSTANCE = LE_PARTY_CATEGORY_INSTANCE
 local Names = ByteTerrace.Names
-local Report, SafeCall, TimedCall = ByteTerrace.Report, ByteTerrace.SafeCall, ByteTerrace.TimedCall
+local pairs = pairs
+local remove = table.remove
+local Report = ByteTerrace.Report
+local SafeCall = ByteTerrace.SafeCall
+local TimedCall = ByteTerrace.TimedCall
+local tostring = tostring
+local type = type
+local wipe = wipe
 
 local Comms = {}
 
@@ -166,7 +178,8 @@ local function Pump(self)
         return
     end
 
-    local queue, entry = self.m_queue, self.m_queue[1]
+    local queue = self.m_queue
+    local entry = self.m_queue[1]
     local ok, result = SafeCall(C_ChatInfo.SendAddonMessage, self.m_prefix, entry.text, channel)
 
     self.m_lastSent = GetTime()
@@ -205,8 +218,11 @@ end
 ---@param module table the owning module
 ---@param spec table { prefix, interval?, queue? }
 function ByteTerrace.NewComms(module, spec)
-    local addon, problems = module.Addon, {}
-    local prefix, interval, queue = spec.prefix, (spec.interval or 1), (spec.queue or 8)
+    local addon = module.Addon
+    local problems = {}
+    local prefix = spec.prefix
+    local interval = (spec.interval or 1)
+    local queue = (spec.queue or 8)
 
     if (type(prefix) ~= "string") or (#prefix < 1) or (#prefix > MaxPrefix) or prefix:find("[%z\t\r\n]") then
         problems[#problems + 1] = ("prefix must be a string of 1 to %d bytes"):format(MaxPrefix)
@@ -270,7 +286,8 @@ end
 --- calls it as it starts.
 function Comms:Open()
     -- Registered once per UI session: after a restart of the module it's a duplicate, which is fine.
-    local result, results = C_ChatInfo.RegisterAddonMessagePrefix(self.m_prefix), Enum.RegisterAddonMessagePrefixResult
+    local result = C_ChatInfo.RegisterAddonMessagePrefix(self.m_prefix)
+    local results = Enum.RegisterAddonMessagePrefixResult
 
     if (result ~= results.Success) and (result ~= results.DuplicatePrefix) then
         local reason = (((result == results.MaxPrefixes) and "MaxPrefixes") or "InvalidPrefix")
@@ -280,7 +297,9 @@ function Comms:Open()
 
     -- Your name, nil while it's secret; each message looks it up again until it isn't.
     local me = Names.Mine()
-    local module, prefix, listeners = self.m_module, self.m_prefix, self.m_listeners
+    local module = self.m_module
+    local prefix = self.m_prefix
+    local listeners = self.m_listeners
 
     self.m_open = true
     self.m_session = (self.m_session + 1)
@@ -398,7 +417,8 @@ function Comms:Send(kind, fields, urgent)
     end
 
     if type(fields) == "table" then
-        local encoded, count = {}, 0
+        local encoded = {}
+        local count = 0
 
         for key in pairs(fields) do
             if (type(key) ~= "number") or (key < 1) or ((key % 1) ~= 0) or (key > #fields) then
@@ -464,7 +484,8 @@ end
 ---@param handle table from Listen
 function Comms:Unlisten(handle)
     handle.dead = true
-    local list, copy = self.m_listeners[handle.kind], {}
+    local list = self.m_listeners[handle.kind]
+    local copy = {}
 
     for i = 1, #(list or {}) do
         if not list[i].dead then

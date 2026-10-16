@@ -13,7 +13,8 @@ end
 
 -- The puzzle the screen shows: watched.puzzle is always the latest. Call before it first shows.
 local function Watch(h)
-    local watched, view = {}, h.ns.ScholarView
+    local watched = {}
+    local view = h.ns.ScholarView
     local show = view.Show
 
     view.Show = function(puzzle, info)
@@ -120,7 +121,8 @@ end)
 
 test("a riddle that comes back after a fight keeps its wrong answers and its Skip", function()
     local h, addon = LoadKid({ ["Scholar.mode"] = "gentle", ["Scholar.mathLevel"] = 2, ["Scholar.readingLevel"] = 2 })
-    local view, puzzle = h.ns.ScholarView, nil
+    local view = h.ns.ScholarView
+    local puzzle = nil
     local show = view.Show
 
     view.Show = function(shown, info)
@@ -565,7 +567,8 @@ test("an answer glows under the mouse, a missed one doesn't, and so do the foote
         return ("%.2f,%.2f,%.2f"):format(color[1], color[2], color[3])
     end
 
-    local gold, edge = "1.00,0.82,0.00", "0.45,0.36,0.17"
+    local gold = "1.00,0.82,0.00"
+    local edge = "0.45,0.36,0.17"
     local button = frame.Buttons[1]
 
     truthy(h:Hover(button, true))
@@ -786,7 +789,8 @@ test("Read aloud and Skip live in the footer, never over the question", function
         kind = "reading.rhyme", prompt = "Which word rhymes with \"cat\"?", subject = "reading", title = "Rhyme Time" },
         { actions = { hint = "H", skip = "Esc", speak = "R" }, canSpeak = true, keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 1 })
 
-    local speak, hint = Point(frame.Speak), Point(frame.Hint)
+    local speak = Point(frame.Speak)
+    local hint = Point(frame.Hint)
 
     eq(speak.point, "TOPRIGHT")
     eq(speak.y, hint.y, "Read aloud sits on the footer row with Need a hint?")

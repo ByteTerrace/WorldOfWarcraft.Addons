@@ -8,12 +8,13 @@
 //                      already delimits it: existing parentheses, an if/elseif/while/until condition,
 //                      a call's arguments, an index's brackets and a numeric for's bounds. An operand
 //                      of the same `and`, `or` or `..` stays bare, so a chain stays one flat group.
+//   split-locals       a `local` declaring several names gets a line per name, when it gives each
+//                      name its own value (or none) and no value reads a name declared before it.
 //   init-order         a table constructor whose every field is `name = value` is sorted by name,
 //                      when no value calls anything (or with options.sortCalls); a field's own comment
 //                      lines move with it. Across lines, fields that each had a line keep one; packed
 //                      fields are packed again, up to 120 columns.
 //   trailing-comma     a multi-line table constructor's last field ends with a comma.
-//   alias-order        a file-level `local a, b = x, y` with values that call nothing is sorted by name.
 //   export-order       a file-level run of `Table.member = value` lines is sorted by target.
 //   local-order        a file-level run of `local` statements (consecutive lines, values that call
 //                      nothing and hold no function) is sorted by name, with each one's comment lines.
@@ -35,7 +36,7 @@ import luaparse from "luaparse";
 import { parse, walk } from "./lua-scope.mjs";
 
 export const PASSES = [
-    "trailing-comments", "string-merge", "paren-clarity", "init-order", "trailing-comma", "alias-order", "export-order",
+    "trailing-comments", "string-merge", "paren-clarity", "split-locals", "init-order", "trailing-comma", "export-order",
     "local-order", "function-order", "decl-spacing", "block-spacing", "member-spacing", "comment-fill", "blank-lines",
 ];
 
@@ -256,6 +257,23 @@ const Passes = {
         return edits;
     },
 
+    "split-locals": ({ text, ast }) => {
+        const edits = [];
+        walk(ast.body, (node) => {
+            if (node.type !== "LocalStatement" || node.variables.length < 2) return;
+            const { variables, init } = node;
+            if (init.length && init.length !== variables.length) return;
+            if (commentsBetween(ast, node.range[0], node.range[1]).length) return;
+            if (text.slice(node.range[0], node.range[1]).includes("\n")) return;
+            // Split, a value would read the new local declared before it instead of the name it reads now.
+            if (init.some((value, i) => variables.slice(0, i).some((variable) => namesRead(value).has(variable.name)))) return;
+            const indent = " ".repeat(indentOf(text, node.range[0]));
+            const lines = variables.map((variable, i) => `local ${variable.name}${init.length ? ` = ${text.slice(init[i].range[0], init[i].range[1])}` : ""}`);
+            edits.push({ start: node.range[0], end: node.range[1], text: lines.join(`\n${indent}`) });
+        });
+        return edits;
+    },
+
     "init-order": ({ text, ast, options }) => {
         const edits = [];
         walk(ast.body, (node) => {
@@ -333,27 +351,6 @@ const Passes = {
             if (!text.slice(last.range[1], next.range[0]).includes("\n")) return;
             edits.push({ start: last.range[1], end: last.range[1], text: "," });
         });
-        return edits;
-    },
-
-    "alias-order": ({ text, ast }) => {
-        const edits = [];
-        for (const { body, fileLevel } of blocksOf(ast)) {
-            if (!fileLevel) continue;
-            for (const statement of body) {
-                if (statement.type !== "LocalStatement" || statement.variables.length < 2) continue;
-                const { variables, init } = statement;
-                if (init.length !== variables.length || !init.every(isPure) || init.some(hasVararg)) continue;
-                if (commentsBetween(ast, statement.range[0], statement.range[1]).length) continue;
-                if (text.slice(statement.range[0], statement.range[1]).includes("\n")) continue;
-                const pairs = variables.map((variable, i) => ({ name: variable.name, value: text.slice(init[i].range[0], init[i].range[1]) }));
-                const sorted = [...pairs].sort((a, b) => compareNames(a.name, b.name));
-                if (sorted.every((pair, i) => pair === pairs[i])) continue;
-                const names = sorted.map((pair) => pair.name).join(", ");
-                const values = sorted.map((pair) => pair.value).join(", ");
-                edits.push({ start: statement.range[0], end: statement.range[1], text: `local ${names} = ${values}` });
-            }
-        }
         return edits;
     },
 

@@ -28,7 +28,8 @@ end
 test("a combat is a session: its events, its sources sorted by amount, and its rates", function()
     local h = Harness.New({ classFile = "WARRIOR", name = "Tester" })
     local env = h.env
-    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local types = env.Enum.DamageMeterType
+    local sessionTypes = env.Enum.DamageMeterSessionType
     local seen = Watch(h, unpack(MeterEvents))
 
     local fight = h:MeterFight({ duration = 10, sources = {
@@ -49,7 +50,8 @@ test("a combat is a session: its events, its sources sorted by amount, and its r
 
     falsy(env.issecretvalue(session.totalAmount), "plain out of combat")
     eq(#session.combatSources, 2)
-    local top, me = session.combatSources[1], session.combatSources[2]
+    local top = session.combatSources[1]
+    local me = session.combatSources[2]
 
     eq(top.name, "Cara")
     eq(top.totalAmount, 2000)
@@ -79,7 +81,8 @@ end)
 test("Bob hit me for 3000 and killed me; Mom healed 5000: deaths, spells and the recap", function()
     local h = Harness.New({ name = "Tester" })
     local env = h.env
-    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local types = env.Enum.DamageMeterType
+    local sessionTypes = env.Enum.DamageMeterSessionType
     local fight = BobKillsMe(h)
 
     truthy(h.player.dead, "the local player's death kills the player")
@@ -172,7 +175,8 @@ end)
 test("in combat every field is secret except the NeverSecret ones; the tables stay plain", function()
     local h = Harness.New({ name = "Tester" })
     local env = h.env
-    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local types = env.Enum.DamageMeterType
+    local sessionTypes = env.Enum.DamageMeterSessionType
 
     BobKillsMe(h, false)
     truthy(h.inCombat)
@@ -216,7 +220,8 @@ end)
 test("Current is the latest fight, Expired is empty after ordinary fights (probed), Overall merges them all", function()
     local h = Harness.New({ name = "Tester" })
     local env = h.env
-    local types, sessionTypes = env.Enum.DamageMeterType, env.Enum.DamageMeterSessionType
+    local types = env.Enum.DamageMeterType
+    local sessionTypes = env.Enum.DamageMeterSessionType
     local damageMeter = env.C_DamageMeter
 
     eq(#damageMeter.GetCombatSessionFromType(sessionTypes.Current, types.DamageDone).combatSources, 0, "no session yet: an empty one")

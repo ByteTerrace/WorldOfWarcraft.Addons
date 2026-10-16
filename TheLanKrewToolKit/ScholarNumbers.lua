@@ -18,7 +18,9 @@ local addonName, ns = ...
 -- ScholarWords' quest banks.
 
 -- The longest giver, objective and title, in bytes, a quest riddle names.
-local MaxGiver, MaxObjective, MaxTitle = 24, 28, 36
+local MaxGiver = 24
+local MaxObjective = 28
+local MaxTitle = 36
 -- A quest objective's kind by its log type: an item to bring or a foe to defeat. Other objectives aren't counted.
 local ObjectiveKinds = { item = "item", monster = "foe" }
 -- The largest number a quest riddle's count or answer reaches, per grade (copper for a vendor's riddle).
@@ -50,15 +52,34 @@ local Places = { { "one", "ones" }, { "ten", "tens" }, { "hundred", "hundreds" }
 local Units = { 1, 10, 100, 1000 }
 local Walks = { "ones", "ones, then tens", "ones, tens, then hundreds", "ones, tens, hundreds, then thousands" }
 
-local abs, floor, max, min = math.abs, math.floor, math.max, math.min
-local concat, insert, sort = table.concat, table.insert, table.sort
+local abs = math.abs
+local concat = table.concat
 local find = string.find
-local ipairs, tostring, type, unpack = ipairs, tostring, type, unpack
+local floor = math.floor
+local insert = table.insert
+local ipairs = ipairs
+local max = math.max
+local min = math.min
+local sort = table.sort
+local tostring = tostring
+local type = type
+local unpack = unpack
 
 local Kit = ns.Puzzles.Kit
-local Chance, Count, Fill, Finish, Fits, Pick, Shuffle = Kit.Chance, Kit.Count, Kit.Fill, Kit.Finish, Kit.Fits, Kit.Pick, Kit.Shuffle
-local Generators, Numeric, Text, Vars, Why, With = Kit.Generators, Kit.Numeric, Kit.Text, Kit.Vars, Kit.Why, Kit.With
+local Chance = Kit.Chance
+local Count = Kit.Count
+local Fill = Kit.Fill
+local Finish = Kit.Finish
+local Fits = Kit.Fits
+local Generators = Kit.Generators
 local NumberWords = ns.ScholarNumberWords
+local Numeric = Kit.Numeric
+local Pick = Kit.Pick
+local Shuffle = Kit.Shuffle
+local Text = Kit.Text
+local Vars = Kit.Vars
+local Why = Kit.Why
+local With = Kit.With
 
 -- A time of day as a clock shows it: 165 minutes is "2:45".
 local function Clock(minutes)
@@ -163,7 +184,8 @@ local OrderForms = {
             }
         end,
         function(_, b, c, d)
-            local left, right = ((c + d) * (b + 1)), (c * b)
+            local left = ((c + d) * (b + 1))
+            local right = (c * b)
 
             return {
                 first = ((c + d) .. " x " .. (b + 1)), parens = false, slips = { { ((left - c) * b), "leftToRight" } },
@@ -178,11 +200,13 @@ local OrderForms = {
 -- farther off; the rest fall below or above t so the answer's rank among the four gives nothing away.
 local function Closest(state)
     local scale = (((state.grade >= 3) and 10) or 1)
-    local t, gap = ((10 * scale) * state.roll(2, 8)), (scale * state.roll(1, 4))
+    local t = ((10 * scale) * state.roll(2, 8))
+    local gap = (scale * state.roll(1, 4))
     local sign = ((Chance(state, 2) and "+") or "-")
     local v = (((sign == "+") and (t + gap)) or (t - gap))
     local trap = (t + (scale * state.roll((gap / scale) + 1, 9)))
-    local chosen, used = { trap }, { [trap] = true, [v] = true }
+    local chosen = { trap }
+    local used = { [trap] = true, [v] = true }
     local below = state.roll(0, 2)
 
     for i = 1, 2 do
@@ -228,7 +252,9 @@ end
 
 -- A place-value number of count distinct digits, none of them 0: its digits, ones first, and its value.
 local function DistinctNumber(state, count)
-    local pool, digits, n = Shuffle(state, { 1, 2, 3, 4, 5, 6, 7, 8, 9 }), {}, 0
+    local pool = Shuffle(state, { 1, 2, 3, 4, 5, 6, 7, 8, 9 })
+    local digits = {}
+    local n = 0
 
     for i = 1, count do
         digits[i] = pool[i]
@@ -255,7 +281,8 @@ end
 local function FractionOfLine(state)
     local way = Pick(state, Fractions[Tier(state)])
     local e = Pick(state, way[4])
-    local j, k = way[2], way[3]
+    local j = way[2]
+    local k = way[3]
     local s = (e / j)
     local v = (k * s)
     local vars = { e = e, frac = way[1], j = j, k = k, s = s, v = v }
@@ -272,13 +299,15 @@ end
 -- The middle of two numbers: never one whose gap is the answer, which the step names.
 local function Halfway(state)
     local unit = HalfwayUnits[min(state.grade, 4)]
-    local lo, half = (unit * state.roll(1, 6)), (unit * state.roll(1, 5))
+    local lo = (unit * state.roll(1, 6))
+    local half = (unit * state.roll(1, 5))
 
     if half == lo then
         half = (half + unit)
     end
 
-    local hi, v = (lo + (2 * half)), (lo + half)
+    local hi = (lo + (2 * half))
+    local v = (lo + half)
     local vars = { gap = (2 * half), half = half, hi = hi, lo = lo, v = v }
     local named = { { half, why = "half" }, { (2 * half), why = "gap" }, { (lo + hi), why = "sum" } }
 
@@ -290,7 +319,8 @@ end
 -- the other pictures (ScholarPuzzles.lua).
 local function Mark(state)
     local line = Pick(state, Lines[Tier(state)])
-    local e, j = line[1], line[2]
+    local e = line[1]
+    local j = line[2]
     local s = (e / j)
     local k = state.roll(2, j - 1)
 
@@ -332,7 +362,8 @@ local function Objectives(state, most)
         local title = ((type(record) == "table") and Plain(record.title, MaxTitle))
 
         for i = 1, (((giver or title) and 3) or 0) do
-            local name, required = Plain(record["objective" .. i], MaxObjective), record["required" .. i]
+            local name = Plain(record["objective" .. i], MaxObjective)
+            local required = record["required" .. i]
             local kind = ObjectiveKinds[record["type" .. i]]
 
             if name and kind and (type(required) == "number") and (required == floor(required)) and (required >= 2) and (required <= most) then
@@ -362,7 +393,8 @@ end
 
 -- How many quests the player's book holds and how many of them are turned in.
 local function QuestCounts(state)
-    local held, turned = 0, 0
+    local held = 0
+    local turned = 0
 
     for _, record in ipairs(((type(state.known) == "table") and state.known) or {}) do
         if type(record) == "table" then
@@ -386,7 +418,8 @@ local function QuestMore(state, objectives, cap)
         objective = { giver = Pick(state, bank.names), kind = "item", name = Pick(state, bank.items), required = state.roll(4, min(12, cap)) }
     end
 
-    local r, done = objective.required, {}
+    local r = objective.required
+    local done = {}
 
     for h = 1, r - 1 do
         if (h ~= (r - h)) and ((h + 1) ~= (r - h)) then
@@ -412,7 +445,8 @@ end
 
 -- A vendor's copper for an objective's items, sometimes added to the player's own copper when the sum stays in reach.
 local function QuestSell(state, objectives, cap)
-    local items, stock = {}, (#objectives == 0)
+    local items = {}
+    local stock = (#objectives == 0)
 
     for _, objective in ipairs(objectives) do
         if (objective.kind == "item") and (objective.required >= 3) then
@@ -472,7 +506,8 @@ local function QuestTotal(state, objectives, cap)
 
     if stock then
         local bank = QuestBank(state)
-        local items, names = Shuffle(state, bank.items), Shuffle(state, bank.names)
+        local items = Shuffle(state, bank.items)
+        local names = Shuffle(state, bank.names)
 
         first = { giver = names[1], kind = "item", name = items[1], required = state.roll(2, min(12, cap - 2)) }
         second = { giver = names[2], kind = "item", name = items[2], required = state.roll(2, min(12, cap - first.required)) }
@@ -482,9 +517,13 @@ local function QuestTotal(state, objectives, cap)
         return nil
     end
 
-    local r1, r2 = first.required, second.required
-    local v, big, small = (r1 + r2), max(r1, r2), min(r1, r2)
-    local oa, ob = (r1 % 10), (r2 % 10)
+    local r1 = first.required
+    local r2 = second.required
+    local v = (r1 + r2)
+    local big = max(r1, r2)
+    local small = min(r1, r2)
+    local oa = (r1 % 10)
+    local ob = (r2 % 10)
 
     local vars = {
         big = big, big1 = (big + 1), g1 = first.giver, g2 = second.giver,
@@ -545,7 +584,9 @@ local function Build(state)
         end
     end
 
-    local words, saidDigits, reversed = {}, 0, 0
+    local words = {}
+    local saidDigits = 0
+    local reversed = 0
 
     for i, part in ipairs(parts) do
         words[i] = Said(part[1], part[2])
@@ -557,7 +598,9 @@ local function Build(state)
     end
 
     local said = (((#words == 3) and (words[1] .. ", " .. words[2] .. " and " .. words[3])) or (words[1] .. " and " .. words[2]))
-    local o, td, hd = digits[1], digits[2], (digits[3] or 0)
+    local o = digits[1]
+    local td = digits[2]
+    local hd = (digits[3] or 0)
     local v = (((100 * hd) + (10 * td)) + o)
 
     local vars = {
@@ -593,7 +636,8 @@ local function DigitWorth(state)
     local count = PlaceDigits[min(state.grade, 4)][state.level]
     local digits, n = DistinctNumber(state, count)
     local at = state.roll(2, count)
-    local d, unit = digits[at], Units[at]
+    local d = digits[at]
+    local unit = Units[at]
     local otherAt = Pick(state, { (((at > 1) and (at - 1)) or (at + 1)), (((at < count) and (at + 1)) or (at - 1)) })
     local v = (d * unit)
 
@@ -614,12 +658,15 @@ end
 local function TenMore(state)
     local count = PlaceDigits[min(state.grade, 4)][state.level]
     local s = ((((count >= 3) and (state.level >= 2) and Chance(state, 2)) and 100) or 10)
-    local less, cross = Chance(state, 2), ((state.level == 3) and Chance(state, 3))
+    local less = Chance(state, 2)
+    local cross = ((state.level == 3) and Chance(state, 3))
 
     -- Ten less with no tens to take trades from the next place, so the number needs one.
     cross = (cross and (not less or (Units[count] >= (10 * s))))
-    local lo, hi = Units[count], ((Units[count] * 10) - 1)
-    local n, pd
+    local lo = Units[count]
+    local hi = ((Units[count] * 10) - 1)
+    local n
+    local pd
 
     for _ = 1, 40 do
         n = state.roll(lo, hi)
@@ -666,7 +713,10 @@ end
 -- number's hundreds as tens too.
 local function TensIn(state)
     local count = min(PlaceDigits[min(state.grade, 4)][state.level], 3)
-    local n, o, td, hd
+    local n
+    local o
+    local td
+    local hd
 
     if (state.grade == 0) and (state.level < 3) then
         hd, td, o = 0, 1, state.roll(2, 9)
@@ -698,7 +748,8 @@ end
 -- ends right on it.
 local function TimeElapsed(state)
     local tier = Tier(state)
-    local h, dur = state.roll(1, 10), (5 * state.roll(2, ((tier <= 2) and 6) or 11))
+    local h = state.roll(1, 10)
+    local dur = (5 * state.roll(2, ((tier <= 2) and 6) or 11))
     local m1 = (5 * state.roll(0, ((tier <= 2) and ((55 - dur) / 5)) or 11))
 
     -- A trip ending right on the hour would end where the step's count up stops.
@@ -706,7 +757,8 @@ local function TimeElapsed(state)
         dur = (dur - 5)
     end
 
-    local start, v = ((h * 60) + m1), (((h * 60) + m1) + dur)
+    local start = ((h * 60) + m1)
+    local v = (((h * 60) + m1) + dur)
     local cross = ((m1 + dur) >= 60)
 
     local vars = {
@@ -747,14 +799,17 @@ end
 -- How long a trip lasts, from its start and end, never right on the hour. Across an hour, the classic slip takes the
 -- times away as if an hour had 100 minutes.
 local function TimeHowLong(state)
-    local h, m1, dur = state.roll(1, 10), (5 * state.roll(1, 11)), (5 * state.roll(2, 11))
+    local h = state.roll(1, 10)
+    local m1 = (5 * state.roll(1, 11))
+    local dur = (5 * state.roll(2, 11))
 
     if (m1 + dur) == 60 then
         dur = (dur - 5)
     end
 
     local stop = (((h * 60) + m1) + dur)
-    local h2, m2 = floor(stop / 60), (stop % 60)
+    local h2 = floor(stop / 60)
+    local m2 = (stop % 60)
     local cross = (h2 > h)
 
     local vars = {
@@ -782,14 +837,16 @@ local function TimeWords(state)
         or { "half", "quarterPast", "quarterTo", "past", "to" })
 
     local h = state.roll(1, 12)
-    local h0, h1 = LastHour(h), NextHour(h)
+    local h0 = LastHour(h)
+    local h1 = NextHour(h)
     local m = (({ half = 30, quarterPast = 15, quarterTo = 45 })[form] or (5 * Pick(state, { 1, 2, 4, 5 })))
 
     if form == "to" then
         m = (60 - m)
     end
 
-    local v, k = ((h * 60) + m), (60 - m)
+    local v = ((h * 60) + m)
+    local k = (60 - m)
     local named
 
     if form == "half" then
@@ -822,9 +879,13 @@ end
 
 Generators["math.order"] = function(state)
     local form = Pick(state, OrderForms[state.level])
-    local a, b, c, d = state.roll(2, 6), state.roll(2, 6), state.roll(2, 6), state.roll(2, 6)
+    local a = state.roll(2, 6)
+    local b = state.roll(2, 6)
+    local c = state.roll(2, 6)
+    local d = state.roll(2, 6)
     local riddle = form(a, b, c, d)
-    local v, named = riddle.v, {}
+    local v = riddle.v
+    local named = {}
 
     for i, slip in ipairs(riddle.slips) do
         named[i] = { slip[1], why = slip[2] }

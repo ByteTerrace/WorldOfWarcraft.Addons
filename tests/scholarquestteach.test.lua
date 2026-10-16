@@ -190,7 +190,8 @@ test("a missing word's wrong answers are words of its kind, and its step quotes 
     local asked = {}
 
     for _, puzzle in ipairs(Puzzles(h, ns, quest, { quest })) do
-        local answer, choices = puzzle.choices[puzzle.answer], puzzle.choices
+        local answer = puzzle.choices[puzzle.answer]
+        local choices = puzzle.choices
         local listed = table.concat(choices, ", ")
 
         asked[answer] = true

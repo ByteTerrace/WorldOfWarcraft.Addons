@@ -85,7 +85,9 @@ local AfterDeathSeconds = 5
 local Probes = {}
 
 -- The needs by key, and the probes in run order and by name, as the other probe files add them.
-local ByName, List, Needs = {}, {}, {}
+local ByName = {}
+local List = {}
+local Needs = {}
 
 -- The UNIT_COMBAT payloads seen since load (Probes.NoteUnitCombat): units[unit][action] holds a set per payload field
 -- (action, flagText, amount, schoolMask) of the shapes seen (a secret action keys "secret"); actions and flagTexts are
@@ -182,7 +184,8 @@ end
 -- their comma-separated items (the marker as "secret", so neither side is lost), tables merge key by key, two booleans
 -- are true if either is, and otherwise b stands.
 local function Merge(a, b)
-    local itemA, itemB = Item(a), Item(b)
+    local itemA = Item(a)
+    local itemB = Item(b)
 
     if ((type(a) == "string") or (type(b) == "string")) and (type(itemA) == "string") and (type(itemB) == "string") then
         if itemA == itemB then
@@ -308,7 +311,8 @@ local function FieldShapes(tbl)
 end
 
 local function SortedKeys(...)
-    local seen, keys = {}, {}
+    local seen = {}
+    local keys = {}
 
     for i = 1, select("#", ...) do
         local tbl = select(i, ...)
@@ -454,7 +458,8 @@ local function Whose(guid)
         return "secret"
     end
 
-    local me, pet = UnitGUID("player"), UnitGUID("pet")
+    local me = UnitGUID("player")
+    local pet = UnitGUID("pet")
 
     if not issecretvalue(me) and (guid == me) then
         return "you"
@@ -557,7 +562,8 @@ end
 --- enter, the rest leave; a step of the other edge than the last one's starts that edge over.
 ---@param state number? the Combat restriction's Enum.AddOnRestrictionState
 function Probes.NoteCombatEdge(event, state)
-    local label, kind = event, (((event == "PLAYER_REGEN_DISABLED") and "enter") or "leave")
+    local label = event
+    local kind = (((event == "PLAYER_REGEN_DISABLED") and "enter") or "leave")
 
     if event == "ADDON_RESTRICTION_STATE_CHANGED" then
         label = ("Combat " .. tostring(EnumName(Enum.AddOnRestrictionState, state)))

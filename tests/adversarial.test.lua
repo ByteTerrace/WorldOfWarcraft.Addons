@@ -23,7 +23,8 @@ test("record replacement publishes only the complete collection", function()
         toggle = false })
 
     Start(h)
-    local people, snapshots = module.Records.people, {}
+    local people = module.Records.people
+    local snapshots = {}
 
     people:Set("A", { seen = 1 })
 
@@ -45,7 +46,8 @@ test("an immediate watcher that stops its owner leaves no subscription", functio
     local module = addon:Module("M", { label = "M", state = { { default = 0, kind = "number", name = "n" } } })
 
     Start(h)
-    local runs, before = 0, addon.State:WatcherCount()
+    local runs = 0
+    local before = addon.State:WatcherCount()
 
     module:Watch({ "n" }, function()
         runs = (runs + 1)
@@ -62,7 +64,8 @@ test("an immediate rule that stops its owner leaves no subscription", function()
     local module = addon:Module("M", { label = "M", state = { { default = 0, kind = "number", name = "n" } } })
 
     Start(h)
-    local runs, before = 0, addon.State:WatcherCount()
+    local runs = 0
+    local before = addon.State:WatcherCount()
 
     module:Rule({ changed = function()
             runs = (runs + 1)
@@ -133,7 +136,10 @@ for _, restriction in ipairs({ "Encounter", "ChallengeMode", "PvPMatch", "Map", 
         module.Comms:Send("PING", "stale")
         eq(module.Comms:Queued(), 1)
         eq(module:PendingTimers(), 1)
-        local activating, locked, queued, timers
+        local activating
+        local locked
+        local queued
+        local timers
 
         module:On("ADDON_RESTRICTION_STATE_CHANGED", function(kind, state)
             if (kind == h.env.Enum.AddOnRestrictionType[restriction])

@@ -3,7 +3,10 @@
 -- answer is what its prompt works out to, and Scholar asks it only while the quest book holds a quest.
 
 local Kit = use("scholar")
-local Accept, LoadKid, Numbers, Watch = Kit.Accept, Kit.LoadKid, Kit.Numbers, Kit.Watch
+local Accept = Kit.Accept
+local LoadKid = Kit.LoadKid
+local Numbers = Kit.Numbers
+local Watch = Kit.Watch
 
 local Candles = {
     goal = "Bring 6 Kobold Candles to Marshal Dughan.", header = "Elwynn Forest", id = 60,
@@ -32,7 +35,8 @@ end
 
 -- Every math.quest riddle for seeds at grade and level, with the player's quest book and context.
 local function Riddles(ns, grade, level, seeds, context)
-    local out, known = {}, ns.QuestBook.All()
+    local out = {}
+    local known = ns.QuestBook.All()
 
     for seed = 1, seeds do
         math.randomseed((grade * 1000) + seed)

@@ -97,19 +97,35 @@ local Counted = {
 
 local Order = { glory = 4, grudge = 2, mark = 1, war = 3 }
 
-local concat, sort = table.concat, table.sort
-local GetServerTime, GetTime, SOUNDKIT = GetServerTime, GetTime, SOUNDKIT
+local concat = table.concat
+local GetServerTime = GetServerTime
+local GetTime = GetTime
 local Names = ByteTerrace.Names
-local next, pairs, tostring, wipe = next, pairs, tostring, wipe
-local UnitAffectingCombat, UnitExists = UnitAffectingCombat, UnitExists
+local next = next
+local pairs = pairs
+local sort = table.sort
+local SOUNDKIT = SOUNDKIT
+local tostring = tostring
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitExists = UnitExists
+local wipe = wipe
 
 local Addon = ns.Addon
-local Alert, Krew, ShowCard = ns.Cards.Alert, ns.Krew, ns.Cards.Show
+local Alert = ns.Cards.Alert
+local Krew = ns.Krew
+local ShowCard = ns.Cards.Show
 local Warband = ns.Warband
-local GuildName, InfoFields = Warband.GuildName, Warband.InfoFields
-local GuildNamed, PlayerNamed, Typed = Warband.GuildNamed, Warband.PlayerNamed, Warband.Typed
-local Here, Position = Warband.Here, Warband.Position
-local Hostile, Identify, KeyOf, MyKey = Warband.Hostile, Warband.Identify, Warband.KeyOf, Warband.MyKey
+local GuildName = Warband.GuildName
+local GuildNamed = Warband.GuildNamed
+local Here = Warband.Here
+local Hostile = Warband.Hostile
+local Identify = Warband.Identify
+local InfoFields = Warband.InfoFields
+local KeyOf = Warband.KeyOf
+local MyKey = Warband.MyKey
+local PlayerNamed = Warband.PlayerNamed
+local Position = Warband.Position
+local Typed = Warband.Typed
 
 -- The pending end of the alert window: while it's set, alerts are held for a summary.
 local AlertTimer
@@ -120,26 +136,33 @@ local Held = {}
 -- Maps each held champion in a fight to true.
 local HeldFighting = {}
 -- Each maps a key to the GetTime() of its last alert, counted kill and Krew report, in that order.
-local LastAlert, LastKill, LastShared = {}, {}, {}
+local LastAlert = {}
 -- The info of the hostile player you last targeted, plus its time.
 local LastFoe
 -- Maps each guild key to the GetTime() of its last alert.
 local LastGuildAlert = {}
 -- Maps each zone .. "/" .. subZone to the GetTime() of its last report, yours or the Krew's.
 local LastIntel = {}
+local LastKill = {}
 -- The GetTime() of your last rally call.
 local LastRally
 -- The last player unit Seen read, and the GetTime() it was read at.
-local LastSeen, LastSeenAt
+local LastSeen
+local LastSeenAt
+local LastShared = {}
 -- The module's collections, bound when it's declared.
-local Ledger, Wars, People
+local Ledger
+local People
+local PlaceSubZone
 -- Here(), read once per place: zone changes and loading screens forget it.
-local PlaceZone, PlaceSubZone
+local PlaceZone
 local WarbandModule
+local Wars
 
 -- Sorts held keys by standing (Order), then by name.
 local function ByStanding(a, b)
-    local first, second = Order[Held[a]], Order[Held[b]]
+    local first = Order[Held[a]]
+    local second = Order[Held[b]]
 
     if first ~= second then
         return (first < second)
@@ -174,7 +197,8 @@ end
 ---@param key string
 ---@return string
 local function Describe(key)
-    local level, class = People:Field(key, "level"), People:Field(key, "class")
+    local level = People:Field(key, "level")
+    local class = People:Field(key, "class")
     local who = key
 
     if (level > 0) or (class ~= "") then
@@ -207,7 +231,8 @@ end
 ---@param subZone string
 ---@return boolean fresh
 local function FreshGathering(zone, subZone)
-    local place, now = (zone .. "/" .. subZone), GetTime()
+    local place = (zone .. "/" .. subZone)
+    local now = GetTime()
 
     if LastIntel[place] and ((now - LastIntel[place]) < IntelCooldown) then
         return false
@@ -249,7 +274,9 @@ local function HeldSummary()
     sort(keys, ByStanding)
     -- Glory sorts last, so the summary plays a raid warning unless every held alert is a champion.
     local sound = (((Held[keys[1]] ~= "glory") and SOUNDKIT.RAID_WARNING) or nil)
-    local segments, names, status = {}, nil, nil
+    local segments = {}
+    local names = nil
+    local status = nil
 
     for _, key in ipairs(keys) do
         if Held[key] ~= status then
@@ -676,7 +703,8 @@ local function Seen(unit, plate, suspect)
     end
 
     LastSeen, LastSeenAt = info, GetTime()
-    local key, hostile = info.key, Hostile(unit)
+    local key = info.key
+    local hostile = Hostile(unit)
 
     if hostile then
         if suspect == "fighting" then

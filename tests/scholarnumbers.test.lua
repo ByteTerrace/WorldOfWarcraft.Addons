@@ -52,7 +52,8 @@ local function NumberLine(prompt)
 
     if row then
         local ticks = (row:match("^0 ([%+%*%-]+) "):gsub("%-", ""))
-        local e, star = tonumber(row:match("(%d+)$")), ticks:find("*", 1, true)
+        local e = tonumber(row:match("(%d+)$"))
+        local star = ticks:find("*", 1, true)
 
         return ((e / (#ticks - 1)) * (star - 1))
     end
@@ -215,7 +216,8 @@ test("every place-value, clock and number-line answer is what its prompt works o
 
     for _, kind in ipairs(Kinds) do
         Sample(ns.Puzzles, kind, 40, function(p, options)
-            local correct, where = p.choices[p.answer], Where(p, options)
+            local correct = p.choices[p.answer]
+            local where = Where(p, options)
 
             if kind == "math.placeValue" then
                 eq(tonumber(correct), PlaceValue(p.prompt), where)
@@ -265,7 +267,8 @@ test("each kind offers the mistakes it exists to catch, with a why", function()
     end
 
     Sample(ns.Puzzles, "math.time", 60, function(p, options)
-        local where, hour = Where(p, options), tonumber(p.prompt:match("half past (%d+)") or "")
+        local where = Where(p, options)
+        local hour = tonumber(p.prompt:match("half past (%d+)") or "")
 
         if hour then
             truthy(Offers(p, Clock((hour * 60) + 50)), "half past read as :50 at " .. where)
@@ -279,7 +282,8 @@ test("each kind offers the mistakes it exists to catch, with a why", function()
             Saw("quarter to", true)
         end
 
-        local short, long = p.prompt:match("short hand [%a ]-the (%d+)"), p.prompt:match("long hand [%a ]-the (%d+)")
+        local short = p.prompt:match("short hand [%a ]-the (%d+)")
+        local long = p.prompt:match("long hand [%a ]-the (%d+)")
 
         if short and (short ~= long) then
             Saw("hands swapped", Offers(p, Clock((tonumber(long) * 60) + ((tonumber(short) % 12) * 5))))
@@ -296,7 +300,8 @@ test("each kind offers the mistakes it exists to catch, with a why", function()
     end)
 
     Sample(ns.Puzzles, "math.placeValue", 60, function(p, options)
-        local where, d = Where(p, options), (p.prompt:match("the (%d) worth") or p.prompt:match("the (%d) in it worth"))
+        local where = Where(p, options)
+        local d = (p.prompt:match("the (%d) worth") or p.prompt:match("the (%d) in it worth"))
 
         if d then
             truthy(Offers(p, d), "the digit itself at " .. where)
@@ -315,7 +320,8 @@ test("each kind offers the mistakes it exists to catch, with a why", function()
         local where = Where(p, options)
 
         if p.prompt:find("closest") then
-            local t, found = Numbers(p.prompt)[1], false
+            local t = Numbers(p.prompt)[1]
+            local found = false
 
             for i, choice in ipairs(p.choices) do
                 found = (found or ((i ~= p.answer) and (choice:sub(1, 1) == tostring(t):sub(1, 1)) and Offers(p, choice)))
@@ -359,7 +365,8 @@ test("a number line's star riddle is drawn as a line with its ends labeled, in p
     eq(puzzle.picture.kind, "line")
     ns.ScholarView.Show(puzzle, { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 3 })
     local frame = ns.ScholarView.Frame()
-    local pictures, ticks = frame.Pictures, 0
+    local pictures = frame.Pictures
+    local ticks = 0
 
     for _, tick in ipairs(pictures.Ticks) do
         if tick:IsShown() then ticks = (ticks + 1) end

@@ -182,7 +182,8 @@ test("counting adds no allocation to a dispatch: it costs exactly its handlers' 
     end })
 
     Start(h)
-    local events, SafeCall = addon.Events, h.env.ByteTerrace.SafeCall
+    local events = addon.Events
+    local SafeCall = h.env.ByteTerrace.SafeCall
 
     local function Empty() end
 

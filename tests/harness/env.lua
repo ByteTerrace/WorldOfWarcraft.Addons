@@ -57,7 +57,8 @@ local Libraries = {
 
 -- Seconds since the epoch for a UTC date table (time{...} in the harness's UTC world).
 local function EpochFromDate(t)
-    local year, month = t.year, t.month
+    local year = t.year
+    local month = t.month
 
     if month <= 2 then year, month = (year - 1), (month + 12) end
 
@@ -81,7 +82,9 @@ local function Library(name)
 end
 
 local function MoneyString(money)
-    local gold, silver, copper = math.floor(money / 10000), (math.floor(money / 100) % 100), (money % 100)
+    local gold = math.floor(money / 10000)
+    local silver = (math.floor(money / 100) % 100)
+    local copper = (money % 100)
     local parts = {}
 
     if gold > 0 then parts[#parts + 1] = (gold .. "g") end
@@ -209,7 +212,8 @@ function Harness:BuildEnvironment()
         rawequal = rawequal, unpack = unpack,
         -- WoW's xpcall passes extra arguments to the function (Lua 5.1's doesn't).
         xpcall = function(fn, handler, ...)
-            local args, count = { ... }, select("#", ...)
+            local args = { ... }
+            local count = select("#", ...)
 
             return xpcall(function() return fn(unpack(args, 1, count)) end, handler)
         end,
@@ -334,7 +338,8 @@ function Harness:BuildEnvironment()
 
             if not unit or not unit.isPlayer or not unit.name then return end
 
-            local class, race = Classes[unit.classFile or ""], (unit.race and Harness.RACES[unit.race])
+            local class = Classes[unit.classFile or ""]
+            local race = (unit.race and Harness.RACES[unit.race])
             local realm = ((((unit.realm == nil) or (unit.realm == h.player.realm)) and "") or unit.realm)
 
             return (class and (unit.className or class[1])), unit.classFile, race, unit.race, (unit.sex or 2),
@@ -396,7 +401,8 @@ function Harness:BuildEnvironment()
                 h:Schedule(seconds, callback)
             end,
             NewTicker = function(seconds, callback, iterations)
-                local state, handle = {}, nil
+                local state = {}
+                local handle = nil
                 local remaining = iterations
 
                 local function Tick()
@@ -638,7 +644,8 @@ function Harness.FakeFunctionNames()
     local h = Harness.New()
 
     Harness.created = {}
-    local names, seen = {}, {}
+    local names = {}
+    local seen = {}
 
     -- The functions in a plain table, nested tables included (each table once; widgets aside).
     local function Walk(path, t)

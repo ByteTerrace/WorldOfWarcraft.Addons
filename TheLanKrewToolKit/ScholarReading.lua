@@ -24,18 +24,36 @@ local TeamPlaces = {
     start = { has = "starts with", place = "start", swap = "finish", which = "first" },
 }
 
-local concat, insert, remove, sort = table.concat, table.insert, table.remove, table.sort
-local find, gmatch, gsub, sub = string.find, string.gmatch, string.gsub, string.sub
-local ipairs, pairs, type, unpack = ipairs, pairs, type, unpack
-local max, min = math.max, math.min
+local concat = table.concat
+local find = string.find
+local gmatch = string.gmatch
+local gsub = string.gsub
+local insert = table.insert
+local ipairs = ipairs
+local max = math.max
+local min = math.min
+local pairs = pairs
+local remove = table.remove
+local sort = table.sort
+local sub = string.sub
+local type = type
+local unpack = unpack
 
 local Kit = ns.Puzzles.Kit
-local Chance, Fill, Finish, Pick, Shuffle = Kit.Chance, Kit.Fill, Kit.Finish, Kit.Pick, Kit.Shuffle
-local ScholarReadingWords, ScholarStoryWords = ns.ScholarReadingWords, ns.ScholarStoryWords
-local Generators, Text, Words = Kit.Generators, ScholarReadingWords.text, Kit.Words
+local Chance = Kit.Chance
+local Fill = Kit.Fill
+local Finish = Kit.Finish
+local Generators = Kit.Generators
+local Pick = Kit.Pick
+local ScholarReadingWords = ns.ScholarReadingWords
+local ScholarStoryWords = ns.ScholarStoryWords
+local Shuffle = Kit.Shuffle
+local Text = ScholarReadingWords.text
+local Words = Kit.Words
 
 -- Each letter team by its letters, and every team and place a riddle may ask where its sound is.
-local PlaceRiddles, Teams = {}, {}
+local PlaceRiddles = {}
+local Teams = {}
 
 for _, team in ipairs(ScholarReadingWords.digraphs) do
     Teams[team[1]] = team
@@ -192,7 +210,8 @@ end
 -- Up to three sounds groups other than group, for wrong choices, and whether the first sounds close to it (p for b). A
 -- group spelling group's own sound with another letter (k for c) is never one.
 local function SoundGroups(state, group)
-    local groups, out = ScholarReadingWords.sounds, {}
+    local groups = ScholarReadingWords.sounds
+    local out = {}
     local near = (group.near or "")
 
     local function Other(other)
@@ -244,7 +263,8 @@ end
 
 -- The player's name and zone sometimes, else the entry's defaults or stock ones.
 local function StoryVars(state, entry)
-    local name, zone = state.context.name, state.context.zone
+    local name = state.context.name
+    local zone = state.context.zone
 
     return {
         hero = ((name and Chance(state, 2) and name) or entry.hero or Pick(state, Words.heroes)[2]),
@@ -255,8 +275,10 @@ end
 -- The wrong choices for changing vars.was to vars.now in vars.from: the word unchanged, then bank words with the new
 -- letter that changed too much or put it in the wrong place, then look-alikes without it when the bank runs short.
 local function SwapWrongs(state, text, vars)
-    local target, now = vars.target, vars.now
-    local wrongs, taken = { { vars.from, why = Fill(text.whySame, vars) } }, { [vars.from] = true, [target] = true }
+    local target = vars.target
+    local now = vars.now
+    local wrongs = { { vars.from, why = Fill(text.whySame, vars) } }
+    local taken = { [vars.from] = true, [target] = true }
 
     local function Add(word, template)
         if (#wrongs < 3) and not taken[word] then
@@ -439,7 +461,8 @@ Generators["reading.unscramble"] = function(state)
     local text = Text.unscramble
     local tier = (((state.grade == 2) and ({ 1, 1, 2 })[state.level]) or ({ 2, 3, 3 })[state.level])
     local entry = Pick(state, Tier(ScholarReadingWords.unscramble, tier, tier))
-    local word, letters = entry[1], Shuffle(state, Letters(entry[1]))
+    local word = entry[1]
+    local letters = Shuffle(state, Letters(entry[1]))
 
     if concat(letters) == word then
         local first = remove(letters, 1)
@@ -447,7 +470,8 @@ Generators["reading.unscramble"] = function(state)
         letters[#letters + 1] = first
     end
 
-    local have, wrongs = Counts(word), {}
+    local have = Counts(word)
+    local wrongs = {}
 
     -- Each near miss needs a tile the scramble doesn't have: the why names the first, in the word's order.
     for i = 3, 5 do
@@ -479,7 +503,8 @@ local function Meaning(state, kind, field)
     local text = Text[kind]
     local pool = Tier(ScholarReadingWords.synonyms, 1, (((state.grade == 2) and (state.level < 3)) and 1) or 2, field)
     local entry = Pick(state, pool)
-    local word, twin = entry[1], entry[5 - field]
+    local word = entry[1]
+    local twin = entry[5 - field]
     local wrongs = {}
 
     if twin then
@@ -672,7 +697,8 @@ end
 -- near sound, another team, or the team at the other end; the step tries the first of them.
 local function TeamPlace(state, text)
     local riddle = Pick(state, PlaceRiddles)
-    local team, place = riddle[1], riddle[2]
+    local team = riddle[1]
+    local place = riddle[2]
     local said = TeamPlaces[place]
     local words = Shuffle(state, team[place])
 
@@ -681,7 +707,8 @@ local function TeamPlace(state, text)
         which = said.which,
     }
 
-    local first, rest = nil, {}
+    local first = nil
+    local rest = {}
 
     local function Add(list, template, extra, sound)
         if list and list[place] then
@@ -733,7 +760,8 @@ local function TeamSplit(state, text)
     local team, place = TeamOf(word)
     local units = TeamUnits(word, team, place)
     local at = (((place == "start") and 1) or #units)
-    local first, second = sub(team[1], 1, 1), sub(team[1], 2, 2)
+    local first = sub(team[1], 1, 1)
+    local second = sub(team[1], 2, 2)
 
     -- The sounds with the team's place holding parts instead.
     local function Swapped(...)
@@ -788,7 +816,8 @@ end
 -- names.
 local function TeamWhy(text, team, place, choice)
     local named = { choice = choice, digraph = team[1], has = TeamPlaces[place].has }
-    local two, close = AtPlace(choice, place, 2), team.close
+    local two = AtPlace(choice, place, 2)
+    local close = team.close
 
     if two == team[1] then
         return Fill(text.whyRest, named)
@@ -852,7 +881,8 @@ end
 -- Why choice isn't the blend word target: a letter of a blend dropped, a sound added, the letters turned around, or a
 -- sound swapped (in the blend or elsewhere). Nil for any other change, which the kind's wrong template names.
 local function BlendWhy(text, target, choice)
-    local dropped, added = DroppedAt(choice, target), DroppedAt(target, choice)
+    local dropped = DroppedAt(choice, target)
+    local added = DroppedAt(target, choice)
 
     if dropped and Pair(target, dropped) then
         local named = { choice = choice, letter = sub(target, dropped, dropped), pair = Pair(target, dropped) }
@@ -877,7 +907,8 @@ Generators["reading.blend"] = function(state)
     local entry = Pick(state, ScholarReadingWords.blends)
     local target = entry[1]
     local sounds = concat(Letters(target), " - ")
-    local wrongs, froms = {}, {}
+    local wrongs = {}
+    local froms = {}
 
     for i = 2, 4 do
         local dropped = DroppedAt(entry[i], target)

@@ -3,7 +3,8 @@
 test("combat audio alerts speak only when the player turned them on, and refuse secret text", function()
     local h = Harness.New()
     local env = h.env
-    local alerts, category = env.C_CombatAudioAlert, env.Enum.CombatAudioAlertCategory.General
+    local alerts = env.C_CombatAudioAlert
+    local category = env.Enum.CombatAudioAlertCategory.General
 
     falsy(alerts.IsEnabled(), "off by default (CAAEnabled is 0)")
     eq(select("#", alerts.SpeakText("Incoming", category)), 0, "disabled: nothing spoken, nothing returned")

@@ -43,14 +43,21 @@ local Sprees = {
     { file = "WickedSick", key = "wickedSick", kills = 30, label = "Wicked sick", says = "is wicked sick", word = "wicked" },
 }
 
-local GetTime, IsLoggedIn, tostring = GetTime, IsLoggedIn, tostring
+local GetTime = GetTime
+local IsLoggedIn = IsLoggedIn
 local min = math.min
+local tostring = tostring
 
 local Addon = ns.Addon
-local Alert, Krew = ns.Cards.Alert, ns.Krew
-local CleanCount, CleanText = ns.KrewFields.CleanCount, ns.KrewFields.CleanText
-local MultiKeys, SpreeAt, SpreeByKey, SpreeKeys = {}, {}, {}, {}
+local Alert = ns.Cards.Alert
+local CleanCount = ns.KrewFields.CleanCount
+local CleanText = ns.KrewFields.CleanText
+local Krew = ns.Krew
+local MultiKeys = {}
 local SoundBank = ns.SoundBank
+local SpreeAt = {}
+local SpreeByKey = {}
+local SpreeKeys = {}
 
 for i, spree in ipairs(Sprees) do
     SpreeAt[spree.kills] = spree
@@ -75,7 +82,8 @@ local Multi = 0
 local StreaksModule
 
 local function OnMessage(sender, fields)
-    local event, count = fields[1], CleanCount(fields[2], MaxCount)
+    local event = fields[1]
+    local count = CleanCount(fields[2], MaxCount)
 
     if not count then
         return

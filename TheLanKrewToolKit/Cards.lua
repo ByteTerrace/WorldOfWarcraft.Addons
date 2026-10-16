@@ -20,13 +20,19 @@ local CardWidth = 440
 local MaxQueued = 6
 local MinCardHeight = 88
 
-local C_Sound, ChatTypeInfo, CreateFrame, RaidWarningUtil = C_Sound, ChatTypeInfo, CreateFrame, RaidWarningUtil
-local insert, remove = table.insert, table.remove
+local C_Sound = C_Sound
+local ChatTypeInfo = ChatTypeInfo
+local CreateFrame = CreateFrame
+local insert = table.insert
+local RaidWarningUtil = RaidWarningUtil
+local remove = table.remove
 
 local Addon = ns.Addon
-local Card, HideTimer, Current
+local Card
 -- The module is assigned at the end of the file, and it always runs.
 local Cards
+local Current
+local HideTimer
 local InCombat = false
 local Queue = {}
 

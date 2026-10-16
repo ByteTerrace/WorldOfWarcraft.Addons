@@ -13,12 +13,19 @@ local addonName, ns = ...
 --   Probes.NoteNamePlate(event, token)    NAME_PLATE_UNIT_ADDED and NAME_PLATE_UNIT_REMOVED, for namePlates.events
 --   Probes.NoteTurnIn(questID)            QUEST_TURNED_IN, for questLog.titleAfterTurnIn
 
-local C_NamePlate, C_QuestLog, C_RestrictedActions = C_NamePlate, C_QuestLog, C_RestrictedActions
-local InCombatLockdown, UnitAffectingCombat, UnitExists = InCombatLockdown, UnitAffectingCombat, UnitExists
+local C_NamePlate = C_NamePlate
+local C_QuestLog = C_QuestLog
+local C_RestrictedActions = C_RestrictedActions
+local InCombatLockdown = InCombatLockdown
 local pcall = pcall
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitExists = UnitExists
 
 local Probes = ns.Probes
-local Flag, Joined, Note, Text = Probes.Flag, Probes.Joined, Probes.Note, Probes.Text
+local Flag = Probes.Flag
+local Joined = Probes.Joined
+local Note = Probes.Note
+local Text = Probes.Text
 
 -- The combat states PLAYER_DEAD dispatched in, as a set (NoteDeathState).
 local DeathStates = {}

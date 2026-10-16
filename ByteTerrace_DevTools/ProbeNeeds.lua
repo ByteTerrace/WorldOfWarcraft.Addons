@@ -13,8 +13,12 @@ local AuraRestrictions = { "Combat", "Encounter", "ChallengeMode", "PvPMatch" }
 local PvPLaterSeconds = 5
 
 local Probes = ns.Probes
-local AfterDeath, Kills, UnitCombat = Probes.AfterDeath, Probes.Kills, Probes.UnitCombat
-local AuraTokens, CombatEdges, Restricted = Probes.AuraTokens, Probes.CombatEdges, Probes.Restricted
+local AfterDeath = Probes.AfterDeath
+local AuraTokens = Probes.AuraTokens
+local CombatEdges = Probes.CombatEdges
+local Kills = Probes.Kills
+local Restricted = Probes.Restricted
+local UnitCombat = Probes.UnitCombat
 
 -- Out of combat (no lockdown, not fighting), with exactly these addon restrictions in force.
 local function CalmWith(restrictions)
@@ -233,7 +237,8 @@ local Needs = {
                 return false
             end
 
-            local dead, feigning = UnitIsDeadOrGhost("target"), UnitIsFeignDeath("target")
+            local dead = UnitIsDeadOrGhost("target")
+            local feigning = UnitIsFeignDeath("target")
 
             return ((not issecretvalue(dead) and (dead == true)) or (not issecretvalue(feigning) and (feigning == true)))
         end,
@@ -398,7 +403,8 @@ local Needs = {
     },
     playerTarget = {
         check = function()
-            local target, me = UnitGUID("target"), UnitGUID("player")
+            local target = UnitGUID("target")
+            local me = UnitGUID("player")
 
             if issecretvalue(target) or issecretvalue(me) then
                 return false

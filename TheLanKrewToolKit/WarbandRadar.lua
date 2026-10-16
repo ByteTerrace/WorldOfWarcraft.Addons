@@ -25,16 +25,19 @@ local RowHeight = 18
 local ShareInterval = 10
 local Width = 240
 
-local CreateFrame, GetTime = CreateFrame, GetTime
+local CreateFrame = CreateFrame
 local floor = math.floor
-local MenuUtil, RAID_CLASS_COLORS = MenuUtil, RAID_CLASS_COLORS
-local sort, wipe = table.sort, wipe
+local GetTime = GetTime
+local MenuUtil = MenuUtil
+local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+local sort = table.sort
+local wipe = wipe
 
 local Addon = ns.Addon
 local Krew = ns.Krew
 local Warband = ns.Warband
 
-local FlushTimer, Window, Ticker
+local FlushTimer
 -- Scratch space for the entries a redraw shows, in order.
 local List = {}
 -- Maps each key to { key, class, level, faction, guild, time, by, status }.
@@ -42,12 +45,15 @@ local Nearby = {}
 -- Maps each key of your own sightings not yet shared to true.
 local Pending = {}
 local Radar
+local Ticker
+local Window
 
 local Render
 
 -- Standing first (marks, then grudges ...), then the most recently seen, then by name.
 local function ByStanding(a, b)
-    local rankA, rankB = (Warband.Order[a.status] or 9), (Warband.Order[b.status] or 9)
+    local rankA = (Warband.Order[a.status] or 9)
+    local rankB = (Warband.Order[b.status] or 9)
 
     if rankA ~= rankB then
         return (rankA < rankB)
@@ -129,7 +135,8 @@ local function Flush()
         return
     end
 
-    local fields, room = {}, Room
+    local fields = {}
+    local room = Room
 
     for key in pairs(Pending) do
         local entry = Nearby[key]
@@ -292,7 +299,8 @@ end
 -- Expires old entries and redraws what changed; hides the window and stops the tick when nobody is left. The window
 -- shows exactly while the tick runs.
 function Render()
-    local now, list = GetTime(), List
+    local now = GetTime()
+    local list = List
 
     wipe(list)
 

@@ -14,7 +14,9 @@ local BadgeSize = 24
 -- Nameplate unit tokens run from nameplate1 to nameplate40.
 local MaxNameplates = 40
 
-local C_NamePlate, CreateFrame, UnitExists = C_NamePlate, CreateFrame, UnitExists
+local C_NamePlate = C_NamePlate
+local CreateFrame = CreateFrame
+local UnitExists = UnitExists
 
 local Addon = ns.Addon
 local Warband = ns.Warband

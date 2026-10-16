@@ -3,7 +3,10 @@
 -- addon a missed fact is remembered and comes back as the next riddle of its kind once it's due.
 
 local Kit = use("scholar")
-local LoadKid, Numbers, Watch, WrongAnswer = Kit.LoadKid, Kit.Numbers, Kit.Watch, Kit.WrongAnswer
+local LoadKid = Kit.LoadKid
+local Numbers = Kit.Numbers
+local Watch = Kit.Watch
+local WrongAnswer = Kit.WrongAnswer
 
 -- Each fact kind, a grade that asks it, and facts to ask again with the expression each must show.
 local Asked = {

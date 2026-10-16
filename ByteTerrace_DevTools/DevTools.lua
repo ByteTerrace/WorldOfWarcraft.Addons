@@ -149,7 +149,9 @@ local function ListProbes()
     local probes = (((type(ByteTerraceDevToolsDB) == "table") and (type(ByteTerraceDevToolsDB.probes) == "table")
         and ByteTerraceDevToolsDB.probes) or {})
 
-    local build, missing, count = Probes.Build(), {}, 0
+    local build = Probes.Build()
+    local missing = {}
+    local count = 0
 
     for _, probe in ipairs(Probes.List) do
         local record = probes[probe.name]
@@ -235,7 +237,12 @@ local function RunProbes()
     local db = Database()
 
     db.probes = (((type(db.probes) == "table") and db.probes) or {})
-    local recorded, added, changed, confirmed, skipped, failed = 0, 0, 0, 0, {}, 0
+    local recorded = 0
+    local added = 0
+    local changed = 0
+    local confirmed = 0
+    local skipped = {}
+    local failed = 0
     local build = Probes.Build()
 
     for _, probe in ipairs(Probes.List) do
@@ -345,7 +352,8 @@ local function DescribeTable(name, value)
 end
 
 local function Dump()
-    local globals, count = {}, 0
+    local globals = {}
+    local count = 0
 
     Skipped = {}
 
@@ -383,7 +391,9 @@ local function Sweep()
     end
 
     db.probes = (((type(db.probes) == "table") and db.probes) or {})
-    local build, context, named = Probes.Build(), Probes.Context(), {}
+    local build = Probes.Build()
+    local context = Probes.Context()
+    local named = {}
 
     for _, probe in ipairs(Probes.List) do
         local saved = db.probes[probe.name]
@@ -434,7 +444,8 @@ end
 
 -- Says what's stale on entering the world: a dump from another build, and the probes without a result for this one.
 local function Greet()
-    local db, build = Database(), Probes.Build()
+    local db = Database()
+    local build = Probes.Build()
     local _, number = GetBuildInfo()
 
     if (type(db.build) == "table") and (db.build.build ~= number) then

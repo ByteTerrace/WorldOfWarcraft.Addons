@@ -18,8 +18,10 @@
 --   restriction  which addon restrictions are in force (FactsRestriction.lua).
 
 local ByteTerrace = ByteTerrace
-local InCombatLockdown, issecretvalue = InCombatLockdown, issecretvalue
-local UnitAffectingCombat, UnitIsAFK = UnitAffectingCombat, UnitIsAFK
+local InCombatLockdown = InCombatLockdown
+local issecretvalue = issecretvalue
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitIsAFK = UnitIsAFK
 
 ByteTerrace.Facts = {
     afk = {

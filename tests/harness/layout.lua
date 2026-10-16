@@ -13,8 +13,9 @@
 local State = Harness.State
 
 local Bottom = { BOTTOM = true, BOTTOMLEFT = true, BOTTOMRIGHT = true }
-local CharWidth, LineHeight = 7, 14
+local CharWidth = 7
 local Left = { BOTTOMLEFT = true, LEFT = true, TOPLEFT = true }
+local LineHeight = 14
 local Right = { BOTTOMRIGHT = true, RIGHT = true, TOPRIGHT = true }
 local Top = { TOP = true, TOPLEFT = true, TOPRIGHT = true }
 
@@ -27,7 +28,10 @@ local Size
 
 -- SetPoint(point [, relativeTo [, relativePoint]] [, x, y]); a point replaces the same point.
 local function Anchor(s, point, a, b, c, d)
-    local relativeTo, relativePoint, x, y
+    local relativeTo
+    local relativePoint
+    local x
+    local y
 
     if (a == nil) or (type(a) == "number") then
         x, y = a, b
@@ -65,7 +69,8 @@ local function Anchored(s, axis, depth)
         return Size(s.allPoints, axis, depth + 1)
     end
 
-    local low, high
+    local low
+    local high
 
     for _, p in ipairs(s.points) do
         if axis.low[p.point] then low = p elseif axis.high[p.point] then high = p end
@@ -91,7 +96,8 @@ local function Lines(s, bound)
         return {}
     end
 
-    local lines, perLine = {}, (((bound > 0) and (s.wordWrap ~= false) and math.max(1, math.floor(bound / CharWidth))) or nil)
+    local lines = {}
+    local perLine = (((bound > 0) and (s.wordWrap ~= false) and math.max(1, math.floor(bound / CharWidth))) or nil)
 
     for line in (tostring(text) .. "\n"):gmatch("(.-)\n") do
         line = line:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")

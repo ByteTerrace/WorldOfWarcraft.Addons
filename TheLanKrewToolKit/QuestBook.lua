@@ -40,14 +40,33 @@ local MaxLine = 120
 local MaxNameReads = 20
 local MaxObjectives = 3
 
-local C_QuestLog, GetQuestID, GetQuestLogQuestText = C_QuestLog, GetQuestID, GetQuestLogQuestText
+local C_QuestLog = C_QuestLog
 local concat = table.concat
-local GetObjectiveText, GetQuestText, GetRewardText, GetTitleText = GetObjectiveText, GetQuestText, GetRewardText, GetTitleText
-local GetRealZoneText, GetServerTime, GetSubZoneText, UnitName = GetRealZoneText, GetServerTime, GetSubZoneText, UnitName
-local gmatch, gsub, match, sub = string.gmatch, string.gsub, string.match, string.sub
-local ipairs, issecretvalue, tostring, type = ipairs, issecretvalue, tostring, type
-local next, pairs, tonumber, wipe = next, pairs, tonumber, wipe
-local QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, QUEST_OBJECTS_FOUND = QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED, QUEST_OBJECTS_FOUND
+local GetObjectiveText = GetObjectiveText
+local GetQuestID = GetQuestID
+local GetQuestLogQuestText = GetQuestLogQuestText
+local GetQuestText = GetQuestText
+local GetRealZoneText = GetRealZoneText
+local GetRewardText = GetRewardText
+local GetServerTime = GetServerTime
+local GetSubZoneText = GetSubZoneText
+local GetTitleText = GetTitleText
+local gmatch = string.gmatch
+local gsub = string.gsub
+local ipairs = ipairs
+local issecretvalue = issecretvalue
+local match = string.match
+local next = next
+local pairs = pairs
+local QUEST_ITEMS_NEEDED = QUEST_ITEMS_NEEDED
+local QUEST_MONSTERS_KILLED = QUEST_MONSTERS_KILLED
+local QUEST_OBJECTS_FOUND = QUEST_OBJECTS_FOUND
+local sub = string.sub
+local tonumber = tonumber
+local tostring = tostring
+local type = type
+local UnitName = UnitName
+local wipe = wipe
 
 -- A format's literal text as a pattern: punctuation escaped, and any run of spaces optional, since an unloaded name
 -- leaves its spaces at the trimmed ends ("0/5 " reads "0/5").
@@ -58,7 +77,8 @@ end
 -- A Lua pattern that reads a quest objective GlobalString's text ("%2$d/%3$d %1$s slain"): the counts match digits and
 -- the name is its one capture.
 local function CountPattern(format)
-    local parts, position = { "^" }, 1
+    local parts = { "^" }
+    local position = 1
 
     for start, conversion, finish in gmatch(format, "()%%%d*%$?([sd])()") do
         parts[#parts + 1] = Literal(sub(format, position, start - 1))
@@ -98,7 +118,8 @@ local Unnamed = {}
 --- Every record, newest first, each a copy with its key.
 ---@return table[]
 local function All()
-    local quests, list = QuestBookModule.Records.quests, {}
+    local quests = QuestBookModule.Records.quests
+    local list = {}
 
     for _, key in ipairs(quests:Keys()) do
         local record = quests:Get(key)
@@ -138,13 +159,15 @@ local function Order()
     local keys = quests:Keys()
 
     table.sort(keys, function(a, b)
-        local freshA, freshB = quests:Field(a, "fresh"), quests:Field(b, "fresh")
+        local freshA = quests:Field(a, "fresh")
+        local freshB = quests:Field(b, "fresh")
 
         if freshA ~= freshB then
             return freshA
         end
 
-        local byA, byB
+        local byA
+        local byB
 
         if freshA then
             byA, byB = -quests:Field(a, "seen"), -quests:Field(b, "seen")
@@ -216,10 +239,12 @@ end
 -- The quest log's objectives for questID, as record fields (objective1, required1, type1, ...): the named ones, the
 -- rest of the slots cleared, and unnamed when one still lacks its name.
 local function ObjectiveFields(questID, values)
-    local count, unnamed = 0, false
+    local count = 0
+    local unnamed = false
 
     for _, objective in ipairs(C_QuestLog.GetQuestObjectives(questID) or {}) do
-        local required, kind = objective.numRequired, objective.type
+        local required = objective.numRequired
+        local kind = objective.type
 
         kind = ((not issecretvalue(kind) and (type(kind) == "string") and kind) or "")
 
@@ -260,7 +285,8 @@ end
 
 -- Where you are: the subzone, else the zone; and the zone.
 local function Place()
-    local subZone, zone = Plain(GetSubZoneText(), MaxLine), Plain(GetRealZoneText(), MaxLine)
+    local subZone = Plain(GetSubZoneText(), MaxLine)
+    local zone = Plain(GetRealZoneText(), MaxLine)
 
     return (((subZone ~= "") and subZone) or zone), zone
 end
@@ -269,7 +295,8 @@ local function OnTurnedIn(questID)
     local turnIn = ((TurnIn and (TurnIn.id == questID) and TurnIn) or nil)
 
     TurnIn = nil
-    local quests, key = QuestBookModule.Records.quests, tostring(questID)
+    local quests = QuestBookModule.Records.quests
+    local key = tostring(questID)
     local endPlace, endZone = Place()
     local values = { endPlace = endPlace, endZone = endZone, fresh = true, seen = GetServerTime(), turnedIn = true }
 
@@ -312,7 +339,8 @@ local function OnAccepted(questID)
     else
         -- An area trigger's quest: no dialog showed it, so it's what the quest log shows.
         local index = C_QuestLog.GetLogIndexForQuestID(questID)
-        local text, goal = "", ""
+        local text = ""
+        local goal = ""
 
         if index then
             text, goal = GetQuestLogQuestText(index)

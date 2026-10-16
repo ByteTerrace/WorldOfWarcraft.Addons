@@ -25,21 +25,42 @@ local SyncCount = 3
 -- How long, in seconds, a burst of hellos gathers before one sync.
 local SyncDelay = 2
 
-local concat, sort = table.concat, table.sort
-local GetServerTime, SOUNDKIT = GetServerTime, SOUNDKIT
-local ipairs, min = ipairs, math.min
+local concat = table.concat
+local GetServerTime = GetServerTime
+local ipairs = ipairs
+local min = math.min
+local sort = table.sort
+local SOUNDKIT = SOUNDKIT
 
 local Addon = ns.Addon
-local Alert, Krew, ShowCard = ns.Cards.Alert, ns.Krew, ns.Cards.Show
-local CleanCount, CleanText = ns.KrewFields.CleanCount, ns.KrewFields.CleanText
+local Alert = ns.Cards.Alert
+local CleanCount = ns.KrewFields.CleanCount
+local CleanText = ns.KrewFields.CleanText
+local Krew = ns.Krew
+local ShowCard = ns.Cards.Show
 local Warband = ns.Warband
-local Avenge, FreshGathering, HeardSighting = Warband.Avenge, Warband.FreshGathering, Warband.HeardSighting
-local CleanFaction, InfoFields, InfoFrom = Warband.CleanFaction, Warband.InfoFields, Warband.InfoFrom
-local CountDeath, Remember, SetKind = Warband.CountDeath, Warband.Remember, Warband.SetKind
-local Describe, Known, Score, Status = Warband.Describe, Warband.Known, Warband.Score, Warband.Status
-local GuildName, MyKey, ValidGuildKey, ValidKey = Warband.GuildName, Warband.MyKey, Warband.ValidGuildKey, Warband.ValidKey
-local Ledger, WarbandModule, Wars = Warband.Ledger, Warband.Module, Warband.Wars
-local SetWaypoint, Where = Warband.SetWaypoint, Warband.Where
+local Avenge = Warband.Avenge
+local CleanFaction = Warband.CleanFaction
+local CountDeath = Warband.CountDeath
+local Describe = Warband.Describe
+local FreshGathering = Warband.FreshGathering
+local GuildName = Warband.GuildName
+local HeardSighting = Warband.HeardSighting
+local InfoFields = Warband.InfoFields
+local InfoFrom = Warband.InfoFrom
+local Known = Warband.Known
+local Ledger = Warband.Ledger
+local MyKey = Warband.MyKey
+local Remember = Warband.Remember
+local Score = Warband.Score
+local SetKind = Warband.SetKind
+local SetWaypoint = Warband.SetWaypoint
+local Status = Warband.Status
+local ValidGuildKey = Warband.ValidGuildKey
+local ValidKey = Warband.ValidKey
+local WarbandModule = Warband.Module
+local Wars = Warband.Wars
+local Where = Warband.Where
 
 -- The pending timer that answers a burst of hellos with one sync.
 local SyncTimer
@@ -84,7 +105,8 @@ end
 local function SendPacked(kind, entries)
     -- "KIND:"
     local room = ((MaxMessage - #kind) - 1)
-    local fields, left = {}, room
+    local fields = {}
+    local left = room
 
     for _, entry in ipairs(entries) do
         -- A tab goes before every entry but the first.
@@ -108,7 +130,8 @@ end
 -- SyncDelay seconds: one sync per burst, not one per member.
 local function Sync()
     SyncTimer = nil
-    local me, now = MyKey(), GetServerTime()
+    local me = MyKey()
+    local now = GetServerTime()
 
     local function Recent(collection, predicate)
         local found = {}
@@ -282,13 +305,17 @@ function Warband.EnableMessages()
             return
         end
 
-        local zone, subZone = CleanText(fields[6]), CleanText(fields[7])
+        local zone = CleanText(fields[6])
+        local subZone = CleanText(fields[7])
 
         if not FreshGathering(zone, subZone) then
             return
         end
 
-        local faction, mapID, x, y = CleanFaction(fields[2]), fields[3], fields[4], fields[5]
+        local faction = CleanFaction(fields[2])
+        local mapID = fields[3]
+        local x = fields[4]
+        local y = fields[5]
 
         ShowCard({ body = (sender .. " sees " .. count .. " " .. (((faction ~= "") and faction) or "enemy") .. " players at " .. Where(zone, subZone) .. ". Click for a waypoint."),
             icon = "Interface\\Icons\\Ability_Hunter_SniperShot",

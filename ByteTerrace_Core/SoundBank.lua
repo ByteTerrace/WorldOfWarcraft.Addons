@@ -30,10 +30,19 @@ local FadeOutMilliseconds = 1000
 local MaxVariants = 5
 
 local ByteTerrace = ByteTerrace
-local C_UIFileAsset, GetTime, PlaySoundFile, StopSound = C_UIFileAsset, GetTime, PlaySoundFile, StopSound
+local C_UIFileAsset = C_UIFileAsset
 local concat = table.concat
-local ipairs, pairs, print, random, select = ipairs, pairs, print, math.random, select
-local tonumber, tostring, type = tonumber, tostring, type
+local GetTime = GetTime
+local ipairs = ipairs
+local pairs = pairs
+local PlaySoundFile = PlaySoundFile
+local print = print
+local random = math.random
+local select = select
+local StopSound = StopSound
+local tonumber = tonumber
+local tostring = tostring
+local type = type
 
 local SoundBank = {}
 
@@ -228,7 +237,8 @@ function SoundBank:Test(arg)
     local channel = addon.State:Get(self.m_channel)
     local files, present = Files(self, sound)
     local variant = tonumber(which)
-    local played, known
+    local played
+    local known
 
     if variant and (variant >= 1) and (variant <= MaxVariants) then
         known = files[variant]
@@ -257,8 +267,10 @@ end
 ---@param ... string sound keys
 ---@return table rule { reads, when }
 function SoundBank:WhileOn(...)
-    local master, sounds = self.m_master, {}
-    local reads, seen = { master }, { [master] = true }
+    local master = self.m_master
+    local sounds = {}
+    local reads = { master }
+    local seen = { [master] = true }
 
     for i = 1, select("#", ...) do
         local sound = self.m_catalog[(select(i, ...))]

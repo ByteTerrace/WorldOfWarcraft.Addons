@@ -16,7 +16,10 @@ local Energy = Enum.PowerType.Energy
 local Height = 64
 local SideInset = 24
 
-local CreateFrame, UnitPower, UnitPowerMax, UnitPowerType = CreateFrame, UnitPower, UnitPowerMax, UnitPowerType
+local CreateFrame = CreateFrame
+local UnitPower = UnitPower
+local UnitPowerMax = UnitPowerMax
+local UnitPowerType = UnitPowerType
 
 local Meter
 

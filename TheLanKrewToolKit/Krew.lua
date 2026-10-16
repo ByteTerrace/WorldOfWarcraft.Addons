@@ -39,10 +39,11 @@ local MaxStars = 99999
 local MaxText = 60
 -- How many Krew members on a newer version make it worth saying so.
 local NewerQuorum = 2
-local PartyUnits, RaidUnits = {}, {}
+local PartyUnits = {}
 local Prefix = "TLKKrew1"
 -- How long, in seconds, without a roster update ends a burst of them.
 local PruneDelay = 1
+local RaidUnits = {}
 -- How long, in seconds, a burst of hellos gathers before one reply.
 local ReplyDelay = 1
 local RollCallDelay = 2
@@ -51,19 +52,29 @@ for i = 1, 40 do
     PartyUnits[i], RaidUnits[i] = ("party" .. i), ("raid" .. i)
 end
 
-local concat, sort = table.concat, table.sort
-local GetNumGroupMembers, GetTime, IsInGroup, IsInRaid = GetNumGroupMembers, GetTime, IsInGroup, IsInRaid
-local ipairs, next, pairs, tonumber, type, wipe = ipairs, next, pairs, tonumber, type, wipe
+local concat = table.concat
+local GetNumGroupMembers = GetNumGroupMembers
+local GetTime = GetTime
+local ipairs = ipairs
+local IsInGroup = IsInGroup
+local IsInRaid = IsInRaid
+local next = next
+local pairs = pairs
+local sort = table.sort
 local SOUNDKIT = SOUNDKIT
+local tonumber = tonumber
+local type = type
+local wipe = wipe
 
 local Addon = ns.Addon
 local Names = ByteTerrace.Names
 local ShowCard = ns.Cards.Show
 
 -- Krew is the module and Messages is its Comms (ns.Krew), both assigned at the end of the file.
-local Krew, Messages
+local Krew
 -- Maps each member running the toolkit, by name, to the version its hello named ("" when unreadable).
 local Members = {}
+local Messages
 -- Scratch space while pruning Members: maps each of the group's members, by name, to true.
 local Present = {}
 -- The pending timer that prunes Members once a burst of roster updates settles.
@@ -120,7 +131,8 @@ end
 local function CompareVersions(a, b)
     local a1, a2, a3 = a:match("^(%d+)%.(%d+)%.(%d+)$")
     local b1, b2, b3 = b:match("^(%d+)%.(%d+)%.(%d+)$")
-    local major, minor = (tonumber(a1) - tonumber(b1)), (tonumber(a2) - tonumber(b2))
+    local major = (tonumber(a1) - tonumber(b1))
+    local minor = (tonumber(a2) - tonumber(b2))
 
     if major ~= 0 then
         return major
@@ -141,7 +153,8 @@ local function Prune()
     end
 
     wipe(Present)
-    local raid, count = IsInRaid(), GetNumGroupMembers()
+    local raid = IsInRaid()
+    local count = GetNumGroupMembers()
     local units = ((raid and RaidUnits) or PartyUnits)
 
     if not raid then
@@ -248,7 +261,9 @@ local function NoticeNewer(heard)
     end
 
     Settle()
-    local count, oldest, mixed = 0, nil, false
+    local count = 0
+    local oldest = nil
+    local mixed = false
 
     for _, version in pairs(Members) do
         if (version ~= "") and (CompareVersions(version, mine) > 0) then
@@ -281,7 +296,8 @@ end
 
 local function Listen(module)
     module:Listen(Messages, "HELLO", function(sender, fields)
-        local version, known = CleanVersion(fields[1]), (Members[sender] ~= nil)
+        local version = CleanVersion(fields[1])
+        local known = (Members[sender] ~= nil)
 
         Members[sender] = version
 

@@ -161,10 +161,37 @@ export const tests = [
         },
     },
     {
-        name: "format sorts a file-level local's names and values together",
+        name: "format gives each name a local declares its own line, unless that would change what a value reads",
         run: () => {
-            formats(lua("local UnitPower, CreateFrame = UnitPower, CreateFrame", "local b, a = f()"),
-                lua("local CreateFrame, UnitPower = CreateFrame, UnitPower", "local b, a = f()"), ["alias-order"]);
+            formats(lua(
+                "local floor, max = math.floor, math.max",
+                "local function Run()",
+                "    local panel, y = Overlay.Panel, 116",
+                "    local first, second",
+                "end",
+                "local CreateFrame, UIParent = CreateFrame, UIParent",
+                "local h, addon, ns = LoadKid()",
+                "local a, b = b, a",
+                "local c, d = 1",
+                "local e, f = 1, -- one",
+                "    2",
+            ), lua(
+                "local floor = math.floor",
+                "local max = math.max",
+                "local function Run()",
+                "    local panel = Overlay.Panel",
+                "    local y = 116",
+                "    local first",
+                "    local second",
+                "end",
+                "local CreateFrame = CreateFrame",
+                "local UIParent = UIParent",
+                "local h, addon, ns = LoadKid()",
+                "local a, b = b, a",
+                "local c, d = 1",
+                "local e, f = 1, -- one",
+                "    2",
+            ), ["split-locals"]);
         },
     },
     {

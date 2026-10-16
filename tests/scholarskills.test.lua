@@ -3,7 +3,10 @@
 -- keep their own difficulty, and /tlk report shows a parent how it's going.
 
 local Kit = use("scholar")
-local LoadKid, Solve, Watch, WrongAnswer = Kit.LoadKid, Kit.Solve, Kit.Watch, Kit.WrongAnswer
+local LoadKid = Kit.LoadKid
+local Solve = Kit.Solve
+local Watch = Kit.Watch
+local WrongAnswer = Kit.WrongAnswer
 
 -- Asks a riddle now and misses its first try, then answers it right; shown is Watch's list. Returns the riddle.
 local function MissThenSolve(h, shown)

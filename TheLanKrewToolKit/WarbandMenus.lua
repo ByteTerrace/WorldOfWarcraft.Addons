@@ -13,14 +13,16 @@ local addonName, ns = ...
 -- The unit popup menus for other players (Blizzard_UnitPopup: "MENU_UNIT_" .. which). Nameplates open none.
 local MenuTags = { "MENU_UNIT_ENEMY_PLAYER", "MENU_UNIT_PLAYER", "MENU_UNIT_PARTY", "MENU_UNIT_RAID_PLAYER" }
 
-local ipairs, print = ipairs, print
+local ipairs = ipairs
+local print = print
 local sort = table.sort
 local UnitExists = UnitExists
 
 local Addon = ns.Addon
 local Warband = ns.Warband
 
-local Active, Hooked = false, false
+local Active = false
+local Hooked = false
 
 local function AddTooltipLines(tooltip)
     if not Active or (tooltip ~= GameTooltip) then
@@ -41,7 +43,8 @@ local function AddTooltipLines(tooltip)
 
     local key = info.key
     local status = Warband.Status(key, info.guild)
-    local ledger, people = Warband.Ledger, Warband.People
+    local ledger = Warband.Ledger
+    local people = Warband.People
 
     if status == "glory" then
         local by = ledger:Field(key, "by")
@@ -161,7 +164,9 @@ end
 
 --- Lists the ledger, marks first and the most recently seen first within a kind, then the wars.
 function Warband.PrintLedger()
-    local ledger, people, wars = Warband.Ledger, Warband.People, Warband.Wars
+    local ledger = Warband.Ledger
+    local people = Warband.People
+    local wars = Warband.Wars
     local keys = ledger:Keys()
 
     if (#keys == 0) and (wars:Count() == 0) then
@@ -171,7 +176,8 @@ function Warband.PrintLedger()
     end
 
     sort(keys, function(a, b)
-        local rankA, rankB = Warband.Order[ledger:Field(a, "kind")], Warband.Order[ledger:Field(b, "kind")]
+        local rankA = Warband.Order[ledger:Field(a, "kind")]
+        local rankB = Warband.Order[ledger:Field(b, "kind")]
 
         if rankA ~= rankB then
             return (rankA < rankB)
@@ -183,7 +189,8 @@ function Warband.PrintLedger()
     Addon:Print(("The ledger (%d of %d):"):format(#keys, ledger.Limit))
 
     for _, key in ipairs(keys) do
-        local kind, zone = ledger:Field(key, "kind"), people:Field(key, "zone")
+        local kind = ledger:Field(key, "kind")
+        local zone = people:Field(key, "zone")
         local line = ("  " .. Warband.Labels[kind] .. ": " .. Warband.Describe(key))
 
         if kind ~= "glory" then
@@ -213,7 +220,8 @@ function Warband.PrintRival(arg)
         return Addon:Print("No record of " .. ((subject and subject.key) or "them") .. " yet.")
     end
 
-    local guild, status = people:Field(key, "guild"), Warband.Status(key)
+    local guild = people:Field(key, "guild")
+    local status = Warband.Status(key)
 
     Addon:Print(Warband.Describe(key) .. (((guild ~= "") and (" of <" .. Warband.GuildName(guild) .. ">")) or "")
         .. ((status and (" - " .. Warband.Labels[status])) or ""))

@@ -30,10 +30,14 @@ local FieldPattern = "^%a[%w_]*$"
 local MaxKeyLength = 64
 
 local ByteTerrace = ByteTerrace
-local ipairs, pairs, tostring, type = ipairs, pairs, tostring, type
+local ipairs = ipairs
 local issecretvalue = issecretvalue
-local Refuse, SafeCall = ByteTerrace.Refuse, ByteTerrace.SafeCall
+local pairs = pairs
+local Refuse = ByteTerrace.Refuse
+local SafeCall = ByteTerrace.SafeCall
 local sort = table.sort
+local tostring = tostring
+local type = type
 
 local Records = {}
 
@@ -78,7 +82,9 @@ end
 ---@param name string "<Module>.<name>"
 ---@param spec table see the file header
 function ByteTerrace.NewRecords(addon, name, spec)
-    local problems, fields, fieldOrder = {}, {}, {}
+    local problems = {}
+    local fields = {}
+    local fieldOrder = {}
 
     for _, field in ipairs(spec.fields or {}) do
         local own = {}
@@ -142,9 +148,12 @@ end
 --- collection with an evict field has one.
 ---@return string? key nil when every key is kept
 function Records:EvictionCandidate()
-    local store, evict, keep = Loaded(self), self.m_evict, self.Keep
+    local store = Loaded(self)
+    local evict = self.m_evict
+    local keep = self.Keep
     local default = self.m_fields[evict].default
-    local best, bestValue
+    local best
+    local bestValue
 
     for key, record in pairs(store) do
         if not (keep and Kept(keep, key)) then
@@ -167,9 +176,13 @@ end
 --- sort, so trimming a collection far over its limit stays cheap.
 ---@return string[]
 function Records:EvictionOrder()
-    local store, evict, keep = Loaded(self), self.m_evict, self.Keep
+    local store = Loaded(self)
+    local evict = self.m_evict
+    local keep = self.Keep
     local default = ((evict and self.m_fields[evict].default) or 0)
-    local keys, kept, value = {}, {}, {}
+    local keys = {}
+    local kept = {}
+    local value = {}
 
     for key, record in pairs(store) do
         keys[#keys + 1] = key
@@ -274,8 +287,11 @@ function Records:Load(stores)
         root[self.Name] = store
     end
 
-    local fields, admits = self.m_fields, ByteTerrace.State.Admits
-    local dropped, reset, count = 0, 0, 0
+    local fields = self.m_fields
+    local admits = ByteTerrace.State.Admits
+    local dropped = 0
+    local reset = 0
+    local count = 0
 
     for key, record in pairs(store) do
         if not ValidKey(key) or (type(record) ~= "table") then
@@ -345,7 +361,8 @@ function Records:Set(key, values)
         error(message:format(self.m_addon.Name, self.Name, MaxKeyLength), 2)
     end
 
-    local fields, admits = self.m_fields, ByteTerrace.State.Admits
+    local fields = self.m_fields
+    local admits = ByteTerrace.State.Admits
 
     for field, value in pairs(values) do
         local spec = fields[field]

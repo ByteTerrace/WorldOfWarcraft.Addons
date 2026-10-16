@@ -19,8 +19,12 @@
 -- times each handler, so with profiling off a dispatch does exactly the counting and nothing more.
 
 local ByteTerrace = ByteTerrace
-local CreateFrame, issecretvalue, pairs, pcall = CreateFrame, issecretvalue, pairs, pcall
-local SafeCall, TimedCall = ByteTerrace.SafeCall, ByteTerrace.TimedCall
+local CreateFrame = CreateFrame
+local issecretvalue = issecretvalue
+local pairs = pairs
+local pcall = pcall
+local SafeCall = ByteTerrace.SafeCall
+local TimedCall = ByteTerrace.TimedCall
 
 local Events = {}
 
@@ -76,7 +80,10 @@ local function Wanted(list)
         return nil
     end
 
-    local unit1, unit2, filtered, all
+    local unit1
+    local unit2
+    local filtered
+    local all
 
     for i = 1, #list do
         local unit = list[i].unit
@@ -137,7 +144,8 @@ local function Refresh(self, event)
 end
 
 local function Rebuild(self, event)
-    local list, copy = self.m_handlers[event], {}
+    local list = self.m_handlers[event]
+    local copy = {}
 
     if list then
         for i = 1, #list do

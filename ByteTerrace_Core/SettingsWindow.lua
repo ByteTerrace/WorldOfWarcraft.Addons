@@ -50,9 +50,16 @@ local TitleHeight = 44
 local Width = 620
 
 local ByteTerrace = ByteTerrace
-local CreateFrame, GameTooltip, Settings, UIParent = CreateFrame, GameTooltip, Settings, UIParent
-local floor, max, min = math.floor, math.max, math.min
-local ipairs, tostring, wipe = ipairs, tostring, wipe
+local CreateFrame = CreateFrame
+local floor = math.floor
+local GameTooltip = GameTooltip
+local ipairs = ipairs
+local max = math.max
+local min = math.min
+local Settings = Settings
+local tostring = tostring
+local UIParent = UIParent
+local wipe = wipe
 
 local SettingsWindow = {}
 
@@ -126,7 +133,8 @@ end
 -- Watches the shown page's rows while the view shows, refreshing them now: a hidden view, and every other page, cost
 -- nothing when their rows change.
 local function Follow(window)
-    local state, watchers = window.m_addon.State, window.m_watchers
+    local state = window.m_addon.State
+    local watchers = window.m_watchers
 
     for i = 1, #watchers do
         state:Unwatch(watchers[i])
@@ -224,7 +232,9 @@ end
 -- A number one step from value. With a step, it moves along the row's grid (multiples of step from min) and stops at
 -- the last grid value inside the bounds, so State always admits it; without one it moves by 1 and stops at min and max.
 local function StepNumber(spec, value, delta)
-    local low, high, step = spec.min, spec.max, spec.step
+    local low = spec.min
+    local high = spec.max
+    local step = spec.step
 
     if not step then
         local stepped = (value + delta)
@@ -258,7 +268,8 @@ end
 
 -- Writes a row from the window: one batch, refused with a message while the row is locked.
 local function Write(window, entry, value)
-    local addon, state = window.m_addon, window.m_addon.State
+    local addon = window.m_addon
+    local state = window.m_addon.State
 
     if state:IsLocked(entry.id) then
         addon:Print(entry.spec.label .. " is locked.")
@@ -275,7 +286,10 @@ end
 -- widest label needs. Picking one writes it and closes the list; clicking the open dropdown again closes it. A locked
 -- row says so instead.
 local function OpenList(window, entry, control)
-    local list, spec, id, state = window.Dropdown, entry.spec, entry.id, window.m_addon.State
+    local list = window.Dropdown
+    local spec = entry.spec
+    local id = entry.id
+    local state = window.m_addon.State
 
     if list.m_id == id then
         CloseList(window)
@@ -338,7 +352,9 @@ end
 
 -- Builds one setting row's label and control, and returns the function that shows its value.
 local function BuildRow(window, row, entry)
-    local state, spec, id = window.m_addon.State, entry.spec, entry.id
+    local state = window.m_addon.State
+    local spec = entry.spec
+    local id = entry.id
     local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 
     label:SetPoint("LEFT", 0, 0)
@@ -347,7 +363,8 @@ local function BuildRow(window, row, entry)
     label:SetText(spec.label)
     row:EnableMouse(true)
     AttachTooltip(row, spec)
-    local control, Refresh
+    local control
+    local Refresh
 
     if spec.kind == "boolean" then
         control = NewButton(row, 22)

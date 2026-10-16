@@ -3,7 +3,8 @@
 
 -- Counts the runs of one probe.
 local function CountRuns(h, name)
-    local probe, counter = h.ns.Probes.ByName[name], { runs = 0 }
+    local probe = h.ns.Probes.ByName[name]
+    local counter = { runs = 0 }
     local run = probe.run
 
     probe.run = function()

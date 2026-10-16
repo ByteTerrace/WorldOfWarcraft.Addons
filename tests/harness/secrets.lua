@@ -163,7 +163,8 @@ end
 -- Concatenation with a secret yields a secret string [E] (secrets.operations: concat). Lua's own rules still apply:
 -- only strings and numbers concatenate.
 SecretMeta.__concat = function(left, right)
-    local a, b = Reveal(left), Reveal(right)
+    local a = Reveal(left)
+    local b = Reveal(right)
 
     for _, value in ipairs({ a, b }) do
         local kind = type(value)
@@ -182,7 +183,8 @@ end
 local RawFormat = string.format
 
 function SecretFormat(fmt, ...)
-    local n, secret = select("#", ...), IsSecret(fmt)
+    local n = select("#", ...)
+    local secret = IsSecret(fmt)
     local args = { ... }
 
     for i = 1, n do
@@ -341,7 +343,8 @@ local Predicates = {
         return ((h:Unit(ctx.unit) ~= nil) and (ctx.unit ~= "player") and (ctx.unit ~= "pet"))
     end,
     SecretWhenUnitThreatStateRestricted = function(h, ctx)
-        local a, b = ctx.units[1], ctx.units[2]
+        local a = ctx.units[1]
+        local b = ctx.units[2]
 
         return (AnyRestriction(h) and (b ~= nil) and (a ~= "player") and (b ~= "player"))
     end,
@@ -435,7 +438,8 @@ function Harness.CheckPayload(event, entry, payload)
     end
 
     for i = 1, payload.n do
-        local value, want = payload[i], PayloadLuaTypes[types[i]]
+        local value = payload[i]
+        local want = PayloadLuaTypes[types[i]]
 
         if IsSecret(value) then
             if not entry.secret then

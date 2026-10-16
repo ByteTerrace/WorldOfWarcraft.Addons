@@ -31,8 +31,11 @@
 -- while profiling is on (debug work and debug profile, Diagnostics.lua). The dispatcher running a callback increments
 -- its owner's field.
 
-local debugprofilestop, geterrorhandler, xpcall = debugprofilestop, geterrorhandler, xpcall
-local pairs, sort = pairs, table.sort
+local debugprofilestop = debugprofilestop
+local geterrorhandler = geterrorhandler
+local pairs = pairs
+local sort = table.sort
+local xpcall = xpcall
 
 ByteTerrace = { Errors = 0 }
 

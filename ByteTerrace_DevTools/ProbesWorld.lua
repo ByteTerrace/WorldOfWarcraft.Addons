@@ -46,9 +46,14 @@ local TexturePaths = {
 }
 
 local Probes = ns.Probes
-local Byte, Fields, Joined = Probes.Byte, Probes.Fields, Probes.Joined
+local Byte = Probes.Byte
+local Fields = Probes.Fields
 local FirstBagItem = Probes.FirstBagItem
-local Marker, Shape, Text, Value = Probes.Marker, Probes.Shape, Probes.Text, Probes.Value
+local Joined = Probes.Joined
+local Marker = Probes.Marker
+local Shape = Probes.Shape
+local Text = Probes.Text
+local Value = Probes.Value
 
 -- textures.used's frame (made on its first run) and its texture per path.
 local TextureFrame
@@ -145,7 +150,8 @@ Probes.Define({
         name = "classColors",
         needs = {},
         run = function()
-            local classes, colorStr = {}, {}
+            local classes = {}
+            local colorStr = {}
 
             for className, color in pairs(RAID_CLASS_COLORS) do
                 classes[#classes + 1] = className
@@ -174,7 +180,8 @@ Probes.Define({
         needs = {},
         -- Both names are plain strings once the player can type (neither API has secret flags).
         run = function()
-            local normalized, realm = GetNormalizedRealmName(), GetRealmName()
+            local normalized = GetNormalizedRealmName()
+            local realm = GetRealmName()
 
             return {
                 hasSpaceOrHyphen = (normalized:find("[%s%-]") ~= nil),
@@ -365,7 +372,8 @@ Probes.Define({
         name = "questLog.objectives",
         needs = { "questLog" },
         run = function()
-            local first, types = nil, {}
+            local first = nil
+            local types = {}
 
             for i = 1, C_QuestLog.GetNumQuestLogEntries() do
                 local info = C_QuestLog.GetInfo(i)
@@ -487,7 +495,8 @@ Probes.Define({
         -- (Blizzard_TrainerUI/Mainline/Blizzard_TrainerUI.lua).
         run = function()
             local count = GetNumTrainerServices()
-            local serviceTypes, available = {}, nil
+            local serviceTypes = {}
+            local available = nil
 
             if not issecretvalue(count) and (type(count) == "number") then
                 for i = 1, count do

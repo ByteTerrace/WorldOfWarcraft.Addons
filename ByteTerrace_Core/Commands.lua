@@ -17,8 +17,14 @@
 -- which WoW only allows from secure templates and bindings.
 
 local ByteTerrace = ByteTerrace
-local ipairs, pairs, print, strtrim, tostring, type = ipairs, pairs, print, strtrim, tostring, type
-local Refuse, SortedKeys = ByteTerrace.Refuse, ByteTerrace.SortedKeys
+local ipairs = ipairs
+local pairs = pairs
+local print = print
+local Refuse = ByteTerrace.Refuse
+local SortedKeys = ByteTerrace.SortedKeys
+local strtrim = strtrim
+local tostring = tostring
+local type = type
 
 local Commands = {}
 
@@ -35,7 +41,9 @@ end
 function Commands:Compile()
     local problems = {}
     local names = SortedKeys(self.m_declared)
-    local ids, specs, bySlash = {}, {}, {}
+    local ids = {}
+    local specs = {}
+    local bySlash = {}
 
     for id, name in ipairs(names) do
         local spec = self.m_declared[name]
@@ -127,7 +135,8 @@ function Commands:Run(ref, arg, phase, source)
         return true
     end
 
-    local addon, module = self.m_addon, spec.module
+    local addon = self.m_addon
+    local module = spec.module
 
     if module and not spec.always and not module:IsRunning() then
         if phase == "down" then

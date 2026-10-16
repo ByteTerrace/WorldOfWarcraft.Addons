@@ -43,8 +43,15 @@
 local NamePattern = "^%a[%w_]*$"
 
 local ByteTerrace = ByteTerrace
-local ipairs, pairs, print, tonumber, tostring, type = ipairs, pairs, print, tonumber, tostring, type
-local Report, SafeCall, TimedCall = ByteTerrace.Report, ByteTerrace.SafeCall, ByteTerrace.TimedCall
+local ipairs = ipairs
+local pairs = pairs
+local print = print
+local Report = ByteTerrace.Report
+local SafeCall = ByteTerrace.SafeCall
+local TimedCall = ByteTerrace.TimedCall
+local tonumber = tonumber
+local tostring = tostring
+local type = type
 
 local AddOn = {}
 
@@ -199,7 +206,11 @@ function AddOn:Module(name, spec)
     end
 
     local module = ByteTerrace.NewModule(self, name, spec)
-    local rows, commands, collections, rowNames, commandNames = {}, {}, {}, {}, {}
+    local rows = {}
+    local commands = {}
+    local collections = {}
+    local rowNames = {}
+    local commandNames = {}
 
     local function AddRow(rowName, row)
         if (type(rowName) ~= "string") or not rowName:find(NamePattern) then
@@ -340,7 +351,8 @@ end
 --- that isn't a demand module, or a cycle.
 ---@return table usesOf [module] = array of its dependencies
 function AddOn:ResolveUses()
-    local problems, usesOf = {}, {}
+    local problems = {}
+    local usesOf = {}
 
     for _, module in ipairs(self.m_moduleOrder) do
         local list = {}
@@ -360,7 +372,8 @@ function AddOn:ResolveUses()
         usesOf[module] = list
     end
 
-    local visiting, done = {}, {}
+    local visiting = {}
+    local done = {}
 
     local function Visit(module)
         if done[module] then
@@ -449,7 +462,8 @@ end
 ---@param kind string? only rows of this kind
 ---@return string
 function AddOn:SettingNames(kind)
-    local names, state = {}, self.State
+    local names = {}
+    local state = self.State
 
     for _, name in ipairs(state.Order) do
         local spec = state.Specs[state.Ids[name]]

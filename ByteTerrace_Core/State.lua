@@ -44,12 +44,21 @@ local Kinds = { boolean = true, number = true, string = true }
 local MaxPublishRounds = 8
 
 local ByteTerrace = ByteTerrace
-local concat, remove, sort = table.concat, table.remove, table.sort
-local floor, huge = math.floor, math.huge
-local ipairs, pairs, tostring, type = ipairs, pairs, tostring, type
+local concat = table.concat
+local floor = math.floor
+local huge = math.huge
+local ipairs = ipairs
 local issecretvalue = issecretvalue
-local Refuse, Report = ByteTerrace.Refuse, ByteTerrace.Report
-local SafeCall, SortedKeys, TimedCall = ByteTerrace.SafeCall, ByteTerrace.SortedKeys, ByteTerrace.TimedCall
+local pairs = pairs
+local Refuse = ByteTerrace.Refuse
+local remove = table.remove
+local Report = ByteTerrace.Report
+local SafeCall = ByteTerrace.SafeCall
+local sort = table.sort
+local SortedKeys = ByteTerrace.SortedKeys
+local TimedCall = ByteTerrace.TimedCall
+local tostring = tostring
+local type = type
 
 local State = {}
 
@@ -182,9 +191,14 @@ end
 -- row back at the value the batch found it with changed for no one but a watcher registered in between, whose baseline
 -- differs: it's due too. Returns how many it scheduled.
 local function Settle(self, list, stamp)
-    local values, original, isTouched = self.Values, self.m_original, self.m_isTouched
-    local versions, watchersByRow = self.m_versions, self.m_watchersByRow
-    local scheduled, count, traced = self.m_scheduled, 0, self.m_traced
+    local values = self.Values
+    local original = self.m_original
+    local isTouched = self.m_isTouched
+    local versions = self.m_versions
+    local watchersByRow = self.m_watchersByRow
+    local scheduled = self.m_scheduled
+    local count = 0
+    local traced = self.m_traced
     local baselines = (#self.m_baselined > 0)
 
     for i = 1, #list do
@@ -245,7 +259,8 @@ end
 -- Insertion sort by registration sequence: the scheduled list is short.
 local function SortScheduled(scheduled, count)
     for i = 2, count do
-        local watcher, j = scheduled[i], (i - 1)
+        local watcher = scheduled[i]
+        local j = (i - 1)
 
         while (j >= 1) and (scheduled[j].seq > watcher.seq) do
             scheduled[j + 1] = scheduled[j]
@@ -552,7 +567,10 @@ end
 function State:Compile(stores, modules)
     local problems = {}
     local names = SortedKeys(self.m_declared)
-    local ids, specs, values, versions = {}, {}, {}, {}
+    local ids = {}
+    local specs = {}
+    local values = {}
+    local versions = {}
 
     for id, name in ipairs(names) do
         local spec = self.m_declared[name]
@@ -583,7 +601,8 @@ function State:Compile(stores, modules)
 
     Refuse(self.m_addon.Name .. " state", problems)
 
-    local dropped, unclaimed = {}, {}
+    local dropped = {}
+    local unclaimed = {}
 
     for scope, store in pairs(stores) do
         for key, value in pairs(store) do
@@ -702,7 +721,9 @@ end
 ---@return table watcher for Unwatch
 function State:Rule(spec)
     local verdict
-    local when, changed, initial = spec.when, spec.changed, spec.initial
+    local when = spec.when
+    local changed = spec.changed
+    local initial = spec.initial
 
     local watcher = Register(self, ResolveIds(self, spec.reads), function(state)
         local now = ((when(state) and true) or false)
@@ -856,7 +877,8 @@ end
 --- How many watchers and rules are registered.
 ---@return integer
 function State:WatcherCount()
-    local seen, count = {}, 0
+    local seen = {}
+    local count = 0
 
     for _, watchers in pairs(self.m_watchersByRow) do
         for _, watcher in ipairs(watchers) do

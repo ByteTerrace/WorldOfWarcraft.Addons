@@ -20,7 +20,8 @@ local ipairs = ipairs
 local function SettingsPages(addon)
     local state = addon.State
     local main = { entries = {}, name = addon.Title }
-    local pages, byName = { main }, {}
+    local pages = { main }
+    local byName = {}
 
     local function AddHeader(page, text)
         if text and (text ~= page.name) then

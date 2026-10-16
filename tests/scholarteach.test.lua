@@ -4,7 +4,9 @@
 -- persistence.
 
 local Kit = use("scholar")
-local Banner, LoadKid, Watch = Kit.Banner, Kit.LoadKid, Kit.Watch
+local Banner = Kit.Banner
+local LoadKid = Kit.LoadKid
+local Watch = Kit.Watch
 
 -- Wrong answers, in order, that aren't puzzle's answer.
 local function Wrongs(puzzle)

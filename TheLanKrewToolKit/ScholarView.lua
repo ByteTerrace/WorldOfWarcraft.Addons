@@ -58,11 +58,16 @@ local ButtonWidth = (((Width - (2 * Pad)) - AnswerGap) / 2)
 local WordColor = "|cff7fe0ff"
 
 local concat = table.concat
-local CreateFrame, UIParent = CreateFrame, UIParent
-local floor, max, min = math.floor, math.max, math.min
+local CreateFrame = CreateFrame
+local floor = math.floor
+local max = math.max
+local min = math.min
+local UIParent = UIParent
 
 local ScholarStyle = ns.ScholarStyle
-local Backdrop, BackdropColors, TextColor = ScholarStyle.Backdrop, ScholarStyle.BackdropColors, ScholarStyle.TextColor
+local Backdrop = ScholarStyle.Backdrop
+local BackdropColors = ScholarStyle.BackdropColors
+local TextColor = ScholarStyle.TextColor
 
 local Palette, Solid, StarIcon, WrongIcon = ScholarStyle.Palette, ScholarStyle.Solid, ScholarStyle.StarIcon,
     ScholarStyle.WrongIcon
@@ -71,7 +76,8 @@ local ScholarView = {}
 
 ns.ScholarView = ScholarView
 
-local Overlay, Callbacks
+local Callbacks
+local Overlay
 local PlaceFooter
 
 -- Big answers get the biggest font that fits: short numbers huge, long words smaller.
@@ -116,7 +122,8 @@ local function DisplayPrompt(puzzle)
         return puzzle.prompt, nil
     end
 
-    local lines, clue = {}, nil
+    local lines = {}
+    local clue = nil
 
     for line in (puzzle.prompt .. "\n"):gmatch("([^\n]*)\n") do
         if puzzle.tiles and line:find("^Clue:") then
@@ -298,7 +305,10 @@ end
 
 local function Paint(button, state)
     button.State = state
-    local background, edge, text, key = Palette.button, Palette.edge, Palette.question, Palette.story
+    local background = Palette.button
+    local edge = Palette.edge
+    local text = Palette.question
+    local key = Palette.story
     local mark
 
     if state == "hover" then
@@ -472,7 +482,9 @@ end
 -- ScrollBook): m_bookView tall, m_bookRange to scroll, at m_bookOffset.
 local function PlaceThumb()
     local thumb = Overlay.Thumb
-    local range, view, offset = Overlay.m_bookRange, Overlay.m_bookView, Overlay.m_bookOffset
+    local range = Overlay.m_bookRange
+    local view = Overlay.m_bookView
+    local offset = Overlay.m_bookOffset
     local scrolls = (range > 0)
 
     Overlay.Track:SetShown(scrolls)
@@ -490,7 +502,8 @@ end
 -- Lays the panel out top to bottom from its content, so it's always exactly as tall as it needs to be, and centers it
 -- on screen (LiftUp above center when there's room). Returns its height.
 local function Layout(hasStory, puzzle)
-    local panel, y = Overlay.Panel, 116
+    local panel = Overlay.Panel
+    local y = 116
 
     Overlay.Book:SetShown(Overlay.m_bookOpen == true)
     Overlay.BookCase:SetShown(Overlay.m_bookOpen == true)
@@ -553,7 +566,8 @@ local function Layout(hasStory, puzzle)
     y = (((y + questionHeight) + 30) + 20)
 
     for i, button in ipairs(Overlay.Buttons) do
-        local column, row = ((i - 1) % 2), (((i > 2) and 1) or 0)
+        local column = ((i - 1) % 2)
+        local row = (((i > 2) and 1) or 0)
 
         button:ClearAllPoints()
         button:SetPoint("TOPLEFT", Pad + (column * (ButtonWidth + AnswerGap)), -(y + (row * (AnswerHeight + AnswerGap))))

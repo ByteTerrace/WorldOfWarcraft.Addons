@@ -33,7 +33,8 @@ end
 
 -- "Ambush for 700. " or "A melee hit for 700. ", or "" when the blow is unknown.
 local function Blow(state)
-    local spell, damage = state:Get("death.killerSpell"), state:Get("death.killerDamage")
+    local spell = state:Get("death.killerSpell")
+    local damage = state:Get("death.killerDamage")
 
     if damage <= 0 then
         return ""
@@ -71,7 +72,8 @@ local function OnKiller(state)
     end
 
     Taken, Suspect = false, nil
-    local kind, prompt = state:Get("death.killerKind"), state:Get("Warband.deathPrompt")
+    local kind = state:Get("death.killerKind")
+    local prompt = state:Get("Warband.deathPrompt")
 
     if kind == "player" then
         local info = KillerInfo(state, suspect)

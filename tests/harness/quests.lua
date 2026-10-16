@@ -72,7 +72,9 @@ local QuestSerial = 0
 
 -- The log's entries as the client lists them: each header, then its quests.
 local function Entries(h)
-    local entries, headers, order = {}, {}, {}
+    local entries = {}
+    local headers = {}
+    local order = {}
 
     for _, quest in ipairs(h.questLog) do
         if not headers[quest.header] then
@@ -161,7 +163,8 @@ end
 
 -- The format string with its positional conversions ("%2$d/%3$d %1$s") filled from the arguments.
 local function FormatPositional(format, ...)
-    local args, position = { ... }, 0
+    local args = { ... }
+    local position = 0
 
     return (format:gsub("%%(%d*)%$?([sd])", function(index)
         position = (position + 1)

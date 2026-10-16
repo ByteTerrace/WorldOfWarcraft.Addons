@@ -22,9 +22,15 @@ local FormidableClassifications = { elite = true, rareelite = true, worldboss = 
 -- UnitLevel's answer for a unit too far above you to show its level.
 local SkullLevel = -1
 
-local issecretvalue, UnitCanAttack, UnitClassification = issecretvalue, UnitCanAttack, UnitClassification
-local UnitExists, UnitIsBossMob, UnitIsDeadOrGhost = UnitExists, UnitIsBossMob, UnitIsDeadOrGhost
-local UnitIsFeignDeath, UnitIsPlayer, UnitLevel = UnitIsFeignDeath, UnitIsPlayer, UnitLevel
+local issecretvalue = issecretvalue
+local UnitCanAttack = UnitCanAttack
+local UnitClassification = UnitClassification
+local UnitExists = UnitExists
+local UnitIsBossMob = UnitIsBossMob
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+local UnitIsFeignDeath = UnitIsFeignDeath
+local UnitIsPlayer = UnitIsPlayer
+local UnitLevel = UnitLevel
 
 local function IsTrue(value)
     return (not issecretvalue(value) and (value == true))
@@ -51,8 +57,12 @@ ByteTerrace.Facts.target = {
     demand = true,
     OnEnable = function(module)
         local state = module.Addon.State
-        local serial, enemy, formidable = module:Id("serial"), module:Id("enemyPlayer"), module:Id("formidable")
-        local alive, died, duelEnded = module:Id("alive"), module:Id("died"), module:Id("duelEnded")
+        local serial = module:Id("serial")
+        local enemy = module:Id("enemyPlayer")
+        local formidable = module:Id("formidable")
+        local alive = module:Id("alive")
+        local died = module:Id("died")
+        local duelEnded = module:Id("duelEnded")
         -- Whether the target is a player, as of the last target change.
         local isPlayer = false
         -- Whether the target's rank is formidable, or nil until it's read for this target.

@@ -35,9 +35,11 @@ local Families = { ["quest.title"] = "quest.giver" }
 local LeadWords = 3
 -- The longest choice a riddle may offer, which ScholarPuzzles enforces.
 local MaxLine = ns.Puzzles.MaxChoice
-local MaxSentence, MinSentence = 140, 30
+local MaxSentence = 140
 local MaxTitle = 60
-local MaxWord, MinWord = 12, 5
+local MaxWord = 12
+local MinSentence = 30
+local MinWord = 5
 -- The field of this quest a riddle about each is mixed up with: who took it for who gave it, where it ended for where
 -- it began, and the other way round.
 local Mixups = { ender = "giver", endPlace = "place", giver = "ender", place = "endPlace" }
@@ -47,9 +49,19 @@ local PlainWords = { from = true, have = true, into = true, that = true, them = 
     what = true, will = true, with = true, your = true }
 
 local concat = table.concat
-local find, gmatch, gsub, lower, sub = string.find, string.gmatch, string.gsub, string.lower, string.sub
-local ipairs, next, pairs, select, tostring, type = ipairs, next, pairs, select, tostring, type
-local max, min = math.max, math.min
+local find = string.find
+local gmatch = string.gmatch
+local gsub = string.gsub
+local ipairs = ipairs
+local lower = string.lower
+local max = math.max
+local min = math.min
+local next = next
+local pairs = pairs
+local select = select
+local sub = string.sub
+local tostring = tostring
+local type = type
 
 local Kit = ns.Puzzles.Kit
 
@@ -75,7 +87,8 @@ local function Comparative(word)
         return false
     end
 
-    local stem, comparable = sub(word, 1, -3), QuestWords.comparable
+    local stem = sub(word, 1, -3)
+    local comparable = QuestWords.comparable
 
     return ((comparable[stem] or comparable[stem .. "e"] or comparable[(gsub(stem, "i$", "y"))]
         or (find(stem, "(%a)%1$") and comparable[sub(stem, 1, -2)])) == true)
@@ -145,7 +158,8 @@ end
 
 -- The stems of title's words (four letters or more, not plain) that text has too, as a set: empty without a title.
 local function TitleHits(text, title)
-    local hits, stems = {}, {}
+    local hits = {}
+    local stems = {}
 
     for word in gmatch(title or "", "%a+") do
         if (#word >= 4) and not PlainWords[lower(word)] then
@@ -168,7 +182,9 @@ local function Tokens(sentence)
     local tokens = {}
 
     for s, word, e in gmatch(sentence, "()(%a+)()") do
-        local after, before, previous = sub(sentence, e, e), sub(sentence, s - 1, s - 1), tokens[#tokens]
+        local after = sub(sentence, e, e)
+        local before = sub(sentence, s - 1, s - 1)
+        local previous = tokens[#tokens]
 
         tokens[#tokens + 1] = {
             e = e,
@@ -210,7 +226,9 @@ end
 -- and not in the sentence): words of that kind from the rest of the quest's text first, then the bank's; nil when there
 -- are too few, or the word is in the sentence twice (it would show through its blank).
 local function Blank(state, sentence, i, pool)
-    local token, kind, text = sentence.tokens[i], sentence.kinds[i], sentence.text
+    local token = sentence.tokens[i]
+    local kind = sentence.kinds[i]
+    local text = sentence.text
     local word = token.word
     local _, uses = gsub(text, "%f[%a]" .. word .. "%f[%A]", "")
 
@@ -218,7 +236,8 @@ local function Blank(state, sentence, i, pool)
         return nil
     end
 
-    local wrongs, seen = {}, {}
+    local wrongs = {}
+    local seen = {}
 
     for _, other in ipairs(sentence.tokens) do
         seen[lower(other.word)] = true
@@ -245,7 +264,8 @@ local function Blank(state, sentence, i, pool)
         return nil
     end
 
-    local before, after = {}, {}
+    local before = {}
+    local after = {}
 
     for chunk in gmatch(sub(text, 1, token.s - 1), "%S+") do
         before[#before + 1] = chunk
@@ -256,7 +276,8 @@ local function Blank(state, sentence, i, pool)
     end
 
     -- The words just before the blank, or just after it when one word before it is all there is ("The ___ of").
-    local lead, side = concat(before, " ", max(1, (#before - LeadWords) + 1)), "after"
+    local lead = concat(before, " ", max(1, (#before - LeadWords) + 1))
+    local side = "after"
 
     if (#before < 2) and (#after >= 2) then
         lead, side = concat(after, " ", 1, min(#after, LeadWords)), "before"
@@ -370,7 +391,9 @@ end
 -- A record's objective i, or nil: what it names, its count and its kind. One without a name, or without the kind the
 -- book notes, isn't asked about.
 local function RecordObjective(record, i)
-    local name, required, logType = Line(record["objective" .. i], MaxLine), record["required" .. i], record["type" .. i]
+    local name = Line(record["objective" .. i], MaxLine)
+    local required = record["required" .. i]
+    local logType = record["type" .. i]
 
     if not ((name ~= "") and (type(required) == "number") and (required >= 1) and (type(logType) == "string") and (logType ~= "")) then
         return nil
@@ -401,7 +424,9 @@ end
 -- faction's lists, not starting the sentence), "noun", "nouns", "ed", "ing", "ly" or "er"; nil for any other word,
 -- which isn't asked or offered.
 local function WordKind(tokens, i, proper)
-    local token, previous, following = tokens[i], tokens[i - 1], tokens[i + 1]
+    local token = tokens[i]
+    local previous = tokens[i - 1]
+    local following = tokens[i + 1]
     local word = token.word
 
     if token.joined or (#word < MinWord) or Words.stopWords[lower(word)] then
@@ -430,7 +455,9 @@ end
 -- A sentence of the quest's text with one word to blank out and three wrong answers of its kind; nil when the text has
 -- none.
 local function BlankCandidate(state)
-    local proper, sentences, pool = ProperWords(state), {}, {}
+    local proper = ProperWords(state)
+    local sentences = {}
+    local pool = {}
 
     for text in gmatch(gsub(state.quest.text, "\n", " ") .. " ", "%s*([^%.!?]+[%.!?])") do
         local tokens = Tokens(text)
@@ -479,7 +506,8 @@ end
 -- give the answer away: three that do are taken when there are three, and otherwise the riddle leaves the title out.
 -- Finish shuffles where they sit among the choices.
 local function Wrongs(state, answer, lists, excluded, title)
-    local entries, seen = {}, { [lower(answer)] = true }
+    local entries = {}
+    local seen = { [lower(answer)] = true }
 
     for key in pairs(excluded or {}) do
         seen[key] = true
@@ -525,8 +553,10 @@ local function AskFor(field, pair, bankKey, zoneField)
     local kind = ("quest." .. field)
 
     return function(state)
-        local quest, text = state.quest, Words.quest[field]
-        local answer, mixed = quest[field], Mixups[field]
+        local quest = state.quest
+        local text = Words.quest[field]
+        local answer = quest[field]
+        local mixed = Mixups[field]
         local mixups = {}
 
         -- Who took it and where it ended are in the book once it's turned in.
@@ -550,7 +580,8 @@ Generators["quest.place"] = AskFor("place", { "place", "endPlace" }, "places", "
 -- How many an objective asked for. Another objective's number, beside its own name in the book, is always a wrong
 -- answer, the mix-up to catch; every other wrong number says which way the book's is.
 Generators["quest.count"] = function(state)
-    local quest, whys = state.quest, Words.quest.count.whys
+    local quest = state.quest
+    local whys = Words.quest.count.whys
     local counted = {}
 
     for _, objective in ipairs(quest.objectives) do
@@ -561,7 +592,8 @@ Generators["quest.count"] = function(state)
 
     local objective = Pick(state, counted)
     local n = objective.required
-    local candidates, hi = { (n - 1), (n + 1), (n + 2), (n * 2) }, max(n * 2, n + 10)
+    local candidates = { (n - 1), (n + 1), (n + 2), (n * 2) }
+    local hi = max(n * 2, n + 10)
 
     for _, other in ipairs(quest.objectives) do
         if (other ~= objective) and (other.required > 1) and (other.required ~= n) then
@@ -608,8 +640,10 @@ Generators["quest.objective"] = function(state)
 end
 
 Generators["quest.title"] = function(state)
-    local quest, from = state.quest, Words.quest.from.title
-    local others, theirs = {}, {}
+    local quest = state.quest
+    local from = Words.quest.from.title
+    local others = {}
+    local theirs = {}
 
     for _, other in ipairs(state.known) do
         if lower(other.giver) == lower(quest.giver) then
@@ -638,7 +672,8 @@ Generators["quest.title"] = function(state)
 end
 
 Generators["quest.blank"] = function(state)
-    local blank, title = state.blank, state.quest.title
+    local blank = state.blank
+    local title = state.quest.title
     local vars = { filled = blank.filled, lead = blank.lead, sentence = blank.sentence, side = blank.side, title = title }
     local text = Prompted(Words.quest.blank, next(TitleHits(blank.word, title)) == nil)
 
@@ -651,7 +686,8 @@ end
 
 -- The kinds whose answer the record holds.
 local function Kinds(state)
-    local quest, kinds = state.quest, {}
+    local quest = state.quest
+    local kinds = {}
 
     local function Add(kind, possible)
         if possible then
@@ -681,7 +717,9 @@ end
 
 -- The kinds in the order to try them (see the header): each group shuffled.
 local function Ordered(state, kinds)
-    local content, other, last = {}, {}, {}
+    local content = {}
+    local other = {}
+    local last = {}
     local lastFamily = Family(state.quest.askedKind)
 
     for _, kind in ipairs(kinds) do

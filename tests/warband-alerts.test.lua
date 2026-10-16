@@ -51,7 +51,8 @@ test("a summary lists marks, grudges, wars and champions in that order, with one
     h:Slash("/tlk grudge Cara Doe")
     h:Slash("/tlk war Knights of Light")
     h:Slash("/tlk mark Finn Doe")
-    local warnings, checks = Sounds(h, h.env.SOUNDKIT.RAID_WARNING), Sounds(h, h.env.SOUNDKIT.READY_CHECK)
+    local warnings = Sounds(h, h.env.SOUNDKIT.RAID_WARNING)
+    local checks = Sounds(h, h.env.SOUNDKIT.READY_CHECK)
 
     h:AddNamePlate(Enemy("Bob"))
     h:AddNamePlate(Enemy("Dan", { canAttack = false, faction = "Horde", inCombat = true, isEnemy = false }))

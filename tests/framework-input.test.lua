@@ -50,7 +50,8 @@ end)
 
 test("a held command that changes maps in its own down gets cancel after that down, not inside it", function()
     local h, addon = NewAddOn()
-    local log, holding = {}, false
+    local log = {}
+    local holding = false
 
     addon:Module("M", { bindings = { { command = "M.enter", map = "menu", source = "gamepad.south" } },
         commands = { { held = true, label = "Enter", name = "enter",

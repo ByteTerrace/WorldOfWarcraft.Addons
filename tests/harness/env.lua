@@ -694,6 +694,19 @@ function Harness:BuildSettings(env)
     }
 end
 
+-- How many timers (C_Timer callbacks and animation finishes) wait to run.
+function Harness:PendingTimers()
+    local count = 0
+
+    for _, entry in ipairs(self.timers) do
+        if not entry.cancelled then
+            count = (count + 1)
+        end
+    end
+
+    return count
+end
+
 -- The player selects a canvas category in Blizzard's settings panel, opening the panel if it's closed. [D]
 -- SettingsPanelMixin:DisplayLayout's canvas branch (Blizzard_SettingsPanel.lua, forever): the shown canvas is cleared
 -- (SetParent(nil), ClearAllPoints, Hide), then the category's frame is parented to Container.SettingsCanvas, fills it

@@ -23,7 +23,7 @@ local addonName, ns = ...
 --
 -- ns.KrewFields cleans the fields of received messages for every feature that listens:
 --   CleanText(text)         a zone, subzone, or name to show, or "".
---   CleanCount(text, max)   a whole number from 1 to max written in digits, or nil.
+--   CleanCount(text, max, min)  a whole number from min (1 unless given) to max written in digits, or nil.
 --   MaxLevel                the highest level a message may carry.
 -- Neither passes a "|" or a control character: someone else's message never puts a link, texture, or color on your
 -- screen.
@@ -92,19 +92,20 @@ local Said = false
 -- Whether this group heard that a newer version is out.
 local ToldNewer = false
 
---- Returns a count from a message: a whole number from 1 to max written in digits only (no sign, exponent, hex, or
---- "inf"), or nil.
+--- Returns a count from a message: a whole number from min (1 unless given) to max written in digits only (no sign,
+--- exponent, hex, fraction, or "inf"), or nil.
 ---@param text string?
 ---@param max integer
+---@param min integer? 0 for a field that may be zero
 ---@return integer?
-local function CleanCount(text, max)
+local function CleanCount(text, max, min)
     if (type(text) ~= "string") or (#text > 9) or not text:find("^%d+$") then
         return nil
     end
 
     local count = tonumber(text)
 
-    return ((((count >= 1) and (count <= max)) and count) or nil)
+    return ((((count >= (min or 1)) and (count <= max)) and count) or nil)
 end
 
 --- Returns a text field from a message (a zone, a subzone, or a name), or "" when it's missing, longer than MaxText, or
@@ -386,7 +387,7 @@ Krew = Addon:Module("Krew", {
             end
         end)
 
-        -- The counters rise once per victory or star.
+        -- A rise is one message, however much it rose by: a fight's flawless kills, or a riddle's stars.
         module:OnIncrease("Victory.flawlessWins", function()
             if module:Get("shareFlawless") then
                 Messages:Send("FLAWLESS")

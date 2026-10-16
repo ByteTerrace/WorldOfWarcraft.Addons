@@ -24,12 +24,7 @@ local function AddMistakes(a, b)
     return out
 end
 
--- A clock time's minutes, its hour times 60 plus its minutes, or nil for text that isn't one.
-local function ClockMinutes(text)
-    local hour, minutes = text:match("^(%d+):(%d%d)$")
-
-    return ((hour and ((tonumber(hour) * 60) + tonumber(minutes))) or nil)
-end
+local ClockMinutes = Kit.ClockMinutes
 
 -- Evaluates text strictly from left to right (parentheses kept), or with the parentheses dropped, by precedence or not.
 local function Evaluate(text, keepParens, precedence)
@@ -442,12 +437,7 @@ local function Plain(text)
         and not text:lower():find("wrong"))
 end
 
--- options.random for Generate: the test Lua's own generator, refusing ranges the client's random would.
-local function Roll(m, n)
-    assert((m == math.floor(m)) and (n == math.floor(n)) and (m <= n), ("random(%s, %s) is not a valid range"):format(tostring(m), tostring(n)))
-
-    return math.random(m, n)
-end
+local Roll = Kit.Roll
 
 -- Calls fn(puzzle, options) for seeds riddles of every math kind at each grade that asks it and every level, every
 -- other one with a context.

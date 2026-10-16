@@ -32,6 +32,23 @@ local function Records(h)
     return (h.env.ByteTerraceDevToolsDB.probes or {})
 end
 
+test("a sweep checks each need, and reads the context and the build, once", function()
+    local h = Load()
+    local types = 0
+
+    for _ in pairs(h.env.Enum.AddOnRestrictionType) do types = (types + 1) end
+
+    h:Advance(5)
+    h.apiCalls = {}
+    h:Advance(5)
+
+    -- The restrictions once each for the context and the two needs that name them (idle, and the Map restriction).
+    truthy(h:CountApiCalls("C_RestrictedActions.IsAddOnRestrictionActive") <= (3 * types),
+        h:CountApiCalls("C_RestrictedActions.IsAddOnRestrictionActive"))
+
+    truthy(h:CountApiCalls("GetBuildInfo") <= 1, h:CountApiCalls("GetBuildInfo"))
+end)
+
 test("probes record themselves as you play, each once per build and context, and the sweep names them", function()
     local h = Load()
     local raidWarning = CountRuns(h, "chatTypeInfo.raidWarning")

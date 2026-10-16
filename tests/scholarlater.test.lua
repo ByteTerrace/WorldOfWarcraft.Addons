@@ -24,19 +24,7 @@ local function Reaches(h, key)
     return (#h.propagatedKeys > before)
 end
 
--- A child's riddle on screen, with the short pause and no quest riddles, and the riddle.
-local function Riddle(settings)
-    local saved = { ["Scholar.missPause"] = "short", ["Scholar.quests"] = false }
-
-    for key, value in pairs(settings or {}) do saved[key] = value end
-
-    local h, addon, ns = LoadKid(saved)
-    local shown = Watch(ns)
-
-    h:Slash("/tlk puzzle")
-
-    return h, addon, shown[#shown], rawget(h.env, "TheLanKrewToolKitScholar")
-end
+local Riddle = Kit.Riddle
 
 test("while a riddle shows, keys it doesn't use reach the game, and its own don't", function()
     local h = Riddle()
@@ -95,8 +83,11 @@ end)
 
 test("Start opens the radial menu, and the riddle steps aside into its pill, as it does for Esc", function()
     local h, addon, _, frame = Riddle()
+    local heard = 0
 
+    addon.State:Watch({ "Scholar.laterCount", "Scholar.collapsed" }, function() heard = (heard + 1) end, true)
     h:OpenRadial()
+    eq(heard, 1, "putting it away is one change")
     falsy(frame:IsShown(), "out of the radial's way")
     truthy(Pill(h):IsShown(), "waiting in its pill")
     h:CloseRadial()

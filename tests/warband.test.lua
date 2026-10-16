@@ -399,23 +399,12 @@ test("solo, a sighting starts no Krew cooldown: the next one after grouping up i
     eq(#Sent(h, "SIGHT"), 1)
 end)
 
--- The timers waiting to run.
-local function Timers(h)
-    local count = 0
-
-    for _, timer in ipairs(h.timers) do
-        if not timer.cancelled then count = (count + 1) end
-    end
-
-    return count
-end
-
 test("solo, the nearby list holds nothing back to share: only its tick runs", function()
     local h = Load()
-    local before = Timers(h)
+    local before = h:PendingTimers()
 
     h:AddNamePlate(Enemy("Bob"))
-    eq(Timers(h) - before, 1, "the window's tick, and no timer to share with nobody")
+    eq(h:PendingTimers() - before, 1, "the window's tick, and no timer to share with nobody")
 end)
 
 test("a gathering counts the enemies of one place: moving on starts the count over", function()

@@ -18,7 +18,7 @@ local addonName, ns = ...
 --             the player saw it, on a page below the riddle's story, and closes again the same way. The
 --             page is at most BookHeight tall (less on a screen without the room), and longer text
 --             scrolls, like the quest log: the mouse wheel, the Up and Down arrows, or the D-pad
---             (held, it keeps going), with a slim bar showing where you are
+--             (a notch a press), with a slim bar showing where you are
 --   footer    Need a hint? and how to answer; feedback (the hint, or the working) replaces it in
 --             place, growing down to fit its text, with the buttons centered on it and a stripe that
 --             says how it went (red, gold, or green). Every button names its key: the controller's
@@ -527,6 +527,7 @@ function ScholarView.Hide()
 end
 
 --- Shows the hint in the footer's place (no penalty: asking for help is part of learning).
+---@param label string the help's name, before it ("Hint", or a rung of the hint)
 ---@param hint string
 function ScholarView.Hint(label, hint)
     ShowFeedback(NumberColor .. label .. ":|r  " .. Emphasize(HintText(hint)), "hint", (label .. ": " .. HintText(hint)))
@@ -691,8 +692,11 @@ end
 
 --- Marks answer i wrong (it shakes and can't be picked again), shows the hint, and offers Skip when canSkip.
 ---@param i integer
+---@param why string? why that answer is wrong, said before the hint
+---@param label string the help's name, before it (ScholarView.Hint)
 ---@param hint string
 ---@param canSkip boolean
+---@param reveal integer? the right answer's index, lit up when the help gives it away
 function ScholarView.Wrong(i, why, label, hint, canSkip, reveal)
     local button = Overlay.Buttons[i]
 

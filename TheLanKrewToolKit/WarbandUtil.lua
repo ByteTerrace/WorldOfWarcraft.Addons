@@ -30,7 +30,6 @@ local ipairs = ipairs
 local issecretvalue = issecretvalue
 local MaxLevel = ns.KrewFields.MaxLevel
 local Names = ByteTerrace.Names
-local tonumber = tonumber
 local tostring = tostring
 local type = type
 local UiMapPoint = UiMapPoint
@@ -59,18 +58,6 @@ end
 ---@return integer
 local function CleanLevel(level)
     return (CleanCount(level, MaxLevel) or 0)
-end
-
--- A message field that's a whole number from 0 to max written in digits only (no sign, exponent, hex, fraction, or
--- "inf"), as a number, or nil otherwise.
-local function Digits(text, max)
-    if (type(text) ~= "string") or (#text > 9) or not text:find("^%d+$") then
-        return nil
-    end
-
-    local n = tonumber(text)
-
-    return (((n <= max) and n) or nil)
 end
 
 -- The key in a collection matching key, ignoring case ("bob doe" finds "Bob Doe").
@@ -228,7 +215,7 @@ end
 ---@param y string
 ---@return boolean set
 local function SetWaypoint(mapID, x, y)
-    mapID, x, y = Digits(mapID, 999999999), Digits(x, 10000), Digits(y, 10000)
+    mapID, x, y = CleanCount(mapID, 999999999, 0), CleanCount(x, 10000, 0), CleanCount(y, 10000, 0)
 
     if not (mapID and (mapID > 0) and x and y) then
         return false

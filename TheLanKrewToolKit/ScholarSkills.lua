@@ -95,13 +95,6 @@ local function Percent(part, whole)
     return math.floor((((part * 100) / whole) + 0.5))
 end
 
---- Returns the parent's report card, as lines of text. It starts with a summary, then gives each section's level,
---- riddles, first-try rate, skills mastered, and skills being worked on, then the recent misses with the answer chosen
---- and the right one.
----@param name string? the character's name
----@param sections table[] { label, level (nil for none), records = { [kind] = a skill's record } } each
----@param misses table[] the recent misses, newest first: { kind, prompt, chosen, right } each
----@return string[]
 --- Returns a count of riddles in words: "1 riddle", or "3 riddles".
 ---@param count number
 ---@return string
@@ -119,6 +112,13 @@ local function Struggling(record)
     return ((record.recent:sub(-1) == "0") or ((record.asked >= 3) and ((right * 2) < #record.recent)))
 end
 
+--- Returns the parent's report card, as lines of text. It starts with a summary, then gives each section's level,
+--- riddles, first-try rate, skills mastered, and skills being worked on, then the recent misses with the answer chosen
+--- and the right one.
+---@param name string? the character's name
+---@param sections table[] { label, level (nil for none), records = { [kind] = a skill's record } } each
+---@param misses table[] the recent misses, newest first: { kind, prompt, chosen, right } each
+---@return string[]
 local function Report(name, sections, misses)
     local lines = {}
     local asked = 0

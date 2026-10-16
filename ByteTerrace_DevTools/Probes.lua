@@ -491,15 +491,27 @@ function Probes.Build()
     return ("%s (%s)"):format(version, build)
 end
 
---- Returns whether the probe's needs are met right now.
+--- Returns whether the probe's needs are met right now. memo, when given, keeps each need's answer ([key] = boolean),
+--- so a sweep checks a need once however many probes share it.
+---@param memo table?
 ---@return boolean met
 ---@return string? unmet the first unmet need's text
-function Probes.Check(probe)
+function Probes.Check(probe, memo)
     for _, key in ipairs(probe.needs) do
         local need = Needs[key]
-        local ok, met = pcall(need.check)
+        local met = (memo and memo[key])
 
-        if not ok or not met then
+        if met == nil then
+            local ok, answer = pcall(need.check)
+
+            met = ((ok and answer and true) or false)
+
+            if memo then
+                memo[key] = met
+            end
+        end
+
+        if not met then
             return false, need.text
         end
     end
@@ -858,11 +870,14 @@ function Probes.NeedsText(probe)
     return NeedsJoined(probe, "text", "nothing")
 end
 
---- Runs the probe and returns its record, or nil and why it failed (an error or a result that can't be saved).
+--- Runs the probe and returns its record, or nil and why it failed (an error or a result that can't be saved). A sweep
+--- passes the context and build it read once; otherwise they're read here.
+---@param context string? Probes.Context()
+---@param build string? Probes.Build()
 ---@return table? record { build, contexts, result, version? }, its contexts the one it ran in
 ---@return string? problem
-function Probes.Record(probe)
-    local context = Probes.Context()
+function Probes.Record(probe, context, build)
+    context = (context or Probes.Context())
     local ok, result = pcall(probe.run)
 
     if not ok then
@@ -878,7 +893,7 @@ function Probes.Record(probe)
     -- Nil for a version 1 probe, so its records match the ones that carry no version.
     local version = probe.version
 
-    return { build = Probes.Build(), contexts = { [context] = true }, result = result, version = version }, nil
+    return { build = (build or Probes.Build()), contexts = { [context] = true }, result = result, version = version }, nil
 end
 
 --- Recreates the probe's needs in a test harness, in the order the probe lists them.

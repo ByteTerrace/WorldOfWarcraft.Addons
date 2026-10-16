@@ -94,17 +94,7 @@ local function Shared(a, b)
     return n
 end
 
-local function Sorted(word)
-    local letters = {}
-
-    for letter in word:gmatch(".") do
-        letters[#letters + 1] = letter
-    end
-
-    table.sort(letters)
-
-    return table.concat(letters)
-end
+local Sorted = use("scholar").Sorted
 
 -- The text of a wrong choice in a bank: a word, or { word, why = ... }.
 local function TextOf(wrong)

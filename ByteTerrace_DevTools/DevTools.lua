@@ -253,9 +253,12 @@ local function RunProbes()
     local skipped = {}
     local failed = 0
     local build = Probes.Build()
+    local context = Probes.Context()
+    -- Each need's answer this run.
+    local memo = {}
 
     for _, probe in ipairs(Probes.List) do
-        local met, unmet = Probes.Check(probe)
+        local met, unmet = Probes.Check(probe, memo)
         local saved = db.probes[probe.name]
 
         if not met then
@@ -264,7 +267,7 @@ local function RunProbes()
                 AddToGroup(skipped, probe, unmet)
             end
         else
-            local record, problem = Probes.Record(probe)
+            local record, problem = Probes.Record(probe, context, build)
 
             if not record then
                 failed = (failed + 1)
@@ -403,13 +406,15 @@ local function Sweep()
     local build = Probes.Build()
     local context = Probes.Context()
     local named = {}
+    -- Each need's answer this sweep.
+    local memo = {}
 
     for _, probe in ipairs(Probes.List) do
         local saved = db.probes[probe.name]
         local known = (HasBuildResult(probe, saved, build) and (type(saved.contexts) == "table") and saved.contexts[context])
 
-        if (probe.accumulates or not known) and not SweepFailed[probe.name] and Probes.Check(probe) then
-            local record, problem = Probes.Record(probe)
+        if (probe.accumulates or not known) and not SweepFailed[probe.name] and Probes.Check(probe, memo) then
+            local record, problem = Probes.Record(probe, context, build)
 
             if not record then
                 SweepFailed[probe.name] = true

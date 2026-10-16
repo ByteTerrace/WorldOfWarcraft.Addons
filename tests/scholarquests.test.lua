@@ -656,30 +656,20 @@ test("a flight, a quest turned in or a death brings the next riddle once it's ha
 end)
 
 test("a loss of control or a turn-in that can't bring a riddle costs no taxi check and no timer", function()
-    local function Timers(h)
-        local count = 0
-
-        for _, timer in ipairs(h.timers) do
-            if not timer.cancelled then count = (count + 1) end
-        end
-
-        return count
-    end
-
     for _, case in ipairs({ "early", "off" }) do
         local h = LoadKid({ ["Scholar.onFlight"] = (case ~= "off"), ["Scholar.onTurnIn"] = (case ~= "off") })
 
         Accept(h, Wolves)
         h:Advance(((case == "early") and 60) or (16 * 60))
         h.apiCalls = {}
-        local before = Timers(h)
+        local before = h:PendingTimers()
 
         for _ = 1, 5 do
             h:Fire("PLAYER_CONTROL_LOST")
             h:Fire("QUEST_TURNED_IN", 9001, 0, 0)
         end
 
-        eq(Timers(h) - before, 0, case .. ": no timer")
+        eq(h:PendingTimers() - before, 0, case .. ": no timer")
         h:Advance(2)
         eq(h:CountApiCalls("UnitOnTaxi"), 0, case)
     end

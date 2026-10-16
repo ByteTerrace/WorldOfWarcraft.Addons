@@ -427,17 +427,7 @@ local function Serialize(p)
         p.explanation, tostring(p.value), tostring(p.expression), tostring(p.remainder) }, "\n")
 end
 
-local function Sorted(word)
-    local letters = {}
-
-    for letter in word:gmatch("%a") do
-        letters[#letters + 1] = letter
-    end
-
-    table.sort(letters)
-
-    return table.concat(letters)
-end
+local Sorted = use("scholar").Sorted
 
 -- The stock careful-work praise, which a reading riddle never falls back to: each kind praises its own strategy.
 local StockPraise

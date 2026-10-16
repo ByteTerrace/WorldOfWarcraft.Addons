@@ -136,7 +136,7 @@ local Gathering = {}
 local Held = {}
 -- Maps each held champion in a fight to true.
 local HeldFighting = {}
--- Each maps a key to the GetTime() of its last alert, counted kill, and Krew report, in that order.
+-- Maps each key to the GetTime() of its last alert.
 local LastAlert = {}
 -- The info of the hostile player you last targeted, plus its time.
 local LastFoe
@@ -144,12 +144,14 @@ local LastFoe
 local LastGuildAlert = {}
 -- Maps each zone .. "/" .. subZone to the GetTime() of its last report, yours or the Krew's.
 local LastIntel = {}
+-- Maps each key to the GetTime() of its last counted kill.
 local LastKill = {}
 -- The GetTime() of your last rally call.
 local LastRally
 -- The last player unit Seen read, and the GetTime() it was read at.
 local LastSeen
 local LastSeenAt
+-- Maps each key to the GetTime() of its last Krew report (SIGHT).
 local LastShared = {}
 -- The module's collections, bound when it's declared.
 local Ledger

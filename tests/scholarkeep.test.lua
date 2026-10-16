@@ -9,19 +9,7 @@ local Returned = Kit.Returned
 local Watch = Kit.Watch
 local WrongAnswer = Kit.WrongAnswer
 
--- A child's riddle on screen, with the short pause and no quest riddles, and the riddle.
-local function Riddle(settings)
-    local saved = { ["Scholar.missPause"] = "short", ["Scholar.quests"] = false }
-
-    for key, value in pairs(settings or {}) do saved[key] = value end
-
-    local h, addon, ns = LoadKid(saved)
-    local shown = Watch(ns)
-
-    h:Slash("/tlk puzzle")
-
-    return h, addon, shown[#shown], rawget(h.env, "TheLanKrewToolKitScholar")
-end
+local Riddle = Kit.Riddle
 
 -- Whether two riddles ask the same: the same prompt, the same choices in the same order, and the same answer.
 local function Same(a, b)

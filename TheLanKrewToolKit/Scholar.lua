@@ -626,10 +626,11 @@ local function NextPuzzle()
     local kinds = Puzzles.Kinds(subject, asked, canHear, hasQuests)
 
     if stretch then
-        local beyond = Without(kinds, Puzzles.Kinds(subject, grade, canHear, hasQuests))
+        local own = Puzzles.Kinds(subject, grade, canHear, hasQuests)
+        local beyond = Without(kinds, own)
 
         if #beyond == 0 then
-            stretch, asked, kinds = false, grade, Puzzles.Kinds(subject, grade, canHear, hasQuests)
+            stretch, asked, kinds = false, grade, own
         else
             kinds = beyond
         end
@@ -772,7 +773,7 @@ Scholar = Addon:Module("Scholar", {
 
         -- A riddle still due when the challenge comes back on keeps its pause (pauseLeft, pauseMisses), and the riddle
         -- itself comes back from the riddle row.
-        Current, Wrongs, WaitTimer = nil, 0, nil
+        Current, Wrongs = nil, 0
         wipe(Missed)
         Windows.Clear(module)
         Close()

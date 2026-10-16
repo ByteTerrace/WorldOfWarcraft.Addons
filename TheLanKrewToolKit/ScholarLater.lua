@@ -95,7 +95,7 @@ local function Start(module)
     local back = nil
 
     PillFrame():SetScript("OnClick", module:Callback(Reopen))
-    EventRegistry:RegisterCallback("Gamepad.ShowMainMenu", function() Later() end, RadialOwner)
+    EventRegistry:RegisterCallback("Gamepad.ShowMainMenu", module:Callback(Later), RadialOwner)
 
     -- The pill shows while a riddle waits, and in "Solve to keep playing" a timer brings it back.
     module:Watch({ collapsed }, function(state)

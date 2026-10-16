@@ -25,12 +25,7 @@ local function HourBefore(hour)
     return (((hour + 10) % 12) + 1)
 end
 
--- A clock time's minutes, or nil.
-local function Minutes(text)
-    local hour, minutes = text:match("^(%d+):(%d%d)$")
-
-    return ((hour and ((tonumber(hour) * 60) + tonumber(minutes))) or nil)
-end
+local Minutes = Kit.ClockMinutes
 
 -- The answer a number-line prompt works out to, or nil for a closest riddle (its answer depends on its choices).
 local function NumberLine(prompt)
@@ -128,12 +123,7 @@ local function PlaceValue(prompt)
     return v
 end
 
--- options.random for Generate: the test Lua's own generator, refusing ranges the client's random would.
-local function Roll(m, n)
-    assert((m == math.floor(m)) and (n == math.floor(n)) and (m <= n), ("random(%s, %s) is not a valid range"):format(tostring(m), tostring(n)))
-
-    return math.random(m, n)
-end
+local Roll = Kit.Roll
 
 -- Calls fn(puzzle, options) for seeds riddles of kind at every grade that asks it and every level.
 local function Sample(puzzles, kind, seeds, fn)

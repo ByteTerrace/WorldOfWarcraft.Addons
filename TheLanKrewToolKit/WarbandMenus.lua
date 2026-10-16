@@ -6,8 +6,9 @@ local addonName, ns = ...
 --   Warband.MenuEntries(root, info)  adds the Krew's choices for a player to a menu description
 --                                    (the unit popup, and the nearby-enemies window's menu).
 --   Warband.EnableMenus()            hooks the menus and tooltips on the first call (nothing joins a menu
---                                    in the controller interface style: it taints the controller UI). Menu and
---   Warband.DisableMenus()           tooltip hooks can't be removed, so these only gate them.
+--                                    in the controller interface style: it taints the controller UI)
+--   Warband.DisableMenus()           gates them off
+-- Menu and tooltip hooks can't be removed, so EnableMenus and DisableMenus only gate them.
 --   Warband.PrintLedger()            lists the ledger and the wars (/tlk ledger).
 --   Warband.PrintRival(arg)          your record against a player (/tlk rival).
 

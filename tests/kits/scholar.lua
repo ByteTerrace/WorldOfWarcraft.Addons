@@ -1,6 +1,7 @@
--- Helpers for Scholar's end-to-end tests (scholarui, scholarquests, scholarscreen): a child's character with the
--- challenge on, the riddles the screen shows, and answering them. Every load seeds the random source with 7, so the
--- riddles asked are the same on every run. A test file gets the table with use("scholar").
+-- Helpers for Scholar's tests: a child's character with the challenge on, a riddle on screen (Riddle), the riddles the
+-- screen shows, and answering them; and for the generator tests, Roll (Generate's random), ClockMinutes, and Sorted.
+-- Every load seeds the random source with 7, so the riddles asked are the same on every run. A test file gets the table
+-- with use("scholar").
 
 --- Offers the quest spec (from giver, Eagan Peltskinner by default) and accepts it.
 local function Accept(h, spec, giver)
@@ -13,6 +14,13 @@ local function Banner(h)
     local text = Harness.State(rawget(h.env, "TheLanKrewToolKitScholar").Feedback.Text).text
 
     return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
+
+--- A clock time's minutes, its hour times 60 plus its minutes, or nil for text that isn't one.
+local function ClockMinutes(text)
+    local hour, minutes = text:match("^(%d+):(%d%d)$")
+
+    return ((hour and ((tonumber(hour) * 60) + tonumber(minutes))) or nil)
 end
 
 --- A harness with The Lan Krew ToolKit loaded from saved (SavedVariables by name).
@@ -48,6 +56,13 @@ local function Numbers(text)
     return out
 end
 
+--- options.random for Generate: the test Lua's own generator, refusing ranges the client's random would.
+local function Roll(m, n)
+    assert((m == math.floor(m)) and (n == math.floor(n)) and (m <= n), ("random(%s, %s) is not a valid range"):format(tostring(m), tostring(n)))
+
+    return math.random(m, n)
+end
+
 --- Whether the riddle screen is up.
 local function Showing(h)
     local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
@@ -62,6 +77,19 @@ local function Solve(h, shown)
     h:Advance(2)
 
     return shown[#shown]
+end
+
+--- A word's letters, sorted (spaces and other marks left out).
+local function Sorted(word)
+    local letters = {}
+
+    for letter in word:gmatch("%a") do
+        letters[#letters + 1] = letter
+    end
+
+    table.sort(letters)
+
+    return table.concat(letters)
 end
 
 --- Every puzzle the screen shows from now on, in order.
@@ -90,6 +118,20 @@ local function Returned(h)
     return shown[#shown], rawget(h.env, "TheLanKrewToolKitScholar")
 end
 
+--- A child's riddle on screen, with the short pause and no quest riddles, and the riddle.
+local function Riddle(settings)
+    local saved = { ["Scholar.missPause"] = "short", ["Scholar.quests"] = false }
+
+    for key, value in pairs(settings or {}) do saved[key] = value end
+
+    local h, addon, ns = LoadKid(saved)
+    local shown = Watch(ns)
+
+    h:Slash("/tlk puzzle")
+
+    return h, addon, shown[#shown], rawget(h.env, "TheLanKrewToolKitScholar")
+end
+
 --- An answer other than the right one and except.
 local function WrongAnswer(puzzle, except)
     for i = 1, 4 do
@@ -100,6 +142,7 @@ local function WrongAnswer(puzzle, except)
 end
 
 return {
-    Accept = Accept, Banner = Banner, Load = Load, LoadKid = LoadKid, Numbers = Numbers, Returned = Returned, Showing = Showing,
-    Solve = Solve, Watch = Watch, WrongAnswer = WrongAnswer,
+    Accept = Accept, Banner = Banner, ClockMinutes = ClockMinutes, Load = Load, LoadKid = LoadKid, Numbers = Numbers,
+    Returned = Returned, Riddle = Riddle, Roll = Roll, Showing = Showing, Solve = Solve, Sorted = Sorted, Watch = Watch,
+    WrongAnswer = WrongAnswer,
 }

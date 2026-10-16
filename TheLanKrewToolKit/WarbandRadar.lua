@@ -257,7 +257,7 @@ local function CreateWindow()
 
     -- Never focused by the controller UI's SmartNavigation (it covers every child): focus on an addon's control carries
     -- its taint into what the controller UI remembers, which blocks SetPreferredGamepadInteractTarget and can freeze
-    -- the game (docs/ControllerSupport.md). Its controller input is summons (Input:Summon) instead.
+    -- the game (docs/ControllerSupport.md). Its rows are for the mouse.
     frame.smartNavigationIgnored = true
 
     frame:SetSize(Width, 26)

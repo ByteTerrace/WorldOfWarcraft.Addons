@@ -26,12 +26,7 @@ local Wolves = {
     title = "Wolves Across the Border",
 }
 
--- options.random for Generate: the test Lua's own generator, refusing ranges the client's random would.
-local function Roll(m, n)
-    assert((m == math.floor(m)) and (n == math.floor(n)) and (m <= n), ("random(%s, %s) is not a valid range"):format(tostring(m), tostring(n)))
-
-    return math.random(m, n)
-end
+local Roll = Kit.Roll
 
 -- Every math.quest riddle for seeds at grade and level, with the player's quest book and context.
 local function Riddles(ns, grade, level, seeds, context)

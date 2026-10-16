@@ -36,6 +36,7 @@ local pairs = pairs
 local Refuse = ByteTerrace.Refuse
 local SafeCall = ByteTerrace.SafeCall
 local sort = table.sort
+local SortedKeys = ByteTerrace.SortedKeys
 local tostring = tostring
 local type = type
 
@@ -262,15 +263,7 @@ end
 --- Returns every key, sorted, in a fresh array.
 ---@return string[]
 function Records:Keys()
-    local keys = {}
-
-    for key in pairs(Loaded(self)) do
-        keys[#keys + 1] = key
-    end
-
-    sort(keys)
-
-    return keys
+    return SortedKeys(Loaded(self))
 end
 
 --- Binds the collection to its SavedVariables table (after State:Compile) and validates it. A collection over its limit

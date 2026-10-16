@@ -112,7 +112,8 @@ An addon can bind a single button without Blizzard's binding groups: `SetOverrid
 ### Read raw input on your own frame
 
 - For buttons, call `frame:EnableGamePadButton(true)` and give the frame an `OnGamePadButtonDown(self, button)` script. For sticks, use `EnableGamePadStick` and `OnGamePadStick`.
-- Only the frame that took the down event gets the up event, so pass presses on unless you mean to consume them.
+- Only the frame that took the down event gets the up event.
+- A frame that takes controller buttons takes all of them. The client ignores the script's return value, so the frame can't pass a button on to the game (seen in game under the Scholar's riddle), and taking the controller is modal. To bind one button and leave the others to the player, use an override binding instead, as `Input:Summon` does (see [Architecture](Architecture.md#input)).
 
 ### Use the hardware
 

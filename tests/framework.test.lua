@@ -433,6 +433,7 @@ test("the settings window is generated from labeled persisted rows, in declarati
 
     eq(button.Label:GetText(), "a")
     button:Click()
+    window.Dropdown.Options[2]:Click()
     eq(state:Get("M.mode"), "b", "window writes go through state")
     eq(button.Label:GetText(), "b")
 end)

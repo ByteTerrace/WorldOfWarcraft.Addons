@@ -79,6 +79,10 @@ test("loads cleanly and builds its settings window, organized into pages and sec
 
     eq(channel.Label:GetText(), "Master")
     channel:Click()
+    local option = window.Dropdown.Options[2]
+
+    eq(option.Label:GetText(), "Sound effects", "the list names the channels as the dropdown does")
+    option:Click()
     eq(addon.State:Get("Sounds.channel"), "SFX")
     eq(channel.Label:GetText(), "Sound effects", "friendly channel names")
 end)

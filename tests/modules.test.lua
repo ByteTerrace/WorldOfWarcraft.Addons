@@ -72,6 +72,7 @@ test("a row locked by another row refuses writes from code, slash and the window
 
     button:Click()
     truthy(h.printed[#h.printed]:find("Mode is locked", 1, true))
+    falsy(addon.SettingsWindow.Dropdown:IsShown(), "a locked dropdown says so instead of opening")
     eq(m:Get("mode"), "a")
     eq(button.Label:GetText(), "a")
     m:Set("locked", false)

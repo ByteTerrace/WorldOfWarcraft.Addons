@@ -103,20 +103,53 @@ test("window and external writes each refresh the changed control once", functio
     truthy(box.Check:IsShown(), "a slash change refreshes the open window")
 end)
 
-test("an enum button steps forward on a left click and back on a right click, wrapping", function()
-    local _, addon = NewAddOn()
+-- The open dropdown list's option labels, in order, with the checked one in brackets.
+local function Options(window)
+    local texts = {}
+
+    for _, option in ipairs(window.Dropdown.Options) do
+        if option:IsShown() then
+            local text = option.Label:GetText()
+
+            texts[#texts + 1] = ((option.Check:IsShown() and ("[" .. text .. "]")) or text)
+        end
+    end
+
+    return table.concat(texts, " ")
+end
+
+test("an enum is a dropdown: a click lists every value with the current one checked, and picking one sets it", function()
+    local h, addon = NewAddOn()
     local window, state = addon.SettingsWindow, addon.State
 
     window:Show()
     local button = window.Controls[state:Id("Meter.size")]
+    local list = window.Dropdown
 
     eq(button.Label:GetText(), "Wide")
-    button:Click("LeftButton")
-    eq(state:Get("Meter.size"), "wider")
-    eq(button.Label:GetText(), "Wider")
-    button:Click("RightButton")
-    button:Click("RightButton")
-    eq(state:Get("Meter.size"), "widest", "back from the first value wraps to the last")
+    falsy(list:IsShown(), "closed until clicked")
+    truthy(h:Click(button))
+    truthy(list:IsVisible(), "a click opens the list")
+    eq(Options(window), "[Wide] Wider Widest")
+    truthy(h:Click(list.Options[3]))
+    eq(state:Get("Meter.size"), "widest")
+    eq(button.Label:GetText(), "Widest")
+    falsy(list:IsShown(), "picking closes it")
+    h:Click(button)
+    eq(Options(window), "Wide Wider [Widest]", "the new value is the checked one")
+    h:Click(button)
+    falsy(list:IsShown(), "clicking the dropdown again closes it")
+    h:Click(button)
+    truthy(h:Click(list.Catcher), "the view behind the list takes the click")
+    falsy(list:IsShown(), "a click elsewhere on the view closes it")
+    eq(state:Get("Meter.size"), "widest", "and changes nothing")
+    h:Click(button)
+    window:Show(2)
+    falsy(list:IsShown(), "another page closes it")
+    window:Show(1)
+    h:Click(button)
+    window:Hide()
+    falsy(list:IsShown(), "hiding the view closes it")
 end)
 
 test("number steppers move by the row's step and stop at its bounds", function()

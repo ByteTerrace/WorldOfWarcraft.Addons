@@ -457,6 +457,10 @@ function Behaviors.SetPoint(s, _, ...) Anchor(s, ...) end
 
 function Behaviors.SetPropagateKeyboardInput(s, _, propagate) s.propagateKeyboard = ((propagate and true) or false) end
 
+-- [D] SetRotation(radians, normalizedRotationPoint?) (SimpleTextureBaseAPI): the harness keeps both; drawing isn't
+-- modeled.
+function Behaviors.SetRotation(s, _, radians, point) s.rotation, s.rotationPoint = radians, point end
+
 function Behaviors.SetScrollChild(s, _, child) s.scrollChild = child end
 
 function Behaviors.SetSize(s, _, width, height) s.width, s.height = width, height end

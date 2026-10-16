@@ -247,7 +247,6 @@ local function ScrollTo(window, offset)
     -- would blur or drop the controls' 1-pixel borders.
     -- secret: the scroll frame's scale is the UI's own, a plain number
     window.Scroll:SetVerticalScroll(PixelUtil.GetNearestPixelSize(offset, window.Scroll:GetEffectiveScale()))
-    -- Unchanged, it runs nothing; changed (the wheel), its OnValueChanged comes back here with the same offset.
     window.ScrollBar:SetValue(offset)
 end
 
@@ -617,8 +616,15 @@ local function BuildView(window)
     bar:SetObeyStepOnDrag(true)
     bar:EnableMouseWheel(true)
     bar:SetScript("OnMouseWheel", function(_, delta) ScrollTo(window, window.m_offset - (delta * RowHeight)) end)
-    -- secret: the value is the addon's own slider's, a plain number
-    bar:SetScript("OnValueChanged", function(_, value) ScrollTo(window, value) end)
+
+    -- A drag moves the page; ScrollTo's own SetValue comes back at the offset it set, which is done already.
+    bar:SetScript("OnValueChanged", function(_, value)
+        -- secret: the value is the addon's own slider's, a plain number
+        if value ~= window.m_offset then
+            ScrollTo(window, value)
+        end
+    end)
+
     local track = bar:CreateTexture(nil, "BACKGROUND")
 
     track:SetAllPoints(bar)

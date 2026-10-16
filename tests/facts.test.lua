@@ -101,10 +101,10 @@ test("a target is read once when chosen; a flag change re-reads attackability, n
 
     truthy(addon.State:Get("target.formidable"))
     elite.canAttack = false
-    eq(Reads(h, function() h:Fire("UNIT_FLAGS", "target") end), "UnitCanAttack=1 UnitExists=1 UnitIsDeadOrGhost=1")
+    eq(Reads(h, function() h:Fire("UNIT_FLAGS", "target") end), "UnitCanAttack=1 UnitIsDeadOrGhost=1")
     falsy(addon.State:Get("target.formidable"), "no longer attackable")
     elite.canAttack = true
-    eq(Reads(h, function() h:Fire("UNIT_FACTION", "target") end), "UnitCanAttack=1 UnitExists=1 UnitIsDeadOrGhost=1")
+    eq(Reads(h, function() h:Fire("UNIT_FACTION", "target") end), "UnitCanAttack=1 UnitIsDeadOrGhost=1")
     truthy(addon.State:Get("target.formidable"), "attackable again, and still elite")
     elite.classification = "normal"
     h:Fire("UNIT_CLASSIFICATION_CHANGED", "target")
@@ -241,6 +241,42 @@ test("a death whose recap holds no events is attributed to no one, at once", fun
     eq(addon.State:Get("death.killer"), "")
     eq(addon.State:Get("death.killerKind"), "")
     eq(addon.State:Get("death.killerDamage"), 0)
+end)
+
+test("a friendly player target's health ticks don't ask whether there's a target: their events say so", function()
+    local h = NewAddOn()
+
+    Start(h)
+    h:SetTarget({ canAttack = false, isPlayer = true, name = "Mom" })
+    h.apiCalls = {}
+
+    for _ = 1, 10 do
+        h:Fire("UNIT_HEALTH", "target")
+    end
+
+    eq(h:CountApiCalls("UnitExists"), 0)
+    eq(h:CountApiCalls("UnitCanAttack"), 10, "a duel can start with no event of its own, so it's read again")
+end)
+
+test("while a death waits for its recap, only the meter's Deaths updates read the meter", function()
+    local h, addon = NewAddOn()
+    local types = h.env.Enum.DamageMeterType
+
+    Start(h)
+    h:EnterCombat()
+    h:Fire("PLAYER_DEAD")
+    h.apiCalls = {}
+
+    for _ = 1, 10 do
+        h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.DamageDone, 1)
+        h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.Dps, 1)
+    end
+
+    eq(h:CountApiCalls("C_DamageMeter.GetCombatSessionFromType"), 0, "damage and DPS updates say nothing of deaths")
+    eq(h:CountApiCalls("C_DamageMeter.IsDamageMeterAvailable"), 0)
+    h:Fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", types.Deaths, 1)
+    truthy(h:CountApiCalls("C_DamageMeter.GetCombatSessionFromType") > 0, "a Deaths update does")
+    eq(addon.State:Get("death.count"), 1)
 end)
 
 test("the death fact's recap retries stop when no module uses it any more", function()

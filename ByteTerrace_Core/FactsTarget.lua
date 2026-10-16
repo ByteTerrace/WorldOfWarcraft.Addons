@@ -70,9 +70,10 @@ ByteTerrace.Facts.target = {
         -- Whether the target became attackable while targeted, which makes it your duel partner.
         local dueling = false
 
-        -- Whether the target is an attackable player, formidable, and alive.
-        local function Read()
-            if not IsTrue(UnitExists("target")) then
+        -- Whether the target is an attackable player, formidable, and alive. targeted says there's a target: the
+        -- target's own unit events come only while there is one, so they needn't ask.
+        local function Read(targeted)
+            if not (targeted or IsTrue(UnitExists("target"))) then
                 return false, false, false
             end
 
@@ -98,9 +99,9 @@ ByteTerrace.Facts.target = {
             state:Set(alive, isAlive)
         end
 
-        -- Same target, new facts: attackability, rank, death, and resurrection.
-        local function Refresh()
-            local isEnemy, isFormidable, isAlive = Read()
+        -- Same target, new facts: attackability, rank, death, and resurrection. targeted is Read's.
+        local function Refresh(targeted)
+            local isEnemy, isFormidable, isAlive = Read(targeted)
 
             Live(isAlive, isEnemy or state.Values[enemy])
 
@@ -115,7 +116,7 @@ ByteTerrace.Facts.target = {
         -- The client sends the target's health events only while you have one.
         module:On("UNIT_HEALTH", function()
             if isPlayer and not state.Values[enemy] then
-                Refresh()
+                Refresh(true)
             else
                 Live(not IsTrue(UnitIsDeadOrGhost("target")), state.Values[enemy])
             end
@@ -149,18 +150,23 @@ ByteTerrace.Facts.target = {
             outOfBounds = false
         end)
 
-        module:On("UNIT_FACTION", Refresh, "target")
-        module:On("UNIT_FLAGS", Refresh, "target")
+        -- The target's own unit events: there's a target.
+        local function Changed()
+            Refresh(true)
+        end
+
+        module:On("UNIT_FACTION", Changed, "target")
+        module:On("UNIT_FLAGS", Changed, "target")
 
         local function RankChanged()
             rank = nil
-            Refresh()
+            Refresh(true)
         end
 
         module:On("UNIT_CLASSIFICATION_CHANGED", RankChanged, "target")
         module:On("UNIT_LEVEL", RankChanged, "target")
         isPlayer = IsTrue(UnitIsPlayer("target"))
-        Refresh()
+        Refresh(false)
         -- An attackable target at a /reload may be anyone, so it isn't taken for a duel partner.
         dueling = false
     end,

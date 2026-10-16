@@ -32,6 +32,32 @@ test("a stopping module's maps stop capturing: a stopped feature never keeps the
     eq(h.propagated[1], "PAD3", "the controller is the player's again")
 end)
 
+test("capture changes only when whether anything's bound does", function()
+    local h, addon = NewAddOn()
+
+    addon:Module("Pad", { bindings = { { command = "Pad.pick", map = "pad", source = "gamepad.east" } },
+        commands = { { label = "Pick", name = "pick", run = function() end } }, label = "Pad" })
+
+    addon:Module("Note", { commands = { { label = "Focus", name = "focus", run = function() end } }, label = "Note" })
+    Start(h)
+    h:ResetCalls()
+
+    for _ = 1, 5 do
+        addon.Input:SetActiveMaps({ "pad" })
+    end
+
+    eq(h:CountCalls("EnableGamePadButton"), 1, "capture turns on once")
+
+    for _ = 1, 5 do
+        addon.Input:SetActiveMaps({})
+    end
+
+    eq(h:CountCalls("EnableGamePadButton"), 2, "and off once")
+    h:ResetCalls()
+    addon.State:Set("Note.enabled", false)
+    eq(h:CountCalls("EnableGamePadButton") + h:CountCalls("ClearOverrideBindings"), 0, "a module with no summons stops quietly")
+end)
+
 test("a map that binds two modules' commands is refused: a map belongs to one module", function()
     local h, addon = NewAddOn()
 

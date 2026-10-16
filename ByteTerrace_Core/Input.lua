@@ -208,12 +208,14 @@ local function CaptureFrame(self)
     return frame
 end
 
--- Turns capture on while any binding is active. EnableGamePadButton is flagged protected, but, like Show and Hide, that
--- restricts only protected (Secure) frames. The capture frame is a plain frame, so this works in combat too.
+-- Turns capture on while any binding is active, touching the frame only when that changes. EnableGamePadButton is
+-- flagged protected, but, like Show and Hide, that restricts only protected (Secure) frames. The capture frame is a
+-- plain frame, so this works in combat too.
 local function ApplyCapture(self)
     local wanted = (next(self.m_active) ~= nil)
 
-    if wanted or self.m_frame then
+    if wanted ~= self.m_capturing then
+        self.m_capturing = wanted
         CaptureFrame(self):EnableGamePadButton(wanted)
     end
 end
@@ -248,6 +250,8 @@ function ByteTerrace.NewInput(addon)
         -- The active maps' names, in order.
         m_activeMaps = {},
         m_addon = addon,
+        -- Whether the capture frame takes controller buttons (ApplyCapture).
+        m_capturing = false,
         -- Each entry is { map, source, command }, kept until compile.
         m_declared = {},
         -- Maps each held key to the command id its press went to.
@@ -417,9 +421,11 @@ function Input:Release(module)
     local dropped = false
     local dismissed = false
 
-    for _, key in ipairs(ByteTerrace.SortedKeys(self.m_summons)) do
-        if Unstack(self, key, function(summon) return (summon.module == module) end) then
-            dismissed = true
+    if next(self.m_summons) then
+        for _, key in ipairs(ByteTerrace.SortedKeys(self.m_summons)) do
+            if Unstack(self, key, function(summon) return (summon.module == module) end) then
+                dismissed = true
+            end
         end
     end
 

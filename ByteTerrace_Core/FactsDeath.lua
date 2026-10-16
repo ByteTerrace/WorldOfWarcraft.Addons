@@ -210,6 +210,15 @@ ByteTerrace.Facts.death = {
             end
         end
 
+        -- A meter update: only the Deaths meter's can carry a new recap, so the others cost nothing.
+        local function OnMeterUpdate(meterType)
+            if issecretvalue(meterType) or (meterType ~= Enum.DamageMeterType.Deaths) then
+                return
+            end
+
+            TryRecap()
+        end
+
         module:On("PLAYER_DEAD", function()
             local number = (state.Values[count] + 1)
 
@@ -224,7 +233,7 @@ ByteTerrace.Facts.death = {
                 return
             end
 
-            waitHandle = (waitHandle or module:On("DAMAGE_METER_COMBAT_SESSION_UPDATED", TryRecap))
+            waitHandle = (waitHandle or module:On("DAMAGE_METER_COMBAT_SESSION_UPDATED", OnMeterUpdate))
 
             for i, delay in ipairs(RecapRetries) do
                 death.timers[i] = module:After(delay, TryRecap)

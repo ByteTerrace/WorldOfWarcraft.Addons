@@ -215,6 +215,19 @@ test("every scroll offset is whole screen pixels, so 1-pixel borders stay sharp 
     end
 end)
 
+test("a notch of the wheel scrolls the page once", function()
+    local h, addon = NewLongAddOn(40)
+    local window = addon.SettingsWindow
+
+    h:SelectSettingsCategory(h.categories[2])
+    h:ResetCalls()
+    h:MouseWheel(window.Scroll, -1)
+    eq(h:CountCalls("SetVerticalScroll"), 1)
+    h:ResetCalls()
+    h:DragSliderThumb(window.ScrollBar, 100)
+    eq(h:CountCalls("SetVerticalScroll"), 1, "and so does a step of the thumb")
+end)
+
 test("dragging the scroll thumb scrolls the page, a whole row at a time, within the page", function()
     local h, addon = NewLongAddOn(40)
     local window = addon.SettingsWindow

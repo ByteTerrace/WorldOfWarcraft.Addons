@@ -316,7 +316,9 @@ function Comms:Open()
             return
         end
 
-        if not self:Ready() or (type(sender) ~= "string") or (sender == "") or sender:find("[|%c]") then
+        -- A group channel says you're in a group, so only lockdown is left to ask about.
+        if not self.m_open or C_ChatInfo.InChatMessagingLockdown() or (type(sender) ~= "string") or (sender == "")
+            or sender:find("[|%c]") then
             return
         end
 

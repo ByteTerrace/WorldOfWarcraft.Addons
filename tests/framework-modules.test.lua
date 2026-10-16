@@ -222,6 +222,23 @@ test("group messages: sent to the group, received from it, never your own", func
     eq(h.addonMessages[#h.addonMessages].result, h.env.Enum.SendAddonMessageResult.Success)
 end)
 
+test("a received message costs no group check: its channel says it came from the group", function()
+    local h, addon = NewAddOn()
+    local module = addon:Module("Chat", { comms = { prefix = "TestApp1" }, label = "Chat" })
+    local got = 0
+
+    module.Comms:Listen("PING", function() got = (got + 1) end)
+    Start(h)
+    h:JoinGroup("party", { "Bob" })
+    h.apiCalls = {}
+    h:ReceiveAddonMessage("TestApp1", "PING:x", "PARTY", "Bob")
+    eq(got, 1)
+    eq(h:CountApiCalls("IsInGroup") + h:CountApiCalls("IsInRaid"), 0)
+    h:SetRestriction("Encounter", true)
+    h:ReceiveAddonMessage("TestApp1", "PING:x", "PARTY", "Bob")
+    eq(got, 1, "chat lockdown still keeps messages out")
+end)
+
 test("group messages keep one per interval from a bounded queue, and nothing while stopped", function()
     local h, addon = NewAddOn()
     local module = addon:Module("Chat", { comms = { interval = 2, prefix = "TestApp1", queue = 3 }, label = "Chat" })

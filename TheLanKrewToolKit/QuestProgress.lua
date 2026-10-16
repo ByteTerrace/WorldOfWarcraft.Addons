@@ -165,7 +165,13 @@ ns.Addon:Module("QuestProgress", {
             elseif not timer then
                 timer = module:After(ReadDelay, function()
                     timer = nil
-                    Read(module, true, false)
+
+                    -- A fight that started while this reading waited gets it in the fight's sum instead.
+                    if state.Values[combat] then
+                        waiting = true
+                    else
+                        Read(module, true, false)
+                    end
                 end)
             end
         end

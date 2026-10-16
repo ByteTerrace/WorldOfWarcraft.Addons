@@ -95,6 +95,21 @@ test("in a fight the log isn't read and the Owl keeps quiet, then sums up what t
     eq(Said(h, from), "That fight got you 2 more! Tough Wolf Meat: 2 of 8. 6 more to go!")
 end)
 
+test("progress just before a fight starts waits for the fight to end, and the fight's sum includes it", function()
+    local h = KidWithWolves()
+    local from = #h.spoken
+    local reads = h:CountApiCalls("C_QuestLog.GetQuestObjectives")
+
+    h:ProgressObjective(33, 1, 1)
+    h:EnterCombat()
+    h:Advance(1)
+    eq(h:CountApiCalls("C_QuestLog.GetQuestObjectives"), reads, "the reading due as the fight started waits")
+    eq(Said(h, from), "", "and nothing is said mid-fight")
+    h:LeaveCombat()
+    h:Advance(1)
+    eq(Said(h, from), "That fight got you 1 more! Tough Wolf Meat: 1 of 8. 7 more to go!")
+end)
+
 test("a burst of quest log updates is one reading of the log", function()
     local h = KidWithWolves()
     local reads = h:CountApiCalls("C_QuestLog.GetQuestObjectives")

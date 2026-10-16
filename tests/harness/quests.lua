@@ -65,9 +65,9 @@
 --               reaches numRequired; its text shows the new count. Blizzard's Forever objective
 --               tracker redraws on QUEST_LOG_UPDATE (Blizzard_QuestObjectiveTracker.lua).
 --               [G] Progress fires QUEST_WATCH_UPDATE(questID), then QUEST_LOG_UPDATE, and no
---               UNIT_QUEST_LOG_CHANGED. [G] ReadyForTurnIn is true when every objective is finished,
---               a quest without objectives included, and nil for a quest not in the log
---               (questLog.readyForTurnIn asks the client).
+--               UNIT_QUEST_LOG_CHANGED. [E] ReadyForTurnIn is true when every objective is finished
+--               and false while one isn't; a quest without objectives can be either (questLog.readyForTurnIn).
+--               [G] The harness answers true for one, and nil for a quest not in the log.
 --   Windows     [D] Blizzard's Forever UI shows the gossip frame on GOSSIP_SHOW(textureKit) and
 --               hides it on GOSSIP_CLOSED(interactionIsContinuing) (CustomGossipFrameBase.lua).
 --               The merchant, mailbox, bank, auction house, trainer, and other windows register

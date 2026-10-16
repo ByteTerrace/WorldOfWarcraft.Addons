@@ -301,7 +301,7 @@ test("realm names: GetRealmName as is, GetNormalizedRealmName without spaces or 
     eq(h.env.GetNormalizedRealmName(), "BloodMoonKeep")
 end)
 
-test("GetGuildInfo returns name, rank, rank index and another realm's name; nothing without a guild", function()
+test("GetGuildInfo returns name, rank, rank index and a realm (empty for your own); nothing without a guild", function()
     local h = Harness.New({ guild = "The Lan Krew", guildRank = "Officer", guildRankIndex = 1, realm = "Home Realm" })
     local env = h.env
     local name, rank, index, realm = env.GetGuildInfo("player")
@@ -309,7 +309,7 @@ test("GetGuildInfo returns name, rank, rank index and another realm's name; noth
     eq(name, "The Lan Krew")
     eq(rank, "Officer")
     eq(index, 1)
-    eq(realm, nil, "the player's own realm is nil")
+    eq(realm, "", "the player's own realm is a string (guild.player), empty until the probe says which")
 
     h:SetTarget(EnemyPlayer({ guild = "Knights of Light", guildRank = "Guild Master", guildRankIndex = 0,
         guildRealm = "Other Realm" }))
@@ -321,7 +321,7 @@ test("GetGuildInfo returns name, rank, rank index and another realm's name; noth
     eq(realm, "Other Realm")
     falsy(env.issecretvalue(name))
     h:SetTarget(EnemyPlayer({ guild = "Home Guild", guildRealm = "HomeRealm" }))
-    eq(select(4, env.GetGuildInfo("target")), nil, "the player's realm, however it's written")
+    eq(select(4, env.GetGuildInfo("target")), "", "the player's realm, however it's written")
     eq(select(2, env.GetGuildInfo("target")), "Member", "the default rank")
     h:SetTarget(EnemyPlayer())
     eq(select("#", env.GetGuildInfo("target")), 0, "no guild: nothing")

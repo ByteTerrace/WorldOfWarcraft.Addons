@@ -204,13 +204,24 @@ Probes.Define({
         end,
     },
     {
+        -- What GetGuildInfo("player") answers. Its realm is "empty", "normalized" (GetNormalizedRealmName's form),
+        -- "display" (GetRealmName's), "other", or a secret marker: WarbandUtil's guild keys add your normalized realm
+        -- to an empty one, so a display name here would file your own guild under a second key.
         name = "guild.player",
         needs = { "guild" },
         run = function()
             local guildName, rankName, rankIndex, realm = GetGuildInfo("player")
+            local form = Text(realm)
 
-            return { guildName = Shape(guildName), rankIndex = Shape(rankIndex), rankName = Shape(rankName), realm = Shape(realm) }
+            if form == "text" then
+                -- secret: Text checked realm with issecretvalue, so it's a plain string here
+                form = (((realm == GetNormalizedRealmName()) and "normalized") or ((realm == GetRealmName()) and "display")
+                    or "other")
+            end
+
+            return { guildName = Shape(guildName), rankIndex = Shape(rankIndex), rankName = Shape(rankName), realm = form }
         end,
+        version = 2,
     },
     {
         name = "map.player",

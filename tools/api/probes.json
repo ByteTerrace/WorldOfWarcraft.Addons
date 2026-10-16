@@ -23,7 +23,7 @@
         "sellPrice": "number",
         "stackCount": "number"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "chat.lockdownIdle": {
       "result": { "inChatMessagingLockdown": false },
@@ -31,7 +31,7 @@
     },
     "chatTypeInfo.raidWarning": {
       "result": { "b": 0, "g": 72, "hasMetatable": true, "r": 255, "sticky": 0 },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "classColors": {
       "result": {
@@ -48,15 +48,14 @@
           "WARRIOR": "ffc69b6d"
         }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "combat.edges": {
       "result": {
         "enter": "PLAYER_REGEN_DISABLED[lockdown=false affecting=true restricted=false] > Combat Activating[lockdown=false affecting=true restricted=false]",
         "leave": "Combat Inactive[lockdown=false affecting=false restricted=false] > PLAYER_REGEN_ENABLED[lockdown=false affecting=false restricted=false]"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "damageMeter.afterDeath": {
       "result": { "types": "DamageTaken,Deaths" },
@@ -85,7 +84,7 @@
     },
     "damageMeter.available": {
       "result": { "failureReason": "", "isAvailable": true },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "damageMeter.currentInCombat": {
       "result": {
@@ -97,6 +96,10 @@
       },
       "contexts": { "combat/Combat": true },
       "build": "1.60.1 (70374)"
+    },
+    "damageMeter.currentSession": {
+      "result": { "updatedIn": "lockdown=true affecting=true restricted=true" },
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "damageMeter.death": {
       "result": {
@@ -202,15 +205,15 @@
     },
     "faction.player": {
       "result": { "group": "string", "isAllianceOrHorde": true, "localized": "string", "localizedIsGlobalString": true },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "fonts.scholar": {
       "result": { "Game18Font": "Font", "Game24Font": "Font", "Game30Font": "Font" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "gamePad.controllers": {
       "result": { "interfaceStyles": "Gamepad", "labelStyles": "Letters", "powerLevels": "Medium" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "gamePad.device": {
       "result": {
@@ -222,12 +225,12 @@
         "state": "table",
         "usingGamepad": "boolean"
       },
-      "contexts": { "idle/none": true },
+      "contexts": { "combat/Combat": true, "idle/none": true },
       "version": 2
     },
     "gamePad.settings": {
       "result": { "enabled": "boolean", "freelook": "boolean" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "gamePad.vibration": {
       "result": { "accepted": "High,LTrigger,Low,RTrigger", "refused": "none" },
@@ -239,7 +242,7 @@
         "COMBATLOG_HONORGAIN": "%s dies (Honorable Kill: %s). You gain %d Honor.",
         "COMBATLOG_HONORGAIN_NO_RANK": "%s dies (Honorable Kill). You gain %d Honor."
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "input.events": {
       "result": {
@@ -247,7 +250,7 @@
         "GAME_PAD_POWER_CHANGED": { "beforeWorld": false, "payloads": "Critical,Medium" },
         "heard": "GAME_PAD_ACTIVE_CHANGED,GAME_PAD_POWER_CHANGED"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "kills.seen": {
       "result": {
@@ -266,7 +269,7 @@
         "mapID": "number",
         "position": "table"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "merchant.firstItem": {
       "result": {
@@ -286,12 +289,18 @@
     },
     "namePlate.enemyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
-      "contexts": { "combat/Combat": true, "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "namePlate.friendlyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
       "contexts": { "idle/none": true }
+    },
+    "namePlates.events": {
+      "result": {
+        "added": "shown=true exists=false,shown=true exists=true",
+        "removed": "shown=true exists=false,shown=true exists=true"
+      },
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.chatDiscordInfo": {
       "result": {
@@ -310,38 +319,22 @@
           "type": "number",
           "userID": "number"
         },
-        "shapes": {
-          "CHAT_MSG_CHANNEL": "table",
-          "CHAT_MSG_PARTY": "table",
-          "CHAT_MSG_SAY": "table",
-          "CHAT_MSG_WHISPER": "table",
-          "CHAT_MSG_YELL": "table"
-        }
+        "shapes": { "CHAT_MSG_CHANNEL": "table", "CHAT_MSG_GUILD": "table", "CHAT_MSG_SAY": "table" }
       },
-      "contexts": { "combat/Combat": true, "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.chatSenders": {
-      "result": {
-        "CHAT_MSG_ADDON": "Aa Aa",
-        "CHAT_MSG_CHANNEL": "Aa Aa",
-        "CHAT_MSG_PARTY": "Aa Aa",
-        "CHAT_MSG_SAY": "Aa Aa",
-        "CHAT_MSG_WHISPER": "Aa Aa",
-        "CHAT_MSG_YELL": "Aa Aa"
-      },
-      "contexts": { "combat/Combat": true, "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "result": { "CHAT_MSG_CHANNEL": "Aa Aa", "CHAT_MSG_GUILD": "Aa Aa", "CHAT_MSG_SAY": "Aa Aa" },
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.otherPlayer": {
       "result": {
-        "byGUID": { "name": "Aa Aa", "realm": "empty" },
+        "byGUID": { "name": "Aa Aa", "realm": "Aa0" },
         "unitFullName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "names.player": {
       "result": {
@@ -353,21 +346,19 @@
         "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.secondPart": {
       "result": { "unitFullNameIsRealm": false, "unitNameIsRealm": false },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "power.comboPoints": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "power.comboPointsInCombat": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "power.npcTarget": {
       "result": {
@@ -376,8 +367,7 @@
         "powerType": "number",
         "token": "string"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "power.npcTargetInCombat": {
       "result": {
@@ -386,8 +376,7 @@
         "powerType": "number",
         "token": "string"
       },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "power.player": {
       "result": {
@@ -405,32 +394,27 @@
         "powerType": "number",
         "token": "string"
       },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "quest.offer": {
       "result": { "objectiveText": "text", "questText": "text", "title": "text" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "quest.offerIdentity": {
       "result": { "hasQuestID": true, "npcName": "string", "questID": "number", "questNpcName": "string" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "quest.turnIn": {
       "result": { "rewardText": "text", "title": "text" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "quest.turnInIdentity": {
       "result": { "hasQuestID": true, "questID": "number", "questNpcName": "string" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "questLog.countForm": {
       "result": { "forms": "leading,none" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "questLog.entry": {
       "result": {
@@ -443,25 +427,33 @@
         "questID": "number",
         "title": "text"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "questLog.objectives": {
       "result": {
-        "fields": "finished,numFulfilled,numRequired,text,type",
+        "fields": "finished,numFulfilled,numRequired,objectiveType,text,type",
         "finished": "boolean",
         "hasObjectives": true,
         "numFulfilled": "number",
         "numRequired": "number",
-        "objectiveType": "nil",
+        "objectiveType": "nil,number",
         "text": "text",
         "type": "text",
         "types": "item,log,monster"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
+    },
+    "questLog.readyForTurnIn": {
+      "result": { "answers": "finished:true,none:false,none:true,unfinished:false" },
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "questLog.text": {
       "result": { "description": "text", "objectives": "text", "selectedQuest": "number", "titleForQuestID": "text" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
+    },
+    "questLog.titleAfterTurnIn": {
+      "result": { "title": "text" },
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "realm.normalized": {
       "result": {
@@ -470,12 +462,11 @@
         "normalized": "string",
         "realm": "string"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "resting.player": {
       "result": { "isResting": "boolean" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "secrets.operations": {
       "result": {
@@ -490,15 +481,15 @@
         "tostring": true,
         "truthTest": true
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "secrets.rawOperations": {
       "result": { "compare": false, "tableKey": false },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "sound.knownFile": {
       "result": { "addonLua": true, "addonToc": true, "missing": false, "shipped": true },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "textures.used": {
       "result": {
@@ -537,7 +528,7 @@
         "Interface\\TargetingFrame\\UI-StatusBar": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true },
         "Interface\\Tooltips\\UI-Tooltip-Border": { "fileID": "number", "filePath": "text", "hasFileID": true, "set": true }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "trainer.services": {
       "result": {
@@ -556,8 +547,7 @@
         "texture": "number",
         "trainerType": "number"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "tts.voices": {
       "result": {
@@ -567,17 +557,15 @@
         "voiceName": "string",
         "voices": "table"
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "unitClassification.npcTarget": {
       "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "unitClassification.npcTargetInCombat": {
       "result": { "classification": "string", "isDocumented": true, "isSkull": false, "level": "number" },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "unitCombat.seen": {
       "result": {
@@ -608,13 +596,11 @@
     },
     "unitHealth.npcTarget": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "unitHealth.npcTargetInCombat": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "unitHealth.player": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": "number" },
@@ -622,8 +608,7 @@
     },
     "unitHealth.playerInCombat": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": "number" },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "unitHealthPercent.player": {
       "result": {
@@ -641,8 +626,7 @@
         "percent": { "secret": true, "type": "number" },
         "percentUnpredicted": { "secret": true, "type": "number" }
       },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "unitIdentity.enemyPlayer": {
       "result": {
@@ -664,8 +648,7 @@
         "name": "string",
         "realm": "nil"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "unitIdentity.npcTargetInCombat": {
       "result": {
@@ -676,8 +659,7 @@
         "name": "string",
         "realm": "nil"
       },
-      "contexts": { "combat/Combat": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "combat/Combat": true }
     },
     "unitIdentity.partyMember": {
       "result": {
@@ -697,7 +679,7 @@
     },
     "xp.player": {
       "result": { "exhaustion": "number or nil", "xp": "number", "xpMax": "number" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     }
   }
 }

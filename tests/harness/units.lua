@@ -69,8 +69,10 @@
 --               GUID (sex defaults to 2), and nothing about any other GUID.
 --   Realms      [D] GetNormalizedRealmName drops spaces and hyphens.
 --   Guilds      [D] GetGuildInfo(unit) returns guildName, guildRankName, guildRankIndex (0 = guild
---               master), realm (nil for the player's own realm), and nothing for a unit in no
---               guild or no unit (warcraft.wiki.gg API_GetGuildInfo). It's C API
+--               master), realm, and nothing for a unit in no guild or no unit (warcraft.wiki.gg
+--               API_GetGuildInfo). [E] The realm of your own guild is a string, not the nil the
+--               page gives (guild.player). [G] It's "" on your own realm; version 2 of the probe
+--               asks which string it is. It's C API
 --               (Ketho/BlizzardInterfaceResources' forever GlobalAPI) the docs don't cover, so it
 --               takes no secret arguments and [G] returns no secrets: players' identity isn't
 --               secret anyway, and an NPC has no guild. [G] The rank defaults to "Member", index 1.
@@ -383,10 +385,10 @@ function Harness:UnitFakes()
 
             if not unit or (unit.guild == nil) then return end
 
-            local realm = unit.guildRealm
+            local realm = (unit.guildRealm or "")
 
-            if (realm ~= nil) and (Harness.NormalizeRealm(realm) == Harness.NormalizeRealm(h.player.realm)) then
-                realm = nil
+            if Harness.NormalizeRealm(realm) == Harness.NormalizeRealm(h.player.realm) then
+                realm = ""
             end
 
             return unit.guild, (unit.guildRank or "Member"), (unit.guildRankIndex or 1), realm

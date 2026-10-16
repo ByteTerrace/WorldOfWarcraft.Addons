@@ -413,7 +413,11 @@ local Needs = {
             return (UnitIsPlayer("target") and (target ~= nil) and (target ~= me))
         end,
         label = "player target",
-        setup = function(h) h:SetTarget({ classFile = "WARRIOR", isPlayer = true, level = 20, name = "Grommash", race = "Orc" }) end,
+        -- A player from a connected realm, as Forever's realms are (names.otherPlayer saw one).
+        setup = function(h)
+            h:SetTarget({ classFile = "WARRIOR", isPlayer = true, level = 20, name = "Grommash", race = "Orc",
+                realm = "ClassicBetaPvP2" })
+        end,
         step = 1,
         text = "target another player (any faction; one whose name shows a surname is best)",
     },

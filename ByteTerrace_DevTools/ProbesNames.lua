@@ -93,6 +93,9 @@ Probes.Define({
         end,
     },
     {
+        accumulates = true,
+        -- The shapes another player's names take. Who you target decides some of them (byGUID's realm is "empty" for a
+        -- player on your own realm and a name for one from a connected realm), so every session's shapes are kept.
         name = "names.otherPlayer",
         needs = { "playerTarget" },
         run = function() return Names("target") end,

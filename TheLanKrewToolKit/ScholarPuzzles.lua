@@ -11,6 +11,7 @@ local addonName, ns = ...
 --   ns.Puzzles.Grades     { id, label } from { 0, "Kindergarten" } to { 6, "Grade 6" }, in order.
 --   ns.Puzzles.Generate   see Generate below.
 --   ns.Puzzles.Kinds      Kinds(subject, grade): the puzzle kinds a grade asks, which Generate's kind option takes.
+--   ns.Puzzles.Signature  Signature(puzzle): what the no-repeat window remembers of a riddle.
 --   ns.Puzzles.Kit        the building blocks, for the generators (Journal.lua also borrows Count).
 --   ns.Puzzles.MaxChoice  the longest choice, in bytes, a riddle may offer (ScholarQuests.lua cuts its lines to it).
 --                         Kit.Generators[kind] is function(state) -> puzzle.
@@ -21,6 +22,8 @@ local addonName, ns = ...
 -- The factions a context may name, as UnitFactionGroup names them.
 local Factions = { Alliance = true, Horde = true }
 local MaxChoice, MaxPrompt = 40, 240
+-- How many times Generate draws again to avoid a riddle the child saw recently.
+local MaxRedraws = 8
 
 local error, ipairs, pairs, tonumber, tostring, type = error, ipairs, pairs, tonumber, tostring, type
 local find, gmatch, gsub, lower, upper = string.find, string.gmatch, string.gsub, string.lower, string.upper
@@ -319,14 +322,49 @@ local function Fits(puzzle)
     return ((#puzzle.prompt <= MaxPrompt) and (max(#choices[1], #choices[2], #choices[3], #choices[4]) <= MaxChoice))
 end
 
+--- The puzzle kinds of a subject ("math" or "reading") at a grade (clamped to 0..6), in a fresh array. Without canHear,
+--- the kinds that are heard rather than read (ScholarWords.heard) are left out, and without hasQuests the kinds built
+--- from the player's quests (ScholarWords.fromQuests).
+---@param subject string
+---@param grade number
+---@param canHear boolean whether the client can say a riddle aloud
+---@param hasQuests boolean whether the quest book holds a quest to build a riddle from
+---@return string[]
+local function Kinds(subject, grade, canHear, hasQuests)
+    local kinds = ScholarWords.kinds[subject]
+
+    if not kinds then
+        error("ScholarPuzzles.Kinds: unknown subject " .. tostring(subject), 2)
+    end
+
+    local out = {}
+
+    for _, kind in ipairs(kinds[Clamp(grade, 0, 6, 0)]) do
+        if (canHear or not ScholarWords.heard[kind]) and (hasQuests or not ScholarWords.fromQuests[kind]) then
+            out[#out + 1] = kind
+        end
+    end
+
+    return out
+end
+
+--- What makes two riddles the same to a child: the kind and the prompt (its numbers and words).
+---@param puzzle table
+---@return string
+local function Signature(puzzle)
+    return (puzzle.kind .. "|" .. puzzle.prompt)
+end
+
 --- Generates a puzzle. Every math and reading puzzle fits the length limits, with any context SafeContext admits. Bad
 --- options (no random, an unknown subject) raise an error; grade and level are read as numbers and clamped. A quest
 --- puzzle ignores grade and level, and is nil when no question fits the quest.
 ---@param options table subject ("math" | "reading" | "quest"), grade (0..6), level (1..3, easiest first), random
 ---                     (function(m, n) returning an integer from m to n), an optional context { name, class, level,
 ---                     zone, copper, faction ("Alliance" or "Horde"), locale (GetLocale's "enUS") } of plain values,
----                     an optional kind (one of Kinds(subject, grade); a random one otherwise), and for "quest" the
----                     quest (a QuestBook record) and known (every record)
+---                     an optional kind (one of Kinds(subject, grade); a random one otherwise), avoid (a set of
+---                     Signatures not to repeat), fact (a math fact to ask again, { a, b }, for the kinds that ask
+---                     facts), known (every QuestBook record, for "quest" and the math kinds built from quests), and
+---                     for "quest" the quest (a QuestBook record)
 ---@return table? puzzle { subject, kind, title, prompt, choices (4 distinct strings), answer (1..4), hint,
 ---                      explanation, speech (what's said aloud for a heard riddle, whose prompt never shows the word) }, plus value, expression, remainder and terms on math puzzles and book (the quest
 ---                      book's text) on quest puzzles
@@ -336,8 +374,8 @@ local function Generate(options)
     end
 
     local state = {
-        context = SafeContext(options.context), grade = Clamp(options.grade, 0, 6, 0),
-        level = Clamp(options.level, 1, 3, 1), roll = options.random, subject = options.subject,
+        context = SafeContext(options.context), fact = options.fact, grade = Clamp(options.grade, 0, 6, 0),
+        known = options.known, level = Clamp(options.level, 1, 3, 1), roll = options.random, subject = options.subject,
     }
 
     if options.subject == "quest" then
@@ -362,38 +400,25 @@ local function Generate(options)
         error(("ScholarPuzzles.Generate: %s isn't a %s kind at grade %d"):format(tostring(kind), options.subject, state.grade), 2)
     end
 
-    return Generators[kind](state)
-end
+    -- A riddle the child saw recently (options.avoid holds their Signatures) is drawn again, a few times at most.
+    local puzzle = Generators[kind](state)
 
---- The puzzle kinds of a subject ("math" or "reading") at a grade (clamped to 0..6), in a fresh array. Without canHear,
---- the kinds that are heard rather than read (ScholarWords.heard) are left out.
----@param subject string
----@param grade number
----@param canHear boolean whether the client can say a riddle aloud
----@return string[]
-local function Kinds(subject, grade, canHear)
-    local kinds = ScholarWords.kinds[subject]
-
-    if not kinds then
-        error("ScholarPuzzles.Kinds: unknown subject " .. tostring(subject), 2)
-    end
-
-    local out = {}
-
-    for _, kind in ipairs(kinds[Clamp(grade, 0, 6, 0)]) do
-        if canHear or not ScholarWords.heard[kind] then
-            out[#out + 1] = kind
+    for _ = 1, MaxRedraws do
+        if not (options.avoid and options.avoid[Signature(puzzle)]) then
+            break
         end
+
+        puzzle = Generators[kind](state)
     end
 
-    return out
+    return puzzle
 end
 
 --- Three distinct plausible wrong numbers from lo to hi, and each one's why (or nil). A candidate is a number or { n,
 --- why = text, required = true }: required ones always come first (the misconception a riddle exists to catch), then
---- the other candidates and near misses, chosen so the answer's rank among the four values is uniform: it isn't the
---- middle one more often than chance. lo defaults to 1 (0 when value is 0); hi to twice value or value plus 10,
---- whichever is larger, and never less than lo plus 6.
+--- the other candidates and near misses, chosen so the answer's rank among the four values is as even as the required
+--- ones allow. lo defaults to 1 (0 when value is 0); hi to twice value or value plus 10, whichever is larger, and never
+--- less than lo plus 6.
 ---@return number[] wrongs
 ---@return table whys by index into wrongs
 local function WrongNumbers(state, value, candidates, lo, hi)
@@ -488,4 +513,4 @@ local Kit = {
     Pick = Pick, Shuffle = Shuffle, Trim = Trim, Vars = Vars, Words = ScholarWords, WrongNumbers = WrongNumbers,
 }
 
-ns.Puzzles = { Generate = Generate, Grades = Grades, Kinds = Kinds, Kit = Kit, MaxChoice = MaxChoice }
+ns.Puzzles = { Generate = Generate, Grades = Grades, Kinds = Kinds, Kit = Kit, MaxChoice = MaxChoice, Signature = Signature }

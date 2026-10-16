@@ -13,6 +13,8 @@ local addonName, ns = ...
 ns.ScholarWords = {
     -- The kinds whose riddle is heard, not read: Scholar asks them only while the client has a text-to-speech voice.
     heard = { ["reading.listen"] = true, ["reading.listenSound"] = true },
+    -- The kinds built from the player's own quests: Scholar asks them only while the quest book holds one.
+    fromQuests = {},
     -- Puzzle kinds per subject and grade.
     kinds = {
         math = {

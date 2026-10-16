@@ -552,7 +552,7 @@ test("loads standalone and defines ns.Puzzles, ns.ScholarWords and no globals", 
     end
 
     table.sort(keys)
-    eq(table.concat(keys, ","), "Generate,Grades,Kinds,Kit,MaxChoice", "exactly the contract's fields")
+    eq(table.concat(keys, ","), "Generate,Grades,Kinds,Kit,MaxChoice,Signature", "exactly the contract's fields")
 end)
 
 test("Grades runs from Kindergarten to Grade 6 in order", function()

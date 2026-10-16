@@ -812,8 +812,10 @@ function ScholarView.Show(puzzle, info)
     Overlay = (Overlay or Create())
     local subject = ((SubjectLabels[puzzle.subject] and puzzle.subject) or "math")
 
-    Overlay.Tag:SetText(("%s%s|r  %s-  %s|r"):format(Hex(Palette[subject]), SubjectLabels[subject],
-        Hex(Palette.muted), puzzle.title))
+    -- A stretch riddle says so: it's meant to be hard, and its help comes sooner.
+    local label = (SubjectLabels[subject] .. ((puzzle.stretch and " STRETCH") or ""))
+
+    Overlay.Tag:SetText(("%s%s|r  %s-  %s|r"):format(Hex(Palette[subject]), label, Hex(Palette.muted), puzzle.title))
 
     ShowProgress(info)
     local shown, clue = DisplayPrompt(puzzle)

@@ -53,10 +53,6 @@ local HeldInteractions = {}
 local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NUMPAD2 = 2, NUMPAD3 = 3, NUMPAD4 = 4 }
 local LockedBy = "Scholar.locked"
 local MaxPinMisses = 3
--- How many recent misses the report shows.
-local MissesKept = 5
--- The longest prompt, in bytes, a recent miss keeps, on one line.
-local MissPrompt = 160
 local PinWaitSeconds = 60
 -- How many quest riddles come in a row before math or reading takes a turn.
 local QuestShare = 2
@@ -66,6 +62,8 @@ local ScrollKeys = { DOWN = 1, UP = -1 }
 -- How long, in seconds, between notches while a D-pad direction is held.
 local ScrollRepeat = 0.12
 local ScrollSources = { scrollDown = "gamepad.dpadDown", scrollUp = "gamepad.dpadUp" }
+-- One math or reading riddle in StretchOdds is a stretch: a kind from a grade or two above, with extra help.
+local StretchOdds = 5
 -- How long, in seconds, after a turn-in the onTurnIn moment waits, so QuestBook has noted it and the panel closed.
 local TurnInDelay = 1
 
@@ -94,6 +92,7 @@ local next = next
 local SOUNDKIT, UnitClass, UnitLevel, UnitName = SOUNDKIT, UnitClass, UnitLevel, UnitName
 
 local Addon = ns.Addon
+local Memory = ns.ScholarMemory
 local Puzzles = ns.Puzzles
 local QuestBook = ns.QuestBook
 local ScholarView = ns.ScholarView
@@ -190,19 +189,21 @@ local function HasSubject()
     return (Scholar:Get("math") or Scholar:Get("reading") or Scholar:Get("quests"))
 end
 
--- Need a hint? shows the hint; on a quest riddle it opens (or closes) the quest book instead. The rung of the hint
--- ladder the riddle is on, after Wrongs wrong tries: the strategy, then a worked first step, then the answer with its
--- working, whose button glows (its index is the third return).
+-- The rung of the hint ladder the riddle is on, after Wrongs wrong tries: the strategy, then a worked first step, then
+-- the answer with its working, whose button glows (its index is the third return). A stretch riddle starts a rung up.
 local function Help()
-    if Wrongs >= 3 then
+    local rung = (Wrongs + ((Current.stretch and 1) or 0))
+
+    if rung >= 3 then
         return "Here's how", Current.explanation, Current.answer
-    elseif (Wrongs == 2) and Current.step then
+    elseif (rung == 2) and Current.step then
         return "Try this", Current.step
     end
 
     return "Hint", Current.hint
 end
 
+-- Need a hint? shows the rung the riddle is on; on a quest riddle it opens (or closes) the quest book instead.
 local function Hint()
     if Current and Current.book then
         ScholarView.ToggleBook()
@@ -304,6 +305,73 @@ local function Progress(extra)
     return info
 end
 
+local function Choose(i)
+    local buttons = (ScholarView.IsShown() and ScholarView.Frame().Buttons)
+
+    if not Current or Scholar:Get("solved") or not buttons or (buttons[i] and not buttons[i]:IsEnabled()) then
+        return
+    end
+
+    -- Each subject's level row is the difficulty its riddles are written at: a quest riddle never changes one.
+    local adapts = ((Current.questKey == nil) and not Current.stretch)
+    local firstTry = Memory.Record(Scholar, Current, i)
+    local earned = ((Current.stretch and 2) or 1)
+    local levelRow, runRow = (Current.subject .. "Level"), (Current.subject .. "Run")
+
+    if i == Current.answer then
+        -- The riddle stops being due now, so a /reload during the celebration doesn't ask another; solved holds the
+        -- screen until Finish closes it.
+        Scholar:Set("solved", true)
+        Scholar:Set("pending", false)
+        Scholar:Set("elapsed", 0)
+
+        if Current.questKey then
+            -- Marked answered, so a /reload in the celebration doesn't ask it again.
+            QuestBook.Asked(Current.questKey, Current.kind)
+        end
+
+        local streak = (Scholar:Get("streak") + 1)
+
+        Scholar:Set("streak", streak)
+        Scholar:Set("stars", Scholar:Get("stars") + earned)
+        local levelUp = false
+
+        if adapts and firstTry then
+            local run = (Scholar:Get(runRow) + 1)
+
+            Scholar:Set(runRow, run)
+            levelUp = (((run % 3) == 0) and (Scholar:Get(levelRow) < 3))
+
+            if levelUp then
+                Scholar:Set(levelRow, Scholar:Get(levelRow) + 1)
+            end
+        end
+
+        -- Praise names the strategy on a first try, and the persistence after a miss.
+        local praise = (((Wrongs == 0) and Current.praise) or Words.persistence[random(1, #Words.persistence)])
+
+        ScholarView.Correct(i, (Current.explanation .. " " .. praise), Progress({ earned = earned, levelUp = levelUp }))
+        C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LIST_COMPLETE)
+        Scholar:After(FinishDelay, function() Finish(true) end)
+    else
+        Wrongs = (Wrongs + 1)
+        Missed[i] = true
+        Scholar:Set("streak", 0)
+
+        if adapts then
+            Scholar:Set(runRow, 0)
+        end
+
+        if adapts and (Wrongs == 2) and (Scholar:Get(levelRow) > 1) then
+            Scholar:Set(levelRow, Scholar:Get(levelRow) - 1)
+        end
+
+        local label, help, reveal = Help()
+
+        ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("mode") == "gentle", reveal)
+    end
+end
+
 -- Whether riddles are said aloud as they appear: the readAloud setting ("young" means kindergarten and grade 1), when
 -- the client has a voice.
 local function ReadsAloud()
@@ -332,156 +400,6 @@ end
 local function OnInteractionShown(interaction)
     if HeldInteractions[interaction] then
         SetWindow(interaction, true)
-    end
-end
-
--- A skill's record (ScholarSkills), with every field filled in.
-local function SkillOf(kind)
-    return (Scholar.Records.skills:Get(kind) or { asked = 0, box = 1, due = 0, firstTry = 0, lastAt = 0, recent = "" })
-end
-
--- The next riddle. Quest riddles are preferred: QuestShare of them in a row, then math or reading takes a turn
--- (alternating when both are on), whenever any of those is on. nil when there's nothing to ask.
-local function NextPuzzle()
-    local others = (Scholar:Get("math") or Scholar:Get("reading"))
-
-    if Scholar:Get("quests") and ((Scholar:Get("questRun") < QuestShare) or not others) then
-        local puzzle = QuestPuzzle()
-
-        if puzzle then
-            Scholar:Set("questRun", min(Scholar:Get("questRun") + 1, QuestShare))
-
-            return puzzle
-        end
-    end
-
-    Scholar:Set("questRun", 0)
-    local subjects = {}
-
-    if Scholar:Get("math") then
-        subjects[#subjects + 1] = "math"
-    end
-
-    if Scholar:Get("reading") then
-        subjects[#subjects + 1] = "reading"
-    end
-
-    if #subjects == 0 then
-        return nil
-    end
-
-    local subject = subjects[1]
-
-    if (#subjects == 2) and (LastSubject == subject) then
-        subject = subjects[2]
-    end
-
-    LastSubject = subject
-    local grade = tonumber(Scholar:Get("grade"))
-    local kind = Skills.Choose(Puzzles.Kinds(subject, grade, CanHear()), SkillOf, Scholar:Get(subject .. "Count"), random)
-
-    return Puzzles.Generate({
-        context = Context(), grade = grade, kind = kind, level = Scholar:Get(subject .. "Level"), random = random,
-        subject = subject,
-    })
-end
-
--- Records the riddle's first try, once: its skill's record moves (ScholarSkills.Next), a math or reading riddle counts
--- toward its subject's due clock, and a miss joins the report's recent misses. Returns whether this was the first try.
-local function RecordFirstTry(i)
-    if Current.recorded then
-        return false
-    end
-
-    Current.recorded = true
-    local right, count = (i == Current.answer), 0
-
-    if Current.subject ~= "quest" then
-        count = (Scholar:Get(Current.subject .. "Count") + 1)
-        Scholar:Set(Current.subject .. "Count", count)
-    end
-
-    local now = GetServerTime()
-
-    Scholar.Records.skills:Set(Current.kind, Skills.Next(SkillOf(Current.kind), right, count, now))
-
-    if not right then
-        local seq = (Scholar:Get("missCount") + 1)
-
-        Scholar:Set("missCount", seq)
-
-        Scholar.Records.misses:Set(tostring(seq), {
-            at = now, chosen = (Current.choices[i] or ""), kind = Current.kind,
-            prompt = Current.prompt:gsub("%s+", " "):sub(1, MissPrompt), right = Current.choices[Current.answer], seq = seq,
-        })
-    end
-
-    return true
-end
-
-local function Choose(i)
-    local buttons = (ScholarView.IsShown() and ScholarView.Frame().Buttons)
-
-    if not Current or Scholar:Get("solved") or not buttons or (buttons[i] and not buttons[i]:IsEnabled()) then
-        return
-    end
-
-    -- Each subject's level row is the difficulty its riddles are written at: a quest riddle never changes one.
-    local adapts = (Current.questKey == nil)
-    local firstTry = RecordFirstTry(i)
-    local levelRow, runRow = (Current.subject .. "Level"), (Current.subject .. "Run")
-
-    if i == Current.answer then
-        -- The riddle stops being due now, so a /reload during the celebration doesn't ask another; solved holds the
-        -- screen until Finish closes it.
-        Scholar:Set("solved", true)
-        Scholar:Set("pending", false)
-        Scholar:Set("elapsed", 0)
-
-        if Current.questKey then
-            -- Marked answered, so a /reload in the celebration doesn't ask it again.
-            QuestBook.Asked(Current.questKey, Current.kind)
-        end
-
-        local streak = (Scholar:Get("streak") + 1)
-
-        Scholar:Set("streak", streak)
-        Scholar:Set("stars", Scholar:Get("stars") + 1)
-        local levelUp = false
-
-        if adapts and firstTry then
-            local run = (Scholar:Get(runRow) + 1)
-
-            Scholar:Set(runRow, run)
-            levelUp = (((run % 3) == 0) and (Scholar:Get(levelRow) < 3))
-
-            if levelUp then
-                Scholar:Set(levelRow, Scholar:Get(levelRow) + 1)
-            end
-        end
-
-        -- Praise names the strategy on a first try, and the persistence after a miss.
-        local praise = (((Wrongs == 0) and Current.praise) or Words.persistence[random(1, #Words.persistence)])
-
-        ScholarView.Correct(i, (Current.explanation .. " " .. praise), Progress({ earned = 1, levelUp = levelUp }))
-        C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LIST_COMPLETE)
-        Scholar:After(FinishDelay, function() Finish(true) end)
-    else
-        Wrongs = (Wrongs + 1)
-        Missed[i] = true
-        Scholar:Set("streak", 0)
-
-        if adapts then
-            Scholar:Set(runRow, 0)
-        end
-
-        if adapts and (Wrongs == 2) and (Scholar:Get(levelRow) > 1) then
-            Scholar:Set(levelRow, Scholar:Get(levelRow) - 1)
-        end
-
-        local label, help, reveal = Help()
-
-        ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("mode") == "gentle", reveal)
     end
 end
 
@@ -543,6 +461,91 @@ end
 
 local function ValidPin(pin)
     return (pin and (pin:match("^%d%d%d%d%d?%d?%d?%d?$") ~= nil))
+end
+
+-- The kinds in list that aren't in except.
+local function Without(list, except)
+    local skip, out = {}, {}
+
+    for _, kind in ipairs(except) do
+        skip[kind] = true
+    end
+
+    for _, kind in ipairs(list) do
+        if not skip[kind] then
+            out[#out + 1] = kind
+        end
+    end
+
+    return out
+end
+
+-- The next riddle. Quest riddles are preferred: QuestShare of them in a row, then math or reading takes a turn
+-- (alternating when both are on), whenever any of those is on. nil when there's nothing to ask.
+local function NextPuzzle()
+    local others = (Scholar:Get("math") or Scholar:Get("reading"))
+
+    if Scholar:Get("quests") and ((Scholar:Get("questRun") < QuestShare) or not others) then
+        local puzzle = QuestPuzzle()
+
+        if puzzle then
+            Scholar:Set("questRun", min(Scholar:Get("questRun") + 1, QuestShare))
+
+            return puzzle
+        end
+    end
+
+    Scholar:Set("questRun", 0)
+    local subjects = {}
+
+    if Scholar:Get("math") then
+        subjects[#subjects + 1] = "math"
+    end
+
+    if Scholar:Get("reading") then
+        subjects[#subjects + 1] = "reading"
+    end
+
+    if #subjects == 0 then
+        return nil
+    end
+
+    local subject = subjects[1]
+
+    if (#subjects == 2) and (LastSubject == subject) then
+        subject = subjects[2]
+    end
+
+    LastSubject = subject
+    local grade, known = tonumber(Scholar:Get("grade")), QuestBook.All()
+    local canHear, hasQuests = CanHear(), (#known > 0)
+    -- A stretch asks a kind from a grade or two up that the child's own grade doesn't, at its easiest level.
+    local stretch = ((grade < 6) and (random(1, StretchOdds) == 1))
+    local asked = ((stretch and min(grade + random(1, 2), 6)) or grade)
+    local kinds = Puzzles.Kinds(subject, asked, canHear, hasQuests)
+
+    if stretch then
+        local beyond = Without(kinds, Puzzles.Kinds(subject, grade, canHear, hasQuests))
+
+        if #beyond == 0 then
+            stretch, asked, kinds = false, grade, Puzzles.Kinds(subject, grade, canHear, hasQuests)
+        else
+            kinds = beyond
+        end
+    end
+
+    local count = Scholar:Get(subject .. "Count")
+    local kind = Skills.Choose(kinds, function(skill) return Memory.SkillOf(Scholar, skill) end, count, random)
+
+    local puzzle = Puzzles.Generate({
+        avoid = Memory.Recent(Scholar), context = Context(), fact = Memory.DueFact(Scholar, kind, count), grade = asked, kind = kind,
+        known = known, level = ((stretch and 1) or Scholar:Get(subject .. "Level")), random = random, subject = subject,
+    })
+
+    puzzle.stretch = (stretch or nil)
+    Memory.Remember(Scholar, puzzle)
+
+    return puzzle
 end
 
 ScholarView.Init({
@@ -622,6 +625,8 @@ local Rows = {
     { default = 1, kind = "number", max = 3, min = 1, name = "readingLevel", scope = "character" },
     { default = 0, kind = "number", min = 0, name = "readingRun", scope = "character", step = 1 },
     { default = 0, kind = "number", min = 0, name = "readingCount", scope = "character", step = 1 },
+    -- How many riddles were shown, which numbers the recent ones the next won't repeat.
+    { default = 0, kind = "number", min = 0, name = "shownCount", scope = "character", step = 1 },
     -- How many first tries have missed, which numbers the report's recent misses.
     { default = 0, kind = "number", min = 0, name = "missCount", scope = "character", step = 1 },
     { default = 0, kind = "number", name = "elapsed", scope = "character" },
@@ -642,65 +647,6 @@ local Rows = {
     { default = 0, kind = "number", name = "pinWait" },
 }
 
--- What Scholar remembers per character for the report and the review schedule (ScholarSkills): a record per skill, and
--- the last MissesKept first tries that missed.
-local Records = {
-    {
-        evict = "lastAt",
-        fields = {
-            { default = 0, kind = "number", min = 0, name = "asked", step = 1 },
-            { default = 1, kind = "number", max = Skills.Boxes, min = 1, name = "box", step = 1 },
-            { default = 0, kind = "number", min = 0, name = "due", step = 1 },
-            { default = 0, kind = "number", min = 0, name = "firstTry", step = 1 },
-            { default = 0, kind = "number", min = 0, name = "lastAt" },
-            { default = "", kind = "string", name = "recent" },
-        },
-        limit = 64, name = "skills", scope = "character",
-    },
-    {
-        evict = "seq",
-        fields = {
-            { default = 0, kind = "number", min = 0, name = "at" },
-            { default = "", kind = "string", name = "chosen" },
-            { default = "", kind = "string", name = "kind" },
-            { default = "", kind = "string", name = "prompt" },
-            { default = "", kind = "string", name = "right" },
-            { default = 0, kind = "number", min = 0, name = "seq", step = 1 },
-        },
-        limit = MissesKept, name = "misses", scope = "character",
-    },
-}
-
--- The parent's report card, as chat lines (ScholarSkills.Report): each subject's skills by their records, the levels,
--- and the recent misses, newest first.
-local function ReportLines()
-    local skills = Scholar.Records.skills
-
-    local sections = {
-        { label = "Math", level = Scholar:Get("mathLevel"), records = {}, subject = "math" },
-        { label = "Reading", level = Scholar:Get("readingLevel"), records = {}, subject = "reading" },
-        { label = "Quests", records = {}, subject = "quest" },
-    }
-
-    for _, kind in ipairs(skills:Keys()) do
-        for _, section in ipairs(sections) do
-            if kind:find(section.subject .. ".", 1, true) == 1 then
-                section.records[kind] = skills:Get(kind)
-            end
-        end
-    end
-
-    local misses = {}
-
-    for _, key in ipairs(Scholar.Records.misses:Keys()) do
-        misses[#misses + 1] = Scholar.Records.misses:Get(key)
-    end
-
-    table.sort(misses, function(a, b) return (a.seq > b.seq) end)
-
-    return Skills.Report(ByteTerrace.Names.Mine(), sections, misses)
-end
-
 local Commands = {
     { label = "Show Scholar stars and the next riddle", name = "status",
         run = function()
@@ -713,7 +659,7 @@ local Commands = {
         slash = "scholar" },
     { label = "Parents: show Scholar's report card", name = "report",
         run = function()
-            for _, line in ipairs(ReportLines()) do
+            for _, line in ipairs(Memory.Report(Scholar)) do
                 Addon:Print(line)
             end
         end,
@@ -979,7 +925,7 @@ Scholar = Addon:Module("Scholar", {
         end, true)
     end,
     page = "Scholar's challenge",
-    records = Records,
+    records = Memory.Records,
     scope = "character",
     state = Rows,
     uses = { "QuestBook" },

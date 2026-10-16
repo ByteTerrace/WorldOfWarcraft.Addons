@@ -166,7 +166,13 @@ local function Show(entry)
         end)
 
         Card:SetScript("OnEnter", HoldTimer)
-        Card:SetScript("OnLeave", StartTimer)
+
+        -- A focused card holds until it's answered or let go, mouse or no mouse.
+        Card:SetScript("OnLeave", function()
+            if not Focused then
+                StartTimer()
+            end
+        end)
     end
 
     if #Queue >= MaxQueued then

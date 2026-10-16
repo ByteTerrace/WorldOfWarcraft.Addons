@@ -123,6 +123,19 @@ test("without a controller a question card says nothing about one, and the mouse
     eq(answers.yes, 1)
 end)
 
+test("a focused card holds after the mouse leaves it", function()
+    local h, ns = LoadWithController()
+
+    Ask(ns, { yes = 0 })
+    h:Gamepad("PADBACK", true)
+    local card = rawget(h.env, "TheLanKrewToolKitCard")
+
+    truthy(h:Hover(card, true))
+    truthy(h:Hover(card, false))
+    h:Advance(13)
+    truthy(Card(h), "a focused card doesn't time out when the mouse leaves it")
+end)
+
 test("focusing a card keeps a riddle's controller map, and letting go of the card leaves it", function()
     local h, ns = LoadWithController()
     local addon = ns.Addon

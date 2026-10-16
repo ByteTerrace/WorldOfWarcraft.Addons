@@ -50,6 +50,11 @@ end
 local function Create()
     local frame = CreateFrame("Frame", addonName .. "Wishes", UIParent, "BackdropTemplate")
 
+    -- Never focused by the controller UI's SmartNavigation (it covers every child): focus on an addon's control carries
+    -- its taint into what the controller UI remembers, which blocks SetPreferredGamepadInteractTarget and can freeze
+    -- the game (docs/ControllerSupport.md). Its controller input is summons (Input:Summon) instead.
+    frame.smartNavigationIgnored = true
+
     frame:SetFrameStrata("DIALOG")
     frame:SetWidth(Width)
     frame:SetPoint("CENTER", 0, 40)

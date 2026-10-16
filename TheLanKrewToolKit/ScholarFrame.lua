@@ -395,6 +395,11 @@ local function Create(callbacks)
     -- Parentless, so hiding the UI (Alt+Z) doesn't hide the riddle.
     local frame = CreateFrame("Frame", addonName .. "Scholar")
 
+    -- Never focused by the controller UI's SmartNavigation (it covers every child): focus on an addon's control carries
+    -- its taint into what the controller UI remembers, which blocks SetPreferredGamepadInteractTarget and can freeze
+    -- the game (docs/ControllerSupport.md). Its controller input is summons (Input:Summon) instead.
+    frame.smartNavigationIgnored = true
+
     -- Under the game menu's DIALOG strata, so Esc and Start open it over the riddle as they always do.
     frame:SetFrameStrata("HIGH")
     frame:SetAllPoints(UIParent)

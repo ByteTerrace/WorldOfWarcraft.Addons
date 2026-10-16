@@ -23,6 +23,11 @@ local function BytesPerCall(fn, calls)
     return grown
 end
 
+-- What was printed after the from-th line.
+local function Since(h, from)
+    return table.concat(h.printed, "\n", from + 1)
+end
+
 test("debug work counts each kind of work in the module it ran for, busiest first", function()
     local h, addon = NewAddOn()
     local chat = addon:Module("Chat", { comms = { prefix = "TestApp1" }, label = "Chat" })
@@ -271,4 +276,27 @@ test("debug work breaks ties by name and lists at most a screenful", function()
         "the addon's ADDON_LOADED and report command, then ties by name: " .. text)
 
     truthy(text:find("  M39: 1 (1 event)\n  ... and 2 more", 1, true), text)
+end)
+
+test("a blocked action naming a ByteTerrace addon is said once per function, with what to choose, and debug status lists it", function()
+    local h = NewAddOn()
+
+    Start(h)
+    local from = #h.printed
+
+    h:Fire("ADDON_ACTION_FORBIDDEN", "ByteTerrace_Core", "SetPreferredGamepadInteractTarget()")
+    h:Fire("ADDON_ACTION_FORBIDDEN", "ByteTerrace_Core", "SetPreferredGamepadInteractTarget()")
+    h:Fire("ADDON_ACTION_BLOCKED", "SomeOtherAddon", "CastSpellByName()")
+    local said = Since(h, from)
+
+    truthy(said:find("ByteTerrace_Core was blocked from SetPreferredGamepadInteractTarget()", 1, true), said)
+    truthy(said:find("choose Disable, not Ignore", 1, true), said)
+    local _, times = said:gsub("was blocked from", "")
+
+    eq(times, 1, "once per function, however often it repeats, and never for another addon")
+    from = #h.printed
+    h:Slash("/test debug status")
+
+    truthy(Since(h, from):find("Blocked since load: ByteTerrace_Core SetPreferredGamepadInteractTarget() (2)", 1, true),
+        Since(h, from))
 end)

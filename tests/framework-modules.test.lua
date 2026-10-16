@@ -395,7 +395,10 @@ test("debug status names running, stopped and demand modules, their records and 
 
     truthy(text:find("Running (demand modules with their users): Chat, Fact (1), Ledger, On", 1, true), text)
     truthy(text:find("Stopped: Off", 1, true), text)
-    truthy(text:find("4 events registered", 1, true), "the transport follows the group and restrictions: " .. text)
+
+    truthy(text:find("6 events registered", 1, true),
+        "the transport follows the group and restrictions, and the addon hears blocked actions: " .. text)
+
     truthy(text:find("0 errors caught", 1, true), text)
     truthy(text:find("Records: Ledger.people 1/5", 1, true), text)
     truthy(text:find("Messages queued: Chat 0", 1, true), text)
@@ -559,7 +562,7 @@ test("debug cpu reads the client's addon profiler and memory", function()
     eq(h.memoryUpdates, 2)
 end)
 
-test("the counts cost no registrations: a quiet addon registers only what it handles", function()
+test("the counts cost no registrations: a quiet addon registers only what it handles, and the blocked-action events", function()
     local h, addon = NewAddOn()
 
     addon:Module("M", { label = "M" })
@@ -571,7 +574,9 @@ test("the counts cost no registrations: a quiet addon registers only what it han
     end
 
     table.sort(registered)
-    eq(table.concat(registered, ","), "", "the client frame has no event registered")
+
+    eq(table.concat(registered, ","), "ADDON_ACTION_BLOCKED,ADDON_ACTION_FORBIDDEN",
+        "the client frame has only the blocked-action events registered, which one ByteTerrace addon notes for all")
 end)
 
 test("an addon whose slash key another addon took reports it and registers no aliases", function()

@@ -624,6 +624,16 @@ function ByteTerrace.NewAddOn(options)
 
     addon:DefineBuiltinCommands()
 
+    -- An action the client blocked, naming a ByteTerrace addon (Diagnostics.lua): one addon notes them all, so each is
+    -- counted once.
+    if not ByteTerrace.BlockWatcher then
+        ByteTerrace.BlockWatcher = addon
+
+        for _, event in ipairs({ "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do
+            addon.Events:On(event, function(blocked, action) addon:NoteBlocked(blocked, action) end)
+        end
+    end
+
     local loaded
 
     loaded = addon.Events:On("ADDON_LOADED", function(name)

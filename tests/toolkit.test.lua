@@ -826,3 +826,26 @@ test("enabling the journal later doesn't continue an old session", function()
     h.ns.Addon.State:Set("Journal.enabled", true)
     eq(h.ns.Addon.State:Get("Journal.sessionQuests"), 0)
 end)
+
+test("every toolkit frame a controller could focus is hidden from Blizzard's SmartNavigation, so focus never lands on it", function()
+    local h, addon = Load({ level = 10 })
+    local ns = h.ns
+
+    addon.State:Set("Scholar.enabled", true)
+    addon.State:Set("Scholar.quests", false)
+    h:Slash("/tlk puzzle")
+    h:Key("L", true)
+    h:Slash("/tlk wishes")
+    h:OpenInteraction("Merchant")
+    h:AddNamePlate(Kit.Enemy("Bob"))
+    addon.State:Set("FuckOMeter.enabled", true)
+    ns.Cards.Show({ body = "A card.", title = "Hello" })
+
+    for _, name in ipairs({ "TheLanKrewToolKitScholar", "TheLanKrewToolKitScholarPill", "TheLanKrewToolKitWishes",
+        "TheLanKrewToolKitShop", "TheLanKrewToolKitRadar", "TheLanKrewToolKitFuckOMeter", "TheLanKrewToolKitCard" }) do
+        local frame = rawget(h.env, name)
+
+        truthy(frame, name .. " exists")
+        eq(frame.smartNavigationIgnored, true, name .. " is ignored by SmartNavigation")
+    end
+end)

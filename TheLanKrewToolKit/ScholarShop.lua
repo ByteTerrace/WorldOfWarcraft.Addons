@@ -69,6 +69,11 @@ local function PanelFrame()
     local style = ns.ScholarStyle
 
     Panel = CreateFrame("Frame", addonName .. "Shop", UIParent, "BackdropTemplate")
+
+    -- Never focused by the controller UI's SmartNavigation (it covers every child): focus on an addon's control carries
+    -- its taint into what the controller UI remembers, which blocks SetPreferredGamepadInteractTarget and can freeze
+    -- the game (docs/ControllerSupport.md). Its controller input is summons (Input:Summon) instead.
+    Panel.smartNavigationIgnored = true
     Panel:SetFrameStrata("HIGH")
     Panel:SetSize(300, 200)
     Panel:SetPoint("RIGHT", -60, 60)

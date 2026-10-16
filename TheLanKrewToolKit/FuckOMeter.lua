@@ -26,6 +26,11 @@ local Meter
 local function CreateMeter()
     local frame = CreateFrame("Frame", addonName .. "FuckOMeter", UIParent, "BackdropTemplate")
 
+    -- Never focused by the controller UI's SmartNavigation (it covers every child): focus on an addon's control carries
+    -- its taint into what the controller UI remembers, which blocks SetPreferredGamepadInteractTarget and can freeze
+    -- the game (docs/ControllerSupport.md). Its controller input is summons (Input:Summon) instead.
+    frame.smartNavigationIgnored = true
+
     frame:SetPoint("LEFT", UIParent, "LEFT", SideInset, 0)
     frame:SetPoint("RIGHT", UIParent, "RIGHT", -SideInset, 0)
     frame:SetHeight(Height)

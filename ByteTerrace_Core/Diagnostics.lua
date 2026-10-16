@@ -26,9 +26,16 @@
 --                       default, and while off nothing is timed.
 --   debug reset         zeroes the event, publish, watcher, and work counts.
 --
+-- An action the client blocks (ADDON_ACTION_BLOCKED or ADDON_ACTION_FORBIDDEN) naming a ByteTerrace addon is said in
+-- chat once per addon and function, with which choice to make: a forbidden action's popup that's ignored can repeat
+-- until the game freezes, and Disable stops it. debug status lists each with how often it came.
+--
 -- The counts it reads are always kept: an integer increment per dispatch and per publish, and a field increment on the
 -- work record the dispatched handler, watcher, timer, or command holds.
 
+-- The blocked actions since load, as "<addon> <function>" in the order first seen, and how often each came.
+local Blocked = {}
+local BlockedOrder = {}
 -- The framework's addon, where its dispatch and publishes are counted.
 local CoreName = "ByteTerrace_Core"
 local MaxLines = 40
@@ -227,6 +234,16 @@ local function Status(addon)
     if #queued > 0 then
         print("  Messages queued: " .. concat(queued, ", "))
     end
+
+    if #BlockedOrder > 0 then
+        local blocked = {}
+
+        for i, key in ipairs(BlockedOrder) do
+            blocked[i] = ("%s (%d)"):format(key, Blocked[key])
+        end
+
+        print("  Blocked since load: " .. concat(blocked, ", "))
+    end
 end
 
 local function Trace(addon, text)
@@ -401,4 +418,24 @@ function AddOn:DebugCommand(arg)
 
         self:Print(usage:format((self.Slash and self.Slash[1]) or ""))
     end
+end
+
+--- Notes an action the client blocked, saying it once per addon and function when it names a ByteTerrace addon.
+---@param blocked string the addon the client blamed
+---@param action string the function it blocked
+function AddOn:NoteBlocked(blocked, action)
+    if (type(blocked) ~= "string") or ((blocked:find("ByteTerrace", 1, true) ~= 1) and (blocked ~= self.Name)) then
+        return
+    end
+
+    local key = (blocked .. " " .. tostring(action))
+
+    if not Blocked[key] then
+        BlockedOrder[#BlockedOrder + 1] = key
+
+        self:Print(("%s was blocked from %s. If the game asks, choose Disable, not Ignore, and tell us what you were doing.")
+            :format(blocked, tostring(action)))
+    end
+
+    Blocked[key] = ((Blocked[key] or 0) + 1)
 end

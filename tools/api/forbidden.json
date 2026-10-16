@@ -1,7 +1,8 @@
 {
-  "SetRaidTarget": "/run SetRaidTarget(\"target\", 8) out of combat in a party was blocked (client 1.60.1 (70009))",
   "C_SettingsUtil.OpenSettingsPanel": "with the controller UI on, closing Blizzard's settings panel froze the client when addon taint was in what the controller UI remembers: SmartNavigation:SetActiveFrame read it, SetPreferredGamepadInteractTarget was blocked, and each blocked-action popup repeated the block (taint.log, 1400+ blocks per second, all from ByteTerrace_Core). Opening the panel from addon code does that (/tlk, and a secure button's macro alike), and so does moving controller focus onto an addon-registered control after Esc > Options (client 1.60.1 (70009))",
+  "SetPreferredGamepadInteractTarget": "the controller UI's interact-target call (Blizzard_GamepadActionBars/MainActionBarFrame.lua, UpdateInteractIcons) is blocked whenever addon taint reaches its path, and its popup repeats until the client freezes. It was blocked again, naming ByteTerrace_Core, out in the world after the toolkit added frames under UIParent without smartNavigationIgnored (the shopping panel, the Wishes window, the pill), and Ignore froze the client. No taint log recorded the path (client 1.60.1 (70425))",
+  "SetRaidTarget": "/run SetRaidTarget(\"target\", 8) out of combat in a party was blocked (client 1.60.1 (70009))",
   "Settings.OpenToCategory": "calls C_SettingsUtil.OpenSettingsPanel (Blizzard_Settings.lua); see it",
-  "SettingsPanel:OpenToCategory": "opens the panel from addon code; see C_SettingsUtil.OpenSettingsPanel",
-  "SettingsPanel:Open": "opens the panel from addon code; see C_SettingsUtil.OpenSettingsPanel"
+  "SettingsPanel:Open": "opens the panel from addon code; see C_SettingsUtil.OpenSettingsPanel",
+  "SettingsPanel:OpenToCategory": "opens the panel from addon code; see C_SettingsUtil.OpenSettingsPanel"
 }

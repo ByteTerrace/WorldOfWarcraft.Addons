@@ -13,13 +13,9 @@ local addonName, ns = ...
 --
 -- What it does with them:
 --   Sightings  when a ledger player or a member of a guild at war shows up (nameplate, target, or
---              mouseover), a raid warning says so. For a mark or grudge, the Krew hears where, and
---              a champion in a fight asks the Krew for aid. Nameplate badges (WarbandBadges.lua)
---              and the nearby-enemies window (WarbandRadar.lua) show the same standing. Each
---              person alerts once per AlertCooldown, and a brawl doesn't stack warnings: the
---              alerts that follow one within AlertWindow merge into one summary with one sound
---              when it ends ("3 more grudges nearby: ..."), ordered mark, grudge, war, then
---              champion. The Krew still hears of each sighting.
+--              mouseover), a raid warning says so, within WarbandAlerts.lua's budget. Nameplate
+--              badges (WarbandBadges.lua) and the nearby-enemies window (WarbandRadar.lua) show the
+--              same standing.
 --   Vengeance  an honorable kill on a marked or grudge enemy settles the score, for everyone.
 --   Grudges    WarbandDeaths.lua names who killed you and offers to hold a grudge.
 --   Rally      /tlk rally calls the Krew to your position: a raid warning and a map waypoint.
@@ -36,8 +32,9 @@ local addonName, ns = ...
 --   Mark, HoldGrudge, Glory, Forgive, DeclareWar, MakePeace   the ledger and war actions (the
 --                           first three answer false when the full ledger refused a newcomer)
 --   Module                  the Warband module, for WarbandMessages.lua's listeners
---   SetKind, Avenge, HeardSighting, FreshGathering   what the Krew's messages do to the ledger,
---                           the kill tally, and the report cooldowns (WarbandMessages.lua)
+--   SetKind, Avenge, FreshGathering   what the Krew's messages do to the ledger, the kill tally,
+--                           and the gathering report's cooldown (WarbandMessages.lua)
+--   Place()                 where you are, read once per place (WarbandAlerts.lua's Krew reports)
 --   OnNearby(info)          set by WarbandRadar.lua while it runs: each hostile player seen
 --   OnPlate(unit, info)     set by WarbandBadges.lua while it runs: each nameplate that appears,
 --                           with its info (nil for no readable player), so a plate is read once
@@ -48,14 +45,8 @@ local addonName, ns = ...
 -- outside PvP matches. Your honorable kills come from ByteTerrace_Core's kills fact, and your killers from its death
 -- fact (WarbandDeaths.lua).
 
--- How long, in seconds, before the same person alerts again.
-local AlertCooldown = 90
--- How long, in seconds, after an alert further alerts merge into one summary.
-local AlertWindow = 3
 -- How long, in seconds, a foe you targeted stays the prime suspect.
 local FoeMemory = 30
--- How long, in seconds, before the same guild at war alerts again.
-local GuildAlertCooldown = 60
 -- How long, in seconds, before the same subzone is reported again, by you or the Krew.
 local IntelCooldown = 300
 -- How many enemy players make a gathering.
@@ -73,8 +64,6 @@ local PeopleTrim = 100
 local RallyCooldown = 15
 -- How long, in seconds, before the same person's rivalry record updates again.
 local SeenWriteInterval = 60
--- How long, in seconds, before the Krew hears about the same person again.
-local SightCooldown = 120
 local WarsLimit = 50
 
 -- Each standing's raid-target icon: a star for glory, a cross for grudge, a skull for mark, and a square for war.
@@ -85,26 +74,12 @@ local Icons = {
     war = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_6",
 }
 
--- Each standing's color code in alert text.
-local Colors = { glory = "|cff40c0ff", grudge = "|cffff8000", mark = "|cffff2020", war = "|cffff8000" }
-
--- How an alert summary counts each standing: { one, more than one }.
-local Counted = {
-    glory = { "champion", "champions" },
-    grudge = { "grudge", "grudges" },
-    mark = { "marked for death", "marked for death" },
-    war = { "enemy at war", "enemies at war" },
-}
-
 local Order = { glory = 4, grudge = 2, mark = 1, war = 3 }
 
-local concat = table.concat
 local GetServerTime = GetServerTime
 local GetTime = GetTime
 local Names = ByteTerrace.Names
-local next = next
 local pairs = pairs
-local sort = table.sort
 local SOUNDKIT = SOUNDKIT
 local tostring = tostring
 local UnitAffectingCombat = UnitAffectingCombat
@@ -112,7 +87,6 @@ local UnitExists = UnitExists
 local wipe = wipe
 
 local Addon = ns.Addon
-local Alert = ns.Cards.Alert
 local Krew = ns.Krew
 local ShowCard = ns.Cards.Show
 local Warband = ns.Warband
@@ -128,20 +102,10 @@ local PlayerNamed = Warband.PlayerNamed
 local Position = Warband.Position
 local Typed = Warband.Typed
 
--- The pending end of the alert window: while it's set, alerts are held for a summary.
-local AlertTimer
 -- Maps each key to the GetTime() of a hostile player's nameplate in the place you're in.
 local Gathering = {}
--- Maps each key to the standing of its alert held in this window.
-local Held = {}
--- Maps each held champion in a fight to true.
-local HeldFighting = {}
--- Maps each key to the GetTime() of its last alert.
-local LastAlert = {}
 -- The info of the hostile player you last targeted, plus its time.
 local LastFoe
--- Maps each guild key to the GetTime() of its last alert.
-local LastGuildAlert = {}
 -- Maps each zone .. "/" .. subZone to the GetTime() of its last report, yours or the Krew's.
 local LastIntel = {}
 -- Maps each key to the GetTime() of its last counted kill.
@@ -151,8 +115,6 @@ local LastRally
 -- The last player unit Seen read, and the GetTime() it was read at.
 local LastSeen
 local LastSeenAt
--- Maps each key to the GetTime() of its last Krew report (SIGHT).
-local LastShared = {}
 -- The module's collections, bound when it's declared.
 local Ledger
 local People
@@ -161,18 +123,6 @@ local PlaceSubZone
 local PlaceZone
 local WarbandModule
 local Wars
-
--- Sorts held keys by standing (Order), then by name.
-local function ByStanding(a, b)
-    local first = Order[Held[a]]
-    local second = Order[Held[b]]
-
-    if first ~= second then
-        return (first < second)
-    end
-
-    return (a < b)
-end
 
 --- Counts a Krew member's death (yours or theirs) to key, against them and their guild at war.
 ---@param key string
@@ -257,74 +207,6 @@ local function GuildSubject(arg)
     local info = (UnitExists("target") and Identify("target"))
 
     return ((info and (info.guild ~= "") and info.guild) or nil)
-end
-
---- Records that the Krew was just told about key (a SIGHT message), so you don't report them again for SightCooldown
---- seconds.
----@param key string
-local function HeardSighting(key)
-    LastShared[key] = GetTime()
-end
-
--- The summary of the held alerts and its one sound: "3 more grudges nearby: ..." for one standing, else each standing's
--- names under its label, in Order.
-local function HeldSummary()
-    local keys = {}
-
-    for key in pairs(Held) do
-        keys[#keys + 1] = key
-    end
-
-    sort(keys, ByStanding)
-    -- Glory sorts last, so the summary plays a raid warning unless every held alert is a champion.
-    local sound = (((Held[keys[1]] ~= "glory") and SOUNDKIT.RAID_WARNING) or nil)
-    local segments = {}
-    local names = nil
-    local status = nil
-
-    for _, key in ipairs(keys) do
-        if Held[key] ~= status then
-            if status then
-                segments[#segments + 1] = (Colors[status] .. Labels[status] .. ":|r " .. concat(names, ", "))
-            end
-
-            status, names = Held[key], {}
-        end
-
-        if HeldFighting[key] then
-            names[#names + 1] = (key .. " (in a fight)")
-            sound = (sound or SOUNDKIT.READY_CHECK)
-        else
-            names[#names + 1] = key
-        end
-    end
-
-    if #segments == 0 then
-        local counted = Counted[status][((#keys == 1) and 1) or 2]
-
-        return ("%s%d more %s nearby:|r %s"):format(Colors[status], #keys, counted, concat(names, ", ")), sound
-    end
-
-    segments[#segments + 1] = (Colors[status] .. Labels[status] .. ":|r " .. concat(names, ", "))
-
-    return ("%d more nearby: %s"):format(#keys, concat(segments, "; ")), sound
-end
-
--- The alert window ends: the alerts held in it show as one summary, which opens the next window.
-local function EndWindow()
-    AlertTimer = nil
-
-    if next(Held) == nil then
-        return
-    end
-
-    if WarbandModule:Get("sightingAlerts") then
-        AlertTimer = WarbandModule:After(AlertWindow, EndWindow)
-        Alert(HeldSummary())
-    end
-
-    wipe(Held)
-    wipe(HeldFighting)
 end
 
 --- Returns what the client lets addons know about a player unit (Identify), reusing Seen's reading of the same player
@@ -499,72 +381,6 @@ local function Avenged(key, by)
     ShowCard({ body = (((by and (by .. " took down ")) or "You took down ") .. key .. ". " .. Score(key)),
         icon = "Interface\\Icons\\Ability_Rogue_Eviscerate", sound = SOUNDKIT.UI_EPICLOOT_TOAST,
         title = (((kind == "mark") and "The mark is paid!") or "Vengeance!") })
-end
-
--- Raises a sighting alert, within the budget: the first opens an AlertWindow, and the ones that follow in it are held
--- for one summary when it ends.
-local function Raise(key, status, guild, fighting)
-    if not WarbandModule:Get("sightingAlerts") then
-        return
-    end
-
-    if AlertTimer then
-        Held[key], HeldFighting[key] = status, (fighting or nil)
-
-        return
-    end
-
-    AlertTimer = WarbandModule:After(AlertWindow, EndWindow)
-    local color = Colors[status]
-
-    if status == "war" then
-        Alert(color .. "At war:|r " .. Describe(key) .. " of <" .. GuildName(guild) .. "> is here!", SOUNDKIT.RAID_WARNING)
-    elseif status == "mark" then
-        Alert(color .. "Marked for death:|r " .. Describe(key) .. " is here!", SOUNDKIT.RAID_WARNING)
-    elseif status == "grudge" then
-        Alert(color .. "Grudge:|r " .. Describe(key) .. " is here. " .. Score(key), SOUNDKIT.RAID_WARNING)
-    elseif fighting then
-        Alert(color .. "Champion|r " .. Describe(key) .. " is in a fight. Aid them!", SOUNDKIT.READY_CHECK)
-    else
-        Alert(color .. "Champion|r " .. Describe(key) .. " is nearby.")
-    end
-end
-
-local function AlertFor(key, status, info, unit)
-    local now = GetTime()
-
-    if LastAlert[key] and ((now - LastAlert[key]) < AlertCooldown) then
-        return
-    end
-
-    LastAlert[key] = now
-
-    if status == "war" then
-        -- A guild shows up in numbers: one alert per guild per cooldown, not one per member.
-        local guild = info.guild
-
-        if LastGuildAlert[guild] and ((now - LastGuildAlert[guild]) < GuildAlertCooldown) then
-            return
-        end
-
-        LastGuildAlert[guild] = now
-        Raise(key, status, guild, false)
-
-        return
-    end
-
-    local fighting = ((status == "glory") and UnitAffectingCombat(unit))
-
-    Raise(key, status, nil, fighting)
-
-    -- With nobody to tell, the share's cooldown doesn't start: the next sighting in a group goes out.
-    if WarbandModule:Get("shareSightings") and ((status ~= "glory") or fighting) and Krew:Ready()
-        and not (LastShared[key] and ((now - LastShared[key]) < SightCooldown)) then
-        LastShared[key] = now
-        local zone, subZone = Place()
-
-        Krew:Send("SIGHT", { key, zone, subZone, ((fighting and "1") or "0") })
-    end
 end
 
 --- Puts someone in the ledger as kind, without telling the Krew. A grudge doesn't lift a mark, and keeps who put them
@@ -749,7 +565,7 @@ local function Seen(unit, plate, suspect)
     end
 
     if status then
-        AlertFor(key, status, info, unit)
+        Warband.AlertFor(key, status, info, unit)
     end
 end
 
@@ -809,7 +625,7 @@ local function OnSubject(verb, act, done)
     end
 end
 
-Warband.Avenge, Warband.FreshGathering, Warband.HeardSighting, Warband.SetKind = Avenge, FreshGathering, HeardSighting, SetKind
+Warband.Avenge, Warband.FreshGathering, Warband.Place, Warband.SetKind = Avenge, FreshGathering, Place, SetKind
 Warband.CountDeath, Warband.Remember = CountDeath, Remember
 Warband.DeclareWar, Warband.MakePeace = DeclareWar, MakePeace
 Warband.Describe, Warband.IdentifyNow, Warband.Subject = Describe, IdentifyNow, Subject
@@ -896,12 +712,9 @@ WarbandModule = Addon:Module("Warband", {
     OnDisable = function()
         Warband.DisableMenus()
         Warband.DisableMessages()
+        Warband.DisableAlerts()
         LastFoe, LastSeen, PlaceZone, PlaceSubZone = nil, nil, nil, nil
-        -- The module's timers stop with it, so only the handles are forgotten.
-        AlertTimer = nil
         wipe(Gathering)
-        wipe(Held)
-        wipe(HeldFighting)
     end,
     OnEnable = function(module)
         Warband.EnableMenus()

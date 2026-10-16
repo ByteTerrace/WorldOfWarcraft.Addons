@@ -35,6 +35,7 @@ Journal.lua
 Krew.lua
 WarbandUtil.lua
 Warband.lua
+WarbandAlerts.lua
 WarbandMessages.lua
 WarbandDeaths.lua
 WarbandMenus.lua

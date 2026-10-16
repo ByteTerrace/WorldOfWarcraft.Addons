@@ -1,7 +1,7 @@
 local addonName, ns = ...
 
 -- WarbandMessages: what the Krew's Warband messages do, and your marks and wars shared with Krew members who join.
--- Warband.lua sends the messages and owns the collections and rules these use.
+-- Warband.lua sends the messages (WarbandAlerts.lua its sightings) and owns the collections and rules these use.
 --
 -- Messages from the Krew only update the collections, show an alert or card, and (a rally, with rallyWaypoint on) set a
 -- map waypoint. None acts on your behalf, and none is heard while Warband is off. Every hello (a Krew member joining,

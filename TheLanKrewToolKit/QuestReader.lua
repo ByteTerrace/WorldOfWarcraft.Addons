@@ -3,10 +3,12 @@ local addonName, ns = ...
 -- QuestReader: the Owl reads a young scholar's quests aloud. When a quest dialog opens, its giver's words are read with
 -- the player's text-to-speech voice: who's speaking and the quest's name, then the offer's story and what to do
 -- (QUEST_DETAIL), the progress page's question (QUEST_PROGRESS), or the reward page's words (QUEST_COMPLETE). Closing
--- the dialog (QUEST_FINISHED, when it's accepted, completed, or walked away from) stops a reading it started, and stops
--- nothing else, since another voice may be talking. It's part of the Scholar's challenge: it runs while the challenge
--- is on, behind the parent's lock, and follows Read riddles aloud (ns.ScholarVoice). /tlk read reads the open quest
--- whatever that setting says. Texts lose the client's escape codes (ns.QuestBook.Plain), and a secret one is left out.
+-- the dialog (QUEST_FINISHED, when it's accepted, completed, or walked away from) stops a reading it started, and so
+-- does switching the reader off. Either stops only while the reading is the last thing the Owl said
+-- (ns.ScholarVoice.Turn), since another voice may be talking. It's part of the Scholar's challenge: it runs while the
+-- challenge is on, behind the parent's lock, and follows Read riddles aloud (ns.ScholarVoice). /tlk read reads the open
+-- quest whatever that setting says. Texts lose the client's escape codes (ns.QuestBook.Plain), and a secret one is left
+-- out.
 
 local GetObjectiveText = GetObjectiveText
 local GetProgressText = GetProgressText
@@ -19,15 +21,16 @@ local Addon = ns.Addon
 -- The open dialog's page ("detail", "progress", or "reward"), or nil while none is open.
 local Page = nil
 local Plain = ns.QuestBook.Plain
--- Whether the voice is reading the open dialog.
-local Reading = false
+-- The turn of the Owl's line reading the open dialog, or nil while none is read.
+local Reading = nil
 
--- The dialog closed: a reading it started stops.
+-- The dialog closed, or the reader stopped: a reading it started stops, unless the Owl has said something since.
 local function Close()
-    Page = nil
+    local turn = Reading
 
-    if Reading then
-        Reading = false
+    Page, Reading = nil, nil
+
+    if turn and (turn == ns.ScholarVoice.Turn()) then
         C_VoiceChat.StopSpeakingText()
     end
 end
@@ -66,8 +69,7 @@ end
 
 -- Reads the open dialog aloud.
 local function Read()
-    ns.ScholarVoice.Say(Words())
-    Reading = true
+    Reading = ns.ScholarVoice.Say(Words())
 end
 
 -- A dialog page opened: it's read when Read riddles aloud says so.
@@ -97,10 +99,7 @@ Addon:Module("QuestReader", {
         .. "story, and what to do, or the words when it's turned in. It follows Read riddles aloud."),
     label = "Read quests aloud",
     lockedBy = "Scholar.locked",
-    OnDisable = function()
-        Page = nil
-        Reading = false
-    end,
+    OnDisable = Close,
     OnEnable = function(module)
         module:On("QUEST_COMPLETE", function() Open("reward") end)
         module:On("QUEST_DETAIL", function() Open("detail") end)

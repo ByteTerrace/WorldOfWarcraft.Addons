@@ -85,6 +85,37 @@ test("its own switch turns it off, it's part of the challenge, and the game's te
     falsy(addon.Modules.QuestReader:IsRunning(), "it stops with the challenge")
 end)
 
+test("switching the reader or the challenge off mid-reading stops the reading", function()
+    local h, addon = LoadKid({ ["Scholar.grade"] = "0" })
+
+    h:OfferQuest(Wolves, "Eagan Peltskinner")
+    addon.State:Set("QuestReader.enabled", false)
+    eq(h.speechStops, 1, "its own switch stops the reading")
+    h:CloseQuestDialog()
+    eq(h.speechStops, 1, "and the dialog closing afterward has nothing left to stop")
+    addon.State:Set("QuestReader.enabled", true)
+    h:OfferQuest(Wolves, "Eagan Peltskinner")
+    addon.State:Set("Scholar.enabled", false)
+    eq(h.speechStops, 2, "so does the challenge's")
+end)
+
+test("closing the dialog doesn't stop what the Owl said after the reading", function()
+    local h = LoadKid({ ["Scholar.grade"] = "0" })
+
+    Accept(h, Wolves)
+    h:Advance(1)
+    h:OfferQuest({ id = 40, text = "Another day.", title = "Later" }, "Eagan Peltskinner")
+    local spoken = #h.spoken
+
+    h:ProgressObjective(33, 1, 3)
+    h:Advance(1)
+    eq(#h.spoken, spoken + 1, "the Owl counts the objective while the dialog is open")
+    local stops = h.speechStops
+
+    h:CloseQuestDialog()
+    eq(h.speechStops, stops, "the count isn't cut off")
+end)
+
 test("with no text-to-speech voice, nothing is read, and /tlk read says why", function()
     local h = LoadKid({ ["Scholar.grade"] = "0" })
 

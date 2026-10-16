@@ -137,6 +137,8 @@ local Pauses = { long = { 4, 7, 10 }, short = { 2, 4, 6 } }
 local Scholar
 -- The GetTime() the running stretch of play started at.
 local SegmentStart
+-- How many lines Say has said since load: the last one's turn.
+local Turns = 0
 -- The timer counting down the pause after a miss (the pauseLeft row) while the riddle shows.
 local WaitTimer
 -- Blizzard's windows open now that a riddle waits for: "quest", "gossip", and interaction types.
@@ -313,9 +315,14 @@ end
 
 --- Says text aloud (what the screen shows: the riddle, the open quest book, or the feedback) with the player's
 --- text-to-speech voice, rate, and volume.
+---@return number turn this line's turn, which Turn() reports until something else is said
 local function Say(text)
+    Turns = (Turns + 1)
+
     C_VoiceChat.SpeakText(C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard), text, C_TTSSettings.GetSpeechRate(),
         C_TTSSettings.GetSpeechVolume(), false)
+
+    return Turns
 end
 
 -- Activates or deactivates the riddle's controller map, keeping any other feature's (a focused question card's). The
@@ -401,6 +408,11 @@ local function Speak()
     if Current and ScholarView.IsShown() then
         Say(ScholarView.Speech())
     end
+end
+
+--- Returns the turn of the last line Say said, so a feature stops the voice only while its own line is the last.
+local function Turn()
+    return Turns
 end
 
 -- Whether a controller with printed button names is connected.
@@ -963,4 +975,4 @@ Scholar = Addon:Module("Scholar", {
 
 -- Scholar's voice, for the other features that speak to a young scholar (QuestProgress.lua's QuestCount and
 -- QuestReader.lua).
-ns.ScholarVoice = { CanHear = CanHear, ReadsAloud = ReadsAloud, Say = Say }
+ns.ScholarVoice = { CanHear = CanHear, ReadsAloud = ReadsAloud, Say = Say, Turn = Turn }

@@ -37,8 +37,9 @@ local addonName, ns = ...
 --            count runs only while the riddle shows: a fight that takes it away stops the count, and
 --            it comes back with its hint and the seconds left. The seconds left and the misses that
 --            lengthen each pause are saved (pauseLeft, pauseMisses) until a riddle is solved or
---            skipped, so a /reload or relog asks a new riddle that waits them out, and its next miss
---            waits as long as it would have. The hint's rung stays with its own riddle.
+--            skipped, and so is the riddle itself, with its missed answers (the riddle row,
+--            ScholarKeep.lua). A /reload, a relog, or the challenge switched off and on brings back
+--            the same riddle, its hint, and the seconds left, so a child can't trade away a hard one.
 --   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the
 --            grade (math and reading only: a quest riddle never changes it).
 --
@@ -67,6 +68,8 @@ local ScrollRepeat = 0.12
 local ScrollSources = { scrollDown = "gamepad.dpadDown", scrollUp = "gamepad.dpadUp" }
 -- One math or reading riddle in StretchOdds is a stretch: a kind from a grade or two above, with extra help.
 local StretchOdds = 5
+-- Each riddle subject's switch row.
+local SubjectRows = { math = "math", quest = "quests", reading = "reading" }
 -- How long, in seconds, after a turn-in the onTurnIn moment waits, so QuestBook has noted it and the panel closed.
 local TurnInDelay = 1
 
@@ -110,6 +113,7 @@ local UnitOnTaxi = UnitOnTaxi
 local wipe = wipe
 
 local Addon = ns.Addon
+local Keep = ns.ScholarKeep
 local Memory = ns.ScholarMemory
 local Puzzles = ns.Puzzles
 local QuestBook = ns.QuestBook
@@ -350,6 +354,7 @@ local function Finish(solved)
     Current, Wrongs = nil, 0
     wipe(Missed)
     Close()
+    Scholar:Set("riddle", "")
     Scholar:Set("pauseLeft", 0)
     Scholar:Set("pauseMisses", 0)
     Scholar:Set("solved", false)
@@ -396,6 +401,13 @@ end
 --- Returns the turn of the last line Say said, so a feature stops the voice only while its own line is the last.
 local function Turn()
     return Turns
+end
+
+-- Whether a kept riddle can still be asked: its subject is on, and a heard one has a voice to hear it with.
+local function Usable(puzzle)
+    local row = SubjectRows[puzzle.subject]
+
+    return ((row ~= nil) and Scholar:Get(row) and ((puzzle.speech == nil) or CanHear()))
 end
 
 -- Whether a controller with printed button names is connected.
@@ -458,6 +470,7 @@ local function Choose(i)
         Scholar:Set("pending", false)
         Scholar:Set("elapsed", 0)
         Scholar:Set("pauseMisses", 0)
+        Scholar:Set("riddle", "")
 
         if Current.questKey then
             -- Marked answered, so a /reload in the celebration doesn't ask it again.
@@ -490,6 +503,7 @@ local function Choose(i)
     else
         Wrongs = (Wrongs + 1)
         Missed[i] = true
+        Keep.Save(Scholar, Current, Wrongs, Missed)
         Scholar:Set("streak", 0)
 
         if adapts then
@@ -513,8 +527,8 @@ local function Choose(i)
 end
 
 -- Shows the riddle and takes the keyboard and controller. Only ever called out of combat. A riddle that comes back
--- after a miss shows its hint's rung again, and any riddle's answers wait out the pause's seconds left (pauseLeft), a
--- new one's after a /reload included.
+-- after a miss (from a fight, a /reload, or a relog) shows its hint's rung again, and its answers wait out the pause's
+-- seconds left (pauseLeft).
 local function Open()
     local frame = ScholarView.Show(Current, Progress({
         actions = { hint = ActionLabel("hint"), skip = ActionLabel("skip"), speak = ActionLabel("speak") },
@@ -627,6 +641,17 @@ local function NextPuzzle()
 
     puzzle.stretch = (stretch or nil)
     Memory.Remember(Scholar, puzzle)
+
+    return puzzle
+end
+
+-- Asks the next riddle and keeps it (ScholarKeep), so a /reload brings back the same one.
+local function Ask()
+    local puzzle = NextPuzzle()
+
+    if puzzle then
+        Keep.Save(Scholar, puzzle, 0, Missed)
+    end
 
     return puzzle
 end
@@ -746,7 +771,8 @@ Scholar = Addon:Module("Scholar", {
             Finish(true)
         end
 
-        -- A riddle still due when the challenge comes back on keeps its pause (pauseLeft, pauseMisses).
+        -- A riddle still due when the challenge comes back on keeps its pause (pauseLeft, pauseMisses), and the riddle
+        -- itself comes back from the riddle row.
         Current, Wrongs, WaitTimer = nil, 0, nil
         wipe(Missed)
         wipe(Windows)
@@ -762,6 +788,16 @@ Scholar = Addon:Module("Scholar", {
         end
 
         module:Set("locked", (module:Get("pin") ~= 0) and not module:Get("unlocked"))
+
+        -- The riddle kept when the challenge last stopped (a /reload, a relog, or switched off) comes back the same
+        -- while it's still due, unless its subject was switched off or it's heard and there's no voice.
+        local kept, wrongs, missed = Keep.Take(module)
+
+        if kept and module:Get("pending") and Usable(kept) then
+            Current, Wrongs, Missed = kept, wrongs, missed
+        elseif kept then
+            module:Set("riddle", "")
+        end
 
         module:On("PLAYER_ENTERING_WORLD", function(isInitialLogin)
             if isInitialLogin then
@@ -863,7 +899,7 @@ Scholar = Addon:Module("Scholar", {
                     return
                 end
 
-                Current = (Current or NextPuzzle())
+                Current = (Current or Ask())
 
                 if Current then
                     Open()
@@ -896,7 +932,7 @@ Scholar = Addon:Module("Scholar", {
         module:Watch({ "QuestBook.quests", mathOn, readingOn, questsOn }, function(state)
             if state.Values[pending] and not Current and not state.Values[solved] and not state.Values[combat]
                 and not state.Values[window] then
-                Current = NextPuzzle()
+                Current = Ask()
 
                 if Current then
                     Open()

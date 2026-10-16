@@ -1,11 +1,13 @@
 -- The pause after a wrong answer (Scholar.lua and ScholarView.lua): the answers left wait a moment before they can be
 -- picked again, longer each miss, so a child reads the hint instead of trying every answer. Each waiting answer's
 -- keycap counts the seconds down. The hint, Read aloud, and Skip still work while they wait. The seconds left and the
--- misses so far are saved until a riddle is solved or skipped, so a /reload or relog doesn't get around them.
+-- misses so far are saved until a riddle is solved or skipped, so a /reload or relog doesn't get around them, and the
+-- riddle itself comes back (scholarkeep.test.lua).
 
 local Kit = use("scholar")
 local Banner = Kit.Banner
 local LoadKid = Kit.LoadKid
+local Returned = Kit.Returned
 local Watch = Kit.Watch
 local WrongAnswer = Kit.WrongAnswer
 
@@ -26,6 +28,15 @@ local function Riddle(pause)
     h:Slash("/tlk puzzle")
 
     return h, addon, ns, shown[#shown], rawget(h.env, "TheLanKrewToolKitScholar")
+end
+
+-- The keycaps while the answers wait: seconds on each, and its own key on the missed one.
+local function Waiting(miss, seconds)
+    local caps = {}
+
+    for i = 1, 4 do caps[i] = (((i == miss) and tostring(i)) or seconds) end
+
+    return table.concat(caps, " ")
 end
 
 test("after a miss the answers left wait two seconds, counting down on their keycaps, and a press then does nothing", function()
@@ -130,68 +141,67 @@ test("a wait doesn't follow the child to the next riddle", function()
     eq(Keycaps(frame), "1 2 3 4")
 end)
 
--- The riddle on screen after a /reload or a relog, seen through Watch: a fight sends it away and brings it back, so
--- Watch sees the riddle the new UI asked.
-local function Returned(h)
-    local shown = Watch(h.ns)
-
-    h:EnterCombat()
-    h:LeaveCombat()
-
-    return shown[#shown], rawget(h.env, "TheLanKrewToolKitScholar")
-end
-
-test("a /reload doesn't end the wait: the riddle that comes back waits out the seconds left, without the old hint", function()
+test("a /reload doesn't end the wait: the riddle comes back with its hint, and its answers left wait out the seconds left", function()
     local h, _, _, puzzle, frame = Riddle("long")
+    local miss = WrongAnswer(puzzle)
 
-    h:Key(tostring(WrongAnswer(puzzle)), true)
+    h:Key(tostring(miss), true)
     h:Advance(1)
     eq(frame.Buttons[puzzle.answer].Key:GetText(), "3")
     h:Reload()
     frame = rawget(h.env, "TheLanKrewToolKitScholar")
-    truthy(frame:IsShown(), "a riddle is still due")
-    eq(Keycaps(frame), "3 3 3 3", "every answer of the riddle that comes back waits the seconds left")
-    falsy(frame.Buttons[1]:IsEnabled())
-    falsy(frame.Feedback:IsShown(), "the old riddle's hint doesn't come with it")
+    truthy(frame:IsShown(), "the riddle is still due")
+    eq(Keycaps(frame), Waiting(miss, "3"), "each answer left waits the seconds left, and the missed one stays out")
+    falsy(frame.Buttons[puzzle.answer]:IsEnabled())
+    truthy(frame.Feedback:IsShown(), "its hint comes with it")
     h:Advance(2)
-    eq(Keycaps(frame), "1 1 1 1")
+    eq(Keycaps(frame), Waiting(miss, "1"))
     h:Advance(1)
     eq(Keycaps(frame), "1 2 3 4", "then the answers wake")
-    truthy(frame.Buttons[1]:IsEnabled())
+    truthy(frame.Buttons[puzzle.answer]:IsEnabled())
 end)
 
 test("after a /reload, the next miss waits as long as it would have, and the one after longer", function()
     local h, _, _, puzzle = Riddle("short")
+    local first = WrongAnswer(puzzle)
 
-    h:Key(tostring(WrongAnswer(puzzle)), true)
+    h:Key(tostring(first), true)
     h:Advance(2)
     h:Reload()
     local again, frame = Returned(h)
     local right = frame.Buttons[again.answer]
+    local second = WrongAnswer(again, first)
 
     eq(Keycaps(frame), "1 2 3 4", "the first wait was over")
-    h:Key(tostring(WrongAnswer(again)), true)
+    h:Key(tostring(second), true)
     eq(right.Key:GetText(), "4", "the second miss waits 4 seconds")
     h:Advance(4)
-    h:Key(tostring(WrongAnswer(again, WrongAnswer(again))), true)
+
+    for i = 1, 4 do
+        if (i ~= again.answer) and (i ~= first) and (i ~= second) then
+            h:Key(tostring(i), true)
+        end
+    end
+
     eq(right.Key:GetText(), "6", "and the third 6")
 end)
 
 test("a relog keeps the seconds left, however long the child was away", function()
     local h, _, _, puzzle = Riddle("long")
+    local miss = WrongAnswer(puzzle)
 
-    h:Key(tostring(WrongAnswer(puzzle)), true)
+    h:Key(tostring(miss), true)
     h:Advance(3)
     h:Relog(3600)
     local frame = rawget(h.env, "TheLanKrewToolKitScholar")
 
-    truthy(frame:IsShown(), "a riddle is still due")
-    eq(Keycaps(frame), "1 1 1 1", "the second it had left")
+    truthy(frame:IsShown(), "the riddle is still due")
+    eq(Keycaps(frame), Waiting(miss, "1"), "the second it had left")
     h:Advance(1)
     eq(Keycaps(frame), "1 2 3 4")
     local again = Returned(h)
 
-    h:Key(tostring(WrongAnswer(again)), true)
+    h:Key(tostring(WrongAnswer(again, miss)), true)
     eq(frame.Buttons[again.answer].Key:GetText(), "7", "and the next miss waits the second step")
 end)
 

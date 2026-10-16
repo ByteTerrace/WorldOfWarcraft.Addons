@@ -91,6 +91,9 @@ local Rows = {
     { default = 0, kind = "number", min = 0, name = "pauseMisses", scope = "character", step = 1 },
     { default = false, kind = "boolean", name = "pending", scope = "character" },
     { default = 0, kind = "number", min = 0, name = "questRun", scope = "character", step = 1 },
+    -- The riddle on screen until it's solved or skipped, with its misses and missed answers (ScholarKeep.lua), so a
+    -- /reload, a relog, or the challenge switched off and on brings back the same riddle. Empty while there's none.
+    { default = "", kind = "string", name = "riddle", scope = "character" },
     -- The riddle on screen was just solved: its celebration holds the screen until Finish.
     { default = false, kind = "boolean", name = "solved", persist = false },
     -- One of Blizzard's windows a riddle waits for is open (Windows).

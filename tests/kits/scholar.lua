@@ -79,6 +79,17 @@ local function Watch(ns)
     return shown
 end
 
+--- The riddle on screen after a /reload or a relog, seen through Watch: a fight sends it away and brings it back, so
+--- Watch sees the riddle the new UI asked.
+local function Returned(h)
+    local shown = Watch(h.ns)
+
+    h:EnterCombat()
+    h:LeaveCombat()
+
+    return shown[#shown], rawget(h.env, "TheLanKrewToolKitScholar")
+end
+
 --- An answer other than the right one and except.
 local function WrongAnswer(puzzle, except)
     for i = 1, 4 do
@@ -89,6 +100,6 @@ local function WrongAnswer(puzzle, except)
 end
 
 return {
-    Accept = Accept, Banner = Banner, Load = Load, LoadKid = LoadKid, Numbers = Numbers, Showing = Showing, Solve = Solve,
-    Watch = Watch, WrongAnswer = WrongAnswer,
+    Accept = Accept, Banner = Banner, Load = Load, LoadKid = LoadKid, Numbers = Numbers, Returned = Returned, Showing = Showing,
+    Solve = Solve, Watch = Watch, WrongAnswer = WrongAnswer,
 }

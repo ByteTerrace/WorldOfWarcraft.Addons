@@ -379,9 +379,10 @@ local function Place()
     return PlaceZone, PlaceSubZone
 end
 
--- Counts hostile players on nameplates. Enough of them in a subzone is a gathering worth reporting.
+-- Counts hostile players on nameplates. Enough of them in a subzone is a gathering worth reporting. With nobody to tell
+-- (no Krew), it counts nothing, so it neither reads the place nor starts the report's cooldown.
 local function CountGathering(info)
-    if not WarbandModule:Get("reportGatherings") then
+    if not (WarbandModule:Get("reportGatherings") and Krew:Ready()) then
         return
     end
 
@@ -554,7 +555,8 @@ local function AlertFor(key, status, info, unit)
 
     Raise(key, status, nil, fighting)
 
-    if WarbandModule:Get("shareSightings") and ((status ~= "glory") or fighting)
+    -- With nobody to tell, the share's cooldown doesn't start: the next sighting in a group goes out.
+    if WarbandModule:Get("shareSightings") and ((status ~= "glory") or fighting) and Krew:Ready()
         and not (LastShared[key] and ((now - LastShared[key]) < SightCooldown)) then
         LastShared[key] = now
         local zone, subZone = Place()

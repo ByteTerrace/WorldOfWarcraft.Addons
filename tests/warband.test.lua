@@ -358,6 +358,66 @@ test("five enemy players gathering are reported once", function()
     truthy(intel[1]:find("^INTEL:5\tAlliance\t1424\t"), intel[1])
 end)
 
+test("solo, a gathering reads no position and spends no cooldown: grouping up there reports it", function()
+    local h = Load()
+
+    h:AddMap(1424, { mapType = "Zone", name = "Hillsbrad Foothills" })
+    h:SetLocation({ mapID = 1424, subZone = "Southshore", x = 0.5, y = 0.5, zone = "Hillsbrad Foothills" })
+    h.apiCalls = {}
+
+    for i = 1, 6 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+
+    -- The rivalry records still note the zone, once per place.
+    eq(h:CountApiCalls("C_Map.GetBestMapForUnit"), 0, "no position read for a report with nobody to tell")
+    h:JoinGroup("party", { "Mom" })
+    h:Echo(false)
+    h:Advance(2)
+
+    for i = 7, 12 do
+        h:AddNamePlate(Enemy("Foe" .. i))
+    end
+
+    h:Advance(3)
+    eq(#Sent(h, "INTEL"), 1, "the gathering goes out once there's a Krew")
+end)
+
+test("solo, a sighting starts no Krew cooldown: the next one after grouping up is shared", function()
+    local h = Load()
+
+    h:Slash("/tlk mark Bob Doe")
+    local plate = h:AddNamePlate(Enemy())
+
+    h:RemoveNamePlate(plate)
+    h:JoinGroup("party", { "Mom" })
+    h:Echo(false)
+    -- Past the alert's cooldown, within the share's.
+    h:Advance(100)
+    h:AddNamePlate(Enemy())
+    h:Advance(3)
+    eq(#Sent(h, "SIGHT"), 1)
+end)
+
+-- The timers waiting to run.
+local function Timers(h)
+    local count = 0
+
+    for _, timer in ipairs(h.timers) do
+        if not timer.cancelled then count = (count + 1) end
+    end
+
+    return count
+end
+
+test("solo, the nearby list holds nothing back to share: only its tick runs", function()
+    local h = Load()
+    local before = Timers(h)
+
+    h:AddNamePlate(Enemy("Bob"))
+    eq(Timers(h) - before, 1, "the window's tick, and no timer to share with nobody")
+end)
+
 test("a gathering counts the enemies of one place: moving on starts the count over", function()
     local h = Grouped()
 

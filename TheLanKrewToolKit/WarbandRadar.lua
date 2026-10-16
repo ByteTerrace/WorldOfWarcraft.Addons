@@ -175,7 +175,8 @@ local function Note(info, by)
         entry = { class = "", faction = "", guild = "", key = info.key, level = 0 }
         Nearby[info.key] = entry
 
-        if not by then
+        -- Your own sighting waits to be shared, while there's a Krew to share it with.
+        if not by and Radar:Get("share") and Krew:Ready() then
             Pending[info.key] = true
         end
     end
@@ -314,7 +315,8 @@ function Render()
         if (now - entry.time) > NearbySeconds then
             Nearby[key] = nil
         else
-            entry.status = Warband.Status(key, entry.guild)
+            -- A Krew report names no guild (""): the rivalry record's is the one to go by.
+            entry.status = Warband.Status(key, ((entry.guild ~= "") and entry.guild) or nil)
             list[#list + 1] = entry
         end
     end

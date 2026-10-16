@@ -308,6 +308,21 @@ test("new enemies are shared with the Krew in one batch; Krew reports join the l
     falsy(rows:find("bad", 1, true))
 end)
 
+test("a Krew report of a guild at war's member shows them at war, by the guild their record holds", function()
+    local h = Grouped()
+
+    h:SetTarget(Enemy("Dan", { guild = "Knights of Light" }))
+    h:Slash("/tlk war")
+    h:SetTarget(nil)
+    -- Dan's record holds his guild; the list forgets him after two minutes.
+    h:Advance(130)
+    Receive(h, "Mom", "NEARBY", Key(h, "Dan") .. ";WARRIOR;60")
+    h:Advance(1)
+    local icon = Window(h).Rows[1].Icon:GetTexture()
+
+    eq(icon, h.ns.Warband.Icons.war, "the war's icon, though the report names no guild")
+end)
+
 test("right-click a row for the Krew's choices", function()
     local h, addon = Load()
 

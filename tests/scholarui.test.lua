@@ -802,9 +802,10 @@ test("the feedback banner stops short of the footer's right-hand buttons", funct
 
     view.Wrong(1, nil, "Hint", Shares.hint, true)
     truthy(frame.Skip:IsShown())
-    local banner = { frame.Feedback:GetPoint(2) }
+    local bannerRight = select(4, frame.Feedback:GetPoint(2))
+    local skipLeft = (select(4, frame.Skip:GetPoint(1)) - frame.Skip:GetWidth())
 
-    eq(banner[2], frame.Skip, "the banner ends at Skip, the leftmost right-hand button")
+    eq(bannerRight, skipLeft - 10, "the banner ends 10 short of Skip, the leftmost right-hand button")
 end)
 
 test("an unscramble shows its letters as tiles, not in the question text", function()

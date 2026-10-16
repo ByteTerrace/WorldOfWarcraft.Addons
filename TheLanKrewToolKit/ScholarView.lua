@@ -20,7 +20,8 @@ local addonName, ns = ...
 --             scrolls, like the quest log: the mouse wheel, the Up and Down arrows, or the D-pad
 --             (held, it keeps going), with a slim bar showing where you are
 --   footer    Need a hint? and how to answer; feedback (the hint, or the working) replaces it in
---             place, growing down to fit its text. Every button names its key: the controller's
+--             place, growing down to fit its text, with the buttons centered on it and a stripe that
+--             says how it went (red, gold, or green). Every button names its key: the controller's
 --             buttons when one is connected (face buttons answer, shoulders ask for the hint and read
 --             aloud, Back skips), the keyboard's otherwise
 --
@@ -48,14 +49,17 @@ local WordColor = "|cff7fe0ff"
 
 local concat = table.concat
 local floor = math.floor
+local ipairs = ipairs
 local max = math.max
 local min = math.min
 local UIParent = UIParent
+local unpack = unpack
 
 local ScholarFrame = ns.ScholarFrame
 local AnswerHeight = ScholarFrame.AnswerHeight
 local BookInset = ScholarFrame.BookInset
 local ButtonWidth = ScholarFrame.ButtonWidth
+local Inset = ScholarFrame.Inset
 local LabelPill = ScholarFrame.LabelPill
 local NumberColor = ScholarFrame.NumberColor
 local Pad = ScholarFrame.Pad
@@ -196,6 +200,15 @@ local function Layout(hasStory, puzzle)
         local textHeight = Overlay.BookText:GetStringHeight()
         local view = min(textHeight, BookHeight, Overlay.m_bookRoom)
 
+        -- A book that scrolls shows whole lines: never half of one at its edge.
+        -- secret: plain, as above
+        if view < textHeight then
+            local spacing = Overlay.BookText:GetSpacing()
+            local pitch = (Overlay.BookText:GetLineHeight() + spacing)
+
+            view = max(pitch - spacing, (floor((view + spacing) / pitch) * pitch) - spacing)
+        end
+
         -- secret: plain, as above
         Overlay.m_bookView, Overlay.m_bookRange = view, (textHeight - view)
         Overlay.BookPage:SetHeight(textHeight)
@@ -237,7 +250,7 @@ local function Layout(hasStory, puzzle)
     Overlay.Stripe:SetPoint("TOPLEFT", Overlay.Band, "TOPLEFT")
     Overlay.Stripe:SetPoint("BOTTOMLEFT", Overlay.Band, "BOTTOMLEFT")
     Overlay.Question:ClearAllPoints()
-    Overlay.Question:SetPoint("TOPLEFT", Pad + 22, -(y + 15))
+    Overlay.Question:SetPoint("TOPLEFT", Pad + Inset, -(y + 15))
     -- secret: plain, as above
     y = (((y + questionHeight) + 30) + 20)
 
@@ -281,15 +294,19 @@ end
 
 -- Shows a message in the footer's place: the hint (gold) or the working (green), and said is the message as plain text,
 -- for Read aloud.
-local function ShowFeedback(text, good, said)
+local function ShowFeedback(text, tone, said)
     Overlay.m_said = said
     local banner = Overlay.Feedback
 
-    if good then
+    if tone == "right" then
         BackdropColors(banner, Palette.feedbackGood, Palette.feedbackGoodEdge)
     else
         BackdropColors(banner, Palette.feedback, Palette.feedbackEdge)
     end
+
+    -- The stripe says how it went: green when it's right, red for a miss, gold for a hint.
+    banner.Stripe:SetColorTexture(unpack((((tone == "right") and Palette.good) or ((tone == "miss") and Palette.bad))
+        or Palette.gold))
 
     banner.Text:SetText(text)
     banner:Show()
@@ -403,51 +420,52 @@ end
 -- right-hand button comes first, and grows down to fit its text. Returns the footer's height.
 function PlaceFooter()
     local y = Overlay.FooterTop
+    local banner = Overlay.Feedback
+    local hint = Overlay.Hint
+    -- The banner fills the row between the buttons: from the hint's right edge to the right-hand buttons' left.
+    local left = Pad
+    local right = Pad
+    local pills = {}
 
-    Overlay.Hint:ClearAllPoints()
-    Overlay.Hint:SetPoint("TOPLEFT", Pad, -(y + 8))
-    local right = -Pad
-    -- The banner's width: the row, less the pills beside it.
-    local room = (Width - (2 * Pad))
-    local leftmost
+    if hint:IsShown() then
+        -- secret: pill sizes come from fixed strings and key names
+        left = ((Pad + hint:GetWidth()) + 10)
+    end
 
     for _, pill in ipairs({ Overlay.Speak, Overlay.Skip }) do
         if pill:IsShown() then
-            pill:ClearAllPoints()
-            pill:SetPoint("TOPRIGHT", right, -(y + 8))
-            -- secret: pill sizes come from fixed strings and key names
-            right = ((right - pill:GetWidth()) - 8)
+            pills[#pills + 1] = { pill, right }
             -- secret: as above
-            room = ((room - pill:GetWidth()) - ((leftmost and 8) or 10))
-            leftmost = pill
+            right = ((right + pill:GetWidth()) + 8)
         end
     end
 
-    local banner = Overlay.Feedback
-
-    banner:ClearAllPoints()
-
-    if Overlay.Hint:IsShown() then
-        banner:SetPoint("TOPLEFT", Overlay.Hint, "TOPRIGHT", 10, 8)
-        -- secret: as above
-        room = ((room - Overlay.Hint:GetWidth()) - 10)
-    else
-        banner:SetPoint("TOPLEFT", Pad, -y)
+    if #pills > 0 then
+        right = (right + 2)
     end
 
-    if leftmost then
-        banner:SetPoint("TOPRIGHT", leftmost, "TOPLEFT", -10, 8)
-    else
-        banner:SetPoint("TOPRIGHT", -Pad, -y)
-    end
-
-    banner.Text:SetWidth(room - 28)
+    banner.Text:SetWidth(((Width - left) - right) - (Inset + 14))
     -- secret: feedback is built from plain strings, as the riddle's text is
     local height = max(FooterHeight, banner.Text:GetStringHeight() + 20)
+    local row = ((banner:IsShown() and height) or FooterHeight)
 
+    banner:ClearAllPoints()
+    banner:SetPoint("TOPLEFT", left, -y)
+    banner:SetPoint("TOPRIGHT", -right, -y)
     banner:SetHeight(height)
+    hint:ClearAllPoints()
+    -- secret: as above
+    hint:SetPoint("TOPLEFT", Pad, -(y + ((row - hint:GetHeight()) / 2)))
 
-    return ((banner:IsShown() and height) or FooterHeight)
+    for _, entry in ipairs(pills) do
+        local pill = entry[1]
+
+        pill:ClearAllPoints()
+        -- secret: as above
+        pill:SetPoint("TOPRIGHT", -entry[2], -(y + ((row - pill:GetHeight()) / 2)))
+    end
+
+    return row
 end
 
 ScholarView.Emphasize = Emphasize
@@ -470,7 +488,7 @@ function ScholarView.Correct(i, explanation, info)
         Paint(button, ((j == i) and "right") or "dim")
     end
 
-    ShowFeedback("|cff59f273Correct!|r  " .. Emphasize(explanation), true, "Correct! " .. explanation)
+    ShowFeedback("|cff59f273Correct!|r  " .. Emphasize(explanation), "right", "Correct! " .. explanation)
     Overlay.Gain:SetText("+" .. max(info.earned or 1, 1))
     Overlay.Rise:Stop()
     Overlay.Rise:Play()
@@ -496,7 +514,7 @@ end
 --- Shows the hint in the footer's place (no penalty: asking for help is part of learning).
 ---@param hint string
 function ScholarView.Hint(label, hint)
-    ShowFeedback(NumberColor .. label .. ":|r  " .. Emphasize(HintText(hint)), false, (label .. ": " .. HintText(hint)))
+    ShowFeedback(NumberColor .. label .. ":|r  " .. Emphasize(HintText(hint)), "hint", (label .. ": " .. HintText(hint)))
 end
 
 --- Sets the handlers the screen calls back: choose(i) for an answer selected, skip() for Skip, hint() for Need a hint?,
@@ -639,7 +657,7 @@ function ScholarView.Wrong(i, why, label, hint, canSkip, reveal)
     local because = ((why and (Emphasize(why) .. "  ")) or "")
 
     ShowFeedback((((("|cffff665aNot quite.|r  " .. because) .. NumberColor) .. label) .. ":|r  ") .. Emphasize(HintText(hint)),
-        false, ("Not quite. " .. ((why and (why .. " ")) or "")) .. label .. ": " .. HintText(hint))
+        "miss", ("Not quite. " .. ((why and (why .. " ")) or "")) .. label .. ": " .. HintText(hint))
 
     if canSkip then
         Overlay.Skip:Show()

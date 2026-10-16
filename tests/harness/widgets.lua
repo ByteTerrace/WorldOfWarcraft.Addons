@@ -168,6 +168,10 @@ function Behaviors.GetEffectiveScale(s)
     return scale
 end
 
+-- [D] A FontString's line height and the spacing between its lines (SimpleFontStringAPI). [G] The line height is the
+-- layout's LineHeight, and the spacing is kept but not added to the string's height.
+function Behaviors.GetLineHeight() return LineHeight end
+
 function Behaviors.GetMinMaxValues(s) return s.min, s.max end
 
 function Behaviors.GetName(s) return s.name end
@@ -183,6 +187,8 @@ function Behaviors.GetParent(s) return s.parent end
 function Behaviors.GetScale(s) return (s.scale or 1) end
 
 function Behaviors.GetScript(s, _, script) return s.scripts[script] end
+
+function Behaviors.GetSpacing(s) return (s.spacing or 0) end
 
 function Behaviors.GetStringHeight(s) return (#Lines(s, Anchored(s, Axes.x, 0) or s.width or 0) * LineHeight) end
 
@@ -236,6 +242,8 @@ function Behaviors.SetMinMaxValues(s, _, min, max) s.min, s.max = min, max end
 function Behaviors.SetScript(s, _, script, fn) s.scripts[script] = fn end
 
 function Behaviors.SetShown(s, w, shown) s.harness:SetWidgetShown(w, shown) end
+
+function Behaviors.SetSpacing(s, _, spacing) s.spacing = spacing end
 
 function Behaviors.SetText(s, _, text) s.text = text end
 

@@ -10,13 +10,21 @@ local addonName, ns = ...
 --   ns.ScholarFrame.Create(callbacks)      the overlay, hidden
 --   ns.ScholarFrame.Paint(button, state)   "normal", "hover", "wrong", "right", "dim", or "reveal"
 --   ns.ScholarFrame.LabelPill(pill, key)   the pill's text with its key ("LB  Need a hint?"), fitted
---   ns.ScholarFrame.AnswerHeight, BookInset, ButtonWidth, NumberColor, Pad, Width   the sizes both files share
+--   ns.ScholarFrame.AnswerHeight, BookInset, ButtonWidth, Inset, NumberColor, Pad, Width   the sizes both files share
+--
+-- One rule aligns the text: the story sits at the panel's padding, like the boxes' edges, and every box's text starts
+-- Inset into it, the question's band, the quest book's page, and the feedback banner alike. The band and the banner
+-- carry a stripe at their left edge in that room: the band's is gold, and the banner's says how it went
+-- (ScholarView.lua colors it). The panel casts a soft shadow, and each answer has a lit top edge and a shaded bottom
+-- one.
 
 local AnswerGap = 14
 local AnswerHeight = 72
--- The room between the quest book's page and its text.
+-- The room above and below the quest book's text, and to its right, before the scroll bar.
 local BookInset = 14
 local CircleMask = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+-- How far into a box its text starts: the question's band, the quest book's page, and the feedback banner.
+local Inset = 22
 local KeycapSize = 34
 local NumberColor = "|cffffd100"
 local OwlIcon = "Interface\\Icons\\Ability_Hunter_Pet_Owl"
@@ -194,8 +202,13 @@ local function CreateFooter(frame, panel)
     local banner = CreateFrame("Frame", nil, panel, "BackdropTemplate")
 
     Backdrop(banner, 10)
+    banner.Stripe = banner:CreateTexture(nil, "ARTWORK")
+    banner.Stripe:SetWidth(4)
+    banner.Stripe:SetPoint("TOPLEFT", 3, -3)
+    banner.Stripe:SetPoint("BOTTOMLEFT", 3, 3)
+    Fill(banner.Stripe, Palette.gold)
     banner.Text = banner:CreateFontString(nil, "OVERLAY", "Game18Font")
-    banner.Text:SetPoint("LEFT", 14, 0)
+    banner.Text:SetPoint("LEFT", Inset, 0)
     banner.Text:SetJustifyH("LEFT")
     banner.Text:SetWordWrap(true)
     TextColor(banner.Text, Palette.story)
@@ -258,6 +271,17 @@ local function CreateAnswer(panel, i)
     button.Text:SetJustifyH("CENTER")
     button.Text:SetWordWrap(true)
 
+    -- A bevel: a lit top edge and a shaded bottom one, inside the border.
+    button.Shine = button:CreateTexture(nil, "ARTWORK")
+    button.Shine:SetHeight(1)
+    button.Shine:SetPoint("TOPLEFT", 4, -4)
+    button.Shine:SetPoint("TOPRIGHT", -4, -4)
+    Fill(button.Shine, { 1, 1, 1 }, 0.1)
+    button.Shade = button:CreateTexture(nil, "ARTWORK")
+    button.Shade:SetHeight(2)
+    button.Shade:SetPoint("BOTTOMLEFT", 4, 4)
+    button.Shade:SetPoint("BOTTOMRIGHT", -4, 4)
+    Fill(button.Shade, { 0, 0, 0 }, 0.35)
     button.Mark = button:CreateTexture(nil, "OVERLAY")
     button.Mark:SetSize(26, 26)
     button.Mark:SetPoint("RIGHT", -16, 0)
@@ -296,11 +320,11 @@ local function CreateBody(frame, panel)
 
     book:EnableMouseWheel(true)
     book:SetScript("OnMouseWheel", function(_, delta) ns.ScholarView.ScrollBook(-delta) end)
-    book:SetPoint("TOPLEFT", BookInset, -BookInset)
+    book:SetPoint("TOPLEFT", Inset, -BookInset)
     book:SetPoint("BOTTOMRIGHT", -BookInset, BookInset)
     book:Hide()
     local page = CreateFrame("Frame", nil, book)
-    local textWidth = (((Width - (2 * Pad)) - (2 * BookInset)) - 16)
+    local textWidth = ((((Width - (2 * Pad)) - Inset) - BookInset) - 16)
 
     page:SetWidth(textWidth)
     book:SetScrollChild(page)
@@ -363,6 +387,12 @@ local function Create(callbacks)
 
     local panel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
 
+    -- A soft shadow behind the panel, so it lifts off the shade.
+    frame.Shadow = frame:CreateTexture(nil, "BORDER")
+    frame.Shadow:SetPoint("TOPLEFT", panel, "TOPLEFT", -10, 10)
+    frame.Shadow:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 10, -10)
+    Fill(frame.Shadow, { 0, 0, 0 }, 0.6)
+
     panel:SetWidth(Width)
     panel:SetPoint("CENTER", 0, 30)
     Backdrop(panel, 16)
@@ -378,6 +408,6 @@ local function Create(callbacks)
 end
 
 ns.ScholarFrame = {
-    AnswerHeight = AnswerHeight, BookInset = BookInset, ButtonWidth = ButtonWidth, Create = Create, LabelPill = LabelPill,
-    NumberColor = NumberColor, Pad = Pad, Paint = Paint, Width = Width,
+    AnswerHeight = AnswerHeight, BookInset = BookInset, ButtonWidth = ButtonWidth, Create = Create, Inset = Inset,
+    LabelPill = LabelPill, NumberColor = NumberColor, Pad = Pad, Paint = Paint, Width = Width,
 }

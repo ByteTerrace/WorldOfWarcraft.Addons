@@ -130,7 +130,9 @@ test("on a tall screen the quest book is a page of at most BookHeight, scrolling
     local closed = overlay.Panel:GetHeight()
 
     h:Key("H", true)
-    eq(overlay.Book:GetHeight(), 240, "a page's worth in view")
+    local pitch = (overlay.BookText:GetLineHeight() + overlay.BookText:GetSpacing())
+
+    truthy((overlay.Book:GetHeight() <= 240) and (overlay.Book:GetHeight() > (240 - pitch)), "a page's worth of whole lines in view: " .. overlay.Book:GetHeight())
     truthy(overlay.BookCase:IsShown() and overlay.Book:IsShown(), "the book opens on its page")
     truthy(overlay.Book:GetVerticalScrollRange() > 0, "and the rest scrolls")
 
@@ -192,7 +194,7 @@ local function BookRiddle(h, ns)
         explanation = "The name at the top of the quest book is \"The Prodigal Lich\".", hint = "Open the quest book.",
         kind = "quest.title", prompt = (giver .. " gave you a quest. Which one?"), subject = "quest",
         title = "Quest Log Quiz",
-    }, { actions = {}, book = true, keys = { "1", "2", "3", "4" }, rank = "Adept", stars = 25 })
+    }, { actions = {}, book = true, canSpeak = true, keys = { "1", "2", "3", "4" }, rank = "Adept", stars = 25 })
 
     ns.ScholarView.ToggleBook()
 
@@ -225,4 +227,72 @@ test("long feedback with the book open shrinks the book, so the panel still fits
     truthy(overlay.Panel:GetHeight() <= (600 - 40), ("the panel (%d) fits the screen (%d)"):format(overlay.Panel:GetHeight(), 560))
     truthy(overlay.Book:GetHeight() < before, "the book gave up the room")
     eq(overlay.Book:GetVerticalScroll() <= overlay.Book:GetVerticalScrollRange(), true, "and its scroll stays in range")
+end)
+
+test("the question, the open book, and the feedback all start their text the same distance in", function()
+    local h, _, ns = LoadKid()
+    local overlay = BookRiddle(h, ns)
+
+    ns.ScholarView.Wrong(1, "That's another quest.", "Hint", "Open the quest book.", false)
+    local questionX = select(4, overlay.Question:GetPoint(1))
+    local caseX = select(4, overlay.BookCase:GetPoint(1))
+    local bookX = select(4, overlay.Book:GetPoint(1))
+
+    eq(caseX + bookX, questionX, "the book's text lines up with the question's")
+    eq(select(4, overlay.Feedback.Text:GetPoint(1)), bookX, "and the feedback's text sits as far into its banner")
+end)
+
+test("the open book shows whole lines, never half of one at its edge", function()
+    local h, _, ns = LoadKid()
+
+    h.env.UIParent:SetSize(1366, 600)
+    local overlay = BookRiddle(h, ns)
+    local pitch = (overlay.BookText:GetLineHeight() + overlay.BookText:GetSpacing())
+    local shown = (overlay.Book:GetHeight() + overlay.BookText:GetSpacing())
+
+    truthy(overlay.Book:GetVerticalScrollRange() > 0, "a long book")
+    eq(shown % pitch, 0, ("%d tall is whole lines of %d"):format(overlay.Book:GetHeight(), pitch))
+end)
+
+test("the feedback banner's stripe says how it went: red for a miss, gold for a hint, green when it's right", function()
+    local h, _, ns = LoadKid()
+    local overlay = BookRiddle(h, ns)
+    local palette = ns.ScholarStyle.Palette
+
+    local function Stripe()
+        local color = Harness.State(overlay.Feedback.Stripe).color
+
+        return table.concat({ color[1], color[2], color[3] }, " ")
+    end
+
+    ns.ScholarView.Wrong(1, "That's another quest.", "Hint", "Open the quest book.", false)
+    eq(Stripe(), table.concat(palette.bad, " "))
+    ns.ScholarView.Hint("Hint", "Open the quest book.")
+    eq(Stripe(), table.concat(palette.gold, " "))
+    ns.ScholarView.Correct(4, "The name at the top of the quest book.", { rank = "Adept", stars = 26 })
+    eq(Stripe(), table.concat(palette.good, " "))
+end)
+
+test("the footer's buttons sit centered on a tall banner, whose top lines up with the row", function()
+    local h, _, ns = LoadKid()
+    local overlay = BookRiddle(h, ns)
+
+    ns.ScholarView.Wrong(1, ("That quest isn't in your quest book. "):rep(4), "Here's how", "Read the name at the top.", false)
+    local top = select(5, overlay.Feedback:GetPoint(1))
+    local height = overlay.Feedback:GetHeight()
+
+    truthy(height > 44, "a tall banner")
+    eq(select(5, overlay.Hint:GetPoint(1)), top - ((height - overlay.Hint:GetHeight()) / 2), "the hint button is centered on it")
+    eq(select(5, overlay.Speak:GetPoint(1)), top - ((height - overlay.Speak:GetHeight()) / 2), "and so is Read aloud")
+end)
+
+test("the panel casts a shadow, and each answer has a bevel", function()
+    local h, _, ns = LoadKid()
+    local overlay = BookRiddle(h, ns)
+
+    truthy(overlay.Shadow:IsShown() and (select(2, overlay.Shadow:GetPoint(1)) == overlay.Panel), "a shadow behind the panel")
+
+    for _, button in ipairs(overlay.Buttons) do
+        truthy(button.Shine:IsShown() and button.Shade:IsShown(), "a lit top edge and a shaded bottom one")
+    end
 end)

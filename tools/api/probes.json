@@ -278,8 +278,10 @@
     "input.events": {
       "result": {
         "GAME_PAD_ACTIVE_CHANGED": { "beforeWorld": false, "payloads": "boolean" },
+        "GAME_PAD_CONNECTED": { "beforeWorld": false, "payloads": "none" },
+        "GAME_PAD_DISCONNECTED": { "beforeWorld": false, "payloads": "none" },
         "GAME_PAD_POWER_CHANGED": { "beforeWorld": false, "payloads": "Critical,Medium" },
-        "heard": "GAME_PAD_ACTIVE_CHANGED,GAME_PAD_POWER_CHANGED"
+        "heard": "GAME_PAD_ACTIVE_CHANGED,GAME_PAD_CONNECTED,GAME_PAD_DISCONNECTED,GAME_PAD_POWER_CHANGED"
       },
       "contexts": { "combat/Combat": true, "idle/none": true }
     },
@@ -287,7 +289,7 @@
       "result": {
         "partyKill": { "attacker": "other,you", "attackerKind": "Player", "target": "Creature" },
         "targetDied": true,
-        "unitDied": { "unit": "Creature,Player" }
+        "unitDied": { "unit": "Creature,Pet,Player" }
       },
       "contexts": { "combat/Combat": true, "idle/none": true }
     },
@@ -323,7 +325,7 @@
     },
     "namePlate.friendlyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "namePlates.events": {
       "result": {
@@ -430,6 +432,16 @@
         "token": "string"
       },
       "contexts": { "combat/Combat": true }
+    },
+    "quest.enderKind": {
+      "result": { "idle/none": "Creature" },
+      "contexts": { "idle/none": true },
+      "version": 2
+    },
+    "quest.giverKind": {
+      "result": { "idle/none": { "plain": { "kind": "Creature", "questID": "positive", "startItem": "zero" } } },
+      "contexts": { "idle/none": true },
+      "version": 2
     },
     "quest.offer": {
       "result": { "objectiveText": "text", "questText": "text", "title": "text" },
@@ -604,7 +616,7 @@
     },
     "unitCombat.seen": {
       "result": {
-        "actions": "DODGE,HEAL,MISS,PARRY,WOUND",
+        "actions": "DODGE,EVADE,HEAL,MISS,PARRY,WOUND",
         "amountInCombat": "number",
         "flagTexts": "BLOCK_REDUCED,CRITICAL,GLANCING",
         "player": {
@@ -615,6 +627,7 @@
         },
         "target": {
           "DODGE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
+          "EVADE": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "HEAL": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "MISS": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },
           "PARRY": { "action": "text", "amount": "number", "flagText": "empty", "schoolMask": "number" },

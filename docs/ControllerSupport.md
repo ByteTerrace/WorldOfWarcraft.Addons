@@ -99,9 +99,9 @@ footer:Finalize(); footer:ShowAndActivateBindings()
 - Only the frame that took the down event gets the up event, so pass presses on unless you really mean to consume them.
 
 **Hardware:**
-- `C_GamePad.SetVibration(type, intensity)` and `StopVibration()`.
+- `C_GamePad.SetVibration(type, intensity)` and `StopVibration()`. The client takes `"High"`, `"Low"`, `"LTrigger"` and `"RTrigger"` without an error (probe `gamePad.vibration`), but only `High` and `Low` are felt on the controllers tried so far; the trigger types did nothing. Use `High` and `Low`. A vibration stops by itself after a moment (seen in game with `/btdev rumble High 1`), so `StopVibration` is only needed to cut one short.
 - `SetLedColor(color)`, `GetLedColor()` and `ClearLedColor()` (DualSense light bar).
-- `GetPowerLevel()`.
+- `GetPowerLevel()`, an `Enum.GamePadPowerLevel`. `GAME_PAD_POWER_CHANGED` fires as the battery drains (Medium and Critical seen, probe `input.events`), and `GAME_PAD_ACTIVE_CHANGED(isActive)` when a controller becomes active; neither fired before the world loaded.
 - Blizzard's UI uses none of these, so they're free for addons.
 
 ## Restrictions

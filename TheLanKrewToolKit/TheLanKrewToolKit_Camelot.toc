@@ -15,7 +15,10 @@ ScholarWords.lua
 ScholarPuzzles.lua
 ScholarMathWords.lua
 ScholarMath.lua
+ScholarNumberWords.lua
+ScholarNumbers.lua
 ScholarReadingWords.lua
+ScholarStoryWords.lua
 ScholarReading.lua
 QuestBook.lua
 ScholarQuests.lua

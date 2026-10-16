@@ -1,11 +1,14 @@
 -- Scholar for children still learning to read: riddles said aloud as they appear (readAloud: kindergarten and grade 1
--- by default), each choice said with the key that picks it, and heard riddles whose word is only spoken. With no
--- text-to-speech voice, nothing tries to speak and no heard riddle is asked.
+-- by default), each choice said with the key that picks it, heard riddles whose word is only spoken, and heard stories
+-- whose story is only spoken, with their choices said after it. With no text-to-speech voice, nothing tries to speak
+-- and no heard riddle is asked.
 
 local Kit = use("scholar")
 local LoadKid, Watch = Kit.LoadKid, Kit.Watch
 
-local HeardKinds = { ["reading.listen"] = true, ["reading.listenSound"] = true }
+local HeardKinds = { ["reading.listen"] = true, ["reading.listenSound"] = true, ["reading.listenStory"] = true }
+-- The heard kinds whose word is only spoken, and whose choices are for reading.
+local WordKinds = { ["reading.listen"] = true, ["reading.listenSound"] = true }
 
 -- A kindergartner's character asking only reading riddles, with every reading skill but kind resting (mastered and not
 -- due), so kind is asked next.
@@ -78,7 +81,7 @@ test("hovering a choice says it with its key while riddles are read aloud, and n
 end)
 
 test("a heard riddle says only its word, even with read-aloud off, never shows it, and its button is Hear it again", function()
-    for kind in pairs(HeardKinds) do
+    for kind in pairs(WordKinds) do
         local h, _, ns = OnlyNext(kind, { ["Scholar.readAloud"] = "off" })
         local shown = Watch(ns)
         local from = (#h.spoken + 1)
@@ -101,12 +104,49 @@ test("a heard riddle says only its word, even with read-aloud off, never shows i
     end
 end)
 
+test("a heard story says the story, the question and each choice with its key, even with read-aloud off, and never shows the story", function()
+    local h, _, ns = OnlyNext("reading.listenStory", { ["Scholar.readAloud"] = "off" })
+    local shown = Watch(ns)
+    local from = (#h.spoken + 1)
+
+    h:Slash("/tlk puzzle")
+    local puzzle = shown[#shown]
+    local choices = {}
+
+    for i, choice in ipairs(puzzle.choices) do
+        choices[i] = ("Press %d for %s."):format(i, choice)
+    end
+
+    local said = ("%s %s"):format(puzzle.speech, table.concat(choices, " "))
+
+    eq(puzzle.kind, "reading.listenStory")
+    eq(SaidSince(h, from), said, "the story and question, then the choices")
+    local frame = rawget(h.env, "TheLanKrewToolKitScholar")
+    local story = puzzle.speech:sub(1, 30)
+
+    falsy((Harness.State(frame.Question).text or ""):find(story, 1, true), "the question band doesn't show the story")
+    falsy((Harness.State(frame.Story).text or ""):find(story, 1, true), "the story band doesn't show it")
+    truthy(Harness.State(frame.Speak.Label).text:find("Hear it again", 1, true))
+    from = (#h.spoken + 1)
+    h:Key("R", true)
+    eq(SaidSince(h, from), said, "Hear it again says it all again")
+    h:Key(tostring(puzzle.answer), true)
+    truthy(frame.Buttons[puzzle.answer].State == "right", "the right choice is right")
+    local young, _, youngNs = OnlyNext("reading.listenStory")
+    local youngShown = Watch(youngNs)
+
+    young:Slash("/tlk puzzle")
+    from = (#young.spoken + 1)
+    young:Hover(rawget(young.env, "TheLanKrewToolKitScholar").Buttons[2], true)
+    eq(SaidSince(young, from), ("Press 2 for %s."):format(youngShown[#youngShown].choices[2]), "a hover says its choice")
+end)
+
 test("with no text-to-speech voice, nothing is said, Read aloud hides, and no heard riddle is asked", function()
     local h, _, ns = LoadKid({ ["Scholar.grade"] = "0", ["Scholar.math"] = false, ["Scholar.quests"] = false })
     local shown = Watch(ns)
 
     h.ttsVoices = {}
-    eq(#ns.Puzzles.Kinds("reading", 0, false), #ns.Puzzles.Kinds("reading", 0, true) - 2, "the heard kinds are left out")
+    eq(#ns.Puzzles.Kinds("reading", 0, false), #ns.Puzzles.Kinds("reading", 0, true) - 3, "the heard kinds are left out")
 
     for _ = 1, 12 do
         h:Slash("/tlk puzzle")

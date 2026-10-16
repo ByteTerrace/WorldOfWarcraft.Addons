@@ -132,7 +132,8 @@ test("a math riddle's missed first try is recorded and brings its skill back as 
 end)
 
 test("math and reading keep their own difficulty: three first-try rights in a row raise only their subject's", function()
-    local h, addon, ns = LoadKid({ ["Scholar.quests"] = false, ["Scholar.reading"] = false })
+    -- Grade 6 asks no stretch riddles, which never move the difficulty.
+    local h, addon, ns = LoadKid({ ["Scholar.grade"] = "6", ["Scholar.quests"] = false, ["Scholar.reading"] = false })
     local shown = Watch(ns)
 
     for _ = 1, 3 do Solve(h, shown) end
@@ -181,7 +182,7 @@ test("Generate asks the kind it's given, and refuses a kind the grade doesn't as
     local Puzzles = ns.Puzzles
     local kinds = Puzzles.Kinds("math", 2)
 
-    eq(table.concat(kinds, ","), "math.add,math.subtract,math.skip,math.coins")
+    eq(table.concat(kinds, ","), "math.add,math.subtract,math.skip,math.coins,math.placeValue,math.time,math.numberLine")
     kinds[1] = "changed"
     eq(Puzzles.Kinds("math", 2)[1], "math.add", "a fresh array each time")
     local puzzle = Puzzles.Generate({ grade = 2, kind = "math.coins", random = math.random, subject = "math" })

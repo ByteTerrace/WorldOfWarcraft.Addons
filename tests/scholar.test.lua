@@ -1,6 +1,6 @@
 -- Scholar puzzles (TheLanKrewToolKit/ScholarWords.lua, ScholarPuzzles.lua, ScholarMathWords.lua, ScholarMath.lua,
--- ScholarReadingWords.lua and ScholarReading.lua): property tests across seeds, every grade, every level and both
--- subjects. The reading banks' own checks are in scholarreading.test.lua.
+-- ScholarNumberWords.lua, ScholarNumbers.lua, ScholarReadingWords.lua and ScholarReading.lua): property tests across
+-- seeds, every grade, every level and both subjects. The reading banks' own checks are in scholarreading.test.lua.
 --
 -- The puzzle files load on their own, not with the whole addon, so concurrent edits to other files can't break these
 -- tests. Their sources come from the runner (tools/lib/test-worker.mjs passes every TOC-listed file's source as
@@ -10,27 +10,46 @@
 -- The largest number a grade's math may use, in its answers and calculations (copper for money).
 local Band = { [0] = 10, 20, 100, 100, 9999, 1000, 1000 }
 local Context = { class = "MAGE", copper = 4567, level = 12, name = "Tessa", zone = "Duskwood" }
+-- Kinds that read numbers rather than work with them reach further at every grade: place value, the number line and
+-- time (in minutes, so 12:59 is 779).
+local ReadBands = { ["math.numberLine"] = 9999, ["math.placeValue"] = 99999, ["math.time"] = 779 }
 
 local Files = {
-    "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarMathWords.lua", "ScholarMath.lua", "ScholarReadingWords.lua",
-    "ScholarReading.lua",
+    "ScholarWords.lua", "ScholarPuzzles.lua", "ScholarMathWords.lua", "ScholarMath.lua", "ScholarNumberWords.lua",
+    "ScholarNumbers.lua", "ScholarReadingWords.lua",
+    "ScholarStoryWords.lua", "ScholarReading.lua",
 }
 
 local Kinds = {
     math = {
-        [0] = { "math.count", "math.add", "math.subtract", "math.compare" },
-        { "math.add", "math.subtract", "math.missing" },
-        { "math.add", "math.subtract", "math.skip", "math.coins" },
-        { "math.multiply", "math.divide", "math.groups" },
-        { "math.multiply", "math.remainder", "math.money" },
-        { "math.fraction", "math.multistep", "math.decimal" },
-        { "math.percent", "math.ratio", "math.order" },
+        [0] = {
+            "math.count", "math.add", "math.subtract", "math.compare", "math.placeValue", "math.time", "math.numberLine",
+            "math.quest",
+        },
+        { "math.add", "math.subtract", "math.missing", "math.placeValue", "math.time", "math.numberLine", "math.quest" },
+        {
+            "math.add", "math.subtract", "math.skip", "math.coins", "math.placeValue", "math.time", "math.numberLine",
+            "math.quest",
+        },
+        { "math.multiply", "math.divide", "math.groups", "math.placeValue", "math.time", "math.numberLine", "math.quest" },
+        { "math.multiply", "math.remainder", "math.money", "math.placeValue", "math.numberLine", "math.quest" },
+        { "math.fraction", "math.multistep", "math.decimal", "math.quest" },
+        { "math.percent", "math.ratio", "math.order", "math.quest" },
     },
     reading = {
-        [0] = { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.listen", "reading.listenSound" },
-        { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.listen", "reading.listenSound" },
-        { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
-        { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
+        [0] = {
+            "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.digraph", "reading.listen",
+            "reading.listenSound", "reading.listenStory",
+        },
+        {
+            "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.digraph", "reading.blend",
+            "reading.listen", "reading.listenSound", "reading.listenStory",
+        },
+        {
+            "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling", "reading.digraph",
+            "reading.blend", "reading.story",
+        },
+        { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling", "reading.story" },
         { "reading.vocab", "reading.blank", "reading.story" },
         { "reading.vocab", "reading.blank", "reading.story" },
         { "reading.vocab", "reading.blank", "reading.story" },
@@ -219,7 +238,8 @@ end
 
 local Numbers = use("scholar").Numbers
 
--- A choice's value: copper for money, { quotient, remainder } for remainders, else its number.
+-- A choice's value: copper for money, { quotient, remainder } for remainders, minutes for a clock time, else its
+-- number.
 local function ChoiceValue(kind, choice)
     if kind == "math.money" then
         return ((tonumber(choice:match("(%d+) silver") or 0) * 100) + tonumber(choice:match("(%d+) copper") or 0))
@@ -227,6 +247,10 @@ local function ChoiceValue(kind, choice)
         local q, r = choice:match("^(%d+), with (%d+) left over$")
 
         return { tonumber(q), tonumber(r) }
+    elseif choice:match("^%d+:%d%d$") then
+        local hour, minutes = choice:match("^(%d+):(%d%d)$")
+
+        return ((tonumber(hour) * 60) + tonumber(minutes))
     end
 
     return Numbers(choice)[1]
@@ -332,7 +356,7 @@ local function CheckBand(p, options)
 end
 
 local function CheckMath(p, options)
-    local band = Band[options.grade]
+    local band = (ReadBands[p.kind] or Band[options.grade])
 
     Expect(type(p.value) == "number", p, options, "numeric value")
     local expected = (((p.kind == "math.remainder") and { p.value, p.remainder }) or p.value)
@@ -440,10 +464,60 @@ local function CheckTeaching(p, options, heard)
     Expect(not (heard and (HasWord(p.hint, heard) or HasWord(p.step, heard))), p, options, "the help doesn't name %q", tostring(heard))
 end
 
+-- The letter teams, and whether one can start or end a word.
+local TeamAt = { finish = { ch = true, ck = true, ng = true, sh = true, th = true }, start = { ch = true, sh = true, th = true, wh = true } }
+
+-- Letter teams, blends and heard stories: the answer is the word the sounds build, the team in the asked place, the
+-- letters of the asked sound, or the bank's answer to a story that's only heard.
+local function CheckSounds(p, options, correct)
+    local sounds = p.prompt:match("\n([%a %-]+)\n")
+    local units = {}
+
+    for unit in (sounds or ""):gmatch("%a+") do
+        units[#units + 1] = unit
+    end
+
+    if p.kind == "reading.listenStory" then
+        local question = p.prompt:match("\n([^\n]+)$")
+        local story = p.speech:sub(1, -(#question + 2))
+
+        Expect(p.speakChoices and (p.speech:sub(-#question) == question), p, options, "the speech asks the question, then the choices")
+        Expect((#story > 20) and not p.prompt:find(story:sub(1, 20), 1, true), p, options, "the story is only heard")
+        Expect(story:find(p.explanation:match("\"(.+)\"$"), 1, true), p, options, "the working quotes the story")
+    elseif sounds then
+        Expect(correct == table.concat(units), p, options, "%s blends into %q", sounds, correct)
+        Expect((p.kind == "reading.blend") or TeamAt.start[units[1]] or TeamAt.finish[units[#units]], p, options, "a team is one sound")
+    elseif p.prompt:find("Which shows") then
+        local word = p.prompt:match("in \"(%a+)\"")
+
+        Expect(correct:gsub(" %- ", "") == word, p, options, "the sounds of %q", word)
+        Expect(#correct:gsub("[^%-]", "") < (#word - 1), p, options, "a team is one sound in %q", correct)
+    elseif p.prompt:find("Which letters") then
+        local which, word = p.prompt:match("the (%a+) sound in \"(%a+)\"")
+
+        Expect(correct == (((which == "first") and word:sub(1, 2)) or word:sub(-2)), p, options, "%s's %s sound", word, which)
+    elseif p.kind == "reading.digraph" then
+        local has, team = p.prompt:match("(%a+) with the \"(%a+)\" sound")
+
+        for i, choice in ipairs(p.choices) do
+            local at = (((has == "starts") and choice:sub(1, 2)) or choice:sub(-2))
+
+            Expect((at == team) == (i == p.answer), p, options, "%q %s with %q", choice, has, team)
+        end
+    else
+        local letter, from = p.prompt:match("\"(%a)\"[^\"]*\"(%a+)\"")
+        local at = p.prompt:match("at the (%a+)")
+        local built = (((at == "start") and (letter .. from)) or ((at == "end") and (from .. letter)) or nil)
+
+        Expect(Contains(p.choices, from) and (#correct == (#from + 1)) and correct:find(letter, 1, true), p, options, "%q with %q", from, letter)
+        Expect((built == nil) or (correct == built), p, options, "%q %s", letter, tostring(at))
+    end
+end
+
 local function CheckReading(p, options)
     local correct = p.choices[p.answer]
-    -- A heard riddle's speech ends with its word.
-    local heard = (p.speech and p.speech:match("(%a+)%.$"))
+    -- A heard riddle's speech ends with its word; a heard story's speech is the story, and its choices are said.
+    local heard = (p.speech and not p.speakChoices and p.speech:match("(%a+)%.$"))
 
     CheckTeaching(p, options, heard)
 
@@ -504,6 +578,8 @@ local function CheckReading(p, options)
             Expect((Sorted(choice) == Sorted(letters)) == (i == p.answer), p, options, "anagram check for %q", choice)
             Expect(#choice == #correct, p, options, "%q is as long as the answer", choice)
         end
+    elseif (p.kind == "reading.digraph") or (p.kind == "reading.blend") or (p.kind == "reading.listenStory") then
+        CheckSounds(p, options, correct)
     end
 end
 
@@ -665,7 +741,8 @@ test("each variant of a kind turns up", function()
 
     local variants = {
         "Count back by", "Which number is the biggest", "Which number is the smallest", "left over", "Change the",
-        "Say each sound", "gears in inches", "100 copper", "in all%?", "%)", "%% off",
+        "Say each sound", "gears in inches", "100 copper", "in all%?", "%)", "%% off", "Which shows", "Which letters",
+        "starts with the \"", "ends with the \"", "Add the \"", "Put \"",
     }
 
     Sweep(Load().Puzzles, 60, nil, function(p)
@@ -794,6 +871,9 @@ test("pictures always match the math, and only small numbers in the early grades
         elseif picture.kind == "take" then
             eq(picture.a - picture.b, p.value, where)
             truthy(picture.a <= 20, where)
+        elseif picture.kind == "line" then
+            eq((picture.to / picture.jumps) * picture.mark, p.value, where)
+            truthy(p.prompt:find(picture.row, 1, true), "the line the picture replaces is in the prompt at " .. where)
         elseif picture.kind == "count" then
             eq(picture.n, p.value, where)
             truthy(p.prompt:find(picture.row, 1, true), "the row the picture replaces is in the prompt at " .. where)

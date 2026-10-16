@@ -653,9 +653,9 @@ end
 ---@param puzzle table
 ---@return string
 -- What read-aloud says for choice i: the button that picks it, then the choice (spelled out for a spelling riddle), or
--- nil for a riddle that's heard, whose choices are for reading.
+-- nil for a riddle that's heard, whose choices are for reading (unless it speaks its choices, as a heard story does).
 local function SpokenChoice(puzzle, i)
-    if puzzle.speech then
+    if puzzle.speech and not puzzle.speakChoices then
         return nil
     end
 
@@ -670,13 +670,14 @@ local function SpokenChoice(puzzle, i)
     return ("Press %s for %s."):format(key, Sayable(choice))
 end
 
--- What read-aloud says for a riddle: a heard riddle's own speech, else its prompt, then each choice with its button.
+-- What read-aloud says for a riddle: a heard riddle's own speech, else its prompt, then each choice with its button. A
+-- heard riddle that speaks its choices says its speech, then the choices.
 local function Spoken(puzzle)
-    if puzzle.speech then
+    if puzzle.speech and not puzzle.speakChoices then
         return Sayable(puzzle.speech)
     end
 
-    local spoken = { Sayable((puzzle.prompt:gsub("\n", " "))) }
+    local spoken = { Sayable(((puzzle.speech or puzzle.prompt):gsub("\n", " "))) }
 
     for i in ipairs(puzzle.choices) do
         spoken[#spoken + 1] = SpokenChoice(puzzle, i)

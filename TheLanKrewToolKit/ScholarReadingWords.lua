@@ -1,7 +1,8 @@
 local addonName, ns = ...
 
 -- The reading riddles' text and word banks, as ns.ScholarReadingWords: ScholarReading.lua reads it; this file only
--- holds data. Everything is original, kid-friendly plain ASCII. Kinds, heard kinds and titles stay in ScholarWords.lua.
+-- holds data. Everything is original, kid-friendly plain ASCII. Kinds, heard kinds and titles stay in ScholarWords.lua,
+-- and the stories are ns.ScholarStoryWords (ScholarStoryWords.lua).
 --
 -- `text` holds each kind's riddle text: a prompt (or prompts), the hint (the strategy, on the first miss), the step (a
 -- worked first step, on the second miss), the explanation (the working, after a right answer), praise for the strategy
@@ -51,6 +52,26 @@ ns.ScholarReadingWords = {
         { t = 3, "The ancient book was so ___ that its pages crumbled at a single touch.", "fragile", "sturdy", "heavy", "colorful", clue = "its pages crumbled at a single touch" },
         { t = 3, "Our guide was ___ about the path, so we never once got lost.", "certain", "confused", "careless", "curious", clue = "we never once got lost" },
     },
+    -- Words with a consonant blend: two consonants side by side, each keeping its own sound (the fl in flag, the nd in
+    -- hand). Every letter makes one sound. Each is { word, three real words a reader might pick instead }: at least one
+    -- drops a letter of the blend (lag for flag), the mistake the riddle is for, and the rest swap a sound or turn the
+    -- letters around.
+    blends = {
+        { "flag", "lag", "frog", "flap" }, { "flip", "lip", "slip", "flop" }, { "clap", "lap", "cap", "clip" },
+        { "clip", "lip", "slip", "clap" }, { "club", "cub", "crab", "clip" }, { "blend", "bend", "lend", "bland" },
+        { "grip", "rip", "trip", "grab" }, { "grub", "rub", "grab", "crab" }, { "frog", "fog", "from", "flag" },
+        { "trip", "rip", "tip", "trap" }, { "trap", "tap", "rap", "trip" }, { "drip", "dip", "trip", "drop" },
+        { "stop", "top", "spot", "step" }, { "stun", "sun", "spun", "stub" }, { "spin", "pin", "skin", "spun" },
+        { "spot", "pot", "stop", "slot" }, { "spend", "send", "sped", "spent" }, { "slip", "lip", "slap", "flip" },
+        { "sled", "led", "slid", "shed" }, { "snap", "nap", "sap", "snip" }, { "plan", "pan", "plant", "clan" },
+        { "plug", "pug", "lug", "plum" }, { "crab", "cab", "grab", "crib" }, { "crib", "rib", "crab", "crop" },
+        { "crop", "cop", "drop", "crib" }, { "brim", "rim", "trim", "brag" }, { "hand", "had", "band", "hard" },
+        { "sand", "sad", "send", "band" }, { "band", "bad", "bend", "bald" }, { "pond", "pod", "bond", "pound" },
+        { "bend", "bed", "band", "bent" }, { "wind", "win", "wild", "wand" }, { "mend", "men", "mind", "bend" },
+        { "nest", "net", "nets", "rest" }, { "best", "bet", "bets", "bent" }, { "fist", "fit", "fits", "fast" },
+        { "list", "lit", "last", "lint" }, { "lost", "lot", "lots", "last" }, { "vest", "vet", "vets", "west" },
+        { "west", "wet", "went", "nest" }, { "past", "pat", "pats", "pest" },
+    },
     -- Consonant-vowel-consonant words with no repeated letters.
     cvc = {
         "cat", "hat", "bat", "mat", "rat", "sat", "map", "cap", "nap", "tap", "van", "can", "fan", "pan", "jam", "ham",
@@ -60,6 +81,114 @@ ns.ScholarReadingWords = {
         "web", "leg", "peg", "bad", "pad", "sad", "mad", "gap", "lap", "yam", "wax", "tag", "wag", "bit", "fit", "pit",
         "lit", "kit", "lip", "zip", "hid", "lid", "kid", "job", "jog", "cot", "got", "lot", "not", "cub", "tub", "rub",
         "bus", "gum", "hum", "nut", "cut", "mud", "bud", "yum", "get", "let", "met", "set", "yet", "vet", "men", "zap",
+    },
+    -- Letter teams (digraphs): two letters that spell one sound. Each is { letters, note = what the team does, sound =
+    -- how a riddle names its sound, start and finish = words it starts or ends, spell = three wrong spellings of its
+    -- sound, each { letters, why = ... }, other = the teams a reader mixes it up with }, and for the wrong choices of a
+    -- riddle about where its sound is: alone and half (words with only its first or only its second letter there) and
+    -- close (letters, words with a near sound there, and why). A team whose first letter alone spells the same sound
+    -- (like: w for wh, k for ck) is never asked where its sound is.
+    digraphs = {
+        {
+            "sh", note = "\"s\" and \"h\" team up to make one sound: the quiet one in \"shhh\".",
+            sound = "the quiet sound in \"shhh\"", start = { "ship", "shop", "shell", "sheep", "shark", "shed", "shut", "shoe" },
+            finish = { "fish", "dish", "wish", "cash", "brush", "push", "rush" },
+            alone = { finish = { "bus", "gas", "yes", "plus" }, start = { "sun", "sock", "sand", "seal", "six" } },
+            half = { start = { "hat", "hen", "hill", "hug" } }, other = { "ch", "th" },
+            spell = {
+                { "s", why = "\"s\" alone makes the hissing sound in \"sun\" and \"bus\". This sound is different." },
+                { "h", why = "\"h\" alone makes the breathy sound in \"hat\". This sound needs a team of two letters." },
+                { "ch", why = "\"ch\" makes the sneezy sound in \"chin\", not this quiet one." },
+            },
+        },
+        {
+            "ch", note = "\"c\" and \"h\" team up to make one sound: the sneezy one in \"ah-choo\".",
+            sound = "the sneezy sound in \"ah-choo\"", start = { "chin", "chip", "chop", "chest", "chair", "cheese", "chick" },
+            finish = { "much", "such", "rich", "lunch", "bench", "peach", "beach" },
+            alone = { start = { "cat", "cup", "cake", "cow", "coat" } }, half = { start = { "hat", "hen", "hill", "hug" } },
+            close = {
+                letters = "j", start = { "jam", "jump", "jet", "jog" },
+                why = "\"{choice}\" starts with \"j\". It's close, but \"j\" buzzes: touch your throat and say it.",
+            },
+            other = { "sh", "th" },
+            spell = {
+                { "c", why = "\"c\" alone makes the sound in \"cat\". This sound needs a team of two letters." },
+                { "sh", why = "\"sh\" makes the quiet sound in \"shhh\", not this sneezy one." },
+                { "j", why = "\"j\" is close, but \"j\" buzzes: touch your throat and say \"jam\"." },
+            },
+        },
+        -- Its start and finish words all have the quiet th of thin, not the buzzing th of this, so a riddle's example
+        -- and answer sound alike.
+        {
+            "th", note ="\"t\" and \"h\" team up to make one sound: your tongue peeks out between your teeth.",
+            sound = "the sound you make with your tongue peeking out",
+            start = { "thin", "thumb", "think", "three", "thorn", "thick", "thud" },
+            finish = { "bath", "path", "math", "moth", "cloth", "teeth", "tooth" },
+            alone = { finish = { "bat", "hot", "net", "cut" }, start = { "top", "ten", "tent", "toe", "tiger" } },
+            half = { start = { "hat", "hen", "hill", "hug" } },
+            close = {
+                finish = { "leaf", "roof", "beef", "cuff" }, letters = "f", start = { "fin", "fox", "fan", "feet" },
+                why = "\"{choice}\" {has} \"f\". It sounds close, but \"f\" is made with your lip, and the \"th\" sound with your tongue peeking out.",
+            },
+            other = { "sh", "ch" },
+            spell = {
+                { "t", why = "\"t\" alone makes the sound in \"top\". For this sound, your tongue peeks out between your teeth." },
+                { "f", why = "\"f\" sounds close, but \"f\" is made with your lip. For this sound, your tongue peeks out." },
+                { "sh", why = "\"sh\" makes the quiet sound in \"shhh\", not this one." },
+            },
+        },
+        {
+            "wh", like = true, note = "\"w\" and \"h\" team up to spell one sound at the start of words like \"what\" and \"when\".",
+            sound = "the sound at the start of \"what\"", start = { "whip", "when", "whale", "wheel", "white", "wheat" },
+            other = { "sh", "ch", "th" },
+            spell = {
+                { "w", why = "\"w\" alone makes this sound in \"wet\", but \"{word}\" spells it with a team of two letters." },
+                { "h", why = "\"h\" is part of it, but \"h\" alone makes the breathy sound in \"hat\"." },
+                { "sh", why = "\"sh\" makes the quiet sound in \"shhh\", not this one." },
+            },
+        },
+        {
+            "ck", like = true, note = "\"c\" and \"k\" team up to spell one sound at the end of a short word, right after a short vowel.",
+            sound = "the \"k\" sound right after a short vowel",
+            finish = { "duck", "back", "sock", "rock", "kick", "neck", "pick", "luck", "lock", "sack" }, other = { "ch" },
+            spell = {
+                { "k", why = "\"k\" alone makes this sound in \"kite\", but at the end of \"{word}\", it's spelled with a team of two letters." },
+                { "c", why = "\"c\" alone makes this sound in \"cat\", but at the end of \"{word}\", it's spelled with a team of two letters." },
+                { "ch", why = "\"ch\" makes the sneezy sound in \"much\", not this one." },
+            },
+        },
+        {
+            "ng", note = "\"n\" and \"g\" team up to make one sound that hums in your nose.",
+            sound = "the sound that hums in your nose", finish = { "ring", "sing", "king", "wing", "song", "long", "bang", "swing" },
+            alone = { finish = { "pin", "fan", "ten", "sun", "van" } }, half = { finish = { "dig", "bag", "rug", "log" } },
+            close = {
+                finish = { "sink", "pink", "bank", "honk" }, letters = "nk",
+                why = "\"{choice}\" ends with \"nk\": there's a \"k\" sound at the very end.",
+            },
+            other = {},
+            spell = {
+                { "n", why = "\"n\" alone makes the sound in \"net\". This sound hums further back, in your nose." },
+                { "g", why = "\"g\" alone makes the sound in \"goat\". In this team, you don't hear a hard \"g\"." },
+                { "nk", why = "\"nk\" ends with a \"k\" sound, as in \"pink\". \"{word}\" doesn't end with a \"k\" sound." },
+            },
+        },
+    },
+    -- Words to blend with one letter team (a digraph) at the start or the end; every other letter makes one sound. Each
+    -- is { word, three real words a reader might pick instead }: at least one is the team's mistake: only one of its
+    -- letters (sip or hip for ship), or another team or a near sound in its place (chip, fin for thin).
+    digraphWords = {
+        { "ship", "sip", "chip", "hip" }, { "shop", "hop", "chop", "shot" }, { "shut", "hut", "shot", "nut" },
+        { "shin", "chin", "thin", "ship" }, { "wish", "with", "wig", "wash" }, { "mash", "math", "map", "mesh" },
+        { "mush", "much", "mug", "mash" }, { "chip", "ship", "hip", "chop" }, { "chop", "shop", "hop", "cop" },
+        { "chin", "shin", "thin", "chip" }, { "chat", "hat", "cat", "that" }, { "much", "mush", "mud", "mug" },
+        { "thin", "tin", "fin", "chin" }, { "that", "hat", "chat", "bat" }, { "then", "ten", "hen", "when" },
+        { "them", "hem", "then", "ten" }, { "bath", "bat", "bash", "back" }, { "path", "pat", "pack", "pan" },
+        { "math", "mat", "mash", "map" }, { "whip", "hip", "ship", "chip" },
+        { "when", "hen", "then", "whip" }, { "back", "bath", "bag", "bat" }, { "pack", "path", "pat", "pan" },
+        { "luck", "lush", "lug", "duck" }, { "sack", "sash", "sad", "sap" }, { "mock", "much", "moth", "mop" },
+        { "ring", "rig", "rink", "rich" }, { "sing", "sink", "sung", "sip" }, { "king", "kick", "kit", "kid" },
+        { "wing", "win", "wig", "wink" }, { "song", "son", "sock", "sob" }, { "bang", "bag", "bank", "bath" },
+        { "long", "log", "lock", "lot" }, { "sung", "sun", "sunk", "sub" }, { "moth", "mock", "mop", "much" },
     },
     -- Rhyme families: every word in a family rhymes, and no two families rhyme.
     rhymes = {
@@ -201,131 +330,6 @@ ns.ScholarReadingWords = {
         { t = 2, "potion", "The mage drank a ___.", "poshun", "potian", "poshen", part = "the end", tip = "The \"shun\" sound at the end is spelled \"tion\"." },
         { t = 2, "question", "Ask the Owl Sage a ___.", "queschun", "kwestion", "questshun", part = "the end", tip = "The \"chun\" sound at the end is spelled \"tion\"." },
     },
-    -- Each story is { text, questions... }, with optional hero and place defaults. A question is { question, answer,
-    -- three wrong answers, type = literal, inference, main, sequence or vocab, clue = the part of the story that holds
-    -- the answer }; a wrong answer the story mentions is { text, why = ... }. The first question is the most literal.
-    stories = {
-        { "Pip the gnome built a tiny robot named Bolt. Bolt could sweep floors, but it always swept the dust under the rug! Pip laughed and gave it a dustpan.",
-            { "Where did Bolt sweep the dust?", "Under the rug", { "Into a dustpan", why = "Pip gave Bolt the dustpan after the mistake." }, "Out the door", "Onto Pip's bed", type = "literal", clue = "it always swept the dust under the rug" },
-            { "How did Pip feel about Bolt's mistake?", "Pip thought it was funny", "Pip was angry at the robot", "Pip was afraid of Bolt", "Pip wanted a new robot", type = "inference", clue = "Pip laughed and gave it a dustpan." },
-            { "Why did Pip give Bolt a dustpan?", "To help it clean up right", "To make it stop sweeping", "To hide the dust for good", "To give it a funny hat", type = "inference", clue = "it always swept the dust under the rug" } },
-        { "Every morning, Mira the night elf fed the owls of Teldrassil. One day a baby owl was too shy to eat. Mira sang softly until it hopped over for a berry.",
-            { "Why didn't the baby owl eat at first?", "It was too shy", "It was already full", "It was fast asleep", { "It didn't like berries", why = "It hopped over for a berry in the end." }, type = "literal", clue = "One day a baby owl was too shy to eat." },
-            { "What did Mira do to help?", "She sang softly", "She called loudly", "She left it alone", "She built a nest", type = "literal", clue = "Mira sang softly" },
-            { "What kind of friend is Mira to the owls?", "Gentle and patient", "Bossy and very loud", "Busy and rushed", { "Shy and quiet", why = "The baby owl was the shy one." }, type = "inference", clue = "Mira sang softly until it hopped over for a berry." } },
-        { "A grumpy murloc named Glub hated rain. When a storm came, the other murlocs splashed and played. Glub tried it too and found out puddles were fun.",
-            { "How did Glub feel about rain at the start?", "Glub hated it", { "Glub loved it", why = "That's how Glub felt at the end, not the start." }, "Glub was afraid of it", "Glub never noticed it", type = "literal", clue = "A grumpy murloc named Glub hated rain." },
-            { "What did Glub do after watching the others play?", "Tried splashing too", "Hid from the big storm", "Went to sleep", "Told them to stop", type = "sequence", clue = "Glub tried it too" },
-            { "What is this story mostly about?", "Glub trying something new", "How the big storms are made", { "Murlocs who hate rain", why = "Only Glub hated rain, and he changed his mind." }, "The best way to swim", type = "main", clue = "Glub tried it too and found out puddles were fun." } },
-        { "Brom the dwarf lost his favorite hammer. He searched the forge, the mine and the tavern. At last he found it under his own bed, right where he left it.",
-            { "Where was the hammer?", "Under Brom's bed", { "In the mine", why = "Brom looked in the mine, but it wasn't there." }, { "In the busy tavern", why = "Brom looked in the tavern, but it wasn't there." }, { "In the forge", why = "Brom looked in the forge, but it wasn't there." }, type = "literal", clue = "he found it under his own bed" },
-            { "What does \"searched\" mean in this story?", "Looked hard for something", "Slept for a very long time", "Fixed something broken", "Walked in a circle", type = "vocab", clue = "He searched the forge, the mine and the tavern." },
-            { "Where did Brom look first?", "The forge", { "The mine", why = "The mine came second." }, { "The tavern", why = "The tavern came third." }, { "Under his bed", why = "That's where he found it, at last." }, type = "sequence", clue = "He searched the forge, the mine and the tavern." } },
-        { hero = "Tamsin", "{hero} wanted to learn to fish. On the first day, {hero} caught only an old boot. The next day, {hero} caught three fish and shared them with a hungry cat.",
-            { "What did {hero} catch on the first day?", "An old boot", { "Three fish", why = "Those came the next day." }, { "A hungry cat", why = "The cat got fish; nobody caught it." }, "A shiny ring", type = "literal", clue = "On the first day, {hero} caught only an old boot." },
-            { "What did {hero} do with the fish?", "Shared them with a cat", "Sold them at the market", "Threw them back", "Cooked them for dinner", type = "literal", clue = "shared them with a hungry cat" },
-            { "What lesson does this story show?", "Keep trying and you improve", "Always fish with a friend", "Share only when you have lots", "Fish bite best at night", type = "main", clue = "The next day, {hero} caught three fish" } },
-        { "The goblins of Booty Bay held a boat race. Zix built the fastest boat, but it had no brakes! It zoomed past the finish line into a pile of pillows.",
-            { "Why couldn't Zix stop?", "The boat had no brakes", "The water was frozen solid", "Zix fell asleep", "The sail was stuck", type = "literal", clue = "but it had no brakes!" },
-            { "Where did the boat end up?", "In a pile of pillows", "At the bottom of the sea", "On the sandy beach", "Back at the start", type = "literal", clue = "It zoomed past the finish line into a pile of pillows." },
-            { "What will Zix probably add to his next boat?", "Brakes", "A bigger sail", { "More pillows", why = "The pillows were only where it landed." }, "A second seat", type = "inference", clue = "but it had no brakes!" } },
-        { "Tavi the tauren was the tallest in her village. Some days she wished she were smaller. Then a kite got stuck high in a tree, and only Tavi could reach it.",
-            { "What could only Tavi do?", "Reach the stuck kite", "Fly the kite higher", "Climb the tallest tree", "Fix the broken kite", type = "literal", clue = "only Tavi could reach it" },
-            { "What is the main idea?", "Being different can help", "Kites always get stuck", "Tall trees are dangerous", { "Being tall is bad", why = "Being tall is what helped." }, type = "main", clue = "only Tavi could reach it" },
-            { "How did Tavi probably feel about being tall after that?", "Prouder of it", "Sadder about it", "Angry about it", "Afraid of it", type = "inference", clue = "only Tavi could reach it" } },
-        { "The Owl Sage kept a library in a hollow tree. Each book glowed when someone needed it. One night, a book about stars glowed for a sleepy young gnome.",
-            { "Where was the library?", "In a hollow tree", "In a tall castle", "Under a lake", "On a ship", type = "literal", clue = "kept a library in a hollow tree" },
-            { "When did a book glow?", "When someone needed it", "When it rained", "Every morning", "When it was put on a shelf", type = "literal", clue = "Each book glowed when someone needed it." },
-            { "What did the sleepy gnome probably need?", "To learn about stars", { "A warm blanket", why = "The book that glowed was about stars." }, "A late snack", "A new hat", type = "inference", clue = "a book about stars glowed for a sleepy young gnome" } },
-        { "Rook the raven loved shiny things. He collected buttons, spoons and coins. When a traveler lost her ring, Rook flew it right back to her.",
-            { "What did Rook love?", "Shiny things", "Soft feathers", "Loud songs", "Warm nests", type = "literal", clue = "Rook the raven loved shiny things." },
-            { "Which word best describes Rook at the end?", "Helpful", { "Greedy", why = "Rook gave the ring back instead of keeping it." }, "Sleepy", "Grumpy", type = "inference", clue = "Rook flew it right back to her." },
-            { "Why might Rook have spotted the lost ring?", "He loves shiny things", "He was very hungry", "He was lost too", "The traveler called him", type = "inference", clue = "Rook the raven loved shiny things." } },
-        { "In Mulgore, a young kodo named Pebble was afraid to cross the river. Her mother walked beside her, one slow step at a time, until they reached the other side.",
-            { "What was Pebble afraid of?", "Crossing the river", "The dark night sky", "Loud storms", "Other kodos", type = "literal", clue = "was afraid to cross the river" },
-            { "How did Pebble's mother help?", "She walked beside her", "She carried her across", "She built a bridge", "She called for help", type = "literal", clue = "Her mother walked beside her" },
-            { "What happened at the end?", "They reached the other side", "Pebble ran back home", "They turned around", "Pebble fell into the deep river", type = "sequence", clue = "until they reached the other side" } },
-        { "Fizzle the goblin invented a hat that made tea. Sadly, it poured the tea on his head! Fizzle giggled, dried off and started drawing a better plan.",
-            { "What did the hat do by mistake?", "Poured tea on his head", "Spilled tea on the floor", "Burned his hair", "Made the tea cold", type = "literal", clue = "it poured the tea on his head!" },
-            { "What will Fizzle probably do next?", "Try to build a better hat", { "Quit inventing things forever", why = "He started drawing a better plan, so he isn't quitting." }, "Sell his workshop", "Drink tea all day", type = "inference", clue = "started drawing a better plan" },
-            { "What did Fizzle do right after he giggled?", "Dried off", { "Drew a plan", why = "He drew the plan last." }, "Made more tea", "Threw the hat away", type = "sequence", clue = "Fizzle giggled, dried off and started drawing a better plan." } },
-        { hero = "Nori", place = "Elwynn Forest", "{hero} found a map with an X by a lake in {place}. After digging all day, {hero} found a box. Inside was a note: \"The real treasure is your friends!\"",
-            { "What did {hero} find in the box?", "A note", "Gold coins", "A sword", "A crown", type = "literal", clue = "Inside was a note" },
-            { "Where was the X on the map?", "By a lake", "On a mountain", "In a cave", "Under a bridge", type = "literal", clue = "an X by a lake" },
-            { "What does the note say matters most?", "Friends", { "Gold", why = "That is not what the note calls the real treasure." }, "Maps", "Digging", type = "main", clue = "The real treasure is your friends!" } },
-        { "Snowflake the wolf pup could not howl yet. She practiced every night, but only squeaks came out. On the night of the full moon, she let out a mighty howl.",
-            { "What came out when Snowflake practiced?", "Only squeaks", { "Loud howls", why = "The howl came at the very end." }, "Soft songs", "Nothing at all", type = "literal", clue = "only squeaks came out" },
-            { "When did she finally howl?", "At the full moon", "On her first try", "During a storm", "At sunrise", type = "literal", clue = "On the night of the full moon" },
-            { "What is the lesson of this story?", "Practice helps you grow", "Give up if it's hard", "Squeaks beat howls", "Only sing in the day", type = "main", clue = "She practiced every night" } },
-        { "The bakers of Stormwind had a contest. Old Mae made a cake shaped like a gryphon. It was so beautiful that the judges almost did not want to eat it.",
-            { "What shape was Mae's cake?", "A gryphon", "A castle", "A dragon", "A crown", type = "literal", clue = "a cake shaped like a gryphon" },
-            { "Why did the judges almost not eat it?", "It was so beautiful", "It tasted bad", "It was too small", "It was burned", type = "literal", clue = "It was so beautiful that the judges almost did not want to eat it." },
-            { "Who probably won the contest?", "Old Mae", { "The judges", why = "The judges pick the winner." }, "A young baker", "Nobody at all", type = "inference", clue = "It was so beautiful that the judges almost did not want to eat it." } },
-        { "Two gnomes argued over who could use the workshop. Then they had an idea: build something together! Their flying teapot won first prize.",
-            { "What did they build?", "A flying teapot", "A robot dog", "A tiny boat", "A magic hat", type = "literal", clue = "Their flying teapot won first prize." },
-            { "What did the gnomes learn?", "Working together is better", "Arguing is fun", "Their workshop is far too small", { "Teapots can't fly", why = "Theirs flew, and it won!" }, type = "main", clue = "build something together!" },
-            { "What happened before they had their idea?", "They argued", { "They won a prize", why = "The prize came last." }, { "They built a teapot", why = "They built it after the idea." }, "They went home", type = "sequence", clue = "Two gnomes argued over who could use the workshop." } },
-        { "Every autumn, the leaves in Ashenvale turned gold and red. Young Kael loved to jump in the leaf piles, then rake them up again for the next friend.",
-            { "What season is it in the story?", "Autumn", "Winter", "Spring", "Summer", type = "literal", clue = "Every autumn" },
-            { "What did Kael do after jumping?", "Raked the leaves up again", "Went home for lunch", "Climbed the tallest tree in town", "Took a long nap", type = "sequence", clue = "then rake them up again for the next friend" },
-            { "Why did Kael rake the leaves up again?", "So a friend could jump", "To keep the path clean", "To sell the leaves", "To make a soft bed", type = "inference", clue = "for the next friend" } },
-        { "Elly the paladin carried a lantern through the dark mine. Each time she found a lost miner, she lit a candle at the tunnel's mouth. By sunrise, six candles were glowing.",
-            { "What did Elly carry?", "A lantern", { "A candle", why = "She lit the candles at the tunnel; she carried something else." }, "A pickaxe", "A map", type = "literal", clue = "carried a lantern through the dark mine" },
-            { "How many lost miners did Elly find?", "Six", "One", "Three", "Ten", type = "inference", clue = "By sunrise, six candles were glowing." },
-            { "What does \"sunrise\" mean here?", "Early morning", "Late at night", "Lunchtime", "A sunny day", type = "vocab", clue = "By sunrise, six candles were glowing." } },
-        { "Gruk the orc wanted to win the cooking contest in Orgrimmar. His first stew was too salty, and his second was too spicy. His third stew was just right, and the judges cheered.",
-            { "What was wrong with the first stew?", "It was too salty", { "It was too spicy", why = "That was the second stew." }, "It was too cold", "It was burned", type = "literal", clue = "His first stew was too salty" },
-            { "Which stew did the judges cheer for?", "The third one", { "The first one", why = "The first one was too salty." }, { "The second one", why = "The second one was too spicy." }, "None of them", type = "sequence", clue = "His third stew was just right, and the judges cheered." },
-            { "What is the story mostly about?", "Gruk not giving up", "Why stew is salty", "Judges who love spice", "How to win at games", type = "main", clue = "His third stew was just right" } },
-        { "Wren the hunter heard a strange tapping in the forest. She followed the sound to an old oak and looked up. A woodpecker was busy making a home in the trunk.",
-            { "What was making the tapping sound?", "A woodpecker", "A squirrel", "A woodcutter", "Falling acorns", type = "literal", clue = "A woodpecker was busy making a home in the trunk." },
-            { "What did Wren do right after she heard the tapping?", "Followed the sound", { "Looked up", why = "She looked up once she reached the oak." }, "Ran home", "Climbed the tree", type = "sequence", clue = "She followed the sound to an old oak" },
-            { "How did Wren find the woodpecker?", "By listening carefully", "By following tracks", "By reading a map", "By asking a friend", type = "inference", clue = "She followed the sound" } },
-        { "The night before the big race, Zix could not sleep. He checked his rocket cart three times and polished every bolt. In the morning, he yawned all the way to the starting line.",
-            { "How many times did Zix check his cart?", "Three times", "Once", "Twice", "Ten times", type = "literal", clue = "He checked his rocket cart three times" },
-            { "How did Zix feel the night before the race?", "Nervous", "Bored", "Angry", "Lonely", type = "inference", clue = "He checked his rocket cart three times and polished every bolt." },
-            { "Why did Zix yawn in the morning?", "He didn't sleep much", "He was bored", "He was hungry for breakfast", "He was cold", type = "inference", clue = "Zix could not sleep" } },
-        { "Mira planted a moonflower seed in Darnassus. She watered it every evening and sang to it. After many weeks, it opened its silver petals under the stars.",
-            { "When did Mira water the seed?", "Every evening", "Every morning", "Once a week", "When it rained", type = "literal", clue = "She watered it every evening" },
-            { "When does a moonflower probably open?", "At night", "At noon", "In the morning", "In the rain", type = "inference", clue = "it opened its silver petals under the stars" },
-            { "What are \"petals\"?", "Parts of a flower", "Kinds of very tiny seeds", "Drops of water", { "Silver coins", why = "Silver is their color; they aren't coins." }, type = "vocab", clue = "it opened its silver petals" } },
-        { "A little gnome named Tink was scared of the dark. Her grandpa built her a nightlight shaped like a gear. Now Tink falls asleep smiling every night.",
-            { "What was Tink scared of?", "The dark", "Gears", "Her grandpa", "Loud noises", type = "literal", clue = "was scared of the dark" },
-            { "Why does Tink smile now?", "The nightlight helps her", "She likes gears best", "She stays up late", "Her grandpa tells funny jokes", type = "inference", clue = "Her grandpa built her a nightlight shaped like a gear." },
-            { "What kind of grandpa is Tink's grandpa?", "Caring", "Grumpy", "Forgetful", "Strict", type = "inference", clue = "Her grandpa built her a nightlight" } },
-        { "Brom and Pip wanted to climb the tallest hill in Loch Modan. Brom carried the food, and Pip carried the map. At the top, they shared lunch and watched the clouds roll by.",
-            { "What did Pip carry?", "The map", { "The food", why = "Brom carried the food." }, "The tent", "A rope", type = "literal", clue = "Pip carried the map" },
-            { "What did they do at the top?", "Shared lunch", "Set up a tent", "Read a book", "Went to sleep", type = "sequence", clue = "they shared lunch and watched the clouds roll by" },
-            { "What is this story mostly about?", "Two friends on a hike", "How to read a map of the hills", "Why hills are tall", "Clouds and rain", type = "main", clue = "Brom and Pip wanted to climb the tallest hill in Loch Modan." } },
-        { "Tavi found a baby bird on the ground in Thunder Bluff. She did not touch it. Instead, she waited quietly until its mother swooped down and carried it home.",
-            { "Where did Tavi find the bird?", "On the ground", "In a nest", "On a roof", "In a tree", type = "literal", clue = "a baby bird on the ground" },
-            { "Why did Tavi wait instead of picking it up?", "So its mother could get it", "She was scared of birds", "She was too tired", "She wanted to keep it as a pet", type = "inference", clue = "she waited quietly until its mother swooped down" },
-            { "What happened last?", "Its mother carried it home", { "Tavi found the bird", why = "That happened first." }, { "Tavi waited quietly", why = "That happened before the end." }, "The bird flew off alone", type = "sequence", clue = "its mother swooped down and carried it home" } },
-        { "Every spring, the dwarves of Ironforge hold a snowball race down the mountain. The snowballs grow bigger as they roll. This year, Brom's snowball was as big as a house!",
-            { "How big was Brom's snowball?", "As big as a house", "As big as a hat", "As big as a cart", "As small as an apple", type = "literal", clue = "Brom's snowball was as big as a house!" },
-            { "Why do the snowballs grow bigger?", "They pick up snow", "The dwarves add water", "Magic makes them grow", "They melt in the sun", type = "inference", clue = "The snowballs grow bigger as they roll." },
-            { "When is the race?", "Every spring", { "Every winter", why = "It's snowy, but the race isn't in winter." }, "Every summer", "Every night", type = "literal", clue = "Every spring, the dwarves of Ironforge hold a snowball race" } },
-        { "A shy murloc named Mrgl wanted to make friends. He left a shiny shell by each hut in the village. The next morning, every murloc came to thank him.",
-            { "What did Mrgl leave by each hut?", "A shiny shell", "A fish", "A note", "A pearl", type = "literal", clue = "He left a shiny shell by each hut" },
-            { "How did Mrgl probably feel the next morning?", "Happy and welcome", "Lonely and sad", "Angry and grumpy", { "Scared and shy", why = "He was shy at the start, but then everyone came to thank him." }, type = "inference", clue = "every murloc came to thank him" },
-            { "What is the main idea?", "Kindness can make friends", "Shells are very pretty", "Murlocs like mornings", "Every hut needs a shiny shell", type = "main", clue = "every murloc came to thank him." } },
-        { "Zara the mage practiced a fire spell, but she only made tiny sparks. Her teacher said, \"Breathe slowly and picture the flame.\" On her next try, a flame danced in her hand.",
-            { "What did Zara make at first?", "Tiny sparks", { "A flame", why = "That came on her next try." }, "A puff of smoke", "Ice crystals", type = "literal", clue = "she only made tiny sparks" },
-            { "What happened after the teacher spoke?", "A flame appeared", "Zara gave up", { "Only sparks came out", why = "The sparks came before the teacher spoke." }, "The teacher left", type = "sequence", clue = "On her next try, a flame danced in her hand." },
-            { "What helped Zara most?", "Her teacher's advice", "A brand new magic wand", "Making more sparks", "A lucky charm", type = "inference", clue = "Breathe slowly and picture the flame." } },
-        { "The farmer in Westfall saw that his apples kept vanishing. One night he hid behind the barn and watched. A family of hungry raccoons crept in for a midnight snack.",
-            { "Where did the farmer hide?", "Behind the barn", "In the attic", "Under a tree", "In the field", type = "literal", clue = "he hid behind the barn and watched" },
-            { "Who was taking the apples?", "Hungry raccoons", "A sneaky goblin", "The farmer's dog", "A big crow", type = "literal", clue = "A family of hungry raccoons crept in" },
-            { "What does \"vanishing\" mean here?", "Disappearing", "Growing", "Falling down", "Turning red", type = "vocab", clue = "his apples kept vanishing" } },
-        { "Elly lost her way in the snowy woods. She remembered her father's advice: follow the river downhill. Soon she saw the warm lights of Goldshire.",
-            { "What did Elly's father tell her to do?", "Follow the river downhill", "Climb the tallest tree", "Stay still and wait for help", "Walk toward the brightest star", type = "literal", clue = "She remembered her father's advice: follow the river downhill." },
-            { "Why did seeing the lights help Elly?", "She was nearly home", { "The lights were warm", why = "They were warm, but that's not why they helped." }, "It was getting dark", "She liked the colors", type = "inference", clue = "Soon she saw the warm lights of Goldshire." },
-            { "What is the lesson?", "Good advice can help", "Never go outside", "Snow is fun to play in", "Rivers are cold", type = "main", clue = "She remembered her father's advice" } },
-        { "Pip wanted a pet, so the Owl Sage gave him an egg. Pip kept it warm by the fire for a week. One morning it cracked, and out wiggled a tiny dragon!",
-            { "What did the Owl Sage give Pip?", "An egg", "A puppy", { "A dragon", why = "The dragon came later. What did Pip get first?" }, "A book", type = "literal", clue = "the Owl Sage gave him an egg" },
-            { "What happened after a week by the fire?", "The egg cracked", "Pip got bored", "The fire went out", "The egg froze", type = "sequence", clue = "One morning it cracked" },
-            { "How did Pip probably feel when the egg cracked?", "Excited", "Bored", "Grumpy", "Sleepy", type = "inference", clue = "out wiggled a tiny dragon!" } },
-    },
     -- { word, same meaning, opposite (optional), near = words that go with it but mean something else }. No two entries
     -- share a meaning, and no near word means the same as its word or the opposite.
     synonyms = {
@@ -421,6 +425,92 @@ ns.ScholarReadingWords = {
             whyMiddle = "\"{choice}\" has \"{has}\" in the middle, but the middle sound is \"{want}\".",
             whyStart = "\"{choice}\" starts with \"{has}\", but the first sound is \"{want}\".",
         },
+        -- Consonant blends: blending a word's sounds (join), or adding a blend's missing sound to a word (add). The
+        -- whys name what a wrong choice did to the blend; {pair} is the blend, and {letter} the sound dropped or added.
+        consonantBlend = {
+            add = {
+                explain = "\"{from}\" with \"{letter}\" {where} makes \"{target}\": {sounds}. In \"{pair}\", both sounds are said, one right after the other.",
+                hint = "Say \"{from}\", then say it again with the new sound slipped in. Keep every sound.",
+                praise = "You added one sound and blended the new word.",
+                prompts = {
+                    "Add the \"{letter}\" sound to \"{from}\", {where}.\nWhat word do you make?",
+                    "Sound magic! Put \"{letter}\" into \"{from}\", {where}.\nWhat new word do you get?",
+                },
+                step = "Say \"{from}\" slowly: {fromSounds}. Now slip in \"{letter}\" {where}, and blend all the sounds.",
+                -- Where the new sound goes ({where}).
+                whereAfter = "right after the \"{prev}\"", whereEnd = "at the end", whereStart = "at the start",
+                whySame = "\"{choice}\" is the word you started with. Add the \"{letter}\" sound.",
+                wrong = "\"{choice}\" changes more than one sound. Only the \"{letter}\" is added.",
+            },
+            join = {
+                explain = "{sounds} blends into \"{target}\". In \"{pair}\", both sounds are said, one right after the other.",
+                hint = "In a blend, two sounds slide together, but you still hear both. Say each sound, then faster and faster.",
+                praise = "You kept every sound in the blend.",
+                prompts = {
+                    "Say each sound, then blend them:\n{sounds}\nWhat word do you get?",
+                    "Slide the sounds together, hero!\n{sounds}\nWhich word do they make?",
+                },
+                step = "Blend it in two parts: \"{front}\", then \"{back}\". Now put the parts together.",
+                wrong = "\"{choice}\" has a different sound in it. Blend each sound, one by one.",
+            },
+            whyAdded = "\"{choice}\" has an extra sound, \"{letter}\".",
+            whyDropped = "\"{choice}\" leaves out the \"{letter}\". In the blend \"{pair}\", each letter keeps its own sound.",
+            whyLetter = "\"{choice}\" has \"{has}\" where the sounds have \"{want}\".",
+            whyOrder = "\"{choice}\" has the same letters, but in a different order.",
+            whySwap = "\"{choice}\" has \"{has}\" where the blend has \"{want}\". Listen for both sounds in \"{pair}\".",
+        },
+        -- Letter teams: blending a word with one (join), finding the word with its sound at the start or end (place),
+        -- naming the letters of a word's first or last sound (spell), and showing a word's sounds one by one (split).
+        -- {digraph} is the team, {note} what it does, {has} "starts with" or "ends with", {place} "start" or "end", and
+        -- {which} "first" or "last".
+        digraph = {
+            join = {
+                explain = "{sounds} blends into \"{target}\". {note}",
+                hint = "\"{digraph}\" is one sound made by two letters. Say each sound, then say them faster and faster.",
+                praise = "You blended two letters as one sound.",
+                prompts = {
+                    "Say each sound, then blend them:\n{sounds}\nWhich word do you get?",
+                    "Two letters, one sound! Blend these:\n{sounds}\nWhich word is it?",
+                },
+                step = "Blend the first two sounds into \"{front}\". Now add the rest: \"{back}\".",
+                wrong = "\"{choice}\" has a different sound at the {place}. Blend \"{digraph}\" as one sound.",
+            },
+            place = {
+                explain = "\"{target}\" {has} the \"{digraph}\" sound, like \"{example}\". {note}",
+                hint = "Say each word slowly and listen to its {which} sound. Which one sounds like the {place} of \"{example}\"?",
+                praise = "You listened for one sound made by two letters.",
+                prompts = {
+                    "Which word {has} the \"{digraph}\" sound, as in \"{example}\"?",
+                    "Listen for a letter team!\nWhich word {has} the \"{digraph}\" sound, as in \"{example}\"?",
+                },
+                step = "Try \"{tried}\": it {has} \"{triedSound}\", not the \"{digraph}\" sound. Now try the other words the same way.",
+                wrong = "\"{choice}\" has a different sound at the {place}.",
+            },
+            spell = {
+                explain = "\"{word}\" {has} \"{digraph}\". {note}",
+                hint = "Say \"{word}\" slowly. Is its {which} sound one letter's sound, or one sound made by a team of two letters?",
+                likeTeam = "One letter can make it too, but this word spells it with a team of two letters.",
+                newTeam = "No single letter makes that sound: look for a team of two letters.",
+                praise = "You matched one sound to the two letters that spell it.",
+                prompts = { "Which letters make the {which} sound in \"{word}\"?", "Letter teams!\nWhich letters spell the {which} sound in \"{word}\"?" },
+                step = "Say \"{word}\" slowly and hold its {which} sound: {sound}. {team}",
+            },
+            split = {
+                explain = "{sounds}: \"{word}\" has {count} sounds. {note}",
+                hint = "Say \"{word}\" slowly, one sound at a time. Two letters can team up to make one sound.",
+                praise = "You heard two letters make one sound.",
+                prompts = { "Which shows each sound in \"{word}\", one by one?", "Break it into sounds!\nWhich shows the sounds in \"{word}\"?" },
+                step = "Say \"{word}\" slowly and count its sounds on your fingers: there are {count}.",
+                whyAlone = "That keeps only \"{letter}\", which makes its own sound. The team needs both letters.",
+                whyChunk = "That keeps \"{chunk}\" together, but it's more than one sound. Give each sound its own spot.",
+                whyOther = "That has \"{other}\", which makes a different sound from \"{digraph}\".",
+                whySplit = "That splits \"{first}\" and \"{second}\" into two sounds. As a team, they make one sound.",
+            },
+            whyAlone = "\"{choice}\" {has} \"{letter}\" alone, and \"{letter}\" alone makes its own sound, not the \"{digraph}\" sound.",
+            whyOther = "\"{choice}\" {has} \"{other}\", which makes a different sound from \"{digraph}\".",
+            whyPlace = "\"{choice}\" has the \"{digraph}\" sound at the {otherPlace}, not the {place}.",
+            whyRest = "\"{choice}\" has the \"{digraph}\" sound too, but its other sounds are different. Blend each sound in order.",
+        },
         -- A sight word whose spelling breaks the rules: the hint names the part.
         heart = {
             explain = "\"{filled}\" That's \"{word}\", spelled {spelled}. It's a heart word. {heart}",
@@ -510,41 +600,6 @@ ns.ScholarReadingWords = {
             whyAdded = "\"{choice}\" has an extra letter.", whyDropped = "\"{choice}\" leaves out a letter.",
             whyOrder = "\"{choice}\" has the right letters, but not in the right order.",
             whySounds = "\"{choice}\" sounds right, but this word isn't spelled that way.",
-        },
-        -- A question's type picks its text.
-        story = {
-            inference = {
-                explain = "The story doesn't say it in so many words, but this clue shows it: \"{clue}\"",
-                hint = "The story doesn't say it straight out. Look for clues, and think about what they mean.",
-                praise = "You used the story's clues to figure it out.", prompt = "{story}\n{question}",
-                step = "Look at this clue: \"{clue}\" What does it tell you?", wrong = "The story's clues don't point to that.",
-            },
-            literal = {
-                explain = "It's right there in the story: \"{clue}\"",
-                hint = "Read the story again and find the sentence that answers the question.",
-                praise = "You found the sentence that holds the answer.", prompt = "{story}\n{question}",
-                step = "Look at this part of the story: \"{clue}\"", wrong = "Look back at the story: it doesn't say that.",
-            },
-            main = {
-                explain = "The whole story builds to this: \"{clue}\"",
-                hint = "Think about the whole story, not just one part. What is it mostly about?",
-                praise = "You thought about the whole story, not just one part.", prompt = "{story}\n{question}",
-                step = "Look at this part: \"{clue}\" What does the whole story add up to?",
-                wrong = "That isn't what the whole story is about.",
-            },
-            sequence = {
-                explain = "Follow the story in order: \"{clue}\"", hint = "Picture what happens first, next and last.",
-                praise = "You followed the story in order.", prompt = "{story}\n{question}",
-                step = "Find this part of the story: \"{clue}\" What happens right there?",
-                wrong = "That isn't what happened at that point in the story.",
-            },
-            vocab = {
-                explain = "The words around it are the clue: \"{clue}\"",
-                hint = "Read the sentence with the word again. The words around it are clues.",
-                praise = "You used the words around it as clues.", prompt = "{story}\n{question}",
-                step = "Look at the sentence: \"{clue}\" What meaning fits there?",
-                wrong = "Try that meaning in the story: it doesn't fit.",
-            },
         },
         swap = {
             explain = "Swap \"{was}\" for \"{now}\" and \"{from}\" becomes \"{target}\"!",

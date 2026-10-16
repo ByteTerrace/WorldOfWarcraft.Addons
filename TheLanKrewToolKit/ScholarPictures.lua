@@ -7,9 +7,11 @@ local addonName, ns = ...
 --   ns.ScholarPictures.Draw(frame, picture, tiles) -> height
 --     picture (from the puzzle) is { kind = "groups", groups, each } (bags of items), "join"
 --     { a, b } (two piles), "take" { a, b } (a pile with b crossed out) or "count" { n }, each with
---     the item it counts ("apple"), drawn with that item's icon (a star when none is known); tiles
---     are an unscramble's letters, drawn as letter tiles instead. Returns 0 when there's nothing
---     to draw, and the frame is then hidden.
+--     the item it counts ("apple"), drawn with that item's icon (a star when none is known), or
+--     "line" { to, jumps, mark } (a number line from 0 to to in jumps equal jumps, its ends
+--     labeled, with a star over the tick mark jumps from 0); tiles are an unscramble's letters,
+--     drawn as letter tiles instead. Returns 0 when there's nothing to draw, and the frame is then
+--     hidden.
 --
 -- It also defines ns.ScholarStyle, the look the whole Scholar screen shares: { Palette, Solid, Border, StarIcon,
 -- WrongIcon, Backdrop(frame, edgeSize), BackdropColors(frame, fill, edge), TextColor(fontString, color) }. This file
@@ -18,6 +20,8 @@ local addonName, ns = ...
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local IconGap = 3
 local IconSize = 20
+-- A number line's jump, tick and star, in pixels.
+local JumpWidth, LineStarSize, TickHeight = 30, 18, 12
 
 -- Icons for the items riddles count, by the item's name (ScholarWords.lua's items). An item not listed is drawn as a
 -- star.
@@ -70,6 +74,7 @@ local WrongIcon = "Interface\\RAIDFRAME\\ReadyCheck-NotReady"
 
 local ceil, floor, max, min = math.ceil, math.floor, math.max, math.min
 local CreateFrame = CreateFrame
+local tostring = tostring
 
 local ScholarPictures = {}
 
@@ -95,6 +100,45 @@ local function BackdropColors(frame, fill, edge)
     if edge then
         frame:SetBackdropBorderColor(edge[1], edge[2], edge[3])
     end
+end
+
+-- Lays out a number line (see the header) under its star, with its ends labeled below; returns its width and height.
+local function DrawLine(pictures, picture)
+    local width, bar = (picture.jumps * JumpWidth), pictures.Bar
+
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", 0, -(LineStarSize + 10))
+    bar:SetSize(width, 3)
+    bar:Show()
+
+    for i = 0, picture.jumps do
+        local tick = pictures.Ticks[i + 1]
+
+        if not tick then
+            tick = pictures:CreateTexture(nil, "ARTWORK")
+            tick:SetColorTexture(Palette.gold[1], Palette.gold[2], Palette.gold[3], 1)
+            tick:SetSize(2, TickHeight)
+            pictures.Ticks[i + 1] = tick
+        end
+
+        tick:ClearAllPoints()
+        tick:SetPoint("CENTER", bar, "LEFT", i * JumpWidth, 0)
+        tick:Show()
+    end
+
+    pictures.Star:ClearAllPoints()
+    pictures.Star:SetPoint("BOTTOM", bar, "LEFT", picture.mark * JumpWidth, (TickHeight / 2) + 2)
+    pictures.Star:Show()
+    pictures.From:SetText("0")
+    pictures.From:ClearAllPoints()
+    pictures.From:SetPoint("TOP", bar, "BOTTOMLEFT", 0, -(TickHeight / 2) - 2)
+    pictures.From:Show()
+    pictures.To:SetText(tostring(picture.to))
+    pictures.To:ClearAllPoints()
+    pictures.To:SetPoint("TOP", bar, "BOTTOMRIGHT", 0, -(TickHeight / 2) - 2)
+    pictures.To:Show()
+
+    return width, ((LineStarSize + 10) + 34)
 end
 
 local function PictureCard(pictures, index)
@@ -202,7 +246,15 @@ local function Draw(pictures, picture, tiles)
         tile:Hide()
     end
 
+    for _, tick in ipairs(pictures.Ticks) do
+        tick:Hide()
+    end
+
     pictures.Plus:Hide()
+    pictures.Bar:Hide()
+    pictures.Star:Hide()
+    pictures.From:Hide()
+    pictures.To:Hide()
 
     if tiles then
         local width, height = DrawTiles(pictures, tiles)
@@ -252,6 +304,8 @@ local function Draw(pictures, picture, tiles)
         width, height = Grid(pictures, 1, picture.a, 10, 0, 0, texture, (picture.a - picture.b) + 1)
     elseif picture.kind == "count" then
         width, height = Grid(pictures, 1, picture.n, 5, 0, 0, texture)
+    elseif picture.kind == "line" then
+        width, height = DrawLine(pictures, picture)
     end
 
     pictures:SetSize(max(width, 1), height)
@@ -266,10 +320,19 @@ end
 function ScholarPictures.Create(parent)
     local pictures = CreateFrame("Frame", nil, parent)
 
-    pictures.Icons, pictures.Cards, pictures.Tiles = {}, {}, {}
+    pictures.Icons, pictures.Cards, pictures.Tiles, pictures.Ticks = {}, {}, {}, {}
     pictures.Plus = pictures:CreateFontString(nil, "OVERLAY", "Game24Font")
     pictures.Plus:SetText("+")
     TextColor(pictures.Plus, Palette.gold)
+    pictures.Bar = pictures:CreateTexture(nil, "ARTWORK")
+    pictures.Bar:SetColorTexture(Palette.gold[1], Palette.gold[2], Palette.gold[3], 1)
+    pictures.Star = pictures:CreateTexture(nil, "OVERLAY")
+    pictures.Star:SetSize(LineStarSize, LineStarSize)
+    pictures.Star:SetTexture(StarIcon)
+    pictures.From = pictures:CreateFontString(nil, "OVERLAY", "Game18Font")
+    pictures.To = pictures:CreateFontString(nil, "OVERLAY", "Game18Font")
+    TextColor(pictures.From, Palette.question)
+    TextColor(pictures.To, Palette.question)
 
     return pictures
 end

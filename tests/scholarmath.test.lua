@@ -23,6 +23,13 @@ local function AddMistakes(a, b)
     return out
 end
 
+-- A clock time's minutes, its hour times 60 plus its minutes, or nil for text that isn't one.
+local function ClockMinutes(text)
+    local hour, minutes = text:match("^(%d+):(%d%d)$")
+
+    return ((hour and ((tonumber(hour) * 60) + tonumber(minutes))) or nil)
+end
+
 -- Evaluates text strictly from left to right (parentheses kept), or with the parentheses dropped, by precedence or not.
 local function Evaluate(text, keepParens, precedence)
     local flat = text:gsub("%s", "")
@@ -84,6 +91,11 @@ local function Evaluate(text, keepParens, precedence)
     return Sum()
 end
 
+-- The hour before hour on a clock face.
+local function LastHour(hour)
+    return (((hour + 10) % 12) + 1)
+end
+
 local function Same(a, b)
     if type(a) == "table" then
         return ((type(b) == "table") and (a[1] == b[1]) and (a[2] == b[2]))
@@ -92,9 +104,12 @@ local function Same(a, b)
     return ((type(b) == "number") and (math.abs(a - b) < 1e-9))
 end
 
--- The answer's own numbers: copper for money, { quotient, remainder } for remainders, else its number.
+-- The answer's own numbers: copper for money, { quotient, remainder } for remainders, minutes for a clock time, else
+-- its number.
 local function Value(p, choice)
-    if p.kind == "math.money" then
+    if ClockMinutes(choice) then
+        return ClockMinutes(choice)
+    elseif p.kind == "math.money" then
         return ((tonumber(choice:match("(%d+) silver") or 0) * 100) + tonumber(choice:match("(%d+) copper") or 0))
     elseif p.kind == "math.remainder" then
         local q, r = choice:match("^(%d+), with (%d+) left over$")
@@ -194,6 +209,64 @@ local Mistakes = {
 
         return { (a + b) }
     end,
+    -- The trap shares the target's first digit but sits farther off; a halfway riddle's is half the gap; a star's is
+    -- the jumps counted; a fraction of the way's is its number of parts.
+    ["math.numberLine"] = function(p)
+        local n = Numbers(p.expression)
+
+        if p.prompt:find("closest") then
+            local t, any = Numbers(p.prompt)[1], { any = true }
+            local gap = math.abs(p.value - t)
+
+            for i, choice in ipairs(p.choices) do
+                local x = tonumber(choice)
+
+                if (i ~= p.answer) and (tostring(x):sub(1, 1) == tostring(t):sub(1, 1)) and (math.abs(x - t) > gap) then
+                    any[#any + 1] = x
+                end
+            end
+
+            return any
+        elseif p.expression:find("(", 1, true) then
+            return { ((n[2] - n[1]) / 2) }
+        elseif p.prompt:find("\n0 ") then
+            return { n[3] }
+        end
+
+        return { n[2] }
+    end,
+    -- A digit's face value; the ones left over, or the tens digit alone; one more or less; the digits in the order they
+    -- were said, backwards in place order, or without the empty tens place.
+    ["math.placeValue"] = function(p)
+        local e, n = p.expression, Numbers(p.expression)
+
+        if e:match("^%d+ x %d+$") then
+            return { n[1] }
+        elseif e:find("/ 10", 1, true) then
+            return (((n[1] >= 100) and { (math.floor(n[1] / 10) % 10) }) or { n[2] })
+        elseif e:match("^%d+ [%+%-] %d+$") then
+            return { (n[1] + ((e:find("-", 1, true) and -1) or 1)) }
+        end
+
+        local said, places = {}, { hundred = 3, hundreds = 3, one = 1, ones = 1, ten = 2, tens = 2 }
+        local inOrder, last, zero = true, 4, (p.prompt:find("hundred") and not p.prompt:find("%d tens?%f[%A]"))
+
+        for digit, place in p.prompt:gmatch("(%d+) (%a+)") do
+            if places[place] then
+                said[#said + 1] = digit
+                inOrder, last = (inOrder and (places[place] < last)), places[place]
+            end
+        end
+
+        if zero then
+            return { ((10 * tonumber(p.prompt:match("(%d+) hundreds?"))) + tonumber(p.prompt:match("(%d+) ones?"))) }
+        elseif not inOrder then
+            return { tonumber(table.concat(said)) }
+        end
+
+        return { tonumber(table.concat(said):reverse()) }
+    end,
+    -- Quest riddles' mistakes: adding the count done to the count wanted, or one of two counts alone.
     ["math.multiply"] = function(p, options)
         local a, b = unpack(Numbers(p.expression))
         local v, big, small = p.value, math.max(a, b), math.min(a, b)
@@ -261,6 +334,55 @@ local Mistakes = {
         local start, step = p.terms[1], p.terms[2]
 
         return { ((start + (3 * step)) + (((step < 0) and -1) or 1)) }
+    end,
+    -- Words: reading the minutes like money, or quarter to as quarter past. Hands: the long hand's number as minutes. A
+    -- trip: forgetting the new hour, or going back; how long: taking times away as if an hour had 100 minutes.
+    ["math.time"] = function(p)
+        local prompt = p.prompt
+        local h = tonumber(prompt:match("half past (%d+)") or prompt:match("quarter past (%d+)") or "")
+
+        if h then
+            return { ((h * 60) + ((prompt:find("half") and 50) or 25)) }
+        elseif prompt:match("quarter to (%d+)") then
+            return { ((tonumber(prompt:match("quarter to (%d+)")) * 60) + 15) }
+        elseif prompt:match("(%d+) minutes past (%d+)") then
+            local m, hour = prompt:match("(%d+) minutes past (%d+)")
+
+            return { ((LastHour(tonumber(hour)) * 60) + (60 - tonumber(m))) }
+        elseif prompt:match("(%d+) minutes to (%d+)") then
+            local k, hour = prompt:match("(%d+) minutes to (%d+)")
+
+            return { ((tonumber(hour) * 60) + tonumber(k)) }
+        elseif prompt:find("short hand") then
+            local hand = tonumber(prompt:match("long hand [%a ]*the (%d+)"))
+            local hour = tonumber(prompt:match("short hand [%a ]*the (%d+)"))
+
+            return { ((hour * 60) + hand) }
+        end
+
+        local times = {}
+
+        for hour, minutes in prompt:gmatch("(%d+):(%d%d)") do
+            times[#times + 1] = ((tonumber(hour) * 60) + tonumber(minutes))
+        end
+
+        if #times == 2 then
+            local m1, m2 = (times[1] % 60), (times[2] % 60)
+
+            if math.floor(times[2] / 60) > math.floor(times[1] / 60) then
+                return { (p.value + 40) }
+            end
+
+            return { (m1 + m2) }
+        end
+
+        local dur = tonumber(prompt:match("(%d+) minutes"))
+
+        if ((times[1] % 60) + dur) >= 60 then
+            return { (p.value - 60) }
+        end
+
+        return { ((((times[1] - dur) >= 60) and (times[1] - dur)) or (p.value + 60)) }
     end,
     ["math.subtract"] = function(p, options)
         local a, b = unpack(Numbers(p.expression))

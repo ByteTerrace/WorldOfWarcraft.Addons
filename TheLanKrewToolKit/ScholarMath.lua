@@ -1,8 +1,9 @@
 local addonName, ns = ...
 
 -- The math generators: one function per math kind in ScholarWords.kinds, registered in Kit.Generators for Generate
--- (ScholarPuzzles.lua, which loads first). Pure like ScholarPuzzles.lua. Their text and banks are ns.ScholarMathWords
--- (ScholarMathWords.lua, which loads right before this file).
+-- (ScholarPuzzles.lua, which loads first), except the ones in ScholarNumbers.lua, which loads after this file and
+-- builds with the functions it lends through Kit (below). Pure like ScholarPuzzles.lua. Their text and banks are
+-- ns.ScholarMathWords (ScholarMathWords.lua, which loads right before this file).
 --
 -- Every puzzle here is numeric: it carries value (the answer as a number; copper for money, tenths as a decimal) and,
 -- for calculations, expression (ASCII: + - x / and parentheses), so callers and tests can recompute it.
@@ -10,6 +11,15 @@ local addonName, ns = ...
 -- Each riddle lists the mistakes its kind invites, most telling first, as { n, why = name }: name is one of its text's
 -- whys. The first that fits is required, so the mistake the riddle exists to catch is always a choice; the others are
 -- kept, with their whys, when WrongNumbers draws them. Plain numbers are near misses.
+--
+-- The riddles that ask one fact (a small sum or difference, a times-table or division fact) set puzzle.fact = { a, b },
+-- the numbers in the order asked (a division's a is the number shared), and ask state.fact (Generate's fact option)
+-- again, any story, when it fits the riddle: a small sum or difference to 20, factors to 12.
+--
+--   Kit.Numeric(state, kind, text, vars, candidates, options)  a numeric puzzle (Numeric below); text is a
+--                                                              ScholarMathWords key or a text of that shape
+--   Kit.Text(text, cases)                                      that text with its cases laid over it
+--   Kit.Why(template, vars, extra), Kit.With(list, ...)        a why filled in; near misses appended
 
 -- The factors multiplication's first level mixes in: the rules for 0, 1 and 10, and the doubles and fives.
 local EasyFactors = { 0, 1, 2, 5, 10 }
@@ -37,88 +47,6 @@ local Coins, Count, Finish, Vars, WrongNumbers = Kit.Coins, Kit.Count, Kit.Finis
 local Generators = Kit.Generators
 local MathWords = ns.ScholarMathWords
 
--- One step of a calculation, as the working shows it: "4 x 3 = 12".
-local function Op(x, op, y, z)
-    return (x .. " " .. op .. " " .. y .. " = " .. z)
-end
-
--- Order of operations, per level: forms returning the text, its value, the working step by step, the first operation,
--- whether it has parentheses, and the slips it invites ({ value, why }: working left to right, or skipping the
--- parentheses). Every form and slip stays positive.
-local OrderForms = {
-    {
-        function(a, b, c)
-            local first = (a + 4)
-
-            return {
-                first = (b .. " x " .. c), parens = false, slips = { { ((first + b) * c), "leftToRight" } },
-                text = (first .. " + " .. b .. " x " .. c), v = (first + (b * c)),
-                work = { Op(b, "x", c, b * c), Op(first, "+", b * c, first + (b * c)) },
-            }
-        end,
-        function(a, b, c)
-            local first = ((b * c) + a)
-
-            return {
-                first = (b .. " x " .. c), parens = false, slips = { { ((first - b) * c), "leftToRight" } },
-                text = (first .. " - " .. b .. " x " .. c), v = a, work = { Op(b, "x", c, b * c), Op(first, "-", b * c, a) },
-            }
-        end,
-    },
-    {
-        function(a, b, c)
-            return {
-                first = (a .. " + " .. b), parens = true, slips = { { (a + (b * c)), "parens" } },
-                text = ("(" .. a .. " + " .. b .. ") x " .. c), v = ((a + b) * c),
-                work = { Op(a, "+", b, a + b), Op(a + b, "x", c, (a + b) * c) },
-            }
-        end,
-        function(a, b, c, d)
-            local first = (a + 5)
-            local sum = (first + (b * c))
-
-            return {
-                first = (b .. " x " .. c), parens = false, slips = { { (((first + b) * c) - d), "leftToRight" } },
-                text = (first .. " + " .. b .. " x " .. c .. " - " .. d), v = (sum - d),
-                work = { Op(b, "x", c, b * c), Op(first, "+", b * c, sum), Op(sum, "-", d, sum - d) },
-            }
-        end,
-        function(a, b, _, d)
-            return {
-                first = ((b + d) .. " - " .. d), parens = true, slips = { { ((a * (b + d)) - d), "parens" } },
-                text = (a .. " x (" .. (b + d) .. " - " .. d .. ")"), v = (a * b), work = { Op(b + d, "-", d, b), Op(a, "x", b, a * b) },
-            }
-        end,
-    },
-    {
-        function(a, b, c, d)
-            return {
-                first = ((c + d) .. " - " .. d), parens = true,
-                slips = { { ((a + b) * c), "leftToRight" }, { ((a + (b * (c + d))) - d), "parens" } },
-                text = (a .. " + " .. b .. " x (" .. (c + d) .. " - " .. d .. ")"), v = (a + (b * c)),
-                work = { Op(c + d, "-", d, c), Op(b, "x", c, b * c), Op(a, "+", b * c, a + (b * c)) },
-            }
-        end,
-        function(a, b, c, d)
-            return {
-                first = (a .. " + " .. b), parens = true,
-                slips = { { ((a + (b * (c + d))) - c), "parens" }, { (((a + b) * (c + d)) - c), "parens" } },
-                text = ("(" .. a .. " + " .. b .. ") x (" .. (c + d) .. " - " .. c .. ")"), v = ((a + b) * d),
-                work = { Op(a, "+", b, a + b), Op(c + d, "-", c, d), Op(a + b, "x", d, (a + b) * d) },
-            }
-        end,
-        function(_, b, c, d)
-            local left, right = ((c + d) * (b + 1)), (c * b)
-
-            return {
-                first = ((c + d) .. " x " .. (b + 1)), parens = false, slips = { { ((left - c) * b), "leftToRight" } },
-                text = ((c + d) .. " x " .. (b + 1) .. " - " .. c .. " x " .. b), v = (left - right),
-                work = { Op(c + d, "x", b + 1, left), Op(c, "x", b, right), Op(left, "-", right, left - right) },
-            }
-        end,
-    },
-}
-
 -- The mistakes two-digit addition invites, most telling first: leaving out the carry, adding only the tens, or adding
 -- the tens as if they were ones.
 local function AddMistakes(parts)
@@ -140,6 +68,21 @@ local function AddParts(a, b)
         a = a, b = b, oa = oa, ob = ob, od = ((oa + ob) % 10), ones = (oa + ob), ta = floor(a / 10), tb = floor(b / 10),
         tens = floor((a + b) / 10), tensA = Count(floor(a / 10), Tens), tensB = Count(floor(b / 10), Tens), v = (a + b),
     }
+end
+
+-- The fact state asks again (state.fact) as a, b, when both are whole numbers from 0 to 144 that fits(a, b) admits; nil
+-- otherwise, and the riddle rolls its own.
+local function AskedFact(state, fits)
+    local fact = (((type(state.fact) == "table") and state.fact) or {})
+    local a, b = fact.a, fact.b
+
+    if (type(a) ~= "number") or (type(b) ~= "number") or (a ~= floor(a)) or (b ~= floor(b)) then
+        return nil
+    end
+
+    if (a >= 0) and (b >= 0) and (a <= 144) and (b <= 144) and fits(a, b) then
+        return a, b
+    end
 end
 
 -- Change from a round price: if the change came out equal to the cost, stopping after the first step would be right, so
@@ -172,6 +115,23 @@ local function Factors(state)
     end
 
     return a, b
+end
+
+-- Which facts each fact riddle asks again: small sums and differences within 20, and factors to 12.
+local function FitsDivision(a, b)
+    return ((b >= 2) and (b <= 12) and (a >= b) and ((a % b) == 0) and ((a / b) <= 12))
+end
+
+local function FitsSmallDifference(a, b)
+    return ((b >= 1) and (b <= a) and (a <= 20))
+end
+
+local function FitsSmallSum(a, b)
+    return ((a >= 1) and (b >= 1) and ((a + b) <= 20))
+end
+
+local function FitsTimes(a, b)
+    return ((a <= 12) and (b <= 12))
 end
 
 -- Four distinct numbers from lo to hi.
@@ -236,10 +196,10 @@ local function Tenths(tenths)
     return (floor(tenths / 10) .. "." .. (tenths % 10))
 end
 
--- MathWords[key] with each case named in cases laid over it, in order: a case's fields replace the text's, and its whys
--- add to the text's.
+-- MathWords[key] (or key itself, a text of that shape) with each case named in cases laid over it, in order: a case's
+-- fields replace the text's, and its whys add to the text's.
 local function Text(key, cases)
-    local base = MathWords[key]
+    local base = (((type(key) == "table") and key) or MathWords[key])
     local layers, text, whys = { base }, {}, {}
 
     for _, name in ipairs(cases or {}) do
@@ -395,9 +355,13 @@ end
 
 -- Subtraction within the grade's cap: counting back a few, counting up a short gap, or thinking of the addition.
 local function SubtractSmall(state)
-    local cap = SmallCap[state.grade][state.level]
-    local a = state.roll(((state.grade == 0) and 2) or 5, cap)
-    local b = state.roll(1, (((state.grade == 0) and (state.level == 3)) and a) or (a - 1))
+    local a, b = AskedFact(state, FitsSmallDifference)
+
+    if not a then
+        a = state.roll(((state.grade == 0) and 2) or 5, SmallCap[min(state.grade, 1)][state.level])
+        b = state.roll(1, (((state.grade == 0) and (state.level == 3)) and a) or (a - 1))
+    end
+
     local v = (a - b)
     local counts, case = {}, nil
 
@@ -415,9 +379,13 @@ local function SubtractSmall(state)
         case = "think"
     end
 
-    return Numeric(state, "math.subtract", "subtractSmall", { a = a, b = b, counts = concat(counts, ", "), v = v },
+    local puzzle = Numeric(state, "math.subtract", "subtractSmall", { a = a, b = b, counts = concat(counts, ", "), v = v },
         { { (a + b), why = "added" }, { (v + 1), why = "start" }, (v - 1), (v + 2), b },
         { cases = ((case and { case }) or nil) })
+
+    puzzle.fact = { a = a, b = b }
+
+    return puzzle
 end
 
 -- Appends each of ... to list, the near misses after a riddle's named mistakes, and returns list.
@@ -454,10 +422,17 @@ end
 -- Addition within the grade's cap: the sum is rolled first and then split, so every sum and split is as likely. A sum
 -- past 10 from two numbers under 10 makes a ten first; the rest count on from the bigger number.
 local function AddSmall(state)
-    local cap, low = SmallCap[state.grade][state.level], (((state.grade == 0) and 1) or 2)
-    local v = state.roll(2 * low, cap)
-    local a = state.roll(low, v - low)
-    local b = (v - a)
+    local cap, low = SmallCap[min(state.grade, 1)][state.level], (((state.grade == 0) and 1) or 2)
+    local a, b = AskedFact(state, FitsSmallSum)
+
+    if not a then
+        local sum = state.roll(2 * low, cap)
+
+        a = state.roll(low, sum - low)
+        b = (sum - a)
+    end
+
+    local v = (a + b)
     local big, small = max(a, b), min(a, b)
     local ten = ((big < 10) and (v > 10))
     local counts = {}
@@ -473,8 +448,12 @@ local function AddSmall(state)
         insert(named, 1, { 10, why = "ten" })
     end
 
-    return Numeric(state, "math.add", "addSmall", vars, With(named, (v + 1), (v + 2), (v - 2)),
-        { cases = ((ten and { "ten" }) or nil), hi = (cap + 2) })
+    local puzzle = Numeric(state, "math.add", "addSmall", vars, With(named, (v + 1), (v + 2), (v - 2)),
+        { cases = ((ten and { "ten" }) or nil), hi = (max(cap, v) + 2) })
+
+    puzzle.fact = { a = a, b = b }
+
+    return puzzle
 end
 
 -- Two-digit times one-digit, worked as partial products; the classic slip is leaving out the carry.
@@ -504,15 +483,15 @@ end
 
 -- Times-table facts. Level 1 mixes the rules for 0, 1 and 10 with the doubles and fives, either factor first.
 local function MultiplyFacts(state)
-    local a, b
+    local a, b = AskedFact(state, FitsTimes)
 
-    if state.level == 1 then
+    if (a == nil) and (state.level == 1) then
         a, b = Pick(state, EasyFactors), state.roll(1, 10)
 
         if Chance(state, 2) then
             a, b = b, a
         end
-    else
+    elseif a == nil then
         a, b = Factors(state)
     end
 
@@ -533,8 +512,12 @@ local function MultiplyFacts(state)
 
     local vars = { a = a, b = b, big = big, other = other, skips = Skips(big, small), small = small, v = v }
 
-    return Numeric(state, "math.multiply", "multiply", vars, With(named, (v + small), (v - small), (v + 1), (v - 1)),
+    local puzzle = Numeric(state, "math.multiply", "multiply", vars, With(named, (v + small), (v - small), (v + 1), (v - 1)),
         { cases = ((case and { case }) or nil) })
+
+    puzzle.fact = { a = a, b = b }
+
+    return puzzle
 end
 
 -- Two-digit subtraction: level 1 never trades a ten, level 3 always does.
@@ -571,8 +554,9 @@ local function SubtractBig(state)
         { cases = ((trade and { "trade" }) or nil) })
 end
 
+-- A small sum asked again is asked as one at any grade.
 Generators["math.add"] = function(state)
-    return (((state.grade >= 2) and AddBig(state)) or AddSmall(state))
+    return ((((state.grade >= 2) and not AskedFact(state, FitsSmallSum)) and AddBig(state)) or AddSmall(state))
 end
 
 -- Copper within 100; sometimes the player's own copper when they have less than 90.
@@ -697,12 +681,24 @@ Generators["math.decimal"] = function(state)
 end
 
 Generators["math.divide"] = function(state)
-    local b, q = Factors(state)
-    local a = (b * q)
+    local a, b = AskedFact(state, FitsDivision)
 
-    return Numeric(state, "math.divide", "divide", { a = a, b = b, skips = Skips(b, q), v = q },
+    if a == nil then
+        local q
+
+        b, q = Factors(state)
+        a = (b * q)
+    end
+
+    local q = (a / b)
+
+    local puzzle = Numeric(state, "math.divide", "divide", { a = a, b = b, skips = Skips(b, q), v = q },
         { { (a * b), why = "multiplied" }, { (a - b), why = "subtracted" }, (q + 1), (q - 1), (q + 2), (q - 2), (b + q) },
         {})
+
+    puzzle.fact = { a = a, b = b }
+
+    return puzzle
 end
 
 Generators["math.fraction"] = function(state)
@@ -792,28 +788,15 @@ Generators["math.money"] = function(state)
     return Numeric(state, "math.money", key, vars, named, { cases = cases, format = Coins, lo = 1 })
 end
 
+-- A times-table fact asked again is asked as one at any grade.
 Generators["math.multiply"] = function(state)
-    return (((state.grade >= 4) and MultiplyBig(state)) or MultiplyFacts(state))
+    return ((((state.grade >= 4) and not AskedFact(state, FitsTimes)) and MultiplyBig(state)) or MultiplyFacts(state))
 end
 
 Generators["math.multistep"] = function(state)
     local key, vars, wrong = Pick(state, { Change, Packs, Share })(state)
 
     return Numeric(state, "math.multistep", key, vars, wrong, {})
-end
-
-Generators["math.order"] = function(state)
-    local form = Pick(state, OrderForms[state.level])
-    local a, b, c, d = state.roll(2, 6), state.roll(2, 6), state.roll(2, 6), state.roll(2, 6)
-    local riddle = form(a, b, c, d)
-    local v, named = riddle.v, {}
-
-    for i, slip in ipairs(riddle.slips) do
-        named[i] = { slip[1], why = slip[2] }
-    end
-
-    return Numeric(state, "math.order", "order", { first = riddle.first, text = riddle.text, v = v, work = concat(riddle.work, ", then ") },
-        With(named, (v + 3), (v + 1), (v - 1), (v + 2)), { cases = ((riddle.parens and { "parens" }) or nil), lo = 1 })
 end
 
 -- Of a price, or off it; the steps build the percent from a tenth, a half or a quarter.
@@ -940,11 +923,17 @@ Generators["math.skip"] = function(state)
             (v + 10), (v - 10) }, { cases = (((step < 0) and { "back" }) or nil), hi = 110, lo = 1 })
 end
 
+-- A small difference asked again is asked as one at any grade, never as levels to go.
 Generators["math.subtract"] = function(state)
-    if state.grade == 0 then
+    if (state.grade == 0) or AskedFact(state, FitsSmallDifference) then
         return SubtractSmall(state)
     end
 
     return (LevelsToGo(state, ((state.grade == 1) and 20) or 60)
         or (((state.grade == 1) and SubtractSmall(state)) or SubtractBig(state)))
 end
+
+Kit.Numeric = Numeric
+Kit.Text = Text
+Kit.Why = Why
+Kit.With = With

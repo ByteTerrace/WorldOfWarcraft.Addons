@@ -2,27 +2,50 @@ local addonName, ns = ...
 
 -- The reading generators: one function per reading kind in ScholarWords.kinds, registered in Kit.Generators for
 -- Generate (ScholarPuzzles.lua, which loads first). Their text and word banks are ns.ScholarReadingWords
--- (ScholarReadingWords.lua, which loads first too). Pure like ScholarPuzzles.lua.
+-- (ScholarReadingWords.lua) and their stories ns.ScholarStoryWords (ScholarStoryWords.lua), which load first too. Pure
+-- like ScholarPuzzles.lua.
 --
 -- Every riddle teaches: each wrong choice carries why it's wrong, and the wrong choices are the real confusions where a
 -- bank has them: a word that starts like the target but ends differently, a letter whose sound is close, the same
--- letters turned around, a word with the new letter in the wrong place, the opposite in a synonym riddle. A why never
--- names the answer.
+-- letters turned around, a word with the new letter in the wrong place, the opposite in a synonym riddle, one letter of
+-- a letter team or a team split into two sounds, a blend with a letter dropped. A why never names the answer.
+--
+-- A heard story (reading.listenStory) is never shown: its speech is the story and the question, and its text sets
+-- speakChoices, so ScholarView says each choice after it.
 
 -- The two-letter spellings of one first sound (sh in ship), so "ship" never starts like "sun".
 local Digraphs = { ch = true, kn = true, ph = true, sh = true, th = true, wh = true, wr = true }
 -- A three-letter word's why templates, by the first place a look-alike differs from it.
 local Places = { "whyStart", "whyMiddle", "whyEnd" }
 
-local concat, remove, sort = table.concat, table.remove, table.sort
-local find, gsub, sub = string.find, string.gsub, string.sub
-local ipairs, type, unpack = ipairs, type, unpack
+-- How a riddle names the two places a letter team can be in a word; swap is the other place.
+local TeamPlaces = {
+    finish = { has = "ends with", place = "end", swap = "start", which = "last" },
+    start = { has = "starts with", place = "start", swap = "finish", which = "first" },
+}
+
+local concat, insert, remove, sort = table.concat, table.insert, table.remove, table.sort
+local find, gmatch, gsub, sub = string.find, string.gmatch, string.gsub, string.sub
+local ipairs, pairs, type, unpack = ipairs, pairs, type, unpack
 local max, min = math.max, math.min
 
 local Kit = ns.Puzzles.Kit
 local Chance, Fill, Finish, Pick, Shuffle = Kit.Chance, Kit.Fill, Kit.Finish, Kit.Pick, Kit.Shuffle
-local ScholarReadingWords = ns.ScholarReadingWords
+local ScholarReadingWords, ScholarStoryWords = ns.ScholarReadingWords, ns.ScholarStoryWords
 local Generators, Text, Words = Kit.Generators, ScholarReadingWords.text, Kit.Words
+
+-- Each letter team by its letters, and every team and place a riddle may ask where its sound is.
+local PlaceRiddles, Teams = {}, {}
+
+for _, team in ipairs(ScholarReadingWords.digraphs) do
+    Teams[team[1]] = team
+
+    for _, place in ipairs({ "start", "finish" }) do
+        if team[place] and not team.like then
+            PlaceRiddles[#PlaceRiddles + 1] = { team, place }
+        end
+    end
+end
 
 -- How many of each letter word has.
 local function Counts(word)
@@ -37,21 +60,17 @@ local function Counts(word)
     return counts
 end
 
--- Whether short is long with one letter left out.
-local function Dropped(short, long)
+-- Where long has the one letter short leaves out, or nil when short isn't long with one letter left out.
+local function DroppedAt(short, long)
     if #long ~= (#short + 1) then
-        return false
+        return nil
     end
-
-    local at = 1
 
     for i = 1, #long do
-        if sub(short, at, at) == sub(long, i, i) then
-            at = (at + 1)
+        if (sub(long, 1, i - 1) .. sub(long, i + 1)) == short then
+            return i
         end
     end
-
-    return (at > #short)
 end
 
 -- The first place two same-length words differ.
@@ -161,9 +180,9 @@ end
 local function MisspellingWhy(text, word, choice)
     if Sorted(choice) == Sorted(word) then
         return text.whyOrder
-    elseif Dropped(choice, word) then
+    elseif DroppedAt(choice, word) then
         return text.whyDropped
-    elseif Dropped(word, choice) then
+    elseif DroppedAt(word, choice) then
         return text.whyAdded
     end
 
@@ -522,9 +541,13 @@ Generators["reading.blank"] = function(state)
 end
 
 -- Level 1 asks each story's first (most literal) question. A question's type (literal, inference, main, sequence or
--- vocab) picks its hint, step, explanation and praise; its clue is the part of the story that holds the answer.
+-- vocab) picks its hint, step, explanation and praise; its clue is the part of the story that holds the answer. Grades
+-- 2 and 3 read the short stories (tier 1), grades 4 to 6 the longer ones; grade 3's level 3 reaches up to the longer
+-- ones, and the older grades' level 1 reaches down to the short ones.
 Generators["reading.story"] = function(state)
-    local story = Pick(state, ScholarReadingWords.stories)
+    local lo = ((((state.grade >= 4) and (state.level > 1)) and 2) or 1)
+    local hi = ((((state.grade <= 2) or ((state.grade == 3) and (state.level < 3))) and 1) or 2)
+    local story = Pick(state, Tier(ScholarStoryWords.stories, lo, hi))
     local named = StoryVars(state, story)
     local question = (((state.level == 1) and story[2]) or story[state.roll(2, #story)])
     local wrongs = {}
@@ -544,5 +567,363 @@ Generators["reading.story"] = function(state)
         story = Fill(story[1], named),
     }
 
-    return Finish(state, "reading.story", Text.story[question.type], vars, vars.answer, wrongs)
+    return Finish(state, "reading.story", ScholarStoryWords.text.story[question.type], vars, vars.answer, wrongs)
+end
+
+-- The sentence or sentences of story that hold clue, trimmed: what a heard story's explanation shows.
+local function Line(story, clue)
+    local from, to = find(story, clue, 1, true)
+    local out = {}
+
+    for first, sentence, last in gmatch(story, "()([^%.!%?]*[%.!%?]+\"?)()") do
+        if (first <= to) and (last > from) then
+            out[#out + 1] = (gsub(sentence, "^%s+", ""))
+        end
+    end
+
+    return concat(out, " ")
+end
+
+-- A story the Owl Sage says aloud, for children still learning to read: the speech is the story and the question, and
+-- the choices are said after it (speakChoices). Level 1 asks each story's first (most literal) question. The step
+-- quotes the clue, which never holds a literal or inference answer.
+Generators["reading.listenStory"] = function(state)
+    local story = Pick(state, ScholarStoryWords.heard)
+    local question = (((state.level == 1) and story[2]) or story[state.roll(2, #story)])
+
+    local vars = {
+        clue = (gsub(question.clue, "[%.!%?]+$", "")), line = Line(story[1], question.clue), question = question[1],
+        story = story[1],
+    }
+
+    local text = ScholarStoryWords.text.heard[question.type]
+
+    return Finish(state, "reading.listenStory", text, vars, question[2], { question[3], question[4], question[5] })
+end
+
+-- The letters at a word's start or end ("start" or "finish"), n of them.
+local function AtPlace(word, place, n)
+    return (((place == "start") and sub(word, 1, n)) or sub(word, -n))
+end
+
+-- The letter team a word is built around and where it is ("start" or "finish").
+local function TeamOf(word)
+    for _, team in ipairs(ScholarReadingWords.digraphs) do
+        for _, place in ipairs({ "start", "finish" }) do
+            if team[place] and (AtPlace(word, place, 2) == team[1]) then
+                return team, place
+            end
+        end
+    end
+end
+
+-- Which letters spell a word's first (or last) sound: the team, among one of its letters, a near sound and another
+-- team.
+local function TeamSpell(state, text)
+    local team = Pick(state, ScholarReadingWords.digraphs)
+    local place = ((team.start and "start") or "finish")
+
+    if team.start and team.finish and Chance(state, 2) then
+        place = "finish"
+    end
+
+    local said = TeamPlaces[place]
+
+    local vars = {
+        digraph = team[1], has = said.has, note = team.note, sound = team.sound,
+        team = ((team.like and text.spell.likeTeam) or text.spell.newTeam), which = said.which,
+        word = Pick(state, team[place]),
+    }
+
+    local wrongs = {}
+
+    for i, wrong in ipairs(team.spell) do
+        wrongs[i] = { wrong[1], why = Fill(wrong.why, vars) }
+    end
+
+    return Finish(state, "reading.digraph", text.spell, vars, team[1], wrongs)
+end
+
+-- A word's sounds, in order: the team is one, and every other letter one each ("sh", "i", "p" for ship).
+local function TeamUnits(word, team, place)
+    local units = Letters(((place == "start") and sub(word, 3)) or sub(word, 1, -3))
+
+    insert(units, ((place == "start") and 1) or (#units + 1), team[1])
+
+    return units
+end
+
+-- A copy of vars with extra's fields on top.
+local function With(vars, extra)
+    local out = {}
+
+    for key, value in pairs(vars) do
+        out[key] = value
+    end
+
+    for key, value in pairs(extra) do
+        out[key] = value
+    end
+
+    return out
+end
+
+-- Which word starts (or ends) with a team's sound. The wrong choices are words with only one of its letters there, a
+-- near sound, another team, or the team at the other end; the step tries the first of them.
+local function TeamPlace(state, text)
+    local riddle = Pick(state, PlaceRiddles)
+    local team, place = riddle[1], riddle[2]
+    local said = TeamPlaces[place]
+    local words = Shuffle(state, team[place])
+
+    local named = {
+        digraph = team[1], has = said.has, otherPlace = TeamPlaces[said.swap].place, place = said.place,
+        which = said.which,
+    }
+
+    local first, rest = nil, {}
+
+    local function Add(list, template, extra, sound)
+        if list and list[place] then
+            local word = Pick(state, list[place])
+            local candidate = { word, sound = sound, why = Fill(template, With(named, With(extra, { choice = word }))) }
+
+            first = (first or (sound and candidate))
+
+            if candidate ~= first then
+                rest[#rest + 1] = candidate
+            end
+        end
+    end
+
+    Add(team.alone, text.whyAlone, { letter = sub(team[1], 1, 1) }, sub(team[1], 1, 1))
+    Add(team.half, text.whyAlone, { letter = sub(team[1], 2, 2) }, sub(team[1], 2, 2))
+
+    if team.close then
+        Add(team.close, team.close.why, {}, team.close.letters)
+    end
+
+    for _, other in ipairs(team.other) do
+        Add(Teams[other], text.whyOther, { other = other }, other)
+    end
+
+    if team[said.swap] then
+        Add({ [place] = team[said.swap] }, text.whyPlace, {})
+    end
+
+    local wrongs = { first }
+
+    for _, candidate in ipairs(Shuffle(state, rest)) do
+        if #wrongs < 3 then
+            wrongs[#wrongs + 1] = candidate
+        end
+    end
+
+    local vars = With(named, {
+        example = words[2], note = team.note, target = words[1], tried = first[1], triedSound = first.sound,
+    })
+
+    return Finish(state, "reading.digraph", text.place, vars, words[1], wrongs)
+end
+
+-- Which shows a word's sounds one by one: "sh - i - p". The team split into two sounds is always a choice; the others
+-- keep one of its letters, put another team in, or leave a chunk of sounds together.
+local function TeamSplit(state, text)
+    local word = Pick(state, ScholarReadingWords.digraphWords)[1]
+    local team, place = TeamOf(word)
+    local units = TeamUnits(word, team, place)
+    local at = (((place == "start") and 1) or #units)
+    local first, second = sub(team[1], 1, 1), sub(team[1], 2, 2)
+
+    -- The sounds with the team's place holding parts instead.
+    local function Swapped(...)
+        local out = {}
+
+        for i, unit in ipairs(units) do
+            if i == at then
+                for _, part in ipairs({ ... }) do
+                    out[#out + 1] = part
+                end
+            else
+                out[#out + 1] = unit
+            end
+        end
+
+        return concat(out, " - ")
+    end
+
+    local named = { digraph = team[1], first = first, second = second }
+    local split = { Swapped(first, second), why = Fill(text.split.whySplit, named) }
+    local others = {}
+
+    if not team.like then
+        others[#others + 1] = { Swapped(first), why = Fill(text.split.whyAlone, { letter = first }) }
+    end
+
+    if team.other[1] then
+        local other = team.other[1]
+
+        others[#others + 1] = { Swapped(other), why = Fill(text.split.whyOther, With(named, { other = other })) }
+    end
+
+    local chunk = (((place == "start") and concat(units, "", 2)) or concat(units, "", 1, #units - 1))
+    local chunked = (((place == "start") and { units[1], chunk }) or { chunk, units[#units] })
+
+    others[#others + 1] = { concat(chunked, " - "), why = Fill(text.split.whyChunk, { chunk = chunk }) }
+    local wrongs = { split }
+
+    for _, other in ipairs(Shuffle(state, others)) do
+        if #wrongs < 3 then
+            wrongs[#wrongs + 1] = other
+        end
+    end
+
+    local vars = { count = #units, digraph = team[1], note = team.note, sounds = concat(units, " - "), word = word }
+
+    return Finish(state, "reading.digraph", text.split, vars, vars.sounds, wrongs)
+end
+
+-- Why choice isn't a team riddle's word: the team in its place but other sounds changed, a near sound or another team
+-- in the team's place, or one of its letters alone there. Nil for any other change, which the kind's wrong template
+-- names.
+local function TeamWhy(text, team, place, choice)
+    local named = { choice = choice, digraph = team[1], has = TeamPlaces[place].has }
+    local two, close = AtPlace(choice, place, 2), team.close
+
+    if two == team[1] then
+        return Fill(text.whyRest, named)
+    elseif close and (AtPlace(choice, place, #close.letters) == close.letters) then
+        return Fill(close.why, named)
+    elseif Teams[two] and Teams[two][place] then
+        return Fill(text.whyOther, With(named, { other = two }))
+    end
+
+    local one = AtPlace(choice, place, 1)
+
+    if not team.like and ((one == sub(team[1], 1, 1)) or (one == sub(team[1], 2, 2))) then
+        return Fill(text.whyAlone, With(named, { letter = one }))
+    end
+end
+
+-- Blending a word with a letter team in it: "sh - i - p".
+local function TeamJoin(state, text)
+    local entry = Pick(state, ScholarReadingWords.digraphWords)
+    local target = entry[1]
+    local team, place = TeamOf(target)
+    local units = TeamUnits(target, team, place)
+    local wrongs = {}
+
+    for i = 2, 4 do
+        wrongs[#wrongs + 1] = { entry[i], why = TeamWhy(text, team, place, entry[i]) }
+    end
+
+    local vars = {
+        back = concat(units, "", 3), digraph = team[1], front = (units[1] .. units[2]), note = team.note,
+        place = TeamPlaces[place].place, sounds = concat(units, " - "), target = target,
+    }
+
+    return Finish(state, "reading.digraph", text.join, vars, target, wrongs)
+end
+
+-- Letter teams (sh, ch, th, wh, ck, ng): level 1 blends a word or finds where a team's sound is; higher levels also
+-- spell a sound and split a word into its sounds.
+Generators["reading.digraph"] = function(state)
+    local variants = { TeamJoin, TeamPlace, TeamSpell, TeamSplit }
+
+    return variants[state.roll(1, ((state.level == 1) and 2) or 4)](state, Text.digraph)
+end
+
+-- Whether a letter is a consonant; y counts as a vowel, and no blend word has one.
+local function Consonant(letter)
+    return not find("aeiouy", letter, 1, true)
+end
+
+-- The consonant blend of word that holds position i (its first two letters or its last two), or nil.
+local function Pair(word, i)
+    local n = #word
+
+    if (i <= 2) and Consonant(sub(word, 1, 1)) and Consonant(sub(word, 2, 2)) then
+        return sub(word, 1, 2)
+    elseif (i >= (n - 1)) and Consonant(sub(word, n - 1, n - 1)) and Consonant(sub(word, n, n)) then
+        return sub(word, n - 1)
+    end
+end
+
+-- Why choice isn't the blend word target: a letter of a blend dropped, a sound added, the letters turned around, or a
+-- sound swapped (in the blend or elsewhere). Nil for any other change, which the kind's wrong template names.
+local function BlendWhy(text, target, choice)
+    local dropped, added = DroppedAt(choice, target), DroppedAt(target, choice)
+
+    if dropped and Pair(target, dropped) then
+        local named = { choice = choice, letter = sub(target, dropped, dropped), pair = Pair(target, dropped) }
+
+        return Fill(text.whyDropped, named)
+    elseif added then
+        return Fill(text.whyAdded, { choice = choice, letter = sub(choice, added, added) })
+    elseif Sorted(choice) == Sorted(target) then
+        return Fill(text.whyOrder, { choice = choice })
+    elseif #choice == #target then
+        local i = FirstDifference(choice, target)
+        local named = { choice = choice, has = sub(choice, i, i), pair = Pair(target, i), want = sub(target, i, i) }
+
+        return Fill(((named.pair and text.whySwap) or text.whyLetter), named)
+    end
+end
+
+-- Consonant blends: blending a word's sounds ("f - l - a - g"), or at higher levels adding the sound a word dropped
+-- from a blend ("lag" with "f" at the start). The dropped-letter word is always a choice.
+Generators["reading.blend"] = function(state)
+    local text = Text.consonantBlend
+    local entry = Pick(state, ScholarReadingWords.blends)
+    local target = entry[1]
+    local sounds = concat(Letters(target), " - ")
+    local wrongs, froms = {}, {}
+
+    for i = 2, 4 do
+        local dropped = DroppedAt(entry[i], target)
+
+        if dropped and Pair(target, dropped) then
+            froms[#froms + 1] = entry[i]
+        end
+    end
+
+    if (state.level == 1) or Chance(state, 2) then
+        local cut = ((Pair(target, 1) and 3) or (#target - 2))
+
+        for i = 2, 4 do
+            wrongs[#wrongs + 1] = { entry[i], why = BlendWhy(text, target, entry[i]) }
+        end
+
+        local vars = {
+            back = sub(target, cut + 1), front = sub(target, 1, cut), pair = (Pair(target, 1) or Pair(target, #target)),
+            sounds = sounds, target = target,
+        }
+
+        return Finish(state, "reading.blend", text.join, vars, target, wrongs)
+    end
+
+    local from = Pick(state, froms)
+    local at = DroppedAt(from, target)
+    local where = Fill(text.add.whereAfter, { prev = sub(target, at - 1, at - 1) })
+
+    if at == 1 then
+        where = text.add.whereStart
+    elseif at == #target then
+        where = text.add.whereEnd
+    end
+
+    local vars = {
+        from = from, fromSounds = concat(Letters(from), " - "), letter = sub(target, at, at), pair = Pair(target, at),
+        sounds = sounds, target = target, where = where,
+    }
+
+    wrongs[1] = { from, why = Fill(text.add.whySame, With(vars, { choice = from })) }
+
+    for i = 2, 4 do
+        if entry[i] ~= from then
+            wrongs[#wrongs + 1] = { entry[i], why = BlendWhy(text, target, entry[i]) }
+        end
+    end
+
+    return Finish(state, "reading.blend", text.add, vars, target, wrongs)
 end

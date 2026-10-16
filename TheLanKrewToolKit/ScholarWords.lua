@@ -2,8 +2,9 @@ local addonName, ns = ...
 
 -- Word banks and flavor text for the Scholar puzzles, as ns.ScholarWords: the puzzle files (ScholarPuzzles.lua and its
 -- generators) read it; this file only holds data. Everything is original, kid-friendly plain ASCII. The reading
--- riddles' text and banks are ns.ScholarReadingWords (ScholarReadingWords.lua) and the math riddles' are
--- ns.ScholarMathWords (ScholarMathWords.lua); their kinds and titles are here.
+-- riddles' text and banks are ns.ScholarReadingWords (ScholarReadingWords.lua) and ns.ScholarStoryWords
+-- (ScholarStoryWords.lua), and the math riddles' are ns.ScholarMathWords (ScholarMathWords.lua); their kinds and titles
+-- are here.
 --
 -- Word problems use {hero} and {place}; the stock ones below fill in when the player's context doesn't. Quest riddles
 -- (ScholarQuests.lua) ask about the player's own quests, in the words below; their banks are wrong answers to mix in
@@ -12,25 +13,41 @@ local addonName, ns = ...
 -- order: grouped by subject and grade, beside the words each group's puzzles read
 ns.ScholarWords = {
     -- The kinds whose riddle is heard, not read: Scholar asks them only while the client has a text-to-speech voice.
-    heard = { ["reading.listen"] = true, ["reading.listenSound"] = true },
+    heard = { ["reading.listen"] = true, ["reading.listenSound"] = true, ["reading.listenStory"] = true },
     -- The kinds built from the player's own quests: Scholar asks them only while the quest book holds one.
-    fromQuests = {},
-    -- Puzzle kinds per subject and grade.
+    fromQuests = { ["math.quest"] = true },
+    -- Puzzle kinds per subject and grade. A kind is listed from the grade it fits and a grade below it: its steps and
+    -- worked explanations make it approachable early.
     kinds = {
         math = {
-            [0] = { "math.count", "math.add", "math.subtract", "math.compare" },
-            { "math.add", "math.subtract", "math.missing" },
-            { "math.add", "math.subtract", "math.skip", "math.coins" },
-            { "math.multiply", "math.divide", "math.groups" },
-            { "math.multiply", "math.remainder", "math.money" },
-            { "math.fraction", "math.multistep", "math.decimal" },
-            { "math.percent", "math.ratio", "math.order" },
+            [0] = {
+                "math.count", "math.add", "math.subtract", "math.compare", "math.placeValue", "math.time", "math.numberLine",
+                "math.quest",
+            },
+            { "math.add", "math.subtract", "math.missing", "math.placeValue", "math.time", "math.numberLine", "math.quest" },
+            {
+                "math.add", "math.subtract", "math.skip", "math.coins", "math.placeValue", "math.time", "math.numberLine",
+                "math.quest",
+            },
+            { "math.multiply", "math.divide", "math.groups", "math.placeValue", "math.time", "math.numberLine", "math.quest" },
+            { "math.multiply", "math.remainder", "math.money", "math.placeValue", "math.numberLine", "math.quest" },
+            { "math.fraction", "math.multistep", "math.decimal", "math.quest" },
+            { "math.percent", "math.ratio", "math.order", "math.quest" },
         },
         reading = {
-            [0] = { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.listen", "reading.listenSound" },
-            { "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.listen", "reading.listenSound" },
-            { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
-            { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling" },
+            [0] = {
+                "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.digraph", "reading.listen",
+                "reading.listenSound", "reading.listenStory",
+            },
+            {
+                "reading.rhyme", "reading.sound", "reading.sight", "reading.cvc", "reading.digraph", "reading.blend",
+                "reading.listen", "reading.listenSound", "reading.listenStory",
+            },
+            {
+                "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling", "reading.digraph",
+                "reading.blend", "reading.story",
+            },
+            { "reading.unscramble", "reading.synonym", "reading.antonym", "reading.spelling", "reading.story" },
             { "reading.vocab", "reading.blank", "reading.story" },
             { "reading.vocab", "reading.blank", "reading.story" },
             { "reading.vocab", "reading.blank", "reading.story" },
@@ -100,12 +117,19 @@ ns.ScholarWords = {
         ["math.percent"] = { "Percent Puzzle", "Out of a Hundred", "The Owl Sage's Percents" },
         ["math.ratio"] = { "Recipe Ratios", "For Every One...", "Perfect Proportions" },
         ["math.order"] = { "The Order of Operations", "Solve in Order!", "The Owl Sage's Rules" },
+        ["math.placeValue"] = { "What's It Worth?", "Tens and Ones", "The Place Value Vault" },
+        ["math.time"] = { "Tick Tock, Hero!", "What Time Is It?", "The Owl Sage's Clock" },
+        ["math.numberLine"] = { "The Number Line", "Near or Far?", "Find the Spot" },
+        ["math.quest"] = { "Quest Log Math", "Counting for Your Quest", "The Quest Giver's Sums" },
         ["reading.rhyme"] = { "Rhyme Time!", "The Owl Sage's Rhyme Game", "Hoot and Rhyme" },
         ["reading.sound"] = { "Sound Detective", "First Sound Fun", "Listen Closely!" },
         ["reading.sight"] = { "Word Watcher", "Words by Heart", "The Word Scroll" },
         ["reading.cvc"] = { "Sound It Out", "Word Builder", "Letter Magic" },
         ["reading.listen"] = { "Listen Closely!", "The Owl Sage Whispers", "Ears of a Hero" },
         ["reading.listenSound"] = { "First Sound Hunt", "Listen for the Letter", "Owl Ears" },
+        ["reading.listenStory"] = { "Story Time, Ears Open!", "The Owl Sage Tells a Tale", "Listen to the Story" },
+        ["reading.digraph"] = { "Letter Teams", "Two Letters, One Sound", "Sound Partners" },
+        ["reading.blend"] = { "Blend It Together", "Sound Slide", "The Blend Builder" },
         ["reading.unscramble"] = { "Scrambled Scroll", "A Gnome Mixed Up the Letters!", "Unscramble It!" },
         ["reading.synonym"] = { "Word Twins", "Meaning Match", "Same-Same Words" },
         ["reading.antonym"] = { "Opposite Day", "Flip It Around", "Opposites Attract" },

@@ -3,10 +3,11 @@ local addonName, ns = ...
 -- Scholar puzzles: math and reading questions for kids, kindergarten to grade 6, and questions about their own quests.
 -- Pure: no UI, no WoW API, and no randomness but options.random, so the same options and random sequence give the same
 -- puzzle. The shared text (kinds by grade, titles, praise, and the quest riddles' text and banks) lives in
--- ScholarWords.lua (ns.ScholarWords), which loads first; each subject's own text and banks live in ScholarMathWords.lua
--- and ScholarReadingWords.lua, which load before the generators that read them. The generators live in ScholarMath.lua,
--- ScholarReading.lua and ScholarQuests.lua, which load after this file and register themselves in Kit.Generators; the
--- "quest" subject asks through Kit.AskQuest (ScholarQuests.lua) about one of the player's quests.
+-- ScholarWords.lua (ns.ScholarWords), which loads first; each subject's own text and banks live in
+-- ScholarMathWords.lua, ScholarNumberWords.lua, ScholarReadingWords.lua and ScholarStoryWords.lua, which load before
+-- the generators that read them. The generators live in ScholarMath.lua, ScholarReading.lua and ScholarQuests.lua,
+-- which load after this file and register themselves in Kit.Generators; the "quest" subject asks through Kit.AskQuest
+-- (ScholarQuests.lua) about one of the player's quests.
 --
 --   ns.Puzzles.Grades     { id, label } from { 0, "Kindergarten" } to { 6, "Grade 6" }, in order.
 --   ns.Puzzles.Generate   see Generate below.
@@ -306,6 +307,7 @@ local function Finish(state, kind, text, vars, correct, wrongs)
         praise = ((text.praise and Fill(text.praise, vars)) or Pick(state, ScholarWords.praise)),
         prompt = prompt,
         remainder = vars.r,
+        speakChoices = (text.speakChoices or nil),
         speech = (text.speech and Fill(text.speech, vars)),
         step = ((((step ~= nil) and not GivesAway(text.step, promptText, vars, correct)) and step) or nil),
         subject = state.subject,

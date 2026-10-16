@@ -552,7 +552,7 @@ ScholarView.Init({
     choose = function(i) Addon:Batch(Choose, i) end,
     hint = Hint,
     hover = function(i)
-        local said = (ReadsAloud() and ScholarView.SpokenChoice(i))
+        local said = ((ReadsAloud() or (Current and Current.speakChoices)) and ScholarView.SpokenChoice(i))
 
         if said then
             Say(said)

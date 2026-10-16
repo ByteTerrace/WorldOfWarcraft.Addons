@@ -16,7 +16,7 @@
 --
 -- Blizzard's settings panel gets no controls of the addon's: its controller navigation freezes the client on addon-made
 -- controls (evidence: tools/api/forbidden.json). SettingsWindow.lua shows the same view there instead, as a canvas page
--- the controller UI ignores.
+-- per page that the controller UI ignores.
 
 local ByteTerrace = ByteTerrace
 local ipairs = ipairs

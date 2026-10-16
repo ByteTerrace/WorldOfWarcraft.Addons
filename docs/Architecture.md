@@ -40,14 +40,16 @@ The settings window is generated from labeled persisted rows, and organized so a
 
 The window is laid out like this:
 
-- **Pages.** The main page is named by the addon's title, and a module whose `page` is that title joins it. A module with `page = "<name>"` puts its settings on a page of that name. The main page comes first, and the others follow alphabetically, listed down the window's left side.
+- **Pages.** The main page is named by the addon's title, and a module whose `page` is that title joins it. A module with `page = "<name>"` puts its settings on a page of that name. The main page comes first, and the others follow alphabetically, listed down the window's left side and under the addon's category in Blizzard's settings panel.
 - **Sections.** A setting's section is its row's `section`, else the last section an earlier row of its module named, else the module's `section`, else its `label`. Modules can share a section by naming the same one. A section that repeats its page's name, or a module with neither, puts its settings at the top of the page, under no header. On a page, the top comes first, then the sections alphabetically, and the addon's own (`addon.debug`'s "Advanced") last.
 - **Settings.** Within a section, settings are alphabetical by label. A section's first-declared setting stays first when it's a module's on/off switch, so the switch leads what it turns on. Names sort ignoring case.
-- **Hosts.** One view draws the pages, and it moves to whichever host shows it. In Blizzard's settings panel (Esc > **Options** > **AddOns**), it's the addon's canvas page. The bare slash command toggles the addon's own window, an ordinary frame, so it opens in combat too, and addon code never opens Blizzard's panel. In either host:
+- **Hosts.** One view draws the pages, and it moves to whichever host shows it. In Blizzard's settings panel (Esc > **Options** > **AddOns**), each page is a canvas page: the main page is the addon's category, and every other page is a subcategory under it, so Blizzard's list picks the page. The bare slash command toggles the addon's own window, an ordinary frame, so it opens in combat too, and addon code never opens Blizzard's panel. In either host:
   - Every change goes through `State:Set`, and a locked row is refused with a message.
   - A change made elsewhere refreshes the page that shows.
   - Only that page's rows are watched, so a hidden view or page costs nothing until it shows.
-- **Controller-safe.** The canvas is marked ignored for the controller UI's navigation (`smartNavigationIgnored`, which covers every child), and the addon registers no Blizzard setting controls. On Forever, controller focus on an addon's control taints what the controller UI remembers, and closing the panel then freezes the game. With the controller UI on, the canvas page is for the mouse, and the window is the way in.
+  - A page taller than its host scrolls in it, clipped, a row a notch of the mouse wheel. The window grows with its page up to the screen's height, less a margin.
+  - The controls' column is as wide as the widest dropdown choice needs, and the window as wide as the longest label beside it.
+- **Controller-safe.** Each canvas is marked ignored for the controller UI's navigation (`smartNavigationIgnored`, which covers every child), and the addon registers no Blizzard setting controls. On Forever, controller focus on an addon's control taints what the controller UI remembers, and closing the panel then freezes the game. With the controller UI on, the canvas pages are for the mouse, and the window is the way in.
 
 ## Records
 

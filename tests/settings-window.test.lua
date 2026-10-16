@@ -1,6 +1,6 @@
 -- The addon's settings view (ByteTerrace_Core/SettingsWindow.lua): its two hosts, page layout, controls, state changes,
--- and bare slash commands. Blizzard's panel gets one canvas page that the controller UI ignores and no setting
--- controls, whose focus freezes the client on close (tools/api/forbidden.json).
+-- scrolling, and bare slash commands. Blizzard's panel gets a canvas page per settings page, each ignored by the
+-- controller UI, and no setting controls, whose focus freezes the client on close (tools/api/forbidden.json).
 
 local function NewAddOn()
     local h = Harness.New()
@@ -44,15 +44,37 @@ test("the bare command toggles the window, in combat too, and never opens Blizza
     eq(#h.opened, 0, "Blizzard's settings panel is never opened")
 end)
 
-test("Blizzard's panel gets one canvas page, kept out of controller focus, and no controls of its own", function()
+test("Blizzard's panel lists the main page as the addon's category and every other page under it", function()
     local h, addon = NewAddOn()
     local window = addon.SettingsWindow
 
     eq(h.category.name, "Test App")
-    eq(h.category.canvas, window.Canvas, "the page is the view's canvas")
-    truthy(window.Canvas.smartNavigationIgnored, "SmartNavigation ignores the canvas and every child")
-    -- Blizzard setting controls, whose focus freezes the client for controller players, aren't in the harness at all.
-    eq(#h.categories, 1, "one page; the view draws its own subpages")
+    eq(h.category, h.categories[1], "the main page is the category the AddOns list shows")
+    eq(#h.categories, 2, "one category per page")
+    eq(h.categories[2].name, "Riddles")
+    eq(h.categories[2].parent, h.categories[1], "the Riddles page is listed under the addon")
+
+    for i, category in ipairs(h.categories) do
+        eq(category.canvas, window.Canvases[i], "page " .. i .. " is the view's canvas " .. i)
+        -- Blizzard setting controls, whose focus freezes the client for controller players, aren't in the harness.
+        truthy(category.canvas.smartNavigationIgnored, "SmartNavigation ignores canvas " .. i .. " and every child")
+    end
+end)
+
+test("selecting a page in Blizzard's list shows that page in the panel, without the view's own page list", function()
+    local h, addon = NewAddOn()
+    local window = addon.SettingsWindow
+    local state = addon.State
+
+    h:SelectSettingsCategory(h.categories[2])
+    truthy(window.Controls[state:Id("Riddles.minutes")]:IsVisible(), "the Riddles page shows")
+    falsy(window.Controls[state:Id("Meter.size")]:IsVisible(), "the main page doesn't")
+    eq(window:Page(), 2)
+    falsy(window.Nav:IsVisible(), "Blizzard's list is the page list; the view doesn't repeat it")
+    h:SelectSettingsCategory(h.categories[1])
+    truthy(window.Controls[state:Id("Meter.size")]:IsVisible(), "selecting the addon shows the main page")
+    falsy(window.Controls[state:Id("Riddles.minutes")]:IsVisible())
+    eq(window:Page(), 1)
 end)
 
 test("the view moves to whichever host shows it, and works in both", function()
@@ -60,29 +82,165 @@ test("the view moves to whichever host shows it, and works in both", function()
     local window = addon.SettingsWindow
     local state = addon.State
 
-    window.Canvas:Show()
+    h:SelectSettingsCategory(h.categories[1])
     local box = window.Controls[state:Id("Meter.enabled")]
 
     truthy(box:IsVisible(), "the canvas shows the view")
     box:Click()
     falsy(state:Get("Meter.enabled"))
-    window.Canvas:Hide()
+    h.env.SettingsPanel:Hide()
     window:Show()
     truthy(box:IsVisible(), "the window shows the same view")
+    truthy(window.Nav:IsVisible(), "with its own page list")
     falsy(box.Check:IsShown(), "and the change made on the canvas")
     window:Hide()
-    window.Canvas:Show()
+    h:SelectSettingsCategory(h.categories[1])
     truthy(box:IsVisible(), "back on the canvas")
     eq(h:CountCalls("SetParent") > 0, true)
 end)
 
-test("the toolkit registers its canvas page and no Blizzard setting controls", function()
+test("the toolkit registers a canvas page per settings page and no Blizzard setting controls", function()
     local h = Harness.New()
     local addon = h:LoadAddon("TheLanKrewToolKit").Addon
+    local window = addon.SettingsWindow
 
     eq(h.category.name, addon.Title)
-    truthy(addon.SettingsWindow.Canvas.smartNavigationIgnored)
-    eq(#h.categories, 1)
+    eq(#h.categories, #window.Pages)
+
+    for i, page in ipairs(window.Pages) do
+        eq(h.categories[i].name, page.name)
+        eq(h.categories[i].parent, ((i > 1) and h.category) or nil, page.name)
+        truthy(h.categories[i].canvas.smartNavigationIgnored, page.name)
+    end
+end)
+
+-- An addon whose "Long" page holds count settings, more than any host shows at once.
+local function NewLongAddOn(count)
+    local h = Harness.New()
+
+    h:LoadFiles("ByteTerrace_Core")
+    h.declared.TestDB = true
+    local addon = h.env.ByteTerrace.NewAddOn({ name = "TestApp", savedVariable = "TestDB", slash = { "/test" }, title = "Test App" })
+    local state = {}
+
+    for i = 1, count do
+        state[i] = { default = false, kind = "boolean", label = ("Setting %02d"):format(i), name = ("s%02d"):format(i) }
+    end
+
+    addon:Module("Long", { label = "Long", page = "Long", state = state, toggle = false })
+    addon:Module("Short", { label = "Short", page = "Short" })
+    h:Fire("ADDON_LOADED", "TestApp", false)
+
+    return h, addon
+end
+
+test("a page taller than the panel scrolls inside it, clipped, rather than running past its edge", function()
+    local h, addon = NewLongAddOn(40)
+    local window = addon.SettingsWindow
+    local canvas = h.env.SettingsPanel.Container.SettingsCanvas
+
+    h:SelectSettingsCategory(h.categories[2])
+    eq(window:Page(), 2)
+    eq(Harness.State(window.Scroll).scrollChild, window.Content, "the page is the scroll frame's child, which clips it")
+    truthy(h:WidgetHeight(window.Scroll) <= h:WidgetHeight(canvas), "the scroll frame fits the panel")
+    truthy(h:WidgetWidth(window.Scroll) <= h:WidgetWidth(canvas))
+    eq(h:WidgetWidth(window.Content), h:WidgetWidth(window.Scroll), "the page is as wide as what shows it")
+    local range = (h:WidgetHeight(window.Content) - h:WidgetHeight(window.Scroll))
+
+    truthy(range > 0, "40 settings don't fit")
+    truthy(window.Thumb:IsVisible(), "the thumb shows there's more")
+    truthy(h:MouseWheel(window.Scroll, -1), "the wheel scrolls the page")
+    eq(window.Scroll:GetVerticalScroll(), 28, "a row a notch")
+    h:MouseWheel(window.Scroll, 1)
+    h:MouseWheel(window.Scroll, 1)
+    eq(window.Scroll:GetVerticalScroll(), 0, "and stops at the top")
+
+    for _ = 1, 100 do
+        h:MouseWheel(window.Scroll, -1)
+    end
+
+    eq(window.Scroll:GetVerticalScroll(), range, "and at the bottom, the last setting in view")
+    h:SelectSettingsCategory(h.categories[3])
+    eq(window.Scroll:GetVerticalScroll(), 0, "another page starts at its top")
+    falsy(window.Thumb:IsVisible(), "a page that fits shows no thumb")
+    h:MouseWheel(window.Scroll, -1)
+    eq(window.Scroll:GetVerticalScroll(), 0, "and doesn't scroll")
+end)
+
+test("the window never grows past the screen: a long page scrolls in it", function()
+    local h, addon = NewLongAddOn(40)
+    local window = addon.SettingsWindow
+
+    window:Show(2)
+    truthy(window.Frame:GetHeight() <= h.env.UIParent:GetHeight(), "the window fits the screen")
+    eq(Harness.State(window.Scroll).scrollChild, window.Content)
+    truthy(h:WidgetHeight(window.Content) > h:WidgetHeight(window.Scroll), "the page scrolls")
+    truthy(window.Thumb:IsVisible())
+    h:MouseWheel(window.Scroll, -1)
+    eq(window.Scroll:GetVerticalScroll(), 28)
+    window:Show(3)
+    truthy(window.Frame:GetHeight() < h.env.UIParent:GetHeight(), "a short page makes a short window")
+    falsy(window.Thumb:IsVisible())
+end)
+
+test("scrolling closes an open dropdown rather than leaving it floating", function()
+    local h, addon = NewAddOn()
+    local window = addon.SettingsWindow
+
+    window:Show()
+    h:Click(window.Controls[addon.State:Id("Meter.size")])
+    truthy(window.Dropdown:IsShown())
+    h:MouseWheel(window.Scroll, -1)
+    falsy(window.Dropdown:IsShown())
+end)
+
+-- The label of the row that holds a control: the row's first font string.
+local function RowLabel(control)
+    return (select(1, control:GetParent():GetRegions()))
+end
+
+-- A value as a dropdown names it.
+local function ValueLabel(spec, value)
+    return ((spec.valueLabels and spec.valueLabels[value]) or tostring(value))
+end
+
+test("each toolkit setting's label and every dropdown choice fit, in the window and in Blizzard's panel", function()
+    local h = Harness.New()
+    local addon = h:LoadAddon("TheLanKrewToolKit").Addon
+    local window = addon.SettingsWindow
+    local state = addon.State
+
+    local function Fits(where)
+        for i, page in ipairs(window.Pages) do
+            if where == "panel" then h:SelectSettingsCategory(h.categories[i]) else window:Show(i) end
+
+            for _, entry in ipairs(page.entries) do
+                local control = (entry.id and window.Controls[entry.id])
+
+                if control then
+                    local label = RowLabel(control)
+                    local name = (where .. ": " .. entry.name)
+
+                    truthy(label:GetUnboundedStringWidth() <= h:WidgetWidth(label), name .. "'s label fits")
+
+                    for _, value in ipairs(entry.spec.values or {}) do
+                        control.Label:SetText(ValueLabel(entry.spec, value))
+
+                        truthy(control.Label:GetUnboundedStringWidth() <= h:WidgetWidth(control.Label),
+                            name .. " shows " .. ValueLabel(entry.spec, value) .. " whole")
+                    end
+
+                    if entry.spec.values then
+                        control.Label:SetText(ValueLabel(entry.spec, state.Values[entry.id]))
+                    end
+                end
+            end
+        end
+    end
+
+    Fits("window")
+    window:Hide()
+    Fits("panel")
 end)
 
 test("window and external writes each refresh the changed control once", function()
@@ -247,11 +405,8 @@ test("the page list's buttons switch pages, and the close button closes the wind
     window:Show()
     local riddles
 
-    for _, child in ipairs({ window.View:GetChildren() }) do
-        -- The content frame has no Label, so it's skipped.
-        local label = rawget(child, "Label")
-
-        if label and (label:GetText() == "Riddles") then
+    for _, child in ipairs({ window.Nav:GetChildren() }) do
+        if child.Label:GetText() == "Riddles" then
             riddles = child
         end
     end
@@ -277,26 +432,28 @@ test("the window can be dragged by its frame", function()
 end)
 
 test("the view moving into Blizzard's panel closes the window rather than leaving it empty", function()
-    local _, addon = NewAddOn()
+    local h, addon = NewAddOn()
     local window = addon.SettingsWindow
 
     window:Show()
-    window.Canvas:Show()
+    h:SelectSettingsCategory(h.categories[1])
     falsy(window:IsShown(), "no empty window over the panel")
     truthy(window.Controls[addon.State:Id("Meter.enabled")]:IsVisible(), "the panel shows the settings")
 end)
 
-test("closing the window while Blizzard's panel shows gives the panel its view back", function()
-    local _, addon = NewAddOn()
+test("closing the window while Blizzard's panel shows gives the panel its page back", function()
+    local h, addon = NewAddOn()
     local window = addon.SettingsWindow
 
-    window.Canvas:Show()
-    window:Show()
+    h:SelectSettingsCategory(h.categories[2])
+    window:Show(1)
     window:Hide()
-    local box = window.Controls[addon.State:Id("Meter.enabled")]
+    local minutes = window.Controls[addon.State:Id("Riddles.minutes")]
 
-    truthy(box:IsVisible(), "not a blank page")
-    eq(window.View:GetParent(), window.Canvas)
+    truthy(minutes:IsVisible(), "not a blank page: the Riddles page the panel had selected")
+    eq(window.View:GetParent(), window.Canvases[2])
+    eq(window:Page(), 2)
+    falsy(window.Nav:IsVisible())
 end)
 
 test("number steppers stay on the row's grid and inside its bounds, whatever the bounds", function()

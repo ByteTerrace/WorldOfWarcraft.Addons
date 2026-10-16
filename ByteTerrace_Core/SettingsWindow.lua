@@ -1,13 +1,20 @@
--- SettingsWindow: the addon's settings, drawn from ByteTerrace.SettingsPages (Settings.lua) as one view: the page list
--- on the left, the chosen page's sections and controls on the right. The view has two hosts, and moves to whichever
+-- SettingsWindow: the addon's settings, drawn from ByteTerrace.SettingsPages (Settings.lua) as one view: a page's
+-- sections and controls, in a scroll frame that clips them to the host and scrolls a row a notch with the mouse wheel,
+-- with a thumb at its right edge while the page is taller than the host. The view has two hosts, and moves to whichever
 -- shows it:
---   * Blizzard's settings panel, as the addon's canvas page (Esc > Options > AddOns). The canvas
---     is marked ignored for the controller UI's SmartNavigation (smartNavigationIgnored, which
---     covers every child), so controller focus never lands on an addon control there: on Forever
---     that taints what the controller UI remembers, and closing the panel then freezes the client
---     (tools/api/forbidden.json). With the controller UI on, the page is for the mouse.
---   * The addon's own window, which the bare slash command toggles. It's an ordinary insecure
---     frame, so it opens in combat too, and addon code never has to open Blizzard's panel.
+--   * Blizzard's settings panel (Esc > Options > AddOns), a canvas page per settings page: the main
+--     page is the addon's category, and every other page is a subcategory listed under it, so
+--     Blizzard's own list picks the page. Each canvas is marked ignored for the controller UI's
+--     SmartNavigation (smartNavigationIgnored, which covers every child), so controller focus
+--     never lands on an addon control there: on Forever that taints what the controller UI
+--     remembers, and closing the panel then freezes the client (tools/api/forbidden.json). With
+--     the controller UI on, the pages are for the mouse.
+--   * The addon's own window, which the bare slash command toggles, with the view's own page list
+--     on the left. It's an ordinary insecure frame, so it opens in combat too, and addon code
+--     never has to open Blizzard's panel.
+--
+-- The controls' column is as wide as the widest dropdown choice needs, and the window as wide as the longest setting
+-- label beside it, so no label or choice is cut short.
 --
 -- Controls are plain buttons, textures, and font strings:
 --   boolean  a box that holds a check while on. Selecting it flips it.
@@ -23,34 +30,50 @@
 -- refreshes that row's control while its page shows. Only the shown page's rows are watched, so a hidden view or page
 -- costs nothing and catches up when it shows. Hovering a setting shows its description.
 --
--- The view is built the first time a host shows it. The window is sized to the page it shows. Drag it to move it. The
--- close button or the command hides it.
+-- The view is built the first time a host shows it. The window is sized to the page it shows, up to the screen's height
+-- less a margin, and a longer page scrolls in it. Drag it to move it. The close button or the command hides it.
 --
 --   ByteTerrace.NewSettingsWindow(addon, pages)  the settings for SettingsPages' pages
---   window:Register()                             registers the canvas page with Blizzard's panel
+--   window:Register()                             registers the canvas pages with Blizzard's panel
 --   window:Toggle(), window:Show(page?), window:Hide(), window:IsShown()   the standalone window
 --   window:Page()                                 the index of the page the view shows
--- Public members: Frame (the window, nil until first shown), Canvas (the settings-panel page), View (nil until first
--- shown), Pages, Controls, and Dropdown. Controls maps [row id] to the row's control button: its Label is the value
--- shown, Check the boolean's check, and Minus and Plus the number's steppers. Dropdown is the view's dropdown list, nil
--- until the view is built. Its Options are its option buttons, each with a Label and a Check, and Catcher is the
--- click-away layer under it.
+-- Public members: Frame (the window, nil until first shown), Canvases (the settings-panel pages, by page index), View,
+-- Nav (the window's page list), Scroll (the scroll frame), Content (its scroll child, holding every page), and Thumb
+-- (nil until first shown), Pages, Controls, and Dropdown. Controls maps [row id] to the row's control button: its Label
+-- is the value shown, Check the boolean's check, and Minus and Plus the number's steppers. Dropdown is the view's
+-- dropdown list, nil until the view is built. Its Options are its option buttons, each with a Label and a Check, and
+-- Catcher is the click-away layer under it.
 
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local CanvasInset = 16
+-- The controls' column is at least this wide.
 local ControlWidth = 170
+-- A dropdown's room beside its label: 8 to the left, and 22 to the right for the chevron.
+local DropdownInset = 30
 local HeaderHeight = 30
+-- The room between a setting's label and its control.
+local LabelGap = 12
 local NavButtonHeight = 26
 local NavWidth = 160
 -- The height of one option in an open dropdown list.
 local OptionHeight = 22
 local Pad = 16
+-- One row: a notch of the mouse wheel scrolls this far.
 local RowHeight = 28
+-- The room the window leaves above and below it on the screen.
+local ScreenMargin = 24
+local ScrollBarWidth = 4
+-- The room between the page and its scroll bar.
+local ScrollGap = 12
 local Solid = "Interface\\Buttons\\WHITE8X8"
+-- The scroll thumb is never shorter than this.
+local ThumbFloor = 24
 local TitleHeight = 44
+-- The window is at least this wide.
 local Width = 620
 
 local ByteTerrace = ByteTerrace
+local ceil = math.ceil
 local CreateFrame = CreateFrame
 local floor = math.floor
 local GameTooltip = GameTooltip
@@ -201,14 +224,46 @@ end
 ---@return table window
 local function NewSettingsWindow(addon, pages)
     local window = setmetatable({
-        Controls = {}, m_addon = addon, m_containers = {}, m_heights = {}, m_navButtons = {}, m_page = 1, m_rows = {},
-        m_watchers = {}, Pages = pages,
+        Canvases = {}, Controls = {}, m_addon = addon, m_containers = {}, m_controlWidth = ControlWidth, m_heights = {},
+        m_labelWidth = 0, m_navButtons = {}, m_offset = 0, m_page = 1, m_range = 0, m_rows = {}, m_watchers = {},
+        Pages = pages,
     }, SettingsWindow)
 
     return window
 end
 
--- Shows page i: its container, its nav button marked, the window sized to fit, and its rows followed.
+-- Shows the scroll thumb while the page scrolls: as much of the track as the page shows, as far down it as the page is
+-- scrolled.
+local function PlaceThumb(window)
+    local thumb = window.Thumb
+    local range = window.m_range
+    local scrolls = (range > 0)
+
+    thumb:SetShown(scrolls)
+    window.Track:SetShown(scrolls)
+
+    if not scrolls then
+        return
+    end
+
+    local view = window.m_viewHeight
+    local height = max(ThumbFloor, floor((view * view) / (view + range)))
+
+    thumb:SetHeight(height)
+    thumb:SetPoint("TOP", window.Track, "TOP", 0, -floor(((view - height) * window.m_offset) / range))
+end
+
+-- Scrolls the page by notches of the mouse wheel (down is positive), a row each, within the page. An open dropdown
+-- closes rather than float away from its control.
+local function ScrollBy(window, notches)
+    CloseList(window)
+    window.m_offset = max(0, min(window.m_offset + (notches * RowHeight), window.m_range))
+    window.Scroll:SetVerticalScroll(window.m_offset)
+    PlaceThumb(window)
+end
+
+-- Shows page i: its container, its nav button marked, the window sized to fit it (up to the screen, less a margin), the
+-- page scrolled to its top, and its rows followed.
 local function ShowPage(window, index)
     window.m_page = index
     CloseList(window)
@@ -220,13 +275,28 @@ local function ShowPage(window, index)
             ((i == index) and 0) or 0.5, 1)
     end
 
-    if window.m_host == window.Frame then
-        local navHeight = (#window.Pages * NavButtonHeight)
-        local height = (((window.m_heights[index] > navHeight) and window.m_heights[index]) or navHeight)
+    local height = window.m_heights[index]
 
-        window.Frame:SetHeight((TitleHeight + height) + Pad)
+    if window.m_host == window.Frame then
+        -- secret: UIParent is the client's own screen-sized frame, anchored to nothing an addon sets
+        local room = (((UIParent:GetHeight() - (2 * ScreenMargin)) - TitleHeight) - Pad)
+        local navHeight = (#window.Pages * NavButtonHeight)
+
+        window.Frame:SetHeight((TitleHeight + min(max(height, navHeight), room)) + Pad)
     end
 
+    local scroll = window.Scroll
+
+    -- secret: the scroll frame is the view's own, sized by its anchors to the host
+    window.m_viewHeight = scroll:GetHeight()
+    -- secret: plain, as above
+    window.Content:SetWidth(scroll:GetWidth())
+    window.Content:SetHeight(height)
+    -- secret: plain, as above
+    window.m_range = max(0, height - window.m_viewHeight)
+    window.m_offset = 0
+    scroll:SetVerticalScroll(0)
+    PlaceThumb(window)
     Follow(window)
 end
 
@@ -268,6 +338,39 @@ local function ValueText(spec, value)
     return ("%g"):format(value)
 end
 
+-- Measures the view's text before its rows are built: the controls' column fits the widest dropdown choice (at least
+-- ControlWidth), and m_labelWidth is the longest setting label, which the window makes room for.
+local function Measure(window, view)
+    local label = view:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local choice = view:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local labelWidth = 0
+    local choiceWidth = 0
+
+    label:Hide()
+    choice:Hide()
+
+    for _, page in ipairs(window.Pages) do
+        for _, entry in ipairs(page.entries) do
+            local spec = entry.spec
+
+            if spec then
+                label:SetText(spec.label)
+                -- secret: the labels are the rows' own, plain strings
+                labelWidth = max(labelWidth, label:GetUnboundedStringWidth())
+
+                for _, value in ipairs(spec.values or {}) do
+                    choice:SetText(ValueText(spec, value))
+                    -- secret: plain, as above
+                    choiceWidth = max(choiceWidth, choice:GetUnboundedStringWidth())
+                end
+            end
+        end
+    end
+
+    window.m_labelWidth = ceil(labelWidth)
+    window.m_controlWidth = max(ControlWidth, ceil(choiceWidth) + DropdownInset)
+end
+
 -- Writes a row from the window: one batch, refused with a message while the row is locked.
 local function Write(window, entry, value)
     local addon = window.m_addon
@@ -305,13 +408,13 @@ local function OpenList(window, entry, control)
         return
     end
 
-    local width = ControlWidth
+    local width = window.m_controlWidth
 
     for i, value in ipairs(spec.values) do
         local option = list.Options[i]
 
         if not option then
-            option = NewButton(list, ControlWidth)
+            option = NewButton(list, width)
             option.Label:ClearAllPoints()
             option.Label:SetPoint("LEFT", 22, 0)
             option.Check = option:CreateTexture(nil, "ARTWORK")
@@ -357,10 +460,11 @@ local function BuildRow(window, row, entry)
     local state = window.m_addon.State
     local spec = entry.spec
     local id = entry.id
+    local width = window.m_controlWidth
     local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 
     label:SetPoint("LEFT", 0, 0)
-    label:SetPoint("RIGHT", -(ControlWidth + 12), 0)
+    label:SetPoint("RIGHT", -(width + LabelGap), 0)
     label:SetJustifyH("LEFT")
     label:SetText(spec.label)
     row:EnableMouse(true)
@@ -370,7 +474,7 @@ local function BuildRow(window, row, entry)
 
     if spec.kind == "boolean" then
         control = NewButton(row, 22)
-        control:SetPoint("RIGHT", -(ControlWidth - 22), 0)
+        control:SetPoint("RIGHT", -(width - 22), 0)
         control.Check = control:CreateTexture(nil, "ARTWORK")
         control.Check:SetTexture(Solid)
         control.Check:SetVertexColor(1, 0.82, 0, 1)
@@ -385,7 +489,7 @@ local function BuildRow(window, row, entry)
             control.Check:SetShown(state.Values[id] == true)
         end
     elseif spec.values then
-        control = NewButton(row, ControlWidth)
+        control = NewButton(row, width)
         control:SetPoint("RIGHT")
         control.Label:ClearAllPoints()
         control.Label:SetPoint("LEFT", 8, 0)
@@ -400,7 +504,7 @@ local function BuildRow(window, row, entry)
         end
     else
         control = CreateFrame("Frame", nil, row)
-        control:SetSize(ControlWidth, 22)
+        control:SetSize(width, 22)
         control:SetPoint("RIGHT")
         control.Minus = NewButton(control, 26, "-")
         control.Minus:SetPoint("LEFT")
@@ -473,7 +577,8 @@ local function BuildPage(window, content, page, index)
     return container, y
 end
 
--- Builds the view: the page list and every page, on a frame either host can hold.
+-- Builds the view: the window's page list, and every page in a scroll frame with its thumb, on a frame either host can
+-- hold.
 local function BuildView(window)
     local view = CreateFrame("Frame", nil, UIParent)
 
@@ -486,25 +591,52 @@ local function BuildView(window)
         Follow(window)
     end)
 
-    local content = CreateFrame("Frame", nil, view)
+    Measure(window, view)
+    local nav = CreateFrame("Frame", nil, view)
 
-    content:SetPoint("TOPLEFT", NavWidth + Pad, 0)
-    content:SetPoint("BOTTOMRIGHT")
+    window.Nav = nav
+    nav:SetPoint("TOPLEFT")
+    nav:SetSize(NavWidth, #window.Pages * NavButtonHeight)
+    local scroll = CreateFrame("ScrollFrame", nil, view)
+
+    window.Scroll = scroll
+    scroll:SetPoint("BOTTOMRIGHT", -(ScrollGap + ScrollBarWidth), 0)
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", function(_, delta) ScrollBy(window, -delta) end)
+    local content = CreateFrame("Frame", nil, scroll)
+
+    window.Content = content
+    scroll:SetScrollChild(content)
+    local track = view:CreateTexture(nil, "BACKGROUND")
+
+    window.Track = track
+    track:SetTexture(Solid)
+    track:SetVertexColor(1, 0.82, 0, 0.15)
+    track:SetWidth(ScrollBarWidth)
+    track:SetPoint("TOPLEFT", scroll, "TOPRIGHT", ScrollGap, 0)
+    track:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", ScrollGap, 0)
+    local thumb = view:CreateTexture(nil, "ARTWORK")
+
+    window.Thumb = thumb
+    thumb:SetTexture(Solid)
+    thumb:SetVertexColor(1, 0.82, 0, 0.8)
+    thumb:SetWidth(ScrollBarWidth)
 
     for i, page in ipairs(window.Pages) do
-        local nav = NewButton(view, NavWidth, page.name)
+        local button = NewButton(nav, NavWidth, page.name)
 
-        nav:SetPoint("TOPLEFT", 0, -((i - 1) * NavButtonHeight))
-        nav:SetScript("OnClick", function() ShowPage(window, i) end)
-        window.m_navButtons[i] = nav
+        button:SetPoint("TOPLEFT", 0, -((i - 1) * NavButtonHeight))
+        button:SetScript("OnClick", function() ShowPage(window, i) end)
+        window.m_navButtons[i] = button
         window.m_containers[i], window.m_heights[i] = BuildPage(window, content, page, i)
     end
 
     BuildList(window, view)
 end
 
--- Moves the view into a host (the window or the canvas) and shows its page, refreshed. The window the view leaves
--- closes, rather than standing empty.
+-- Moves the view into a host (the window or a canvas) and shows a page there, refreshed. The window has the view's own
+-- page list; in Blizzard's panel, its list of categories picks the page. The window the view leaves closes, rather than
+-- standing empty.
 local function Present(window, host, page)
     if not window.View then
         BuildView(window)
@@ -517,31 +649,43 @@ local function Present(window, host, page)
             window.Frame:Hide()
         end
 
+        local framed = (host == window.Frame)
+
         window.m_host = host
         view:SetParent(host)
         view:ClearAllPoints()
 
-        if host == window.Frame then
+        if framed then
             view:SetPoint("TOPLEFT", Pad, -TitleHeight)
             view:SetPoint("BOTTOMRIGHT", -Pad, Pad)
+
+            host:SetWidth(max(Width, ((((((((Pad + NavWidth) + Pad) + window.m_labelWidth) + LabelGap)
+                + window.m_controlWidth) + ScrollGap) + ScrollBarWidth) + Pad)))
         else
             view:SetPoint("TOPLEFT", CanvasInset, -CanvasInset)
             view:SetPoint("BOTTOMRIGHT", -CanvasInset, CanvasInset)
         end
+
+        window.Nav:SetShown(framed)
+        window.Scroll:SetPoint("TOPLEFT", (framed and (NavWidth + Pad)) or 0, 0)
     end
 
     ShowPage(window, page or window.m_page)
     view:Show()
 end
 
---- Hides the window. When Blizzard's panel shows the canvas, the view goes back to it.
+--- Hides the window. When Blizzard's panel shows one of the canvases, the view goes back to it.
 function SettingsWindow:Hide()
     if self.Frame then
         self.Frame:Hide()
     end
 
-    if self.Canvas and self.Canvas:IsVisible() and (self.m_host ~= self.Canvas) then
-        Present(self, self.Canvas)
+    for i, canvas in ipairs(self.Canvases) do
+        if canvas:IsVisible() and (self.m_host ~= canvas) then
+            Present(self, canvas, i)
+
+            return
+        end
     end
 end
 
@@ -557,17 +701,27 @@ function SettingsWindow:Page()
     return self.m_page
 end
 
---- Registers the view's canvas page with Blizzard's settings panel, where it shows under Esc > Options > AddOns.
---- Controller focus is kept out of it (see the header).
+--- Registers a canvas page per settings page with Blizzard's settings panel, under Esc > Options > AddOns: the main
+--- page as the addon's category, and every other page as a subcategory under it. Controller focus is kept out of each
+--- (see the header).
 function SettingsWindow:Register()
-    local canvas = CreateFrame("Frame", nil, UIParent)
+    local category
 
-    self.Canvas = canvas
-    canvas:Hide()
-    -- SmartNavigation_IsFrameIgnored skips the canvas and its children.
-    canvas.smartNavigationIgnored = true
-    canvas:SetScript("OnShow", function() Present(self, canvas) end)
-    local category = Settings.RegisterCanvasLayoutCategory(canvas, self.m_addon.Title)
+    for i, page in ipairs(self.Pages) do
+        local canvas = CreateFrame("Frame", nil, UIParent)
+
+        self.Canvases[i] = canvas
+        canvas:Hide()
+        -- SmartNavigation_IsFrameIgnored skips the canvas and its children.
+        canvas.smartNavigationIgnored = true
+        canvas:SetScript("OnShow", function() Present(self, canvas, i) end)
+
+        if category then
+            Settings.RegisterCanvasLayoutSubcategory(category, canvas, page.name)
+        else
+            category = Settings.RegisterCanvasLayoutCategory(canvas, self.m_addon.Title)
+        end
+    end
 
     Settings.RegisterAddOnCategory(category)
 end

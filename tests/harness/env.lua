@@ -569,8 +569,17 @@ function Harness:BuildEnvironment()
     Harness.State(fakes.UIParent).width, Harness.State(fakes.UIParent).height = 1366, 768
     -- Blizzard's settings frame carries SettingsPanelMixin (Blizzard_SettingsPanel.lua). Addon code that opened it
     -- froze the client when it closed, so Open and OpenToCategory are forbidden (tools/api/forbidden.json). The player
-    -- opens it from Esc > Options.
+    -- opens it from Esc > Options, so it starts hidden. [D] Blizzard_SettingsPanel.xml: the panel is 920 by 724, and
+    -- its Container.SettingsCanvas fills the room right of the category list (199 wide at x 18, then 16 apart) to 22
+    -- from the right edge, from 76 below the top to 47 above the bottom: 665 by 601. h:SelectSettingsCategory shows a
+    -- canvas page there.
     fakes.SettingsPanel = h:CreateWidget("Frame", "SettingsPanel", fakes.UIParent)
+    Harness.State(fakes.SettingsPanel).shown = false
+    Harness.State(fakes.SettingsPanel).width, Harness.State(fakes.SettingsPanel).height = 920, 724
+    fakes.SettingsPanel.Container = h:CreateWidget("Frame", nil, fakes.SettingsPanel)
+    fakes.SettingsPanel.Container.SettingsCanvas = h:CreateWidget("Frame", nil, fakes.SettingsPanel.Container)
+    Harness.State(fakes.SettingsPanel.Container.SettingsCanvas).width = 665
+    Harness.State(fakes.SettingsPanel.Container.SettingsCanvas).height = 601
 
     fakes.SettingsPanel.Open = function()
         h:BlockAction("ADDON_ACTION_FORBIDDEN", "SettingsPanel:Open")
@@ -622,15 +631,26 @@ end
 
 -- Settings panel fake, after Blizzard_Settings_Shared (forever branch), for what the addons call:
 -- - RegisterCanvasLayoutCategory(frame, name) returns a category whose page is the addon's own frame
---   (Blizzard shows it when the player selects the category; tests show it directly) and its layout.
+--   (Blizzard shows it when the player selects the category: h:SelectSettingsCategory) and its layout.
+-- - RegisterCanvasLayoutSubcategory(parentCategory, frame, name) does the same for a category listed
+--   under parentCategory.
 -- - RegisterAddOnCategory(category) lists it under Esc > Options > AddOns.
 -- - OpenToCategory calls C_SettingsUtil.OpenSettingsPanel, as Blizzard_Settings.lua does, which
 --   addon code must never call (tools/api/forbidden.json).
 -- - The SettingsPanel global (a frame, see the env) refuses addon code's Open and OpenToCategory.
--- What tests read: h.categories (every category registered, { name, canvas }, in order) and h.category (the
+-- What tests read: h.categories (every category registered, { name, canvas, parent }, in order) and h.category (the
 -- RegisterAddOnCategory argument).
 function Harness:BuildSettings(env)
     local h = self
+
+    local function Register(frame, name, parent)
+        local id = (#h.categories + 1)
+        local category = { canvas = frame, GetID = function() return id end, name = name, parent = parent }
+
+        h.categories[id] = category
+
+        return category, { frame = frame }
+    end
 
     return {
         OpenToCategory = function(categoryID, scrollToElementName)
@@ -640,14 +660,35 @@ function Harness:BuildSettings(env)
             h.category = category
         end,
         RegisterCanvasLayoutCategory = function(frame, name)
-            local id = (#h.categories + 1)
-            local category = { canvas = frame, GetID = function() return id end, name = name }
-
-            h.categories[id] = category
-
-            return category, { frame = frame }
+            return Register(frame, name, nil)
+        end,
+        RegisterCanvasLayoutSubcategory = function(parentCategory, frame, name)
+            return Register(frame, name, parentCategory)
         end,
     }
+end
+
+-- The player selects a canvas category in Blizzard's settings panel, opening the panel if it's closed. [D]
+-- SettingsPanelMixin:DisplayLayout's canvas branch (Blizzard_SettingsPanel.lua, forever): the shown canvas is cleared
+-- (SetParent(nil), ClearAllPoints, Hide), then the category's frame is parented to Container.SettingsCanvas, fills it
+-- (SetAllPoints), and shows.
+function Harness:SelectSettingsCategory(category)
+    local panel = self.env.SettingsPanel
+    local settingsCanvas = panel.Container.SettingsCanvas
+    local current = self.settingsCanvasFrame
+
+    if current and (current ~= category.canvas) then
+        current:SetParent(nil)
+        current:ClearAllPoints()
+        current:Hide()
+    end
+
+    self.settingsCanvasFrame = category.canvas
+    panel:Show()
+    category.canvas:SetParent(settingsCanvas)
+    category.canvas:ClearAllPoints()
+    category.canvas:SetAllPoints(settingsCanvas)
+    category.canvas:Show()
 end
 
 -- Tables whose functions are Lua's own library: the runner doesn't ask whether an addon calls them.

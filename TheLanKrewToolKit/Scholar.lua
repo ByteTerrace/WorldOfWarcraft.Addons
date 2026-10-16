@@ -3,8 +3,7 @@ local addonName, ns = ...
 -- Scholar's challenge: riddles for young players about their own quests, and math and reading, set up by a parent.
 --
 -- It's off by default and per character: a parent turns it on for a child's character, picks a grade, and can lock the
--- settings with a PIN (/tlk lock 1234; /tlk unlock 1234 for the session). While settings are locked, the PIN can't be
--- changed, and after three wrong PINs unlocking waits a minute.
+-- settings with a PIN (ScholarLock.lua).
 --
 --   What     quest riddles are preferred: two in a row, then math or reading takes a turn. A quest
 --            riddle asks about one the player was shown (accepted, or turned in): the newest not
@@ -58,8 +57,6 @@ local FlightCheck = 1
 -- quest dialog and gossip have their own events.
 local HeldInteractions = {}
 local KeyAnswers = { ["1"] = 1, ["2"] = 2, ["3"] = 3, ["4"] = 4, NUMPAD1 = 1, NUMPAD2 = 2, NUMPAD3 = 3, NUMPAD4 = 4 }
-local MaxPinMisses = 3
-local PinWaitSeconds = 60
 -- How many quest riddles come in a row before math or reading takes a turn.
 local QuestShare = 2
 local Ranks = { { 0, "Apprentice" }, { 10, "Journeyman" }, { 25, "Adept" }, { 50, "Sage" }, { 100, "Archmage" } }
@@ -89,7 +86,6 @@ local DialogEvents = {
 -- The taxi node's map also closes with TAXIMAP_CLOSED.
 local TaxiNode = Enum.PlayerInteractionType.TaxiNode
 
-local byte = string.byte
 local ByteTerrace = ByteTerrace
 local C_Sound = C_Sound
 local C_TTSSettings = C_TTSSettings
@@ -98,7 +94,6 @@ local floor = math.floor
 local GetLocale = GetLocale
 local GetMoney = GetMoney
 local GetRealZoneText = GetRealZoneText
-local GetServerTime = GetServerTime
 local GetTime = GetTime
 local IsLoggedIn = IsLoggedIn
 local issecretvalue = issecretvalue
@@ -231,18 +226,6 @@ local function Hint()
     elseif Current and not Scholar:Get("solved") then
         ScholarView.Hint(Help())
     end
-end
-
--- Kid-proofing, not security: a small hash so the PIN isn't sitting in the SavedVariables as-is.
-local function PinHash(pin)
-    local hash = 5381
-    local text = ("tlk:" .. pin)
-
-    for i = 1, #text do
-        hash = (((hash * 33) + byte(text, i)) % 2147483647)
-    end
-
-    return hash
 end
 
 -- A riddle about a quest the player was shown, in QuestBook's order (fresh ones first, then the rest for review), or
@@ -436,10 +419,6 @@ local function KeyLabel(i)
     end
 
     return tostring(i)
-end
-
-local function ValidPin(pin)
-    return (pin and (pin:match("^%d%d%d%d%d?%d?%d?%d?$") ~= nil))
 end
 
 -- The answers left on screen wait left seconds, counted down a second at a time on their keycaps and in pauseLeft.
@@ -705,50 +684,11 @@ local Commands = {
             Scholar:Set("pending", true)
         end,
         slash = "puzzle" },
-    { label = "Parents: lock Scholar settings with a PIN (lock <pin>)", name = "lock",
-        run = function(pin)
-            if Scholar:Get("locked") then
-                Addon:Print("Scholar settings are locked. Unlock them first to change the PIN.")
-            elseif (Scholar:Get("pin") ~= 0) and not pin then
-                Scholar:Set("unlocked", false)
-                Scholar:Set("locked", true)
-                Addon:Print("Scholar settings locked.")
-            elseif ValidPin(pin) then
-                Scholar:Set("pin", PinHash(pin))
-                Scholar:Set("unlocked", false)
-                Scholar:Set("locked", true)
-                Addon:Print("Scholar settings locked. Unlock with " .. Addon.Slash[1] .. " unlock <pin>.")
-            else
-                Addon:Print("Usage: " .. Addon.Slash[1] .. " lock <pin> (4 to 8 digits).")
-            end
-        end,
-        slash = "lock" },
-    { label = "Parents: unlock Scholar settings (unlock <pin>)", name = "unlock",
-        run = function(pin)
-            local wait = (Scholar:Get("pinWait") - GetServerTime())
-
-            if Scholar:Get("pin") == 0 then
-                Addon:Print("Scholar settings aren't locked.")
-            elseif wait > 0 then
-                Addon:Print(("Too many wrong PINs. Try again in %d seconds."):format(wait))
-            elseif not pin then
-                Addon:Print("Usage: " .. Addon.Slash[1] .. " unlock <pin>.")
-            elseif PinHash(pin) == Scholar:Get("pin") then
-                Scholar:Set("pinMisses", 0)
-                Scholar:Set("unlocked", true)
-                Scholar:Set("locked", false)
-                Addon:Print("Scholar settings unlocked for this session.")
-            elseif (Scholar:Get("pinMisses") + 1) >= MaxPinMisses then
-                Scholar:Set("pinMisses", 0)
-                Scholar:Set("pinWait", GetServerTime() + PinWaitSeconds)
-                Addon:Print(("That PIN isn't right. Try again in %d seconds."):format(PinWaitSeconds))
-            else
-                Scholar:Set("pinMisses", Scholar:Get("pinMisses") + 1)
-                Addon:Print("That PIN isn't right.")
-            end
-        end,
-        slash = "unlock" },
 }
+
+for _, command in ipairs(ns.ScholarLock.Commands) do
+    Commands[#Commands + 1] = command
+end
 
 for i = 1, 4 do
     Commands[#Commands + 1] = { label = ("Choose answer " .. i), name = ("answer" .. i), run = function() Choose(i) end }

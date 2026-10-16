@@ -525,9 +525,9 @@ function ScholarView.Hint(label, hint)
 end
 
 --- Sets the handlers the screen calls back: choose(i) for an answer selected, skip() for Skip, hint() for Need a hint?,
---- speak() for Read aloud, later() for Later, and key(key) for every key pressed while the screen has the keyboard,
---- which returns whether the riddle used the key (any other reaches the game).
----@param handlers table { choose, skip, hint, speak, later, key }
+--- speak() for Read aloud, later() for Later, wishes() for Wishes, and key(key) for every key pressed while the screen
+--- has the keyboard, which returns whether the riddle used the key (any other reaches the game).
+---@param handlers table { choose, skip, hint, speak, later, wishes, key }
 function ScholarView.Init(handlers)
     Callbacks = handlers
 end
@@ -610,6 +610,7 @@ function ScholarView.Show(puzzle, info)
     LabelPill(Overlay.Skip, actions.skip)
     LabelPill(Overlay.Later, actions.later)
     Overlay.Later:Show()
+    LabelPill(Overlay.Wishes, actions.wishes)
     Overlay.Speak:SetShown((info.canSpeak and true) or false)
     Overlay.Feedback:Hide()
     Overlay.Hint:Show()

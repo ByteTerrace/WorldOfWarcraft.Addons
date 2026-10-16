@@ -4,9 +4,9 @@ local addonName, ns = ...
 -- them. Create(callbacks) makes the full-screen overlay: the shade, the panel, its header (the Owl Sage, the subject
 -- and title, the stars, the rank bar, and the streak), its body (the story, the quest book's page, the picture, the
 -- clue, the question band, and the four answers), its footer (the pills and the feedback banner), and the Later tab on
--- its top edge. Only the panel takes the mouse, and a key reaches the game unless the key callback says the riddle used
--- it. The widgets call the callbacks ScholarView.Init was given, at the moment they're used. Paint colors an answer by
--- its state, and LabelPill labels a pill with its key and fits it.
+-- its top edge with the Wishes tab beside it. Only the panel takes the mouse, and a key reaches the game unless the key
+-- callback says the riddle used it. The widgets call the callbacks ScholarView.Init was given, at the moment they're
+-- used. Paint colors an answer by its state, and LabelPill labels a pill with its key and fits it.
 --
 --   ns.ScholarFrame.Create(callbacks)      the overlay, hidden
 --   ns.ScholarFrame.Paint(button, state)   "normal", "hover", "wrong", "right", "dim", or "reveal"
@@ -410,9 +410,14 @@ local function Create(callbacks)
     CreateFooter(frame, panel)
     -- Later, a tab on the panel's top edge: it puts the riddle away until it's opened again.
     frame.Later = CreatePill(panel, "Later")
-    frame.Later:SetPoint("CENTER", panel, "TOP", 0, 0)
+    frame.Later:SetPoint("CENTER", panel, "TOP", -70, 0)
     frame.Later:SetFrameLevel(panel:GetFrameLevel() + 5)
     frame.Later:SetScript("OnClick", function() Callbacks.later() end)
+    -- Wishes, beside it: the stars a riddle earns buy them (ScholarWishes.lua).
+    frame.Wishes = CreatePill(panel, "Wishes")
+    frame.Wishes:SetPoint("CENTER", panel, "TOP", 70, 0)
+    frame.Wishes:SetFrameLevel(panel:GetFrameLevel() + 5)
+    frame.Wishes:SetScript("OnClick", function() Callbacks.wishes() end)
 
     -- The riddle's own keys stay with it, and every other key reaches the game, so the player can still walk, chat, and
     -- fight. The choice is made per key, out of combat, since the riddle never shows in one.

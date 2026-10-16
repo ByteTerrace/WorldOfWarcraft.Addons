@@ -21,6 +21,8 @@ local addonName, ns = ...
 local ReopenSource = "gamepad.dpadLeft"
 -- How long a riddle put off waits in "Solve to keep playing" before it comes back by itself.
 local ReturnSeconds = 60
+-- The controller button that opens the wishes window while a riddle waits, as it does on the riddle screen.
+local WishesSource = "gamepad.dpadRight"
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
@@ -55,7 +57,8 @@ end
 -- draws it.
 local function PillText()
     if ByteTerrace.Input.LabelStyle() ~= "Generic" then
-        return (ByteTerrace.Input.Prompt(ReopenSource, 18) .. "  The Owl's riddle is waiting!")
+        return (ByteTerrace.Input.Prompt(ReopenSource, 18) .. "  The Owl's riddle is waiting!    "
+            .. ByteTerrace.Input.Prompt(WishesSource, 18) .. "  Wishes")
     end
 
     return "The Owl's riddle is waiting. Click to answer!"
@@ -105,8 +108,10 @@ local function Start(module)
     module:Watch({ collapsed, combat }, function(state)
         if state.Values[collapsed] and not state.Values[combat] then
             Addon.Input:Summon(module, ReopenSource, "Scholar.reopen")
+            Addon.Input:Summon(module, WishesSource, "Scholar.pillWishes")
         else
             Addon.Input:Dismiss(module, ReopenSource, "Scholar.reopen")
+            Addon.Input:Dismiss(module, WishesSource, "Scholar.pillWishes")
         end
     end, true)
 end
@@ -123,6 +128,9 @@ ns.ScholarLater = {
     Commands = {
         { label = "Put the riddle off for later", name = "later", run = Later },
         { label = "Open the riddle put off for later", name = "reopen", run = Reopen },
+        -- Its own command, so the riddle closing never dismisses the pill's D-pad right (Input:Dismiss ends one
+        -- summon).
+        { label = "Open the wishes window while a riddle waits", name = "pillWishes", run = function() ns.ScholarWishes.Open() end },
     },
     Start = Start,
     Stop = Stop,

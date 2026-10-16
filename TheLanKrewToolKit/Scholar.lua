@@ -58,7 +58,7 @@ local addonName, ns = ...
 local ActionKeys = { hint = "H", later = "L", skip = "Backspace", speak = "R" }
 
 local ActionSources = { hint = "gamepad.leftShoulder", later = "gamepad.dpadLeft", skip = "gamepad.back",
-    speak = "gamepad.rightShoulder" }
+    speak = "gamepad.rightShoulder", wishes = "gamepad.dpadRight" }
 
 local AnswerSources = { "gamepad.south", "gamepad.east", "gamepad.west", "gamepad.north" }
 local FinishDelay = 1.8
@@ -521,7 +521,7 @@ end
 local function Open()
     local frame = ScholarView.Show(Current, Progress({
         actions = { hint = ActionLabel("hint"), later = ActionLabel("later"), skip = ActionLabel("skip"),
-            speak = ActionLabel("speak") },
+            speak = ActionLabel("speak"), wishes = ActionLabel("wishes") },
         book = (Current.book ~= nil), canSkip = ((Scholar:Get("style") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
         controller = UsingController(), gentle = (Scholar:Get("style") == "gentle"),
         keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, reveal = (select(3, Help())), wrong = Missed,
@@ -689,6 +689,7 @@ ScholarView.Init({
     later = function() Addon.Commands:Run("Scholar.later") end,
     skip = function() Addon:Batch(Skip) end,
     speak = Speak,
+    wishes = function() ns.ScholarWishes.Open() end,
 })
 
 local Commands = {
@@ -727,6 +728,9 @@ end
 for _, command in ipairs(Later.Commands) do
     Commands[#Commands + 1] = command
 end
+
+-- D-pad right on the riddle screen and its waiting pill (ScholarWishes.lua loads after this file).
+Commands[#Commands + 1] = { label = "Open the wishes window", name = "wishes", run = function() ns.ScholarWishes.Open() end }
 
 for i = 1, 4 do
     Commands[#Commands + 1] = { label = ("Choose answer " .. i), name = ("answer" .. i), run = function() Choose(i) end }

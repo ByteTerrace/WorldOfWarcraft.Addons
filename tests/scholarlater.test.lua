@@ -80,7 +80,7 @@ end)
 test("while a riddle shows, it takes only its own controller buttons, and every other one is the game's", function()
     local h, addon, puzzle, frame = Riddle()
 
-    for _, key in ipairs({ "PADLTRIGGER", "PADRTRIGGER", "PADDRIGHT", "PADLSTICK", "PADRSTICK" }) do
+    for _, key in ipairs({ "PADLTRIGGER", "PADRTRIGGER", "PADLSTICK", "PADRSTICK", "PADFORWARD" }) do
         local before = #h.propagated
 
         h:Gamepad(key, true)

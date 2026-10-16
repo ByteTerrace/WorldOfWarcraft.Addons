@@ -24,7 +24,14 @@ local addonName, ns = ...
 --
 -- Only the child named as a WISH's grown-up shows it, and only a WISHED from a grown-up the child named counts.
 --
+-- The wishes window (ScholarWishesView.lua) lists the child's wishes, then the requests waiting for this grown-up, and
+-- works with a controller as well as the mouse and keyboard: the D-pad chooses, A asks or grants, X says Not now, and B
+-- closes. Those are summons (Input:Summon), so they stack over the riddle's own and give them back when it closes, and
+-- every other button stays the game's. Up, Down, Enter, and Esc do the same on the keyboard. It opens with /tlk wishes,
+-- and from the riddle screen and its waiting pill (D-pad right, ns.ScholarWishes.Open), and a fight closes it.
+--
 --   ns.ScholarWishes.Balance()      the stars to spend
+--   ns.ScholarWishes.Open()         opens the wishes window (out of combat)
 --   ns.ScholarWishes.ReportLines()  the report card's lines about wishes and bonus stars
 
 -- The most bonus stars one /tlk star gives.
@@ -34,11 +41,20 @@ local MaxPrice = 999
 -- The longest wish, in bytes, so it fits a Krew message.
 local MaxText = 60
 local MaxWishes = 12
+
+-- The wishes window's controller buttons, summoned while it's open, and the commands they run.
+local WindowButtons = {
+    { command = "Wishes.windowAct", source = "gamepad.south" }, { command = "Wishes.windowClose", source = "gamepad.east" },
+    { command = "Wishes.windowDown", source = "gamepad.dpadDown" }, { command = "Wishes.windowNo", source = "gamepad.west" },
+    { command = "Wishes.windowUp", source = "gamepad.dpadUp" },
+}
+
 local WishIcon = "Interface\\Icons\\INV_Misc_Gift_02"
 
 local C_Item = C_Item
 local concat = table.concat
 local GetServerTime = GetServerTime
+local InCombatLockdown = InCombatLockdown
 local ipairs = ipairs
 local pairs = pairs
 local sort = table.sort
@@ -47,11 +63,22 @@ local tonumber = tonumber
 local tostring = tostring
 
 local Addon = ns.Addon
+-- The wishes window's chosen row.
+local Chosen = 1
 local CleanCount = ns.KrewFields.CleanCount
 local CleanText = ns.KrewFields.CleanText
 local Names = ByteTerrace.Names
+local View = ns.ScholarWishesView
 -- The module, assigned at the end of the file.
 local Wishes
+
+local function CloseWindow()
+    View.Hide()
+
+    for _, button in ipairs(WindowButtons) do
+        Addon.Input:Dismiss(Wishes, button.source, button.command)
+    end
+end
 
 -- Whether a grown-up is here without asking: no PIN is set, or the challenge is unlocked here.
 local function GrownUpHere()
@@ -197,6 +224,11 @@ local function ParseItem(text)
     local name = text:match("|h%[(.-)%]|h")
 
     return (id and name and tonumber(id)), name
+end
+
+-- A footer prompt: the source's glyph with a controller connected, else nothing.
+local function Prompt(source)
+    return (((ByteTerrace.Input.LabelStyle() ~= "Generic") and ByteTerrace.Input.Prompt(source, 18)) or nil)
 end
 
 --- Returns the report card's lines about wishes granted and bonus stars, or none.
@@ -403,6 +435,102 @@ local function Request(arg, granted)
     end
 end
 
+-- The wishes window's rows: the child's wishes (where the challenge runs), then the requests waiting for this grown-up.
+local function Rows()
+    local rows = {}
+
+    if Addon.Modules.Scholar:IsRunning() then
+        local balance = Balance()
+
+        for _, entry in ipairs(List()) do
+            local wish = entry.wish
+            local status = ("%d of %s"):format(balance, Stars(wish.price))
+            local ready = false
+
+            if wish.price == 0 then
+                status = "Needs a price from a grown-up"
+            elseif wish.asked then
+                status = "Asked! Waiting for an answer"
+            elseif balance >= wish.price then
+                status, ready = "Ready to ask!", true
+            end
+
+            rows[#rows + 1] = { entry = entry, icon = Icon(wish), kind = "wish", label = wish.text, ready = ready,
+                status = status }
+        end
+    end
+
+    for i, entry in ipairs(Waiting()) do
+        rows[#rows + 1] = { entry = entry, icon = Icon(entry.ask), kind = "request",
+            label = (entry.ask.who .. " wishes for " .. entry.ask.text), position = i, ready = true,
+            status = Stars(entry.ask.price) }
+    end
+
+    return rows
+end
+
+-- Draws the window again from the wishes and requests.
+local function Refresh()
+    local rows = Rows()
+    local scholar = Addon.Modules.Scholar:IsRunning()
+
+    Chosen = math.max(1, math.min(Chosen, #rows))
+    local row = rows[Chosen]
+
+    View.Show({
+        act = ((row and (((row.kind == "request") and "Grant") or (row.ready and "Ask"))) or nil),
+        empty = ((scholar and ("No wishes yet. A grown-up can add one: " .. Addon.Slash[1] .. " wish 20 Pick our next "
+            .. "adventure.")) or "No wishes are waiting for an answer."),
+        no = ((row ~= nil) and (row.kind == "request")),
+        prompts = { act = Prompt("gamepad.south"), close = Prompt("gamepad.east"), no = Prompt("gamepad.west") },
+        rows = rows,
+        selected = (((#rows > 0) and Chosen) or nil),
+        title = ((scholar and ("Wishes: " .. Stars(Balance()) .. " to spend")) or "Wishes waiting for you"),
+    })
+end
+
+-- The chosen row's main action: Ask for a wish with enough stars, or Grant a request.
+local function Act()
+    local row = Rows()[Chosen]
+
+    if row and (row.kind == "request") then
+        Answer(row.entry.key, true, nil, row.position)
+    elseif row and row.ready then
+        Ask(row.entry)
+    end
+
+    Refresh()
+end
+
+local function Move(delta)
+    Chosen = (Chosen + delta)
+    Refresh()
+end
+
+-- Not now, for a chosen request.
+local function NotNow()
+    local row = Rows()[Chosen]
+
+    if row and (row.kind == "request") then
+        Answer(row.entry.key, false, nil, row.position)
+        Refresh()
+    end
+end
+
+--- Opens the wishes window, with its controller buttons, out of combat.
+local function OpenWindow()
+    if InCombatLockdown() then
+        return
+    end
+
+    Chosen = 1
+    Refresh()
+
+    for _, button in ipairs(WindowButtons) do
+        Addon.Input:Summon(Wishes, button.source, button.command)
+    end
+end
+
 -- A question card for a request waiting for this grown-up.
 local function ShowRequest(key, ask)
     local position = 1
@@ -420,7 +548,32 @@ local function ShowRequest(key, ask)
     })
 end
 
+-- The window's keys: Up and Down choose, Enter acts, and Esc closes it. Any other is the game's.
+local WindowKeys = {
+    DOWN = function() Move(1) end, ENTER = Act, ESCAPE = CloseWindow, UP = function() Move(-1) end,
+}
+
+View.Init({
+    act = function() Addon:Batch(Act) end,
+    close = CloseWindow,
+    key = function(key)
+        local action = WindowKeys[key]
+
+        if action then
+            Addon:Batch(action)
+        end
+
+        return (action ~= nil)
+    end,
+    no = function() Addon:Batch(NotNow) end,
+    select = function(i)
+        Chosen = i
+        Refresh()
+    end,
+})
+
 local function ShowWishes()
+    OpenWindow()
     local slash = Addon.Slash[1]
     local scholar = Addon.Modules.Scholar:IsRunning()
     local waiting = Waiting()
@@ -509,9 +662,27 @@ Wishes = Addon:Module("Wishes", {
             slash = "star" },
         { label = "Grown-ups: send this child's wishes to you when grouped (parent <First Last>)", name = "parent",
             run = NameParent, slash = "parent" },
+        { label = "Wishes window: ask or grant", name = "windowAct", run = Act },
+        { label = "Wishes window: close", name = "windowClose", run = CloseWindow },
+        { label = "Wishes window: choose the next", name = "windowDown", run = function() Move(1) end },
+        { label = "Wishes window: not now", name = "windowNo", run = NotNow },
+        { label = "Wishes window: choose the one before", name = "windowUp", run = function() Move(-1) end },
     },
+    OnDisable = CloseWindow,
     OnEnable = function(module)
+        local combat = module:Id("combat.active")
+
         TakeAnswers()
+
+        -- A fight ends the window's summons, so it closes the window too.
+        module:Rule({
+            changed = function(active)
+                if active then
+                    CloseWindow()
+                end
+            end,
+            reads = { combat }, when = function(state) return state.Values[combat] end,
+        })
 
         for _, entry in ipairs(Waiting()) do
             ShowRequest(entry.key, entry.ask)
@@ -589,4 +760,4 @@ Wishes = Addon:Module("Wishes", {
     toggle = false,
 })
 
-ns.ScholarWishes = { Balance = Balance, ReportLines = ReportLines }
+ns.ScholarWishes = { Balance = Balance, Open = OpenWindow, ReportLines = ReportLines }

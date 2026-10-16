@@ -765,7 +765,8 @@ Every button shows its key for the device you're using.
 | Ask for the hint | Left shoulder | H |
 | Read aloud | Right shoulder | R |
 | Skip (Gentle mode, after a try) | Back | Backspace |
-| Put the riddle off (Later) | D-pad left | L |
+| Put the riddle off (Later), or open it again from its pill | D-pad left | L |
+| Wishes | D-pad right | the **Wishes** tab |
 | Scroll an open quest book | D-pad | Up and Down arrows |
 | Menus | Start (the radial menu) | Esc (the game menu) |
 
@@ -805,9 +806,9 @@ Stars buy wishes from a grown-up, so riddles lead to something that matters in t
 1. A grown-up adds a wish with its price: `/tlk wish 15 Ride the gryphon together`. Start with a cheap one, about 5 stars, so the first wish comes quickly, and add bigger ones as goals.
 2. Your child can wish for something too: `/tlk wish Get a turtle pet`. It waits for a grown-up to set its price with `/tlk price <number> <stars>`. `/tlk unwish <number>` takes a wish off. The list holds 12.
 3. To wish for an item, from a vendor, the auction house, a friend's link, or anywhere else: type `/tlk wish ` (or `/tlk wish 15 ` for a grown-up), Shift-click the item to put its link in, and press Enter. The wish keeps the item: `/tlk wishes` links it, so hovering shows its tooltip, and the cards show its icon.
-4. `/tlk wishes` lists them with how close the stars are ("Ride the gryphon together: 12 of 15 stars").
-5. When there are enough stars, the Owl offers to ask with a card, and `/tlk ask <number>` asks too. Asking holds the wish's stars, so they can't be spent twice.
-6. A grown-up answers: a click on the card, or `/tlk grant <number>`, grants it and spends the stars. `/tlk deny <number>` gives them back. The child's character hears the answer at its next login, or at once when you're grouped.
+4. The **Wishes** window lists them with how close the stars are ("Ride the gryphon together: 12 of 15 stars"). Open it with `/tlk wishes`, the **Wishes** tab on the riddle, or D-pad right on the riddle screen and while a riddle waits in its pill. With a controller, the D-pad chooses a wish, A asks for it, and B closes the window. With the mouse, click a wish and then **Ask**. Up, Down, Enter, and Esc work too.
+5. When there are enough stars, the Owl offers to ask with a card, and the window and `/tlk ask <number>` ask too. Asking holds the wish's stars, so they can't be spent twice.
+6. A grown-up answers: a click on the card, A in the **Wishes** window, or `/tlk grant <number>` grants it and spends the stars. X in the window, **Not now**, or `/tlk deny <number>` gives them back. The child's character hears the answer at its next login, or at once when you're grouped.
 
 A request reaches a grown-up two ways:
 - **On the same account,** as a card the next time you log in on any character, and in `/tlk wishes`.

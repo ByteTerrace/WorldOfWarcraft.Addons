@@ -656,7 +656,7 @@ Once half the minutes are played, a good moment brings the next riddle early. Ea
 
 A riddle never comes in combat. It waits for the fight to end, and one on screen steps aside when a fight starts and comes back after. It doesn't come over Blizzard's windows either: a riddle that comes due while a quest dialog, gossip, a vendor, the mailbox, a bank, the auction house, a trainer, or the flight map is open waits for it to close. One already on screen stays.
 
-`/tlk scholar` shows stars and the time to the next riddle. `/tlk puzzle` asks one now.
+`/tlk scholar` shows stars and the time to the next riddle, or that one is waiting. `/tlk puzzle` asks one now.
 
 #### How a riddle works
 
@@ -722,7 +722,7 @@ Reading riddles offer the mix-ups real children make:
 
 #### The riddle screen
 
-The Owl Sage asks. The header shows the stars, a bar toward the next rank ("5 more to Journeyman"), and the streak. The story sits above the question, which has its own band, and numbers and target words are highlighted. For small numbers in the early grades, the riddle is drawn with the items it counts: bags of apples, two piles to join, or a pile with some crossed out. The big answers each have their key on a raised keycap. A wrong answer shakes, and the right one turns green while a "+1" rises.
+The Owl Sage asks. The header shows the stars, a bar toward the next rank ("5 more to Journeyman"), and the streak, which cheers at five in a row and again at ten. The story sits above the question, which has its own band, and numbers and target words are highlighted. For small numbers in the early grades, the riddle is drawn with the items it counts: bags of apples, two piles to join, or a pile with some crossed out. The big answers each have their key on a raised keycap. A wrong answer shakes, and the right one turns green while a "+1" rises.
 
 - **Need a hint?** is free: the streak survives. On a quest riddle, it's the quest book, which stays beside the feedback after a wrong answer.
 - **Read aloud** speaks the riddle and its choices with the game's text-to-speech voice. It reads a blank as "blank", and a spelling riddle's choices letter by letter. With the quest book open, it reads the book. After an answer or a hint, it reads the feedback.

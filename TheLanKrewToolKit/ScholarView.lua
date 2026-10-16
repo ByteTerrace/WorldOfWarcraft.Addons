@@ -330,7 +330,11 @@ local function ShowProgress(info)
     end
 
     if info.streak and (info.streak >= 2) then
-        Overlay.Streak:SetText(info.streak .. " in a row" .. ((info.levelUp and "  -  harder riddles!") or ""))
+        -- A cheer beside a long streak: the riddles getting harder comes first, since it's news.
+        local cheer = ((info.levelUp and "harder riddles!") or ((info.streak >= 10) and "the Owl Sage hoots!")
+            or ((info.streak >= 5) and "on a roll!") or nil)
+
+        Overlay.Streak:SetText(info.streak .. " in a row" .. ((cheer and ("  -  " .. cheer)) or ""))
         Overlay.Streak:Show()
     else
         Overlay.Streak:Hide()

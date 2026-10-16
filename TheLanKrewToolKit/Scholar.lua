@@ -663,9 +663,13 @@ local Commands = {
         run = function()
             local stars = Scholar:Get("stars")
             local left = ((Scholar:Get("interval") * 60) - Elapsed())
-            local minutes = (((left > 0) and math.ceil(left / 60)) or 0)
+            local due = "The Owl Sage has a riddle for you right now!"
 
-            Addon:Print(("Stars: %d (%s). Next riddle in about %d min."):format(stars, Rank(stars), minutes))
+            if not Scholar:Get("pending") then
+                due = ("Next riddle in about %d min."):format(max(math.ceil(left / 60), 1))
+            end
+
+            Addon:Print(("Stars: %d (%s). %s"):format(stars, Rank(stars), due))
         end,
         slash = "scholar" },
     { label = "Parents: show Scholar's report card", name = "report",

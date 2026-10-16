@@ -364,6 +364,15 @@ test("the play clock writes nothing while it runs, and runs no timer while a rid
     eq(scholar:PendingTimers(), 0, "nor while a riddle waits")
 end)
 
+test("the status says a riddle is waiting rather than counting down to it", function()
+    local h = LoadKid()
+
+    h:Slash("/tlk puzzle")
+    h:Slash("/tlk scholar")
+    truthy(h.printed[#h.printed]:find("The Owl Sage has a riddle for you right now!", 1, true), h.printed[#h.printed])
+    falsy(h.printed[#h.printed]:find("0 min", 1, true))
+end)
+
 test("play before a relog counts toward the next riddle", function()
     local h = LoadKid()
 
@@ -533,6 +542,17 @@ test("the header shows how close the next rank is, and the streak", function()
     truthy(Text(frame.Rank):find("8 more to Journeyman", 1, true), Text(frame.Rank))
     eq(Harness.State(frame.Progress).value, 0.2)
     eq(Text(frame.Streak), "2 in a row")
+end)
+
+test("the streak line cheers at five in a row, and more at ten", function()
+    local _, view, frame = Screen()
+
+    view.Show(Shares, { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 5, streak = 5 })
+    eq(Text(frame.Streak), "5 in a row  -  on a roll!")
+    view.Show(Shares, { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 10, streak = 10 })
+    eq(Text(frame.Streak), "10 in a row  -  the Owl Sage hoots!")
+    view.Show(Shares, { keys = { "1", "2", "3", "4" }, rank = "Apprentice", stars = 4, streak = 4 })
+    eq(Text(frame.Streak), "4 in a row", "four is a count, not a cheer")
 end)
 
 test("a right answer raises a +1 and the streak says the riddles got harder", function()

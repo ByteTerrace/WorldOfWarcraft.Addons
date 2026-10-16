@@ -64,6 +64,7 @@ local LabelPill = ScholarFrame.LabelPill
 local NumberColor = ScholarFrame.NumberColor
 local Pad = ScholarFrame.Pad
 local Paint = ScholarFrame.Paint
+local SetKey = ScholarFrame.SetKey
 local Width = ScholarFrame.Width
 
 local ScholarStyle = ns.ScholarStyle
@@ -592,7 +593,7 @@ function ScholarView.Show(puzzle, info)
     for i, button in ipairs(Overlay.Buttons) do
         local choice = puzzle.choices[i]
 
-        button.Key:SetText(info.keys[i])
+        SetKey(button, info.keys[i])
         button.Text:SetFontObject(AnswerFont(choice))
         button.Text:SetText(choice)
         local missed = (info.wrong and info.wrong[i])
@@ -664,7 +665,7 @@ end
 function ScholarView.Wait(seconds)
     for i, button in ipairs(Overlay.Buttons) do
         if button.State ~= "wrong" then
-            button.Key:SetText(((seconds > 0) and tostring(seconds)) or Overlay.m_keys[i])
+            SetKey(button, ((seconds > 0) and tostring(seconds)) or Overlay.m_keys[i])
             button:SetEnabled(seconds <= 0)
 
             if button.State ~= "reveal" then

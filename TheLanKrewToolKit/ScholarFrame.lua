@@ -11,6 +11,7 @@ local addonName, ns = ...
 --   ns.ScholarFrame.Create(callbacks)      the overlay, hidden
 --   ns.ScholarFrame.Paint(button, state)   "normal", "hover", "wrong", "right", "dim", or "reveal"
 --   ns.ScholarFrame.LabelPill(pill, key)   the pill's text with its key ("LB  Need a hint?"), fitted
+--   ns.ScholarFrame.SetKey(answer, text)   the answer's key on its keycap, or a controller glyph in the keycap's place
 --   ns.ScholarFrame.AnswerHeight, BookInset, ButtonWidth, Inset, NumberColor, Pad, Width   the sizes both files share
 --
 -- One rule aligns the text: the story sits at the panel's padding, like the boxes' edges, and every box's text starts
@@ -240,6 +241,9 @@ local function Paint(button, state)
     BackdropColors(button, background, edge)
     TextColor(button.Text, text)
     TextColor(button.Key, key)
+    -- A glyph takes no text color, so a dimmed or missed answer fades it instead.
+    button.m_faded = ((state == "dim") or (state == "wrong"))
+    button.Key:SetAlpha((button.m_glyph and button.m_faded and 0.45) or 1)
     Fill(button.Keycap, (((state == "dim") or (state == "wrong")) and Palette.keycapDim) or Palette.keycap)
     button.Mark:SetTexture(mark)
     button.Mark:SetShown(mark ~= nil)
@@ -257,6 +261,7 @@ local function CreateAnswer(panel, i)
     cap:SetSize(KeycapSize, KeycapSize)
     cap:SetPoint("LEFT", 12, 0)
     Fill(cap, { 0, 0, 0 }, 0.7)
+    button.KeycapBase = cap
     local top = button:CreateTexture(nil, "ARTWORK", nil, 1)
 
     top:SetPoint("TOPLEFT", cap, "TOPLEFT", 1, -1)
@@ -433,7 +438,19 @@ local function Create(callbacks)
     return frame
 end
 
+-- Shows an answer's key: a number or letter on its keycap, or a controller glyph alone in its place, since the glyph is
+-- a button already.
+local function SetKey(button, text)
+    local glyph = ((text ~= nil) and (text:find("|A:", 1, true) ~= nil))
+
+    button.m_glyph = glyph
+    button.Key:SetText(text)
+    button.Keycap:SetShown(not glyph)
+    button.KeycapBase:SetShown(not glyph)
+    button.Key:SetAlpha((glyph and button.m_faded and 0.45) or 1)
+end
+
 ns.ScholarFrame = {
     AnswerHeight = AnswerHeight, BookInset = BookInset, ButtonWidth = ButtonWidth, Create = Create, Inset = Inset,
-    LabelPill = LabelPill, NumberColor = NumberColor, Pad = Pad, Paint = Paint, Width = Width,
+    LabelPill = LabelPill, NumberColor = NumberColor, Pad = Pad, Paint = Paint, SetKey = SetKey, Width = Width,
 }

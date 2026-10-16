@@ -113,10 +113,10 @@ test("with a controller, the riddle's keys, its pills, and the waiting pill show
     h:Slash("/tlk puzzle")
     local frame = rawget(h.env, "TheLanKrewToolKitScholar")
 
-    eq(frame.Buttons[1].Key:GetText(), "|A:gamepad-xbox1-pad1-normal:22:22:0:0|a", "an answer's keycap is A's glyph")
+    eq(frame.Buttons[1].Key:GetText(), "|A:gamepad-xbox1-pad1-normal:32:32:0:0|a", "an answer's keycap is A's glyph")
     truthy(frame.Later.Label:GetText():find("|A:gamepad-xbox1-paddleft-normal", 1, true), frame.Later.Label:GetText())
     h:Key("L", true)
-    truthy(Pill(h).Label:GetText():find("|A:gamepad-xbox1-paddleft-normal:18:18:0:0|a", 1, true), "the pill says which button")
+    truthy(Pill(h).Label:GetText():find("|A:gamepad-xbox1-paddleft-normal:26:26:0:0|a", 1, true), "the pill says which button")
     h:Gamepad("PADDLEFT", true)
     truthy(frame:IsShown(), "and that button opens it")
     truthy(shown[#shown])
@@ -236,4 +236,37 @@ test("the parent's report says how many riddles were put off, and how many came 
     truthy(report:find("Put off 2 riddles with Later.", 1, true), report)
     truthy(report:find("1 riddle came back after a reload or relog.", 1, true), report)
     falsy(report:find("1 riddles", 1, true), "one riddle is a riddle")
+end)
+
+test("with a controller, an answer's glyph stands in for its keycap, and the countdown brings the keycap back", function()
+    local h, _, ns = LoadKid({ ["Scholar.missPause"] = "short", ["Scholar.quests"] = false })
+    local shown = Watch(ns)
+
+    h.labelStyle = "Letters"
+    h:Slash("/tlk puzzle")
+    local frame = rawget(h.env, "TheLanKrewToolKitScholar")
+    local puzzle = shown[#shown]
+    local right = frame.Buttons[puzzle.answer]
+
+    eq(right.Key:GetText(), "|A:gamepad-xbox1-pad" .. puzzle.answer .. "-normal:32:32:0:0|a", "the glyph, full size")
+    falsy(right.Keycap:IsShown(), "with no square keycap behind it")
+    falsy(right.KeycapBase:IsShown())
+    h:Gamepad(({ "PAD1", "PAD2", "PAD3", "PAD4" })[WrongAnswer(puzzle)], true)
+    eq(right.Key:GetText(), "2", "the countdown is a number")
+    truthy(right.Keycap:IsShown(), "on its keycap")
+    eq(right.Key:GetAlpha(), 1)
+    h:Advance(2)
+    falsy(right.Keycap:IsShown(), "and the glyph is back alone")
+end)
+
+test("the waiting pill fits its words and glyphs", function()
+    local h = LoadKid({ ["Scholar.quests"] = false })
+
+    h.labelStyle = "Letters"
+    h:Slash("/tlk puzzle")
+    h:Key("L", true)
+    local pill = Pill(h)
+
+    truthy(pill.Label:GetText():find("|A:gamepad-xbox1-paddleft-normal:26:26:0:0|a", 1, true), pill.Label:GetText())
+    truthy(pill:GetWidth() >= (pill.Label:GetStringWidth() + 46), "the pill is as wide as what it says")
 end)

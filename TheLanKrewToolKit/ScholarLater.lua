@@ -57,8 +57,8 @@ end
 -- draws it.
 local function PillText()
     if ByteTerrace.Input.LabelStyle() ~= "Generic" then
-        return (ByteTerrace.Input.Prompt(ReopenSource, 18) .. "  The Owl's riddle is waiting!    "
-            .. ByteTerrace.Input.Prompt(WishesSource, 18) .. "  Wishes")
+        return (ByteTerrace.Input.Prompt(ReopenSource, 26) .. "  The Owl's riddle is waiting!    "
+            .. ByteTerrace.Input.Prompt(WishesSource, 26) .. "  Wishes")
     end
 
     return "The Owl's riddle is waiting. Click to answer!"
@@ -97,6 +97,9 @@ local function Start(module)
         module:Cancel(back)
         back = nil
         PillFrame().Label:SetText(PillText())
+        -- The icon, its gaps, and the label: the pill fits what it says.
+        -- secret: the label is built from fixed words and controller glyphs, so it holds no secret aspect
+        Pill:SetWidth(Pill.Label:GetStringWidth() + 46)
         Pill:SetShown(state.Values[collapsed])
 
         if state.Values[collapsed] and (module:Get("style") == "gate") then

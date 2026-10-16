@@ -747,9 +747,9 @@ test("with a controller, every button shows its controller button's glyph, as th
     local h = PadKid()
     local frame = Overlay(h)
 
-    eq(Text(frame.Buttons[1].Key), "|A:gamepad-xbox1-pad1-normal:22:22:0:0|a")
-    eq(Text(frame.Buttons[2].Key), "|A:gamepad-xbox1-pad2-normal:22:22:0:0|a")
-    eq(Text(frame.Buttons[4].Key), "|A:gamepad-xbox1-pad4-normal:22:22:0:0|a")
+    eq(Text(frame.Buttons[1].Key), "|A:gamepad-xbox1-pad1-normal:32:32:0:0|a")
+    eq(Text(frame.Buttons[2].Key), "|A:gamepad-xbox1-pad2-normal:32:32:0:0|a")
+    eq(Text(frame.Buttons[4].Key), "|A:gamepad-xbox1-pad4-normal:32:32:0:0|a")
     truthy(Text(frame.Hint.Label):find("|A:gamepad-xbox1-padlshoulder-normal", 1, true), Text(frame.Hint.Label))
     truthy(Text(frame.Speak.Label):find("|A:gamepad-xbox1-padrshoulder-normal", 1, true), Text(frame.Speak.Label))
 end)

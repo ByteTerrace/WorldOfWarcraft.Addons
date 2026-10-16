@@ -416,7 +416,7 @@ end
 -- The key for answer i: 1-4, or the connected controller's face button's glyph.
 local function KeyLabel(i)
     if UsingController() then
-        return ByteTerrace.Input.Prompt(AnswerSources[i], 22)
+        return ByteTerrace.Input.Prompt(AnswerSources[i], 32)
     end
 
     return tostring(i)

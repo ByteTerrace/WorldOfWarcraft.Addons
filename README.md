@@ -233,6 +233,7 @@ The fake is strict:
   - Protected globals and the functions in `tools/api/forbidden.json` are always forbidden (`ADDON_ACTION_FORBIDDEN`). Registering a restricted event (`HasRestrictions`, such as `COMBAT_LOG_EVENT_UNFILTERED`) is forbidden the same way, and registers nothing.
   - The docs don't say what `HasRestrictions` means. Lockdown is the harness's guess, unless the entry names a specific restriction (`RestrictedForMacroChatMessages` applies to macros, so addon calls pass).
 - **SavedVariables** are nil while an addon's files run, and restored right before its `ADDON_LOADED`. `h:Reload()` and `h:Relog()` write them the way the client does: numbers, strings, booleans, and tables of them, as copies, without cycles, NaN, or inf. A secret value or a secret table key there is an error. A relog ends combat and restrictions. `h:SwitchCharacter(name, surname)` logs in as another character on the same account: the account's SavedVariables stay, and the per-character ones are that character's.
+- **Items:** `h:AddItem(itemID, name, quality, icon, uncached)` adds an item the client knows, for `C_Item.GetItemInfo` and `C_Item.GetItemIconByID`. `h:ItemLink(itemID)` is its link, as a Shift-click puts it in chat.
 - **Only real APIs exist:** events, widget methods, and fakes that name real client globals. Reading an undefined global is an error.
   - Only what the addons and probes call is faked. A fake nothing calls is deleted, with its tests. `test` checks it: a fake function (a global, or a member of a global table) whose name appears nowhere in the addons' code (identifiers and strings, not comments) fails, unless `tools/api/forbidden.json` names it, since those fakes exist to refuse the call.
   - Lua's own functions are exempt, and so are widget methods. Every documented method of a widget type exists and counts its calls, and the getters with behaviors are how tests read widget state.
@@ -798,9 +799,10 @@ Stars buy wishes from a grown-up, so riddles lead to something that matters in t
 
 1. A grown-up adds a wish with its price: `/tlk wish 15 Ride the gryphon together`. Start with a cheap one, about 5 stars, so the first wish comes quickly, and add bigger ones as goals.
 2. Your child can wish for something too: `/tlk wish Get a turtle pet`. It waits for a grown-up to set its price with `/tlk price <number> <stars>`. `/tlk unwish <number>` takes a wish off. The list holds 12.
-3. `/tlk wishes` lists them with how close the stars are ("Ride the gryphon together: 12 of 15 stars").
-4. When there are enough stars, the Owl offers to ask with a card, and `/tlk ask <number>` asks too. Asking holds the wish's stars, so they can't be spent twice.
-5. A grown-up answers: a click on the card, or `/tlk grant <number>`, grants it and spends the stars. `/tlk deny <number>` gives them back. The child's character hears the answer at its next login, or at once when you're grouped.
+3. To wish for an item, from a vendor, the auction house, a friend's link, or anywhere else: type `/tlk wish ` (or `/tlk wish 15 ` for a grown-up), Shift-click the item to put its link in, and press Enter. The wish keeps the item: `/tlk wishes` links it, so hovering shows its tooltip, and the cards show its icon.
+4. `/tlk wishes` lists them with how close the stars are ("Ride the gryphon together: 12 of 15 stars").
+5. When there are enough stars, the Owl offers to ask with a card, and `/tlk ask <number>` asks too. Asking holds the wish's stars, so they can't be spent twice.
+6. A grown-up answers: a click on the card, or `/tlk grant <number>`, grants it and spends the stars. `/tlk deny <number>` gives them back. The child's character hears the answer at its next login, or at once when you're grouped.
 
 A request reaches a grown-up two ways:
 - **On the same account,** as a card the next time you log in on any character, and in `/tlk wishes`.

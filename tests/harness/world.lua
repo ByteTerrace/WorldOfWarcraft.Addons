@@ -1,11 +1,11 @@
--- The world around the player in the fake client: location and maps, the user waypoint, honor, raid warnings, and boss
--- encounters (see wow.lua for the rest). Only what the addons call is modeled.
+-- The world around the player in the fake client: location and maps, the user waypoint, honor, raid warnings, boss
+-- encounters, and items (see wow.lua for the rest). Only what the addons call is modeled.
 --
 -- State: h.zone, h.subZone (GetRealZoneText, GetSubZoneText), h.mapID (the uiMapID the player is on), h.mapPosition = {
 -- x, y } (normalized to h.mapID), h.instance (nil, or IsInInstance's type: "party", "raid", "pvp", "arena",
 -- "scenario"), h.maps = { [uiMapID] = { name, mapType, parentMapID, flags, canSetWaypoint } } (h:AddMap), h.waypoint ({
 -- uiMapID, x, y, z } or nil), h.superTracked (the user waypoint is super tracked), and h.raidNotices ({ text, color,
--- displayTime } per raid warning message).
+-- displayTime } per raid warning message). h.items = { [itemID] = { name, quality, icon, uncached } } (h:AddItem).
 --
 -- Modeling decisions ([D] documented, [G] a guess where the docs are silent):
 --   Zones       [D] ZONE_CHANGED_NEW_AREA fires on entering a new zone, ZONE_CHANGED on entering
@@ -19,6 +19,11 @@
 --               unit's own map (parent maps aren't projected); a party member's comes from its
 --               mapID / mapPosition fields. GetBestMapForUnit still answers in an instance
 --               (the instance's map, if the test sets one).
+--   Items       [D] C_Item.GetItemInfo(item) returns the item's name, link, and quality first, and its
+--               icon tenth, or nothing while the client hasn't cached it (warcraft.wiki.gg
+--               API_C_Item.GetItemInfo). [D] C_Item.GetItemIconByID answers at once, cached or not. A link is
+--               "|c<color>|Hitem:<id>::::::::|h[<name>]|h|r", as a shift-click puts in chat
+--               (h:ItemLink). The harness knows only the items a test adds.
 --   Map IDs     The harness knows no uiMapIDs of its own: a test adds each map it uses with
 --               h:AddMap. Like a unit the test hasn't set, a map it hasn't added doesn't exist: no
 --               waypoint can go on it (the client answers the same for an ID that isn't a map).
@@ -338,6 +343,45 @@ function Harness:HonorKill(victimName, rank, honor)
     return text
 end
 
+local QualityColors = { [0] = "ff9d9d9d", [1] = "ffffffff", [2] = "ff1eff00", [3] = "ff0070dd", [4] = "ffa335ee" }
+
+local function ItemFakes(h)
+    local function Known(item)
+        local known = (h.items or {})[tonumber(item)]
+
+        return ((((known ~= nil) and not known.uncached) and known) or nil)
+    end
+
+    return {
+        GetItemIconByID = function(item)
+            local known = (h.items or {})[tonumber(item)]
+
+            return (known and known.icon)
+        end,
+        GetItemInfo = function(item)
+            local known = Known(item)
+
+            if known then
+                return known.name, h:ItemLink(tonumber(item)), known.quality, nil, nil, nil, nil, nil, nil, known.icon
+            end
+        end,
+    }
+end
+
+-- Adds an item the client knows: name, quality (1 unless given), icon (a file ID), and uncached (GetItemInfo answers
+-- nothing yet).
+function Harness:AddItem(itemID, name, quality, icon, uncached)
+    self.items = (self.items or {})
+    self.items[itemID] = { icon = (icon or 134400), name = name, quality = (quality or 1), uncached = uncached }
+end
+
+-- The item's link, as a shift-click puts it in chat.
+function Harness:ItemLink(itemID)
+    local item = self.items[itemID]
+
+    return ("|c%s|Hitem:%d::::::::|h[%s]|h|r"):format(QualityColors[item.quality] or QualityColors[1], itemID, item.name)
+end
+
 -- The world fakes, merged into the env (env.lua) before it wraps them.
 function Harness:WorldFakes()
     local h = self
@@ -347,6 +391,7 @@ function Harness:WorldFakes()
             IsFeatureAvailable = function() return h.encounterWarnings.available end,
             IsFeatureEnabled = function() return (h.encounterWarnings.available and h.encounterWarnings.enabled) end,
         },
+        C_Item = ItemFakes(h),
         C_Map = MapFakes(h),
         C_SuperTrack = {
             SetSuperTrackedUserWaypoint = function(tracked) SetSuperTracked(h, tracked) end,

@@ -281,3 +281,71 @@ test("an answer for a wish that's gone changes nothing", function()
     Krew.Receive(h, "Mom", "WISHED", "Tester Doe", "1", "1")
     eq(addon.Modules.Wishes:Get("spent"), 0, "nothing is spent on a wish that's gone")
 end)
+
+-- A pet a child might want from a vendor.
+local Siamese = 8490
+
+-- What /tlk wishes prints, with its links.
+local function RawWishes(h)
+    local from = #h.printed
+
+    h:Slash("/tlk wishes")
+
+    return table.concat(h.printed, "\n", from + 1)
+end
+
+test("a child wishes for an item by shift-clicking it into the command, and the wish links it", function()
+    local h = Child()
+
+    h:AddItem(Siamese, "Cat Carrier (Siamese)", 1, 132599)
+    h:Slash("/tlk wish " .. h:ItemLink(Siamese))
+    truthy(RawWishes(h):find("[Cat Carrier (Siamese)]|h|r: waiting for a grown-up to set its price.", 1, true), RawWishes(h))
+    truthy(RawWishes(h):find("|Hitem:" .. Siamese .. ":", 1, true), "the list links the item, for its tooltip")
+    truthy(Wishes(h):find("Cat Carrier (Siamese)", 1, true), Wishes(h))
+end)
+
+test("a grown-up puts a price on an item wish with its link, and the child's card shows the item's icon", function()
+    local h, addon = Child()
+
+    h:AddItem(Siamese, "Cat Carrier (Siamese)", 1, 132599)
+    h:Slash("/tlk wish 3 " .. h:ItemLink(Siamese))
+    truthy(Printed(h):find("Wish added: Cat Carrier (Siamese), for 3 stars.", 1, true), Printed(h))
+    addon.State:Set("Scholar.stars", 3)
+    local text, card = Krew.Card(h)
+
+    truthy(text and text:find("Cat Carrier (Siamese)", 1, true), tostring(text))
+    eq(card.Icon:GetTexture(), 132599, "the Owl's offer shows the item")
+end)
+
+test("a wish for an item carries it through the Krew, so the grown-up's card shows it too", function()
+    local h, addon = Child()
+
+    h:AddItem(Siamese, "Cat Carrier (Siamese)", 1, 132599)
+    h:Slash("/tlk parent Mom Doe")
+    h:Slash("/tlk wish 3 " .. h:ItemLink(Siamese))
+    addon.State:Set("Scholar.stars", 3)
+    h:JoinGroup("party", { "Mom" })
+    h:Echo(false)
+    h:Advance(2)
+    h:Slash("/tlk ask 1")
+    eq(table.concat(Krew.Sent(h, "WISH"), " | "), "WISH:Mom Doe\t1\t3\tCat Carrier (Siamese)\t" .. Siamese)
+
+    local grownUp = Krew.Grouped()
+
+    grownUp:AddItem(Siamese, "Cat Carrier (Siamese)", 1, 132599)
+    Krew.Receive(grownUp, "Mom", "WISH", "Tester Doe", "1", "3", "Cat Carrier (Siamese)", tostring(Siamese))
+    local _, card = Krew.Card(grownUp)
+
+    eq(card.Icon:GetTexture(), 132599, "the grown-up's card shows the item")
+end)
+
+test("an item the client hasn't seen yet reads by its name", function()
+    local h = Child()
+
+    h:AddItem(Siamese, "Cat Carrier (Siamese)", 1, 132599)
+    local link = h:ItemLink(Siamese)
+
+    h.items[Siamese].uncached = true
+    h:Slash("/tlk wish 3 " .. link)
+    truthy(Wishes(h):find("1. Cat Carrier (Siamese): 0 of 3 stars.", 1, true), Wishes(h))
+end)

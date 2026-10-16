@@ -4,7 +4,9 @@ local addonName, ns = ...
 -- game. It runs on every character: a child's wishes live on their character, and a grown-up answers from any.
 --
 --   Wishlist  a grown-up adds a wish with a price (/tlk wish 15 Ride the gryphon together). A child can wish for
---             something too (/tlk wish Get a turtle pet), for a grown-up to price (/tlk price 1 10). /tlk wishes lists
+--             something too (/tlk wish Get a turtle pet), for a grown-up to price (/tlk price 1 10). An item from a
+--             vendor, the auction house, or anywhere else is a shift-click: type /tlk wish, shift-click the item to
+--             put its link in, and press Enter. The wish keeps the item, so lists link it and cards show its icon. /tlk wishes lists
 --             them with how close the stars are, and /tlk unwish 1 takes one off. At most MaxWishes.
 --   Asking    when the stars to spend reach a wish's price, the Owl offers to ask with a question card, and /tlk ask 1
 --             asks too. Asking holds the wish's stars, so they can't be spent twice, until a grown-up answers.
@@ -34,6 +36,7 @@ local MaxText = 60
 local MaxWishes = 12
 local WishIcon = "Interface\\Icons\\INV_Misc_Gift_02"
 
+local C_Item = C_Item
 local concat = table.concat
 local GetServerTime = GetServerTime
 local ipairs = ipairs
@@ -57,6 +60,11 @@ local function GrownUpHere()
     return ((state:Get("Scholar.pin") == 0) or (Addon.Modules.Scholar:IsRunning() and not state:Get("Scholar.locked")))
 end
 
+-- A wish's card icon: its item's, or a gift.
+local function Icon(record)
+    return (((record.item > 0) and C_Item.GetItemIconByID(record.item)) or WishIcon)
+end
+
 -- Whether the one acting is a grown-up: no PIN is set, the challenge is unlocked here, or pin is the PIN. Says how when
 -- it isn't.
 local function IsGrownUp(pin, how)
@@ -71,6 +79,13 @@ local function IsGrownUp(pin, how)
     Addon:Print("That's for a grown-up: " .. (how or ("unlock first with " .. Addon.Slash[1] .. " unlock <pin>.")))
 
     return false
+end
+
+-- A wish's words for chat: the item's link when it has one the client knows, so it shows its tooltip, or its text.
+local function Label(record)
+    local link = ((record.item > 0) and select(2, C_Item.GetItemInfo(record.item)))
+
+    return (link or record.text)
 end
 
 -- The child's wishes, in the order they were made, as { key, record }.
@@ -176,6 +191,14 @@ local function NameParent(arg)
     end
 end
 
+-- The item a link names, and its name, or nil: what a shift-click puts in chat.
+local function ParseItem(text)
+    local id = text:match("|Hitem:(%d+)")
+    local name = text:match("|h%[(.-)%]|h")
+
+    return (id and name and tonumber(id)), name
+end
+
 --- Returns the report card's lines about wishes granted and bonus stars, or none.
 ---@return string[]
 local function ReportLines()
@@ -212,11 +235,11 @@ local function Resolve(key, granted)
         Wishes:Set("lastGranted", wish.text)
         wishes:Remove(key)
 
-        ns.Cards.Show({ body = (wish.text .. ". Have fun!"), icon = WishIcon, sound = SOUNDKIT.LFG_REWARDS,
+        ns.Cards.Show({ body = (wish.text .. ". Have fun!"), icon = Icon(wish), sound = SOUNDKIT.LFG_REWARDS,
             title = "Wish granted!" })
     else
         wishes:Set(key, { asked = false })
-        ns.Cards.Show({ body = (wish.text .. ": your stars are back to spend."), icon = WishIcon, title = "Not this time" })
+        ns.Cards.Show({ body = (wish.text .. ": your stars are back to spend."), icon = Icon(wish), title = "Not this time" })
     end
 end
 
@@ -227,7 +250,13 @@ local function SendWish(key, wish)
     end
 
     for name in pairs(Parents()) do
-        ns.Krew:Send("WISH", { name, key, tostring(wish.price), wish.text })
+        local fields = { name, key, tostring(wish.price), wish.text }
+
+        if wish.item > 0 then
+            fields[5] = tostring(wish.item)
+        end
+
+        ns.Krew:Send("WISH", fields)
     end
 end
 
@@ -240,7 +269,9 @@ local function AddWish(arg)
     local wishes = Wishes.Records.wishes
     local stars = (price and GrownUpHere() and CleanCount(price, MaxPrice))
     -- A grown-up's number is the price. A child's is part of the wish.
-    local raw = ((stars and priced) or arg or "")
+    local rest = ((stars and priced) or arg or "")
+    local item, name = ParseItem(rest)
+    local raw = (name or rest)
     -- Cleaned as the Krew cleans what it receives, so it fits a WISH message.
     local text = CleanText(raw)
 
@@ -254,7 +285,7 @@ local function AddWish(arg)
         local id = (Wishes:Get("nextWish") + 1)
 
         Wishes:Set("nextWish", id)
-        wishes:Set(tostring(id), { price = (stars or 0), text = text })
+        wishes:Set(tostring(id), { item = (item or 0), price = (stars or 0), text = text })
 
         if stars then
             Addon:Print(("Wish added: %s, for %s."):format(text, Stars(stars)))
@@ -279,8 +310,8 @@ local function Ask(entry)
         Wishes.Records.wishes:Set(entry.key, { asked = true })
 
         Wishes.Records.asks:Set(Me() .. "#" .. entry.key, {
-            answer = "", at = GetServerTime(), id = tonumber(entry.key), krew = false, price = wish.price,
-            text = wish.text, who = Me(),
+            answer = "", at = GetServerTime(), id = tonumber(entry.key), item = wish.item, krew = false,
+            price = wish.price, text = wish.text, who = Me(),
         })
 
         SendWish(entry.key, wish)
@@ -298,7 +329,7 @@ local function Offer(gained)
         if (wish.price > 0) and not wish.asked and (balance >= wish.price) and ((balance - gained) < wish.price) then
             ns.Cards.Show({
                 body = ("Ask a grown-up for %s (%s)? Click to ask."):format(wish.text, Stars(wish.price)),
-                icon = WishIcon, onClick = Wishes:Callback(Ask, entry), title = "You have enough stars!",
+                icon = Icon(wish), onClick = Wishes:Callback(Ask, entry), title = "You have enough stars!",
             })
 
             return
@@ -385,7 +416,7 @@ local function ShowRequest(key, ask)
     ns.Cards.Show({
         body = (("%s wishes for %s (%s). Click to grant it, or right-click to decide later (%s wishes)."):format(ask.who,
             ask.text, Stars(ask.price), Addon.Slash[1])),
-        icon = WishIcon, onClick = Wishes:Callback(Answer, key, true, nil, position), title = "A wish!",
+        icon = Icon(ask), onClick = Wishes:Callback(Answer, key, true, nil, position), title = "A wish!",
     })
 end
 
@@ -415,7 +446,7 @@ local function ShowWishes()
                 status = "asked! Waiting for a grown-up's answer."
             end
 
-            Addon:Print(("%d. %s: %s"):format(i, wish.text, status))
+            Addon:Print(("%d. %s: %s"):format(i, Label(wish), status))
         end
 
         Addon:Print(("Stars to spend: %d."):format(balance))
@@ -428,7 +459,7 @@ local function ShowWishes()
 
         for i, entry in ipairs(waiting) do
             Addon:Print(("%d. %s wishes for %s (%s). %s grant %d, or %s deny %d."):format(i, entry.ask.who,
-                entry.ask.text, Stars(entry.ask.price), slash, i, slash, i))
+                Label(entry.ask), Stars(entry.ask.price), slash, i, slash, i))
         end
     end
 end
@@ -495,12 +526,15 @@ Wishes = Addon:Module("Wishes", {
             local id = CleanCount(fields[2] or "", 999999)
             local price = CleanCount(fields[3] or "", MaxPrice)
             local text = CleanText(fields[4] or "")
+            -- The item the wish is for, when it's one: the fifth field.
+            local item = (CleanCount(fields[5] or "", 99999999) or 0)
 
             if (CleanText(fields[1] or "") == Me()) and id and price and (text ~= "") then
                 local key = (sender .. "#" .. id)
 
                 module.Records.asks:Set(key, {
-                    answer = "", at = GetServerTime(), id = id, krew = true, price = price, text = text, who = sender,
+                    answer = "", at = GetServerTime(), id = id, item = item, krew = true, price = price, text = text,
+                    who = sender,
                 })
 
                 ShowRequest(key, module.Records.asks:Get(key))
@@ -520,6 +554,8 @@ Wishes = Addon:Module("Wishes", {
         -- The child's wishes: what, its price (0 until a grown-up sets one), and whether it's asked for.
         { fields = {
                 { default = false, kind = "boolean", name = "asked" },
+                -- The item the wish is for, or 0.
+                { default = 0, kind = "number", min = 0, name = "item", step = 1 },
                 { default = 0, kind = "number", max = MaxPrice, min = 0, name = "price", step = 1 },
                 { default = "", kind = "string", name = "text" },
             },
@@ -532,6 +568,7 @@ Wishes = Addon:Module("Wishes", {
                 { default = 0, kind = "number", min = 0, name = "at" },
                 { default = "", kind = "string", name = "by" },
                 { default = 0, kind = "number", min = 0, name = "id", step = 1 },
+                { default = 0, kind = "number", min = 0, name = "item", step = 1 },
                 { default = false, kind = "boolean", name = "krew" },
                 { default = 0, kind = "number", max = MaxPrice, min = 0, name = "price", step = 1 },
                 { default = "", kind = "string", name = "text" },

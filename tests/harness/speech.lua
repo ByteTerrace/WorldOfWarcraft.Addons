@@ -25,6 +25,8 @@
 --         whether or not chat narration (the textToSpeech CVar) is on. Recorded: { api =
 --         "C_VoiceChat.SpeakText", voiceID, text, rate, volume, overlap }. [G] The playback
 --         events (VOICE_CHAT_TTS_PLAYBACK_STARTED / _FINISHED) aren't fired.
+--   C_VoiceChat.StopSpeakingText() stops what text to speech is saying [D]. Each call counts in
+--     h.speechStops.
 
 local Snapshot = __snapshot
 local Categories = Snapshot.enums.CombatAudioAlertCategory
@@ -39,6 +41,7 @@ end
 
 function Harness:InitSpeech(player)
     self.spoken = {}
+    self.speechStops = 0
     self.combatAudioAlerts = (player.combatAudioAlerts == true)
     self.ttsVoices = { { name = "Harness Voice", voiceID = 0 } }
     self.tts = { rate = 0, voices = { [0] = 0, [1] = 0 }, volume = 100 }
@@ -113,6 +116,9 @@ function Harness:SpeechFakes()
                     api = "C_VoiceChat.SpeakText", overlap = (overlap == true), rate = rate, text = text,
                     voiceID = voiceID, volume = volume,
                 }
+            end,
+            StopSpeakingText = function()
+                h.speechStops = (h.speechStops + 1)
             end,
         },
     }

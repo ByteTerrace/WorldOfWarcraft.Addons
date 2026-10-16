@@ -728,6 +728,8 @@ Kindergarten and grade 1 also get riddles that are heard, not read:
 
 The word or story never appears on screen, and **Read aloud** becomes **Hear it again**. Speech uses the player's text-to-speech voice, rate, and volume. With no voice, nothing is said, and no heard riddle is asked.
 
+The Owl reads quests aloud too, following **Read riddles aloud**. When a quest dialog opens, it says who's speaking and the quest's name, then reads the offer's story and what to do, the turn-in's question, or the words when it's turned in ("Eagan Peltskinner says: Wolves Across the Border. ..."). Closing the dialog stops it. Type `/tlk read` to hear the open quest again, whatever the setting says. **Read quests aloud**, at the end of the **Scholar's challenge** page, turns it off.
+
 The Owl also counts quest progress aloud, following **Read riddles aloud**:
 
 - When an objective goes up: "Tough Wolf Meat: 3 of 8. 5 more to go!" The last one is "all 8. Done!", and a one-step task is "done!"

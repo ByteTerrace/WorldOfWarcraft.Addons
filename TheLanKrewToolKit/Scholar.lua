@@ -151,7 +151,7 @@ local function Bank()
     end
 end
 
--- Whether the client has a text-to-speech voice to say a riddle with (probe tts.voices).
+--- Returns whether the client has a text-to-speech voice to say a riddle with (probe tts.voices).
 local function CanHear()
     return (next(C_VoiceChat.GetTtsVoices() or {}) ~= nil)
 end
@@ -963,5 +963,6 @@ Scholar = Addon:Module("Scholar", {
     uses = { "QuestBook" },
 })
 
--- Scholar's voice, for the other features that speak to a young scholar (QuestProgress.lua's QuestCount).
-ns.ScholarVoice = { ReadsAloud = ReadsAloud, Say = Say }
+-- Scholar's voice, for the other features that speak to a young scholar (QuestProgress.lua's QuestCount and
+-- QuestReader.lua).
+ns.ScholarVoice = { CanHear = CanHear, ReadsAloud = ReadsAloud, Say = Say }

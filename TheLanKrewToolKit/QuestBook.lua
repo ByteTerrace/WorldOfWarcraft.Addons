@@ -30,6 +30,7 @@ local addonName, ns = ...
 --                                   with a riddle of kind (askedKind, "" for none)
 --   ns.QuestBook.All()              every record, as copies with their key, newest first
 --   ns.QuestBook.ObjectiveName(text, kind)  what an objective's text names ("Wolf Pelt")
+--   ns.QuestBook.Plain(text, length)  a client text without its escape codes (see Plain)
 --
 -- Records are QuestBook.quests, keyed by the quest ID as text, up to Limit of them (the oldest seen go first). Texts
 -- are whole, keep their line breaks, and lose the client's escape codes (a link keeps its text, a texture goes). An
@@ -188,10 +189,13 @@ local function Order()
     return keys
 end
 
--- A text the client gave, plain. It's "" for a secret or a non-string. Otherwise, its escape codes are undone (a link
--- keeps its text, a texture goes, |n is a line break), control characters other than line breaks are removed, and it's
--- trimmed. With length (a one-line field), it's cut to length bytes, at the last whole sentence (else word) that fits.
--- A quest's text is kept whole, as the log shows it.
+--- Returns a text the client gave, plain. It's "" for a secret or a non-string. Otherwise, its escape codes are undone
+--- (a link keeps its text, a texture goes, |n is a line break), control characters other than line breaks are removed,
+--- and it's trimmed. With length (a one-line field), it's cut to length bytes, at the last whole sentence (else word)
+--- that fits. A quest's text is kept whole, as the log shows it.
+---@param text any
+---@param length integer?
+---@return string
 local function Plain(text, length)
     if issecretvalue(text) or (type(text) ~= "string") then
         return ""
@@ -472,4 +476,6 @@ QuestBookModule = Addon:Module("QuestBook", {
     toggle = false,
 })
 
-ns.QuestBook = { All = All, Asked = Asked, MaxObjectives = MaxObjectives, ObjectiveName = ObjectiveName, Order = Order }
+ns.QuestBook = {
+    All = All, Asked = Asked, MaxObjectives = MaxObjectives, ObjectiveName = ObjectiveName, Order = Order, Plain = Plain,
+}

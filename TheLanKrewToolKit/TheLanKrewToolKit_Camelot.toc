@@ -44,3 +44,4 @@ ScholarPictures.lua
 ScholarView.lua
 Scholar.lua
 QuestProgress.lua
+QuestReader.lua

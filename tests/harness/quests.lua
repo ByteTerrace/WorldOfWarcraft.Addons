@@ -3,17 +3,21 @@
 --
 -- State: h.questLog (the quests in the log, in order: { id, title, text, goal, objectives, header, level }),
 -- h.objectiveHave ([questID] = { [objective index] = how many are done }, from h:ProgressObjective), h.questTitles
--- ([questID] = title, for every quest the client has seen), and h.questDialog (nil, or { panel = "detail" | "reward",
--- quest, reward }) with the giver as the "questnpc" and "npc" units while it's open. A quest spec is { id, title, text
--- (the description), goal (the objective summary), objectives = { { text (what the objective names: an item, a
--- creature, a task), required, have (how many are done, 0 unless given), type ("item" unless given), uncached } },
--- header (the log's zone header), level }. Missing fields get stand-ins. h.gossip is the open gossip window's NPC (or
--- nil), and h.interactions the open interaction manager windows ([Enum.PlayerInteractionType value] = true).
+-- ([questID] = title, for every quest the client has seen), and h.questDialog (nil, or { panel = "detail" | "progress"
+-- | "reward", quest, progress, reward }) with the giver as the "questnpc" and "npc" units while it's open. A quest spec
+-- is { id, title, text (the description), goal (the objective summary), objectives = { { text (what the objective
+-- names: an item, a creature, a task), required, have (how many are done, 0 unless given), type ("item" unless given),
+-- uncached } }, header (the log's zone header), level }. Missing fields get stand-ins. h.gossip is the open gossip
+-- window's NPC (or nil), and h.interactions the open interaction manager windows ([Enum.PlayerInteractionType value] =
+-- true).
 --
 --   h:OfferQuest(spec, giver)     the giver's offer panel: QUEST_DETAIL(0)
 --   h:AcceptQuest()               accepts the offer: QUEST_ACCEPTED(id), QUEST_LOG_UPDATE, QUEST_FINISHED
 --   h:AutoAcceptQuest(spec)       an area trigger's quest, straight into the log: no dialog, no text shown
+--   h:OpenProgress(id, ender, text)  the progress panel of a quest in the log, before its
+--                                 objectives are done ("Have you got them?"): QUEST_PROGRESS
 --   h:OpenTurnIn(id, ender, reward)  the reward panel of a quest in the log: QUEST_COMPLETE
+--   h:CloseQuestDialog()          walks away from the open dialog: QUEST_FINISHED
 --   h:CompleteQuest(xp, money)    selects Complete Quest: QUEST_TURNED_IN(id, xp, money),
 --                                 QUEST_REMOVED(id, false), QUEST_LOG_UPDATE, QUEST_FINISHED
 --   h:LoadQuestNames()            the client has loaded the names uncached objectives lacked:
@@ -29,7 +33,8 @@
 -- where neither says):
 --   Dialogs     [D] Forever loads the Mainline QuestFrame (Blizzard_UIPanels_Game's TOC, [Family]):
 --               QUEST_DETAIL shows QuestFrameDetailPanel, which reads GetTitleText, GetQuestText,
---               and GetObjectiveText; QUEST_COMPLETE shows QuestFrameRewardPanel (GetRewardText);
+--               and GetObjectiveText; QUEST_PROGRESS shows QuestFrameProgressPanel
+--               (GetProgressText); QUEST_COMPLETE shows QuestFrameRewardPanel (GetRewardText);
 --               QUEST_FINISHED hides the frame; the frame's title is UnitName("questnpc"). An area
 --               trigger's auto-accepted quest closes the dialog without showing it. [E] Those texts
 --               and GetQuestID's number are plain out of combat (quest.offer, quest.turnIn,
@@ -224,6 +229,7 @@ local function SetPanel(h, panel)
 
     h:SetWidgetShown(rawget(env, "QuestFrame"), panel ~= nil)
     h:SetWidgetShown(rawget(env, "QuestFrameDetailPanel"), panel == "detail")
+    h:SetWidgetShown(rawget(env, "QuestFrameProgressPanel"), panel == "progress")
     h:SetWidgetShown(rawget(env, "QuestFrameRewardPanel"), panel == "reward")
 end
 
@@ -279,6 +285,13 @@ function Harness:CloseInteraction(name)
     if name == "TaxiNode" then
         self:Fire("TAXIMAP_CLOSED")
     end
+end
+
+--- Opens the reward panel of a quest in the log; ender is a unit table or a name. Walks away from the open quest
+--- dialog.
+function Harness:CloseQuestDialog()
+    assert(self.questDialog, "CloseQuestDialog: no quest dialog is open")
+    CloseDialog(self)
 end
 
 --- Completes the quest whose reward panel is open: it leaves the log and the dialog closes.
@@ -338,7 +351,15 @@ function Harness:OpenInteraction(name)
     self:Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", value)
 end
 
---- Opens the reward panel of a quest in the log; ender is a unit table or a name.
+--- Opens the progress panel of a quest in the log, as its ender asks for what it needs.
+function Harness:OpenProgress(questID, ender, text)
+    assert(not self.questDialog, "OpenProgress: a quest dialog is already open")
+    local quest = assert(LogQuest(self, questID), "OpenProgress: quest " .. tostring(questID) .. " isn't in the log")
+
+    OpenDialog(self, { panel = "progress", progress = (text or "Have you got them?"), quest = quest }, ender)
+    self:Fire("QUEST_PROGRESS")
+end
+
 function Harness:OpenTurnIn(questID, ender, reward)
     assert(not self.questDialog, "OpenTurnIn: a quest dialog is already open")
     local quest = assert(LogQuest(self, questID), "OpenTurnIn: quest " .. tostring(questID) .. " isn't in the log")
@@ -419,6 +440,11 @@ function Harness:QuestFakes(uiParent)
 
             return ((dialog and dialog.quest.goal) or "")
         end,
+        GetProgressText = function()
+            local dialog = Dialog("progress")
+
+            return ((dialog and dialog.progress) or "")
+        end,
         GetQuestID = function()
             local dialog = Dialog()
 
@@ -455,7 +481,7 @@ function Harness:QuestFakes(uiParent)
     Harness.State(frame).shown = false
     fakes.QuestFrame = frame
 
-    for _, name in ipairs({ "QuestFrameDetailPanel", "QuestFrameRewardPanel" }) do
+    for _, name in ipairs({ "QuestFrameDetailPanel", "QuestFrameProgressPanel", "QuestFrameRewardPanel" }) do
         local panel = h:CreateWidget("Frame", name, frame)
 
         Harness.State(panel).shown = false

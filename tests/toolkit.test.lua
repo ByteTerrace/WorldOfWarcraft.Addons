@@ -64,7 +64,7 @@ test("loads cleanly and builds its settings window, organized into pages and sec
             .. " [Nameplate badges] Badges.enabled [Nearby enemies window] Radar.enabled Radar.share"),
         ("Scholar's challenge: Scholar.enabled [Riddles] Scholar.grade Scholar.math Scholar.reading Scholar.quests"
             .. " Scholar.readAloud [When] Scholar.interval Scholar.onLevelUp Scholar.onFlight Scholar.onTurnIn Scholar.onDeath Scholar.mode"
-            .. " [Count quest progress aloud] QuestCount.enabled"),
+            .. " [Count quest progress aloud] QuestCount.enabled [Read quests aloud] QuestReader.enabled"),
     }
 
     local window = addon.SettingsWindow

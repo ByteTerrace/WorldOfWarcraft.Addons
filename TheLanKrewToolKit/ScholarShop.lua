@@ -188,8 +188,10 @@ local function Draw()
 
     panel.Lines:SetText(((#lines > 0) and table.concat(lines, "\n")) or "Looks fine to the Owl.")
 
-    panel.Price:SetText((item.price and ("Wish for it: %s"):format(((Advice.Stars(item.price, ns.ScholarWishes.Worth()) == 1)
-        and "1 star") or (Advice.Stars(item.price, ns.ScholarWishes.Worth()) .. " stars"))) or "")
+    local stars = ns.ScholarWishes.PriceInStars(item.price)
+
+    panel.Price:SetText((stars and ("Wish for it: " .. ns.ScholarWishes.Stars(stars)))
+        or (item.price and "Wish for it: a grown-up will set its price") or "")
 
     panel.Wish:Enable()
 end

@@ -141,6 +141,19 @@ test("quest riddles are preferred, two to every math or reading riddle: fresh qu
     eq(Solve(h, shown).subject, ((third == "math") and "reading") or "math", "math and reading take turns")
 end)
 
+test("math and reading take turns across a /reload and a relog too", function()
+    for _, way in ipairs({ "reload", "relog" }) do
+        local h, _, ns = LoadKid({ ["Scholar.quests"] = false })
+        local shown = Watch(ns)
+        local first = Solve(h, shown).subject
+
+        if way == "reload" then h:Reload() else h:Relog(60) end
+
+        shown = Watch(h.ns)
+        eq(Solve(h, shown).subject, ((first == "math") and "reading") or "math", way)
+    end
+end)
+
 test("with only quest riddles on, older quests come back for review", function()
     local h, _, ns = LoadKid({ ["Scholar.math"] = false, ["Scholar.reading"] = false })
     local shown = Watch(ns)

@@ -127,6 +127,30 @@ test("a riddle whose subject a parent switched off gives way to a fresh one", fu
     truthy(again.subject ~= puzzle.subject, "and it's from the subject still on")
 end)
 
+test("a fresh riddle in a dropped one's place starts with no pause: the old riddle's misses don't follow it", function()
+    for _, way in ipairs({ "subject", "unreadable" }) do
+        local h, addon, puzzle = Riddle()
+
+        h:Key(tostring(WrongAnswer(puzzle)), true)
+
+        if way == "subject" then
+            addon.State:Set("Scholar." .. puzzle.subject, false)
+        else
+            addon.State:Set("Scholar.riddle", "n1;")
+        end
+
+        h:Reload()
+        local _, frame = Returned(h)
+
+        for i = 1, 4 do
+            truthy(frame.Buttons[i]:IsEnabled(), way .. ": answer " .. i .. " can be chosen at once")
+        end
+
+        eq(h.ns.Addon.State:Get("Scholar.pauseLeft"), 0, way)
+        eq(h.ns.Addon.State:Get("Scholar.pauseMisses"), 0, way .. ": the next miss starts the pauses over")
+    end
+end)
+
 test("a saved riddle that can't be read gives way to a fresh one", function()
     for _, saved in ipairs({ "{s3:abc", "{s6:prompts2:hi}", "n1;" }) do
         local h, addon, puzzle = Riddle()

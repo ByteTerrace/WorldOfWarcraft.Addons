@@ -67,8 +67,9 @@ local Rows = {
         kind = "string", label = "Riddle style", lockedBy = LockedBy, name = "style", scope = "character",
         valueLabels = { gate = "Solve to keep playing", gentle = "Gentle (Skip after one try)" },
         values = { "gate", "gentle" } },
-    -- Progress, per character. elapsed is seconds of play toward the next riddle, and questRun is the quest riddles
-    -- asked since math or reading last took a turn.
+    -- Progress, per character. elapsed is seconds of play toward the next riddle, questRun is the quest riddles asked
+    -- since math or reading last took a turn, and lastSubject is the one that took it, so the other goes next, a
+    -- /reload or relog between them included.
     { default = 0, kind = "number", name = "stars", scope = "character" },
     { default = 0, kind = "number", name = "streak", scope = "character" },
     -- Each subject's difficulty (1 to 3), its first-try rights in a row (every third makes it harder), and how many of
@@ -91,6 +92,7 @@ local Rows = {
     { default = 0, kind = "number", min = 0, name = "pauseMisses", scope = "character", step = 1 },
     { default = false, kind = "boolean", name = "pending", scope = "character" },
     { default = 0, kind = "number", min = 0, name = "questRun", scope = "character", step = 1 },
+    { default = "", kind = "string", name = "lastSubject", scope = "character" },
     -- The riddle on screen until it's solved or skipped, with its misses and missed answers (ScholarKeep.lua), so a
     -- /reload, a relog, or the challenge switched off and on brings back the same riddle. Empty while there's none.
     { default = "", kind = "string", name = "riddle", scope = "character" },

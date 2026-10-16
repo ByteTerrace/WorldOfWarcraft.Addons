@@ -32,9 +32,10 @@ local addonName, ns = ...
 --
 --   ns.ScholarWishes.Balance()      the stars to spend
 --   ns.ScholarWishes.Open()         opens the wishes window (out of combat)
+--   ns.ScholarWishes.PriceInStars(price)  a gold price in stars at a star's worth, or nil past what a wish can cost
 --   ns.ScholarWishes.ReportLines()  the report card's lines about wishes and bonus stars
---   ns.ScholarWishes.WishFor(item, name, price)  a wish for an item, priced from its gold price at a star's worth
---   ns.ScholarWishes.Worth()        what a star is worth, in copper (the starWorth setting)
+--   ns.ScholarWishes.Stars(count)   "1 star" or "<count> stars"
+--   ns.ScholarWishes.WishFor(item, name, price)  a wish for an item, priced in stars (PriceInStars)
 
 -- The most bonus stars one /tlk star gives.
 local MaxBonus = 10
@@ -582,6 +583,16 @@ View.Init({
     end,
 })
 
+--- Returns an item's gold price in stars at a star's worth (ns.ScholarAdvice.Stars), or nil when it has no price or
+--- costs more stars than a wish can (MaxPrice): then a grown-up sets it.
+---@param price number? its gold price, in copper
+---@return number? stars
+local function PriceInStars(price)
+    local stars = (price and ns.ScholarAdvice.Stars(price, Worths[Wishes:Get("starWorth")]))
+
+    return (((stars ~= nil) and (stars <= MaxPrice) and stars) or nil)
+end
+
 local function ShowWishes()
     OpenWindow()
     local slash = Addon.Slash[1]
@@ -627,8 +638,8 @@ local function ShowWishes()
     end
 end
 
---- Adds a wish for an item, priced from its gold price at a star's worth (ns.ScholarAdvice.Stars), so the child can ask
---- for it at once. Without a price, a grown-up sets it.
+--- Adds a wish for an item, priced in stars (PriceInStars), so the child can ask for it at once. Without a price, a
+--- grown-up sets it.
 ---@param item number the item's ID
 ---@param name string its name
 ---@param price number? its gold price, in copper
@@ -642,7 +653,7 @@ local function WishFor(item, name, price)
     end
 
     local id = (Wishes:Get("nextWish") + 1)
-    local stars = (price and ns.ScholarAdvice.Stars(price, Worths[Wishes:Get("starWorth")]))
+    local stars = PriceInStars(price)
     local text = CleanText(name):sub(1, MaxText)
 
     Wishes:Set("nextWish", id)
@@ -650,12 +661,6 @@ local function WishFor(item, name, price)
 
     Addon:Print(((stars and ("Added to your wishes: %s, for %s.")) or "Added to your wishes: %s. A grown-up will set its price.")
         :format(text, (stars and Stars(stars)) or ""))
-end
-
---- Returns what a star is worth, in copper.
----@return number
-local function Worth()
-    return Worths[Wishes:Get("starWorth")]
 end
 
 Wishes = Addon:Module("Wishes", {
@@ -808,4 +813,6 @@ Wishes = Addon:Module("Wishes", {
     toggle = false,
 })
 
-ns.ScholarWishes = { Balance = Balance, Open = OpenWindow, ReportLines = ReportLines, WishFor = WishFor, Worth = Worth }
+ns.ScholarWishes = {
+    Balance = Balance, Open = OpenWindow, PriceInStars = PriceInStars, ReportLines = ReportLines, Stars = Stars, WishFor = WishFor,
+}

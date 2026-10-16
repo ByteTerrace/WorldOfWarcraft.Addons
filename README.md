@@ -620,7 +620,7 @@ Enemy names are readable outside PvP matches. Every message from the Krew is che
 
 The Scholar's challenge asks young players riddles about their own quests, plus math and reading, set up by a parent. It's off by default and set per character, so turn it on for your child's characters only.
 
-Math and reading alternate between quest riddles. Quest riddles, math, and reading can each be switched off. Many riddles use the character's own name, class, zone, and gold.
+Math and reading alternate between quest riddles, across a `/reload` or relog too. Quest riddles, math, and reading can each be switched off. Many riddles use the character's own name, class, zone, and gold.
 
 > [!NOTE]
 > It's meant to be fun, not a hard limit. A controller's sticks still move the character, and a determined child can disable the addon at character select. For hard limits, use Blizzard's parental controls (play time limits in Battle.net account settings).
@@ -819,7 +819,7 @@ At a vendor or the auction house, the Owl helps your child spend their gold well
 - whether they'll soon outgrow it ("You'll outgrow this soon. Quests give gear like this.")
 - whether it costs too much of their gold ("That's most of your gold! Maybe wish for it instead.")
 
-**Wish for it** (L3 on a controller, or the panel's button) adds the item to their wishes, priced in stars from what the vendor or the auction house asks: its price at what a star is worth, rounded up. They can ask for it at once, without a grown-up setting a price first. **A star is worth** (1, 5, 10, or 50 silver, or 1 gold, and 10 silver unless you change it) and **The Owl's shopping help** are under **Wishes** on the **Scholar's challenge** page, behind the parent lock. The help only reads what the vendor and the auction house show: it never buys, bids, or searches.
+**Wish for it** (L3 on a controller, or the panel's button) adds the item to their wishes, priced in stars from what the vendor or the auction house asks: its price at what a star is worth, rounded up. They can ask for it at once, without a grown-up setting a price first. An item that would cost more than 999 stars waits for a grown-up's price instead. **A star is worth** (1, 5, 10, or 50 silver, or 1 gold, and 10 silver unless you change it) and **The Owl's shopping help** are under **Wishes** on the **Scholar's challenge** page, behind the parent lock. The help only reads what the vendor and the auction house show: it never buys, bids, or searches.
 
 A request reaches a grown-up two ways:
 - **On the same account,** as a card the next time you log in on any character, and in `/tlk wishes`.

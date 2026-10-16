@@ -113,6 +113,20 @@ test("in the auction house, an item's price is its lowest buyout", function()
     eq(Text(Panel(h).Price), "Wish for it: 5 stars")
 end)
 
+test("an item dearer than the most stars a wish can cost waits for a grown-up's price instead of failing", function()
+    local h, addon = Shopper()
+
+    -- 5000 gold at 10 silver a star is 50,000 stars; a wish costs at most 999.
+    h.auctionResults = { { id = Vest, minPrice = 50000000 } }
+    h:OpenInteraction("Auctioneer")
+    h:ShowItemTooltip(Vest)
+    eq(Text(Panel(h).Price), "Wish for it: a grown-up will set its price")
+    h:Gamepad("PADLSTICK", true)
+    eq(#h.errors, 0, table.concat(h.errors, "\n"))
+    truthy(table.concat(h.printed, "\n"):find("Added to your wishes: Linen Vest. A grown-up will set its price.", 1, true))
+    eq(addon.Modules.Wishes.Records.wishes:Get("1").price, 0, "unpriced")
+end)
+
 test("away from a vendor nothing changes, and closing the vendor hides the panel and gives L3 back", function()
     local h = Shopper()
 

@@ -119,7 +119,6 @@ local Counting = false
 -- The riddle on screen (or waiting out a fight) until it's solved or skipped, how many of its tries missed (the hint's
 -- rung), and which answers they picked ([i] = true), so a riddle that comes back keeps them.
 local Current = nil
-local LastSubject
 local Missed = {}
 -- The seconds the answers left wait after the first, second, and third miss, by the missPause setting.
 local Pauses = { long = { 4, 7, 10 }, short = { 2, 4, 6 } }
@@ -612,11 +611,11 @@ local function NextPuzzle()
 
     local subject = subjects[1]
 
-    if (#subjects == 2) and (LastSubject == subject) then
+    if (#subjects == 2) and (Scholar:Get("lastSubject") == subject) then
         subject = subjects[2]
     end
 
-    LastSubject = subject
+    Scholar:Set("lastSubject", subject)
     local grade = tonumber(Scholar:Get("grade"))
     local known = QuestBook.All()
     local canHear = CanHear()
@@ -650,11 +649,14 @@ local function NextPuzzle()
     return puzzle
 end
 
--- Asks the next riddle and keeps it (ScholarKeep), so a /reload brings back the same one.
+-- Asks the next riddle and keeps it (ScholarKeep), so a /reload brings back the same one. A new riddle starts with no
+-- pause: one a dropped riddle left (its subject switched off, or unreadable) isn't its own.
 local function Ask()
     local puzzle = NextPuzzle()
 
     if puzzle then
+        Scholar:Set("pauseLeft", 0)
+        Scholar:Set("pauseMisses", 0)
         Keep.Save(Scholar, puzzle, 0, Missed)
     end
 

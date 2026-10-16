@@ -316,8 +316,7 @@
         "stackCount": "number",
         "texture": "number"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70374)"
+      "contexts": { "idle/none": true }
     },
     "namePlate.enemyNPC": {
       "result": { "forbidden": false, "hasUnitFrame": true, "objectType": "NamePlate", "plate": "table" },

@@ -668,6 +668,14 @@ Every riddle teaches. A wrong pick says why that answer is tempting but not it (
 
 **Need a hint?** gives the rung the riddle is on. A right answer always shows the working, with praise for the strategy used, or for sticking with it after a miss. It never praises being smart.
 
+After a miss, the answers left wait a moment before they can be picked, so trying every answer in a row doesn't work and the hint gets read. Each waiting answer's keycap counts the seconds down, and the wait grows with each miss on the riddle. **Need a hint?**, **Read aloud**, the quest book, and **Skip** still work while the answers wait. **Pause after a wrong answer**, on the **Scholar's challenge** page, sets it:
+
+| Setting | After the first, second, and third miss |
+| --- | --- |
+| **Short** (the default) | 2, 4, and 6 seconds |
+| **Long** | 4, 7, and 10 seconds |
+| **Off** | No wait |
+
 The choices can't be guessed by position. The mistake the riddle is about is always one of the choices. Among four numbers, the answer is a middle one no more often than that mistake's place allows: two times in three, where chance is one in two.
 
 #### Math riddles

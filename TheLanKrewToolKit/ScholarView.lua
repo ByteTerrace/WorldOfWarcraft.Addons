@@ -642,6 +642,22 @@ function ScholarView.ToggleBook()
     Refit()
 end
 
+--- Makes the answers still open wait seconds before they can be picked (the pause after a miss), dimmed, with their
+--- keycaps counting it down; 0 wakes them, with their keys back. A revealed answer keeps its glow while it waits.
+---@param seconds integer
+function ScholarView.Wait(seconds)
+    for i, button in ipairs(Overlay.Buttons) do
+        if button.State ~= "wrong" then
+            button.Key:SetText(((seconds > 0) and tostring(seconds)) or Overlay.m_keys[i])
+            button:SetEnabled(seconds <= 0)
+
+            if button.State ~= "reveal" then
+                Paint(button, ((seconds > 0) and "dim") or "normal")
+            end
+        end
+    end
+end
+
 --- Marks answer i wrong (it shakes and can't be picked again), shows the hint, and offers Skip when canSkip.
 ---@param i integer
 ---@param hint string

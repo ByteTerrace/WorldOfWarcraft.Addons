@@ -33,6 +33,8 @@ local addonName, ns = ...
 --            default), each choice with the key that picks it, and a hovered choice again. A heard
 --            riddle (ScholarWords.heard) always says its word, and its button is Hear it again.
 --            With no text-to-speech voice, nothing speaks and no heard riddle is asked.
+--   Pause    after a miss, the answers left wait (the missPause setting: Pauses seconds, longer
+--            each miss), their keycaps counting down, so the hint gets read before the next try.
 --   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the
 --            grade (math and reading only: a quest riddle never changes it).
 --
@@ -133,6 +135,8 @@ local Counting = false
 local Current = nil
 local LastSubject
 local Missed = {}
+-- The seconds the answers left wait after the first, second, and third miss, by the missPause setting.
+local Pauses = { long = { 4, 7, 10 }, short = { 2, 4, 6 } }
 -- The end of the file assigns the module.
 local Scholar
 -- The GetTime() the running stretch of play started at.
@@ -328,74 +332,6 @@ local function Progress(extra)
     return info
 end
 
-local function Choose(i)
-    local buttons = (ScholarView.IsShown() and ScholarView.Frame().Buttons)
-
-    if not Current or Scholar:Get("solved") or not buttons or (buttons[i] and not buttons[i]:IsEnabled()) then
-        return
-    end
-
-    -- Each subject's level row is the difficulty its riddles are written at: a quest riddle never changes one.
-    local adapts = ((Current.questKey == nil) and not Current.stretch)
-    local firstTry = Memory.Record(Scholar, Current, i)
-    local earned = ((Current.stretch and 2) or 1)
-    local levelRow = (Current.subject .. "Level")
-    local runRow = (Current.subject .. "Run")
-
-    if i == Current.answer then
-        -- The riddle stops being due now, so a /reload during the celebration doesn't ask another. The solved row holds
-        -- the screen until Finish closes it.
-        Scholar:Set("solved", true)
-        Scholar:Set("pending", false)
-        Scholar:Set("elapsed", 0)
-
-        if Current.questKey then
-            -- Marked answered, so a /reload in the celebration doesn't ask it again.
-            QuestBook.Asked(Current.questKey, Current.kind)
-        end
-
-        local streak = (Scholar:Get("streak") + 1)
-
-        Scholar:Set("streak", streak)
-        Scholar:Set("stars", Scholar:Get("stars") + earned)
-        local levelUp = false
-
-        if adapts and firstTry then
-            local run = (Scholar:Get(runRow) + 1)
-
-            Scholar:Set(runRow, run)
-            levelUp = (((run % 3) == 0) and (Scholar:Get(levelRow) < 3))
-
-            if levelUp then
-                Scholar:Set(levelRow, Scholar:Get(levelRow) + 1)
-            end
-        end
-
-        -- Praise names the strategy on a first try, and the persistence after a miss.
-        local praise = (((Wrongs == 0) and Current.praise) or Words.persistence[random(1, #Words.persistence)])
-
-        ScholarView.Correct(i, (Current.explanation .. " " .. praise), Progress({ earned = earned, levelUp = levelUp }))
-        C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LIST_COMPLETE)
-        Scholar:After(FinishDelay, function() Finish(true) end)
-    else
-        Wrongs = (Wrongs + 1)
-        Missed[i] = true
-        Scholar:Set("streak", 0)
-
-        if adapts then
-            Scholar:Set(runRow, 0)
-        end
-
-        if adapts and (Wrongs == 2) and (Scholar:Get(levelRow) > 1) then
-            Scholar:Set(levelRow, Scholar:Get(levelRow) - 1)
-        end
-
-        local label, help, reveal = Help()
-
-        ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("mode") == "gentle", reveal)
-    end
-end
-
 --- Returns whether riddles are said aloud as they appear: the readAloud setting ("young" means kindergarten and grade
 --- 1), when the client has a voice.
 local function ReadsAloud()
@@ -485,6 +421,90 @@ end
 
 local function ValidPin(pin)
     return (pin and (pin:match("^%d%d%d%d%d?%d?%d?%d?$") ~= nil))
+end
+
+-- The answers left wait left seconds, counted down a second at a time on their keycaps, while puzzle is the riddle on
+-- screen and unsolved.
+local function Wait(puzzle, left)
+    ScholarView.Wait(left)
+
+    if left > 0 then
+        Scholar:After(1, function()
+            if (Current == puzzle) and not Scholar:Get("solved") and ScholarView.IsShown() then
+                Wait(puzzle, left - 1)
+            end
+        end)
+    end
+end
+
+local function Choose(i)
+    local buttons = (ScholarView.IsShown() and ScholarView.Frame().Buttons)
+
+    if not Current or Scholar:Get("solved") or not buttons or (buttons[i] and not buttons[i]:IsEnabled()) then
+        return
+    end
+
+    -- Each subject's level row is the difficulty its riddles are written at: a quest riddle never changes one.
+    local adapts = ((Current.questKey == nil) and not Current.stretch)
+    local firstTry = Memory.Record(Scholar, Current, i)
+    local earned = ((Current.stretch and 2) or 1)
+    local levelRow = (Current.subject .. "Level")
+    local runRow = (Current.subject .. "Run")
+
+    if i == Current.answer then
+        -- The riddle stops being due now, so a /reload during the celebration doesn't ask another. The solved row holds
+        -- the screen until Finish closes it.
+        Scholar:Set("solved", true)
+        Scholar:Set("pending", false)
+        Scholar:Set("elapsed", 0)
+
+        if Current.questKey then
+            -- Marked answered, so a /reload in the celebration doesn't ask it again.
+            QuestBook.Asked(Current.questKey, Current.kind)
+        end
+
+        local streak = (Scholar:Get("streak") + 1)
+
+        Scholar:Set("streak", streak)
+        Scholar:Set("stars", Scholar:Get("stars") + earned)
+        local levelUp = false
+
+        if adapts and firstTry then
+            local run = (Scholar:Get(runRow) + 1)
+
+            Scholar:Set(runRow, run)
+            levelUp = (((run % 3) == 0) and (Scholar:Get(levelRow) < 3))
+
+            if levelUp then
+                Scholar:Set(levelRow, Scholar:Get(levelRow) + 1)
+            end
+        end
+
+        -- Praise names the strategy on a first try, and the persistence after a miss.
+        local praise = (((Wrongs == 0) and Current.praise) or Words.persistence[random(1, #Words.persistence)])
+
+        ScholarView.Correct(i, (Current.explanation .. " " .. praise), Progress({ earned = earned, levelUp = levelUp }))
+        C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LIST_COMPLETE)
+        Scholar:After(FinishDelay, function() Finish(true) end)
+    else
+        Wrongs = (Wrongs + 1)
+        Missed[i] = true
+        Scholar:Set("streak", 0)
+
+        if adapts then
+            Scholar:Set(runRow, 0)
+        end
+
+        if adapts and (Wrongs == 2) and (Scholar:Get(levelRow) > 1) then
+            Scholar:Set(levelRow, Scholar:Get(levelRow) - 1)
+        end
+
+        local label, help, reveal = Help()
+
+        ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("mode") == "gentle", reveal)
+        -- The answers left wait, longer each miss, so the hint gets read before the next try.
+        Wait(Current, (Pauses[Scholar:Get("missPause")] or {})[min(Wrongs, 3)] or 0)
+    end
 end
 
 -- The kinds in list that aren't in except.
@@ -636,6 +656,12 @@ local Rows = {
         scope = "character" },
     { default = true, description = "Once half the minutes are played, a death brings the next riddle.",
         kind = "boolean", label = "Riddles while dead", lockedBy = LockedBy, name = "onDeath", scope = "character" },
+    { default = "short",
+        description = ("After a wrong answer, the answers left wait a moment before they can be picked, longer each "
+            .. "miss, so your child reads the hint instead of trying every answer."),
+        kind = "string", label = "Pause after a wrong answer", lockedBy = LockedBy, name = "missPause", scope = "character",
+        valueLabels = { long = "Long (4, 7, then 10 seconds)", off = "Off", short = "Short (2, 4, then 6 seconds)" },
+        values = { "short", "long", "off" } },
     { default = "gate", description = "Whether a riddle must be solved, or can be skipped after one try.",
         kind = "string", label = "Riddle style", lockedBy = LockedBy, name = "mode", scope = "character",
         valueLabels = { gate = "Solve to keep playing", gentle = "Gentle (Skip after one try)" },

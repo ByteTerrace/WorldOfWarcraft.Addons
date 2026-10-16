@@ -20,7 +20,7 @@ GETTING AROUND
 
 The Krew and Warband features need friends in your group who run the toolkit too.
 Some cards ask a question, like "Hold the grudge?". Click to answer yes, or right-click for no. With a controller, press Select (View on Xbox, Create on PlayStation) on the card, then A for yes or B for no.
-The Scholar's challenge (riddles for kids) is off until a parent turns it on for a character. /tlk report shows a parent how it's going: what's mastered, what's being worked on, and the recent misses. For kindergarten and grade 1, riddles are read aloud as they appear, and some are only heard: listen, then pick the word. The Owl also reads quests aloud as they open (/tlk read reads the open one again), counts quest progress aloud ("Tough Wolf Meat: 3 of 8. 5 more to go!"), and says when a quest is ready to turn in.
+The Scholar's challenge (riddles for kids) is off until a parent turns it on for a character. /tlk report shows a parent how it's going: what's mastered, what's being worked on, and the recent misses. After a wrong answer, the other answers wait a few seconds (counting down on their keys), so guessing every answer in a row doesn't work; a parent can make the wait longer or turn it off in the settings. For kindergarten and grade 1, riddles are read aloud as they appear, and some are only heard: listen, then pick the word. The Owl also reads quests aloud as they open (/tlk read reads the open one again), counts quest progress aloud ("Tough Wolf Meat: 3 of 8. 5 more to go!"), and says when a quest is ready to turn in.
 
 IF SOMETHING GOES WRONG
 1. Type /console scriptErrors 1 once, so the game shows Lua errors.

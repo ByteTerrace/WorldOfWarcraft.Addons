@@ -29,7 +29,8 @@ end
 --- A child's character with the challenge on, and extra's character settings on top.
 ---@return table h, table addon, table ns
 local function LoadKid(extra)
-    local char = { ["Scholar.enabled"] = true }
+    -- The pause after a miss is off: tests that answer right after a miss don't wait (scholarpace.test.lua tests it).
+    local char = { ["Scholar.enabled"] = true, ["Scholar.missPause"] = "off" }
 
     for key, value in pairs(extra or {}) do char[key] = value end
 

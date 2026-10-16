@@ -163,6 +163,20 @@ test("bindings to unknown sources or commands, or a source bound twice in a map,
     truthy(tostring(err):find("menu: gamepad.south is bound twice", 1, true), tostring(err))
 end)
 
+test("a button's glyph is the controller UI's own art for the connected family, and its prompt falls back to text", function()
+    local h = NewAddOn()
+    local Input = h.env.ByteTerrace.Input
+
+    h.labelStyle = "Shapes"
+    eq(Input.Glyph("gamepad.south"), "|A:gamepad-ps-pad1-normal:20:20:0:0|a", "PlayStation art, inline")
+    eq(Input.Glyph("gamepad.dpadLeft", 14), "|A:gamepad-ps-paddleft-normal:14:14:0:0|a", "at the size asked")
+    eq(Input.Prompt("gamepad.south"), Input.Glyph("gamepad.south"), "the prompt is the glyph")
+    eq(Input.Glyph("gamepad.nope"), nil, "an unknown source has none")
+    h.env.InputIconTextureSetUtility.GetActiveInputIconButtonTextures = function() return nil end
+    eq(Input.Glyph("gamepad.south"), nil, "nor does a button the client has no art for")
+    eq(Input.Prompt("gamepad.south"), "Cross", "and then the prompt is its printed name")
+end)
+
 test("a summon binds one controller button to a command without capturing the rest", function()
     local h, addon = NewAddOn()
     local focused = 0

@@ -403,19 +403,20 @@ local function UsingController()
     return (ByteTerrace.Input.LabelStyle() ~= "Generic")
 end
 
--- The key for one of the screen's other actions (hint, speak, skip).
+-- The key for one of the screen's other actions (hint, speak, skip): its key, or its button's glyph, as the controller
+-- UI draws it.
 local function ActionLabel(action)
     if UsingController() then
-        return ByteTerrace.Input.Label(ActionSources[action])
+        return ByteTerrace.Input.Prompt(ActionSources[action], 18)
     end
 
     return ActionKeys[action]
 end
 
--- The key for answer i: 1-4, or the connected controller's face button.
+-- The key for answer i: 1-4, or the connected controller's face button's glyph.
 local function KeyLabel(i)
     if UsingController() then
-        return ByteTerrace.Input.Label(AnswerSources[i])
+        return ByteTerrace.Input.Prompt(AnswerSources[i], 22)
     end
 
     return tostring(i)

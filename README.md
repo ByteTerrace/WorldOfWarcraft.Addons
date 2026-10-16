@@ -233,6 +233,7 @@ The fake is strict:
   - Protected globals and the functions in `tools/api/forbidden.json` are always forbidden (`ADDON_ACTION_FORBIDDEN`). Registering a restricted event (`HasRestrictions`, such as `COMBAT_LOG_EVENT_UNFILTERED`) is forbidden the same way, and registers nothing.
   - The docs don't say what `HasRestrictions` means. Lockdown is the harness's guess, unless the entry names a specific restriction (`RestrictedForMacroChatMessages` applies to macros, so addon calls pass).
 - **SavedVariables** are nil while an addon's files run, and restored right before its `ADDON_LOADED`. `h:Reload()` and `h:Relog()` write them the way the client does: numbers, strings, booleans, and tables of them, as copies, without cycles, NaN, or inf. A secret value or a secret table key there is an error. A relog ends combat and restrictions. `h:SwitchCharacter(name, surname)` logs in as another character on the same account: the account's SavedVariables stay, and the per-character ones are that character's.
+- **The controller UI:** `InputIconTextureSetUtility.GetActiveInputIconButtonTextures` gives a button's glyph atlases for `h.labelStyle`, and `CreateAtlasMarkup` its inline markup. `h:OpenRadial()` and `h:CloseRadial()` open and close the radial menu, firing EventRegistry's `Gamepad.ShowMainMenu` and `Gamepad.HideMainMenu`.
 - **Items:** `h:AddItem(itemID, name, quality, icon, uncached)` adds an item the client knows, for `C_Item.GetItemInfo` and `C_Item.GetItemIconByID`. `h:ItemLink(itemID)` is its link, as a Shift-click puts it in chat.
 - **Only real APIs exist:** events, widget methods, and fakes that name real client globals. Reading an undefined global is an error.
   - Only what the addons and probes call is faked. A fake nothing calls is deleted, with its tests. `test` checks it: a fake function (a global, or a member of a global table) whose name appears nowhere in the addons' code (identifiers and strings, not comments) fails, unless `tools/api/forbidden.json` names it, since those fakes exist to refuse the call.
@@ -766,9 +767,9 @@ Every button shows its key for the device you're using.
 | Skip (Gentle mode, after a try) | Back | Backspace |
 | Put the riddle off (Later) | D-pad left | L |
 | Scroll an open quest book | D-pad | Up and Down arrows |
-| Game menu | Start | Esc |
+| Menus | Start (the radial menu) | Esc (the game menu) |
 
-The riddle takes only its own buttons, so every other button and key works as it would without the addon. Start and Esc open the game menu with one press, over the riddle. Esc also steps the riddle aside into its pill, as **Later** does. A question card you focused with Select lets go when a riddle appears. The card stays up, and Back focuses it again once the riddle is done.
+With a controller connected, every button on the riddle, its pill, and question cards shows the controller's own glyph, as the controller UI draws it. The riddle takes only its own buttons, so every other button and key works as it would without the addon. Esc opens the game menu, and Start opens the controller's radial menu, each with one press. Either one also steps the riddle aside into its pill, as **Later** does. A question card you focused with Select lets go when a riddle appears. The card stays up, and Back focuses it again once the riddle is done.
 
 #### Difficulty and practice
 

@@ -135,9 +135,9 @@ local function SetPrompt()
     local question = (Current and Current.onClick and (Input.LabelStyle() ~= "Generic"))
 
     if question and Focused then
-        Card.Prompt:SetText(("%s: yes    %s: no"):format(Input.Label(AnswerSources.yes), Input.Label(AnswerSources.no)))
+        Card.Prompt:SetText(("%s yes    %s no"):format(Input.Prompt(AnswerSources.yes, 16), Input.Prompt(AnswerSources.no, 16)))
     elseif question then
-        Card.Prompt:SetText(Input.Label(AnswerSources.focus) .. ": answer")
+        Card.Prompt:SetText(Input.Prompt(AnswerSources.focus, 16) .. " answer")
     end
 
     Card.Prompt:SetShown((question and true) or false)

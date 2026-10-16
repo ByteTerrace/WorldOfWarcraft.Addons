@@ -3,7 +3,8 @@
 --
 -- Sources are named by position ("gamepad.south"), never by printed letter, because the letter depends on the
 -- controller family. Input.Label(source) gives the printed name for the connected controller: A on Xbox, Cross on
--- PlayStation, B on Switch.
+-- PlayStation, B on Switch. Input.Glyph(source, size) gives the button's own art, as the controller UI draws it, inline
+-- in text, and Input.Prompt(source, size) gives the glyph, or the name when the client has no art for the button.
 --
 --   Bind(map, source, command)  before compile. A map binds one module's commands (or the
 --                               addon's own). Compile refuses one that mixes modules.
@@ -261,6 +262,21 @@ function ByteTerrace.NewInput(addon)
     }, Input)
 end
 
+--- Returns a source's button art for the connected controller's family, as the controller UI draws it, as inline text
+--- markup, or nil for an unknown source or a button the client has no art for. It only reads the controller UI's icon
+--- tables (Blizzard_SharedXML InputIcons), so it taints nothing.
+---@param source string e.g. "gamepad.south"
+---@param size number? the glyph's width and height (20 unless given)
+---@return string?
+function Input.Glyph(source, size)
+    local key = KeyOf[source]
+    -- The guarded lookup: GetNormalActiveInputIconButtonTexture errors on a button with no art.
+    local textures = (key and InputIconTextureSetUtility.GetActiveInputIconButtonTextures(key))
+    local atlas = (textures and textures[1])
+
+    return ((atlas and CreateAtlasMarkup(atlas, (size or 20), (size or 20))) or nil)
+end
+
 --- Returns a source's printed name for a label style (default: the connected controller's).
 ---@param source string e.g. "gamepad.south"
 ---@param style string? a label style; an unknown one reads as Generic
@@ -283,6 +299,14 @@ function Input.LabelStyle()
     local style = (ok and mapped and mapped.labelStyle)
 
     return ((Labels[style] and style) or "Generic")
+end
+
+--- Returns how to show a source's button: its glyph, or its printed name when there's no art.
+---@param source string e.g. "gamepad.south"
+---@param size number? the glyph's width and height
+---@return string?
+function Input.Prompt(source, size)
+    return (Input.Glyph(source, size) or Input.Label(source))
 end
 
 --- Returns the active maps' names, in order, as a new table, so a feature can add or remove its own map and keep the

@@ -83,7 +83,7 @@ A command is a named intent, `{ name, label, run(arg, phase, source), slash?, he
 
 ## Input
 
-Controller sources are named by position (`gamepad.south`), never by printed letter. `Input.Label(source)` gives the connected family's printed name: A on Xbox, Cross on PlayStation, and B on Switch.
+Controller sources are named by position (`gamepad.south`), never by printed letter. `Input.Label(source)` gives the connected family's printed name: A on Xbox, Cross on PlayStation, and B on Switch. `Input.Glyph(source, size)` gives the button's own art as the controller UI draws it, as inline text markup, or nil when the client has no art for it. `Input.Prompt(source, size)` gives the glyph, or the printed name without one. A feature shows a controller button with `Prompt`.
 
 - **Maps.** A binding is `{ map, source, command }`, and a map binds one module's commands (or the addon's own). Compile refuses a map that mixes modules. `SetActiveMaps` activates exactly the maps it's given, and when two of them bind a source, the later one wins. A module that stops deactivates its maps, even when its own `OnDisable` fails, so a stopped feature never keeps the controller.
 - **Capture.** While any bound button is active, a capture frame takes every controller button: bound ones run their commands, and the rest do nothing. The client ignores a controller script's return value, so capture can't pass a button on to the game (seen in game under Scholar's riddle), and an active map is modal for the controller.

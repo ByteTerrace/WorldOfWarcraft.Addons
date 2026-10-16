@@ -8,6 +8,18 @@
 --   * h:MouseWheel(frame, delta) turns the mouse wheel over a frame (see Harness:MouseWheel).
 --   * h:SeedRandom(n) makes the env's math.random (and random) deterministic.
 --   * h:GamePadMappedState(id) supplies the C_GamePad fake's connected controller state.
+--   * h:OpenRadial() and h:CloseRadial() open and close the controller UI's radial main menu (Start), firing
+--     EventRegistry's Gamepad.ShowMainMenu and Gamepad.HideMainMenu.
+--
+-- The controller UI's glyphs and callbacks (Blizzard_SharedXML InputIcons, Blizzard_SharedXMLBase CallbackRegistry and
+-- TextureUtil, forever branch):
+--   * [D] InputIconTextureSetUtility.GetActiveInputIconButtonTextures(key) returns a button's five state atlases for the
+--     active family (labelStyle, Generic without a controller), Normal first, and nothing for a key the client doesn't
+--     map (PADSOCIAL, a modified key). [G] The atlas names follow "gamepad-<family>-<key>-<state>" here.
+--   * [D] CreateAtlasMarkup(atlas, width, height, x, y) is "|A:atlas:height:width:x:y|a".
+--   * [D] EventRegistry:RegisterCallback(event, fn, owner) calls fn(owner, ...) on each trigger, and
+--     UnregisterCallback(event, owner) ends it. [D] The trigger calls it behind securecallfunction, so an error is the
+--     callback's own.
 
 -- Whether a region covers the whole screen: it is UIParent, or it is anchored (SetAllPoints, or two opposite corners on
 -- the same corners, flush or outside) to a region that does.
@@ -120,6 +132,71 @@ end
 -- (SetPropagateKeyboardInput(false), the default) consumes the key, read after its script runs, so a script may decide
 -- per key. One that propagates passes it on. A key no frame consumes goes to the game's bindings and is recorded in
 -- h.propagatedKeys. Returns whether a frame consumed it.
+local Families = { Generic = "xbox1", Letters = "xbox1", Reverse = "switch-128x", Shapes = "ps" }
+
+local GlyphKeys = {
+    PAD1 = true, PAD2 = true, PAD3 = true, PAD4 = true, PADBACK = true, PADDDOWN = true, PADDLEFT = true,
+    PADDRIGHT = true, PADDUP = true, PADFORWARD = true, PADLSHOULDER = true, PADLSTICK = true, PADLTRIGGER = true,
+    PADRSHOULDER = true, PADRSTICK = true, PADRTRIGGER = true,
+}
+
+-- Fires an EventRegistry event: every callback, in registration order, each isolated like securecallfunction.
+local function Trigger(h, event, ...)
+    for _, entry in ipairs(h.registry[event] or {}) do
+        local ok, err = pcall(entry.fn, entry.owner, ...)
+
+        if not ok then
+            h.errors[#h.errors + 1] = err
+        end
+    end
+end
+
+function Harness:CloseRadial()
+    Trigger(self, "Gamepad.HideMainMenu")
+end
+
+-- The controller UI's glyph and callback fakes, merged into the env (env.lua).
+function Harness:ControllerUIFakes()
+    local h = self
+
+    -- A new UI (a /reload) starts with no callbacks, as the client's does.
+    h.registry = {}
+
+    return {
+        CreateAtlasMarkup = function(atlas, width, height, x, y)
+            return ("|A:%s:%d:%d:%d:%d|a"):format(atlas, (height or 0), (width or 0), (x or 0), (y or 0))
+        end,
+        EventRegistry = {
+            RegisterCallback = function(_, event, fn, owner)
+                h.registry[event] = (h.registry[event] or {})
+                table.insert(h.registry[event], { fn = fn, owner = owner })
+            end,
+            UnregisterCallback = function(_, event, owner)
+                local kept = {}
+
+                for _, entry in ipairs(h.registry[event] or {}) do
+                    if entry.owner ~= owner then
+                        kept[#kept + 1] = entry
+                    end
+                end
+
+                h.registry[event] = kept
+            end,
+        },
+        InputIconTextureSetUtility = {
+            GetActiveInputIconButtonTextures = function(key)
+                if not GlyphKeys[key] then
+                    return nil
+                end
+
+                local base = ("gamepad-%s-%s-"):format(Families[h.labelStyle or "Generic"] or Families.Generic, key:lower())
+
+                return { (base .. "normal"), (base .. "hover"), (base .. "pressed"), (base .. "active"), (base .. "disabled") }
+            end,
+        },
+    }
+end
+
 function Harness:Key(key, down)
     local script = ((down and "OnKeyDown") or "OnKeyUp")
     local receivers = {}
@@ -183,6 +260,11 @@ function Harness:NextRandom()
     self.rng = (((1664525 * self.rng) + 1013904223) % 4294967296)
 
     return (self.rng / 4294967296)
+end
+
+-- Opens the radial main menu, as Start does with the controller UI on.
+function Harness:OpenRadial()
+    Trigger(self, "Gamepad.ShowMainMenu")
 end
 
 -- Lua 5.1's math.random contract: () -> [0, 1), (m) -> integer in [1, m], (m, n) -> [m, n].

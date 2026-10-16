@@ -8,6 +8,11 @@ local addonName, ns = ...
 -- be opened. It's the same riddle either way, still due, and each one put off counts in laterCount for the parent's
 -- report. The rows are the Scholar module's (ScholarSettings.lua).
 --
+-- Start opens the controller UI's radial menu, and the riddle steps aside then too, as it does for Esc. It hears
+-- EventRegistry's Gamepad.ShowMainMenu, which the radial fires last as it shows, behind securecallfunction, so the
+-- callback can't taint the radial (Blizzard_SharedXMLBase CallbackRegistry.lua). It only sets rows: it never touches
+-- the radial itself.
+--
 --   ns.ScholarLater.Commands       later and reopen, for the Scholar module's spec
 --   ns.ScholarLater.Start(module)  its watchers, from the Scholar module's OnEnable
 --   ns.ScholarLater.Stop()         hides the pill, from the Scholar module's OnDisable
@@ -23,6 +28,8 @@ local UIParent = UIParent
 local Addon = ns.Addon
 -- The pill saying a riddle waits, made the first time one is put off.
 local Pill = nil
+-- What the radial menu's callback is registered under.
+local RadialOwner = {}
 
 -- The pill, made once, at the top of the screen.
 local function PillFrame()
@@ -38,11 +45,20 @@ local function PillFrame()
         Pill.Icon:SetTexture("Interface\\Icons\\Ability_Hunter_Pet_Owl")
         Pill.Label = Pill:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         Pill.Label:SetPoint("LEFT", Pill.Icon, "RIGHT", 8, 0)
-        Pill.Label:SetText("The Owl's riddle is waiting. Click to answer!")
         Pill:Hide()
     end
 
     return Pill
+end
+
+-- What the pill says: with a controller connected, the glyph of the button that opens the riddle, as the controller UI
+-- draws it.
+local function PillText()
+    if ByteTerrace.Input.LabelStyle() ~= "Generic" then
+        return (ByteTerrace.Input.Prompt(ReopenSource, 18) .. "  The Owl's riddle is waiting!")
+    end
+
+    return "The Owl's riddle is waiting. Click to answer!"
 end
 
 -- The Scholar module, which Scholar.lua declares after this file loads.
@@ -71,12 +87,14 @@ local function Start(module)
     local back = nil
 
     PillFrame():SetScript("OnClick", module:Callback(Reopen))
+    EventRegistry:RegisterCallback("Gamepad.ShowMainMenu", function() Later() end, RadialOwner)
 
     -- The pill shows while a riddle waits, and in "Solve to keep playing" a timer brings it back.
     module:Watch({ collapsed }, function(state)
         module:Cancel(back)
         back = nil
-        PillFrame():SetShown(state.Values[collapsed])
+        PillFrame().Label:SetText(PillText())
+        Pill:SetShown(state.Values[collapsed])
 
         if state.Values[collapsed] and (module:Get("style") == "gate") then
             back = module:After(ReturnSeconds, Reopen)
@@ -94,6 +112,8 @@ local function Start(module)
 end
 
 local function Stop()
+    EventRegistry:UnregisterCallback("Gamepad.ShowMainMenu", RadialOwner)
+
     if Pill then
         Pill:Hide()
     end

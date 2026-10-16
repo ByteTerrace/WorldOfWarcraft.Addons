@@ -93,6 +93,36 @@ test("while a riddle shows, it takes only its own controller buttons, and every 
     truthy(frame:IsShown())
 end)
 
+test("Start opens the radial menu, and the riddle steps aside into its pill, as it does for Esc", function()
+    local h, addon, _, frame = Riddle()
+
+    h:OpenRadial()
+    falsy(frame:IsShown(), "out of the radial's way")
+    truthy(Pill(h):IsShown(), "waiting in its pill")
+    h:CloseRadial()
+    addon.State:Set("Scholar.enabled", false)
+    h:OpenRadial()
+    eq(#h.errors, 0, "and with the challenge off, the radial hears nothing from it")
+end)
+
+test("with a controller, the riddle's keys, its pills, and the waiting pill show the controller UI's own glyphs", function()
+    local h, addon, ns = LoadKid({ ["Scholar.missPause"] = "short", ["Scholar.quests"] = false })
+    local shown = Watch(ns)
+
+    h.labelStyle = "Letters"
+    h:Slash("/tlk puzzle")
+    local frame = rawget(h.env, "TheLanKrewToolKitScholar")
+
+    eq(frame.Buttons[1].Key:GetText(), "|A:gamepad-xbox1-pad1-normal:22:22:0:0|a", "an answer's keycap is A's glyph")
+    truthy(frame.Later.Label:GetText():find("|A:gamepad-xbox1-paddleft-normal", 1, true), frame.Later.Label:GetText())
+    h:Key("L", true)
+    truthy(Pill(h).Label:GetText():find("|A:gamepad-xbox1-paddleft-normal:18:18:0:0|a", 1, true), "the pill says which button")
+    h:Gamepad("PADDLEFT", true)
+    truthy(frame:IsShown(), "and that button opens it")
+    truthy(shown[#shown])
+    eq(addon.State:Get("Scholar.collapsed"), false)
+end)
+
 test("Later puts the riddle away into a pill, gives the keyboard and controller back, and keeps it due", function()
     for _, way in ipairs({ "key", "button", "pad" }) do
         local h, addon, _, frame = Riddle()

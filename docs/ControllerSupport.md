@@ -73,41 +73,32 @@ These are plain Lua, and addons can use them.
 ### Show button glyphs
 
 - The label style comes from `C_GamePad.GetDeviceMappedState(C_GamePad.GetActiveDeviceID()).labelStyle`: `Letters` (Xbox), `Shapes` (PlayStation), `Reverse` (Switch), or `Generic`.
-- Get the atlas with `InputIconTextureSetUtility.GetNormalActiveInputIconButtonTexture("PAD1")` (for example, `gamepad-xbox1-...`).
-- Templates: `InputIconTextureFrameTemplate` and `InputPromptOneIconWithTextTemplate`. `GamepadMode.AddGamepadIconToButton(button, key)` adds a glyph to a button.
+- Get the atlases with `InputIconTextureSetUtility.GetActiveInputIconButtonTextures("PAD1")`: five states for the active family, Normal first (for example, `gamepad-xbox1-buttona-normal`), or nil for a key it doesn't map (`PADSOCIAL`, or a modified key like `SHIFT-PAD1`). Don't use `GetNormalActiveInputIconButtonTexture`: it indexes that nil and errors (`Blizzard_SharedXML/Shared/InputIcons/InputIconTexture.lua`).
+- Without a controller, or in the mouse and keyboard style, the family is Generic, which is the Xbox art.
+- `CreateAtlasMarkup(atlas, width, height)` makes the inline text markup. ByteTerrace_Core's `Input.Glyph(source, size)` does both, and `Input.Prompt(source, size)` falls back to the printed name.
+- These lookups only read the controller UI's tables, so they taint nothing. Templates: `InputIconTextureFrameTemplate` and `InputPromptOneIconWithTextTemplate`. `GamepadMode.AddGamepadIconToButton(button, key)` adds a glyph to a button, but it replaces the button's `OnEnable` and `OnDisable` scripts, so use it only on your own buttons.
 
 ### Make your own panel navigable
 
 - Call `GamepadMode.FrameControlsManager:FrameShown(frame)` in `OnShow` and `:FrameHidden(frame)` in `OnHide`. Panels opened with `ShowUIPanel` get this automatically.
 - `SmartNavigation` scans child buttons, edit boxes, and frames with mouse scripts on its own. Tune it with `smartNavigationCanFocus`, `smartNavigationIgnored`, and similar fields, and with the optional `OnSmartNavSelect`, `OnSmartNavClick`, and `SmartNavigationCloseHandler` methods.
 
-### Add a button prompt footer
+### Don't use Blizzard's binding groups or prompt footers from addon code
 
-A footer shows prompts such as "(A) Select (B) Back":
+> [!WARNING]
+> Blizzard's binding groups (`GamepadMode.CreateBindingGroup`, `ActivateBindingGroup`, `DeactivateBindingGroup`, and `AddFunctionBinding`) and prompt footers with binding functions (`GamepadSharedUtility.CreatePromptedBindingFooter` and `CreatePromptedBinding`) lead to the protected `SetPreferredGamepadInteractTarget`, which blocks from addon code and can loop the blocked-action popups until the game freezes.
 
-```lua
-local footer = GamepadSharedUtility.CreatePromptedBindingFooter(frame, "MyFooter")
-footer:AddStandardSelectPrompt(); footer:AddStandardBackPrompt()
-footer:AddPromptedBinding(GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_TOP, function(down) end, "Sort"))
-footer:Finalize(); footer:ShowAndActivateBindings()
-```
-
-### Add custom input
-
-1. Create a group with `GamepadMode.CreateBindingGroup("X")`.
-2. Add bindings with `:AddFunctionBinding(key, fn)` and `:AddAxisBinding(GAMEPAD_STICK_RIGHT, fn)`, and block the D-pad with `:BlockDpad()`.
-3. Activate the group with `GamepadMode.ActivateBindingGroup(g)`, and deactivate it with `DeactivateBindingGroup(g)`.
-
-> [!IMPORTANT]
-> The whole stack is built on `SetOverrideBinding(UIParent, ...)`, so activate groups only out of combat. Never call `ClearOverrideBindings(UIParent)`: it wipes Blizzard's entire controller stack.
+The path: activating or deactivating a group changes the binding stack, which calls its listeners directly (`InputBindingManager.lua`, `CheckCoreBindingActive`). One of them, the main action bar's focus state (`Blizzard_GamepadActionBars/MainActionBarFrame.lua`), calls `UpdateInteractIcons`, the only caller of `SetPreferredGamepadInteractTarget`. Addon code that writes the stack also leaves tainted slots that Blizzard reads later, for example on a target change. A footer with a binding function builds such a group. Blizzard uses these everywhere, but only from its own secure code. Never call `ClearOverrideBindings(UIParent)` either: it wipes Blizzard's entire controller stack.
 
 An addon can bind a single button without Blizzard's binding groups: `SetOverrideBindingClick(ownFrame, false, key, buttonName, mouseButton)` on its own frame, cleared with `ClearOverrideBindings(ownFrame)`. A non-priority override wins over the button's normal binding (Select's `TOGGLEUIFOCUS`, for example), and Blizzard's priority overrides still win over it. ByteTerrace_Core's `Input:Summon` does this out of combat only, and clears it during `PLAYER_REGEN_DISABLED`, while combat lockdown is still off. Whether the client blocks an addon's override binding change in combat isn't documented, so it's never tried.
 
-### Add a radial menu page
+### Don't add radial menu entries
 
-- `GamepadRadial:ActivateRadial({ header = ..., buttons = { handler, ... } })` shows a custom page.
-- A handler is a table with `Attach(segment)`, `Detach()`, `IsEnabled()`, `Trigger()` (return true to close), and `GetLabel()`.
-- The main menu's right page has empty slots (3, 4, 6, 7, and 8) in `GamepadRadial.mainMenuPages`. Radial entries are insecure: fine for UI actions, but they can't cast or target.
+The radial main menu (Start) has no supported way to add an entry. Writing into `GamepadRadial.mainMenuPages` or `segmentOptions`, or calling `GamepadRadial:ActivateRadial` with a custom page, taints the radial's segment handlers. Every later close then runs tainted, through the radial's binding group, to `SetPreferredGamepadInteractTarget`. That holds even for a close with B or Start (`Blizzard_Gamepad/UI/Radials/GamepadRadial.lua`, `OnHide`).
+
+### Hear the radial menu
+
+The radial fires EventRegistry's `Gamepad.ShowMainMenu` last as it shows, and `Gamepad.HideMainMenu` as it hides, with no arguments. EventRegistry calls each callback through `securecallfunction` (`Blizzard_SharedXMLBase/CallbackRegistry.lua`), so an addon's callback can't taint the radial. Keep the callback to the addon's own frames and state: hiding or reshaping the radial from it would run the radial's own code from addon code. Scholar's riddle steps aside into its pill this way, as it does for Esc.
 
 ### Read raw input on your own frame
 

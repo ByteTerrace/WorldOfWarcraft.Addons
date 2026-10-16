@@ -32,12 +32,15 @@ test("Select focuses a question card, then A answers yes, and the controller is 
     local answers = { yes = 0 }
 
     Ask(ns, answers)
-    eq(Prompt(h), "View: answer", "the card says how")
+    eq(Prompt(h), "|A:gamepad-xbox1-padback-normal:16:16:0:0|a answer", "the card says how")
     h:Gamepad("PAD3", true)
     eq(h.propagated[#h.propagated], "PAD3", "before Select, every other button is the player's")
     h:Gamepad("PADBACK", true)
     h:Gamepad("PADBACK", false)
-    eq(Prompt(h), "A: yes    B: no")
+
+    eq(Prompt(h), "|A:gamepad-xbox1-pad1-normal:16:16:0:0|a yes    |A:gamepad-xbox1-pad2-normal:16:16:0:0|a no",
+        "the controller UI's own A and B glyphs")
+
     local propagated = #h.propagated
 
     h:Gamepad("PAD3", true)
@@ -71,7 +74,7 @@ test("Select again lets go of the card without answering, and a focused card wai
     h:Advance(30)
     truthy(Card(h), "a focused card doesn't time out")
     h:Gamepad("PADBACK", true)
-    eq(Prompt(h), "View: answer", "back to the question")
+    eq(Prompt(h), "|A:gamepad-xbox1-padback-normal:16:16:0:0|a answer", "back to the question")
     h:Gamepad("PAD3", true)
     eq(h.propagated[#h.propagated], "PAD3", "and the controller is the player's")
     h:Advance(13)
@@ -104,7 +107,7 @@ test("a fight takes the question card and its summon away before lockdown, and t
     eq(h.propagated[#h.propagated], "PAD3", "nor is the controller held")
     h:LeaveCombat()
     truthy(Card(h), "the card is back")
-    eq(Prompt(h), "View: answer", "unfocused")
+    eq(Prompt(h), "|A:gamepad-xbox1-padback-normal:16:16:0:0|a answer", "unfocused")
     h:Gamepad("PADBACK", true)
     h:Gamepad("PAD1", true)
     eq(answers.yes, 1)

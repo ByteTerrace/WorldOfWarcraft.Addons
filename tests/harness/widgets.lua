@@ -36,6 +36,10 @@
 -- clamps to the range itself. Which part of the child is visible isn't modeled. EnableMouseWheel / IsMouseWheelEnabled
 -- keep their state, and h:MouseWheel (input.lua) turns the wheel over a frame.
 --
+-- Sliders (warcraft.wiki.gg Slider:SetValue, SimpleSliderAPI): [D] SetValue clamps to SetMinMaxValues' bounds and runs
+-- OnValueChanged(slider, value, userInput) when the value changes. The thumb (SetThumbTexture) is drawn by the client,
+-- so where it sits isn't modeled. h:DragSliderThumb (input.lua) drags it.
+--
 -- GameTooltip and NamePlate are the client's own frame types (the env's GameTooltip, the plates C_NamePlate returns).
 -- Methods the API docs don't list for a type come from Harness.TYPE_METHODS, with behaviors in Harness.TYPE_BEHAVIORS
 -- (ui.lua).
@@ -72,6 +76,7 @@ local WidgetApis = {
     NamePlate = Chain("FrameAPINamePlate", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
     Scale = Chain("SimpleAnimScaleAPI", "SimpleAnimAPI", FrameScriptObject),
     ScrollFrame = Chain("SimpleScrollFrameAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
+    Slider = Chain("SimpleSliderAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
     StatusBar = Chain("SimpleStatusBarAPI", "SimpleFrameAPI", ScriptRegion, FrameScriptObject),
     Texture = Chain("SimpleTextureAPI", "SimpleTextureBaseAPI", "SimpleRegionAPI", ScriptRegion, FrameScriptObject),
     Translation = Chain("SimpleAnimTranslationAPI", "SimpleAnimAPI", FrameScriptObject),
@@ -79,7 +84,9 @@ local WidgetApis = {
 
 Harness.WIDGET_APIS = WidgetApis
 
-local IsFrame = { Button = true, Frame = true, GameTooltip = true, NamePlate = true, ScrollFrame = true, StatusBar = true }
+local IsFrame = {
+    Button = true, Frame = true, GameTooltip = true, NamePlate = true, ScrollFrame = true, Slider = true, StatusBar = true,
+}
 
 -- Template-provided methods that aren't C API (BackdropTemplateMixin).
 local TemplateMethods = { BackdropTemplate = { SetBackdrop = true, SetBackdropBorderColor = true, SetBackdropColor = true } }
@@ -506,6 +513,11 @@ function Behaviors.SetWidth(s, _, width) s.width = width end
 
 function Behaviors.SetWordWrap(s, _, wrap) s.wordWrap = ((wrap and true) or false) end
 
+-- A Slider's value stays within its bounds, and a change runs OnValueChanged(slider, value, userInput).
+local SliderBehaviors = {}
+
+Harness.TYPE_BEHAVIORS.Slider = SliderBehaviors
+
 function Behaviors.StartMoving(s)
     if not s.movable then
         error("Frame:StartMoving(): Frame is not movable", 0)
@@ -519,6 +531,25 @@ function Behaviors.StopMovingOrSizing(s) s.moving = false end
 function Behaviors.UnregisterAllEvents(s) s.events = {} end
 
 function Behaviors.UnregisterEvent(s, _, event) s.events[event] = nil end
+
+-- Sets a slider's value within its bounds, running OnValueChanged when it changes. userInput is whether a player made
+-- the change.
+function Harness.SetSliderValue(s, w, value, userInput)
+    value = math.max(s.min or 0, math.min(value, s.max or 0))
+
+    -- [G] A new slider's value is 0.
+    if value == (s.value or 0) then
+        s.value = value
+
+        return
+    end
+
+    s.value = value
+
+    if s.scripts.OnValueChanged then
+        s.harness:Protect(s.scripts.OnValueChanged, w, value, (userInput and true) or false)
+    end
+end
 
 -- Show/Hide/SetShown: sets the shown flag and runs OnShow or OnHide for every widget whose visibility changed (see the
 -- header). A widget that stops being visible stops moving.
@@ -565,6 +596,36 @@ function Harness:SetWidgetShown(widget, shown)
         end
     end
 end
+
+function SliderBehaviors.GetObeyStepOnDrag(s) return (s.obeyStepOnDrag == true) end
+
+function SliderBehaviors.GetOrientation(s) return (s.orientation or "HORIZONTAL") end
+
+function SliderBehaviors.GetThumbTexture(s) return s.thumbTexture end
+
+function SliderBehaviors.GetValue(s) return (s.value or 0) end
+
+function SliderBehaviors.GetValueStep(s) return (s.valueStep or 0) end
+
+-- [G] New bounds pull the value inside them, with OnValueChanged if it moved.
+function SliderBehaviors.SetMinMaxValues(s, w, low, high)
+    s.min, s.max = low, high
+    Harness.SetSliderValue(s, w, s.value or low, false)
+end
+
+function SliderBehaviors.SetObeyStepOnDrag(s, _, obey) s.obeyStepOnDrag = ((obey and true) or false) end
+
+function SliderBehaviors.SetOrientation(s, _, orientation) s.orientation = orientation end
+
+-- [D] SetThumbTexture(TextureAsset): the slider draws the thumb, placed along it by its value; placing isn't modeled.
+function SliderBehaviors.SetThumbTexture(s, _, texture) s.thumbTexture = texture end
+
+-- [D] SetValue(value, treatAsMouseEvent?): clamped to the bounds; OnValueChanged's userInput is treatAsMouseEvent.
+function SliderBehaviors.SetValue(s, w, value, treatAsMouseEvent)
+    Harness.SetSliderValue(s, w, value, treatAsMouseEvent)
+end
+
+function SliderBehaviors.SetValueStep(s, _, step) s.valueStep = step end
 
 -- The client's frame strata, bottom to top. SetFrameStrata with anything else is an error here.
 local Strata = { "WORLD", "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP", "BLIZZARD" }

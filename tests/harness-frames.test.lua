@@ -1,5 +1,5 @@
--- The harness's fidelity rules for frame visibility scripts and moving frames (tests/harness/widgets.lua, h:Drag in
--- tests/harness/input.lua).
+-- The harness's fidelity rules for frame visibility scripts, moving frames, and sliders (tests/harness/widgets.lua,
+-- h:Drag and h:DragSliderThumb in tests/harness/input.lua).
 
 local function Recorder(log, name)
     return function() log[#log + 1] = name end
@@ -236,4 +236,28 @@ test("a scroll frame scrolls its child: the range is the child's height less its
     child:SetHeight(150)
     eq(scroll:GetVerticalScrollRange(), 0, "a child shorter than the frame doesn't scroll")
     truthy(scroll:IsObjectType("Frame"), "a scroll frame is a frame")
+end)
+
+test("a slider keeps its value in bounds and runs OnValueChanged on a change, with userInput for a drag", function()
+    local h = Harness.New()
+    local env = h.env
+    local slider = env.CreateFrame("Slider", nil, env.UIParent)
+    local log = {}
+
+    slider:SetScript("OnValueChanged", function(_, value, userInput) log[#log + 1] = (value .. ":" .. tostring(userInput)) end)
+    slider:SetMinMaxValues(0, 100)
+    slider:SetValue(40)
+    slider:SetValue(40)
+    slider:SetValue(500)
+    eq(table.concat(log, ","), "40:false,100:false", "a value it already has runs nothing; past the bounds clamps")
+    slider:SetMinMaxValues(0, 60)
+    eq(slider:GetValue(), 60, "new bounds pull the value in")
+    log = {}
+    slider:SetValueStep(25)
+    slider:SetObeyStepOnDrag(true)
+    truthy(h:DragSliderThumb(slider, 30))
+    eq(table.concat(log, ","), "25:true", "a drag stops on the nearest step, as the player's input")
+    slider:Hide()
+    falsy(h:DragSliderThumb(slider, 50), "a hidden slider can't be dragged")
+    eq(slider:GetValue(), 25)
 end)

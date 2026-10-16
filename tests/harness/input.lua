@@ -102,6 +102,29 @@ function Harness:Drag(frame, dx, dy, button)
     return true
 end
 
+-- Drags a slider's thumb with the mouse to where value would sit. Only a visible slider takes it. [G] With
+-- SetObeyStepOnDrag(true), the thumb stops on the nearest step from the minimum (SetValueStep). The value stays within
+-- the bounds, and OnValueChanged runs with userInput true. Returns whether the slider took the drag.
+function Harness:DragSliderThumb(slider, value)
+    local s = Harness.State(slider)
+
+    if not self:IsVisibleWidget(slider) then
+        return false
+    end
+
+    local step = s.valueStep
+
+    if s.obeyStepOnDrag and step and (step > 0) then
+        local low = (s.min or 0)
+
+        value = (low + (math.floor(((value - low) / step) + 0.5) * step))
+    end
+
+    Harness.SetSliderValue(s, slider, value, true)
+
+    return true
+end
+
 --- The connected controller's mapped state, or nil for an unavailable device.
 function Harness:GamePadMappedState(id)
     if (id ~= 1) or not self.labelStyle then

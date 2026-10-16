@@ -192,6 +192,87 @@ test("every scroll position shows whole rows, in the panel and in the window", f
     Whole("window")
 end)
 
+test("dragging the scroll thumb scrolls the page, a whole row at a time, within the page", function()
+    local h, addon = NewLongAddOn(40)
+    local window = addon.SettingsWindow
+
+    h:SelectSettingsCategory(h.categories[2])
+    local bar = window.ScrollBar
+
+    eq(bar:GetThumbTexture(), window.Thumb, "the thumb is the scroll bar's")
+    local range = (h:WidgetHeight(window.Content) - h:WidgetHeight(window.Scroll))
+
+    truthy(h:DragSliderThumb(bar, 100), "the thumb drags")
+    eq(window.Scroll:GetVerticalScroll(), 112, "it stops on the nearest row")
+    truthy(h:DragSliderThumb(bar, 10000))
+    eq(window.Scroll:GetVerticalScroll(), range, "and no further than the last row")
+    h:MouseWheel(window.Scroll, 1)
+    eq(bar:GetValue(), range - 28, "the wheel moves the thumb too")
+    h:Click(window.Controls[addon.State:Id("Long.s39")])
+    eq(window.Scroll:GetVerticalScroll(), range - 28, "a click on a setting keeps the scroll")
+    h:SelectSettingsCategory(h.categories[3])
+    falsy(bar:IsVisible(), "a page that fits has no scroll bar")
+end)
+
+-- How far below the page's top a font string's text starts and ends: a header anchored to its page, or a setting's
+-- label centered in its row. A line is 14 high in the harness.
+local function Span(h, text, header)
+    if not header then
+        local row = text:GetParent()
+        local middle = (-Harness.State(row).points[1].y + (h:WidgetHeight(row) / 2))
+
+        return (middle - 7), (middle + 7)
+    end
+
+    local point = Harness.State(text).points[1]
+    local y = -point.y
+
+    if point.point == "BOTTOMLEFT" then return (y - 14), y end
+
+    return (y - 7), (y + 7)
+end
+
+test("a section's header sits nearer the settings under it than the one above it", function()
+    local h = Harness.New()
+    local addon = h:LoadAddon("TheLanKrewToolKit").Addon
+    local window = addon.SettingsWindow
+    local checked = 0
+
+    window:Show()
+
+    for _, container in ipairs({ window.Content:GetChildren() }) do
+        local texts = {}
+
+        for _, region in ipairs({ container:GetRegions() }) do
+            texts[#texts + 1] = { header = true, region = region }
+        end
+
+        for _, row in ipairs({ container:GetChildren() }) do
+            texts[#texts + 1] = { region = (select(1, row:GetRegions())) }
+        end
+
+        for _, text in ipairs(texts) do
+            text.top, text.bottom = Span(h, text.region, text.header)
+        end
+
+        table.sort(texts, function(a, b) return (a.top < b.top) end)
+
+        for i = 2, (#texts - 1) do
+            local text = texts[i]
+
+            if text.header and not texts[i - 1].header then
+                local above = (text.top - texts[i - 1].bottom)
+                local below = (texts[i + 1].top - text.bottom)
+
+                truthy(below < above, text.region:GetText() .. ": " .. below .. " below, " .. above .. " above")
+                checked = (checked + 1)
+            end
+        end
+    end
+
+    truthy(checked > 5, "the toolkit's headers were checked")
+end)
+
 test("the window never grows past the screen: a long page scrolls in it", function()
     local h, addon = NewLongAddOn(40)
     local window = addon.SettingsWindow

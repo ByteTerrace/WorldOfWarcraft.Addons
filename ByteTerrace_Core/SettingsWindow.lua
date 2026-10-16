@@ -1,7 +1,8 @@
 -- SettingsWindow: the addon's settings, drawn from ByteTerrace.SettingsPages (Settings.lua) as one view: a page's
--- sections and controls, in a scroll frame that clips them to the host and scrolls a row a notch with the mouse wheel,
--- with a thumb at its right edge while the page is taller than the host. The view has two hosts, and moves to whichever
--- shows it:
+-- sections and controls, in a scroll frame that clips them to the host and scrolls a row a notch with the mouse wheel.
+-- While the page is taller than the host, a scroll bar at its right edge (the client's own Slider) shows where you are,
+-- and dragging its thumb scrolls a whole row at a time. A section's header sits next to the first setting under it. The
+-- view has two hosts, and moves to whichever shows it:
 --   * Blizzard's settings panel (Esc > Options > AddOns), a canvas page per settings page: the main
 --     page is the addon's category, and every other page is a subcategory listed under it, so
 --     Blizzard's own list picks the page. Each canvas is marked ignored for the controller UI's
@@ -38,11 +39,11 @@
 --   window:Toggle(), window:Show(page?), window:Hide(), window:IsShown()   the standalone window
 --   window:Page()                                 the index of the page the view shows
 -- Public members: Frame (the window, nil until first shown), Canvases (the settings-panel pages, by page index), View,
--- Nav (the window's page list), Scroll (the scroll frame), Content (its scroll child, holding every page), and Thumb
--- (nil until first shown), Pages, Controls, and Dropdown. Controls maps [row id] to the row's control button: its Label
--- is the value shown, Check the boolean's check, and Minus and Plus the number's steppers. Dropdown is the view's
--- dropdown list, nil until the view is built. Its Options are its option buttons, each with a Label and a Check, and
--- Catcher is the click-away layer under it.
+-- Nav (the window's page list), Scroll (the scroll frame), Content (its scroll child, holding every page), ScrollBar
+-- (the Slider), and Thumb (its thumb texture) (nil until first shown), Pages, Controls, and Dropdown. Controls maps
+-- [row id] to the row's control button: its Label is the value shown, Check the boolean's check, and Minus and Plus the
+-- number's steppers. Dropdown is the view's dropdown list, nil until the view is built. Its Options are its option
+-- buttons, each with a Label and a Check, and Catcher is the click-away layer under it.
 
 local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local CanvasInset = 16
@@ -50,6 +51,8 @@ local CanvasInset = 16
 local ControlWidth = 170
 -- A dropdown's room beside its text: 8 to the left, 24 to the right for the chevron, and 6 to spare.
 local DropdownInset = 38
+-- A section's header sits this far above its row's bottom edge, next to the first setting under it.
+local HeaderDrop = 3
 -- The room between a setting's label and its control.
 local LabelGap = 12
 local NavButtonHeight = 26
@@ -62,7 +65,8 @@ local Pad = 16
 local RowHeight = 28
 -- The room the window leaves above and below it on the screen.
 local ScreenMargin = 24
-local ScrollBarWidth = 4
+-- Wide enough to take hold of the thumb.
+local ScrollBarWidth = 8
 -- The room between the page and its scroll bar.
 local ScrollGap = 12
 local Solid = "Interface\\Buttons\\WHITE8X8"
@@ -232,34 +236,15 @@ local function NewSettingsWindow(addon, pages)
     return window
 end
 
--- Shows the scroll thumb while the page scrolls: as much of the track as the page shows, as far down it as the page is
--- scrolled.
-local function PlaceThumb(window)
-    local thumb = window.Thumb
-    local range = window.m_range
-    local scrolls = (range > 0)
-
-    thumb:SetShown(scrolls)
-    window.Track:SetShown(scrolls)
-
-    if not scrolls then
-        return
-    end
-
-    local view = window.m_viewHeight
-    local height = max(ThumbFloor, floor((view * view) / (view + range)))
-
-    thumb:SetHeight(height)
-    thumb:SetPoint("TOP", window.Track, "TOP", 0, -floor(((view - height) * window.m_offset) / range))
-end
-
--- Scrolls the page by notches of the mouse wheel (down is positive), a row each, within the page. An open dropdown
--- closes rather than float away from its control.
-local function ScrollBy(window, notches)
+-- Scrolls the page to offset, snapped to a whole row within the page, and moves the scroll bar's thumb there. An open
+-- dropdown closes rather than float away from its control.
+local function ScrollTo(window, offset)
     CloseList(window)
-    window.m_offset = max(0, min(window.m_offset + (notches * RowHeight), window.m_range))
-    window.Scroll:SetVerticalScroll(window.m_offset)
-    PlaceThumb(window)
+    offset = max(0, min(floor((offset / RowHeight) + 0.5) * RowHeight, window.m_range))
+    window.m_offset = offset
+    window.Scroll:SetVerticalScroll(offset)
+    -- Unchanged, it runs nothing; changed (the wheel), its OnValueChanged comes back here with the same offset.
+    window.ScrollBar:SetValue(offset)
 end
 
 -- Shows page i: its container, its nav button marked, the window sized to fit it (up to the screen, less a margin), the
@@ -296,9 +281,15 @@ local function ShowPage(window, index)
     window.Content:SetHeight(height)
     -- secret: plain, as above
     window.m_range = max(0, height - window.m_viewHeight)
-    window.m_offset = 0
-    scroll:SetVerticalScroll(0)
-    PlaceThumb(window)
+    -- The scroll bar shows while the page scrolls, its thumb as much of it as the page shows.
+    local bar = window.ScrollBar
+    local view = window.m_viewHeight
+    local range = window.m_range
+
+    bar:SetShown(range > 0)
+    window.Thumb:SetHeight(max(ThumbFloor, floor((view * view) / (view + range))))
+    bar:SetMinMaxValues(0, range)
+    ScrollTo(window, 0)
     Follow(window)
 end
 
@@ -553,7 +544,7 @@ local function BuildPage(window, content, page, index)
         if entry.header then
             local header = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 
-            header:SetPoint("LEFT", container, "TOPLEFT", 0, -(y + (RowHeight / 2)))
+            header:SetPoint("BOTTOMLEFT", container, "TOPLEFT", 0, -((y + RowHeight) - HeaderDrop))
             header:SetText(entry.header)
             y = (y + RowHeight)
         else
@@ -604,25 +595,38 @@ local function BuildView(window)
     window.Scroll = scroll
     scroll:SetPoint("TOPRIGHT", -(ScrollGap + ScrollBarWidth), 0)
     scroll:EnableMouseWheel(true)
-    scroll:SetScript("OnMouseWheel", function(_, delta) ScrollBy(window, -delta) end)
+    scroll:SetScript("OnMouseWheel", function(_, delta) ScrollTo(window, window.m_offset - (delta * RowHeight)) end)
     local content = CreateFrame("Frame", nil, scroll)
 
     window.Content = content
     scroll:SetScrollChild(content)
-    local track = view:CreateTexture(nil, "BACKGROUND")
+    -- The scroll bar is the client's own slider, so dragging its thumb is the client's: it steps a row at a time, and
+    -- each step scrolls the page there. The wheel scrolls over it too.
+    local bar = CreateFrame("Slider", nil, view)
 
-    window.Track = track
+    window.ScrollBar = bar
+    bar:SetOrientation("VERTICAL")
+    bar:SetWidth(ScrollBarWidth)
+    bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", ScrollGap, 0)
+    bar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", ScrollGap, 0)
+    bar:SetValueStep(RowHeight)
+    bar:SetObeyStepOnDrag(true)
+    bar:EnableMouseWheel(true)
+    bar:SetScript("OnMouseWheel", function(_, delta) ScrollTo(window, window.m_offset - (delta * RowHeight)) end)
+    -- secret: the value is the addon's own slider's, a plain number
+    bar:SetScript("OnValueChanged", function(_, value) ScrollTo(window, value) end)
+    local track = bar:CreateTexture(nil, "BACKGROUND")
+
+    track:SetAllPoints(bar)
     track:SetTexture(Solid)
     track:SetVertexColor(1, 0.82, 0, 0.15)
-    track:SetWidth(ScrollBarWidth)
-    track:SetPoint("TOPLEFT", scroll, "TOPRIGHT", ScrollGap, 0)
-    track:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", ScrollGap, 0)
-    local thumb = view:CreateTexture(nil, "ARTWORK")
+    local thumb = bar:CreateTexture(nil, "ARTWORK")
 
     window.Thumb = thumb
     thumb:SetTexture(Solid)
     thumb:SetVertexColor(1, 0.82, 0, 0.8)
     thumb:SetWidth(ScrollBarWidth)
+    bar:SetThumbTexture(thumb)
 
     for i, page in ipairs(window.Pages) do
         local button = NewButton(nav, NavWidth, page.name)

@@ -57,6 +57,9 @@
 --   * TooltipDataProcessor.AddTooltipPostCall(tooltipType, fn) records fn (a nil type is ignored,
 --     like InternalAddCall). Calls for TooltipDataProcessor.AllTypes ("ALL") run before the type's
 --     own. The AllTypes member itself isn't faked, since no addon names it.
+--   * h:ShowItemTooltip(itemID) is what hovering or focusing an item does (a vendor's, an auction's, a bag's): its
+--     TooltipData is { type = Enum.TooltipDataType.Item, id = itemID, lines = { { leftText = name } } }, and the
+--     Item post calls run with (GameTooltip, data) after its lines, as for a unit.
 --   * h:ShowUnitTooltip(token) is what hovering a unit does: GameTooltip is anchored to UIParent,
 --     then GameTooltip:SetUnit(token) builds the unit's TooltipData, adds its lines, runs the post
 --     calls with (GameTooltip, data) (an error is reported and the rest still run), and shows the
@@ -599,6 +602,31 @@ function Harness:InterfaceFakes(uiParent)
 end
 
 -- Hovering a unit: GameTooltip anchored to UIParent, then SetUnit(token). Returns the data.
+function Harness:ShowItemTooltip(itemID)
+    local tooltip = self.env.GameTooltip
+    local s = Harness.State(tooltip)
+    local known = (self.items or {})[itemID]
+    local data = { id = itemID, lines = { { leftText = (known and known.name) } }, type = self.env.Enum.TooltipDataType.Item }
+
+    TooltipBehaviors.SetOwner(s, tooltip, self.env.UIParent, "ANCHOR_NONE")
+    ClearTooltipLines(s)
+    s.tooltipData = data
+
+    if known then
+        AddTooltipLine(s, known.name)
+    end
+
+    for _, key in ipairs({ AllTypes, data.type }) do
+        for _, fn in ipairs(self.tooltipPostCalls[key] or {}) do
+            self:Protect(fn, tooltip, data)
+        end
+    end
+
+    s.shown = true
+
+    return data
+end
+
 function Harness:ShowUnitTooltip(token)
     local tooltip = self.env.GameTooltip
     local s = Harness.State(tooltip)

@@ -810,6 +810,17 @@ Stars buy wishes from a grown-up, so riddles lead to something that matters in t
 5. When there are enough stars, the Owl offers to ask with a card, and the window and `/tlk ask <number>` ask too. Asking holds the wish's stars, so they can't be spent twice.
 6. A grown-up answers: a click on the card, A in the **Wishes** window, or `/tlk grant <number>` grants it and spends the stars. X in the window, **Not now**, or `/tlk deny <number>` gives them back. The child's character hears the answer at its next login, or at once when you're grouped.
 
+#### Shopping help
+
+At a vendor or the auction house, the Owl helps your child spend their gold well. Point at an item, with the mouse or the controller, and the Owl says what it thinks, in the item's tooltip and in a panel beside the window:
+
+- whether they can use it yet ("You can use this at level 14.", "Your class can't use this.")
+- whether it's better than what they wear in that slot ("An upgrade: +4 item level!", "Not better than what you're wearing.")
+- whether they'll soon outgrow it ("You'll outgrow this soon. Quests give gear like this.")
+- whether it costs too much of their gold ("That's most of your gold! Maybe wish for it instead.")
+
+**Wish for it** (L3 on a controller, or the panel's button) adds the item to their wishes, priced in stars from what the vendor or the auction house asks: its price at what a star is worth, rounded up. They can ask for it at once, without a grown-up setting a price first. **A star is worth** (1, 5, 10, or 50 silver, or 1 gold, and 10 silver unless you change it) and **The Owl's shopping help** are under **Wishes** on the **Scholar's challenge** page, behind the parent lock. The help only reads what the vendor and the auction house show: it never buys, bids, or searches.
+
 A request reaches a grown-up two ways:
 - **On the same account,** as a card the next time you log in on any character, and in `/tlk wishes`.
 - **In a group,** as a card right away, when the child named you with `/tlk parent <First Last>` on their character, and you both run the toolkit with Krew messages on. Only the grown-up the child named sees it, and only their answer counts.

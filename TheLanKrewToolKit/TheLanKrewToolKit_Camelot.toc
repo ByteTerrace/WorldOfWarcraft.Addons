@@ -24,6 +24,7 @@ ScholarReading.lua
 QuestBook.lua
 ScholarQuests.lua
 ScholarSkills.lua
+ScholarAdvice.lua
 ScholarMemory.lua
 Cards.lua
 FuckOMeter.lua
@@ -51,5 +52,6 @@ ScholarLock.lua
 Scholar.lua
 ScholarWishesView.lua
 ScholarWishes.lua
+ScholarShop.lua
 QuestProgress.lua
 QuestReader.lua

@@ -33,6 +33,8 @@ local addonName, ns = ...
 --   ns.ScholarWishes.Balance()      the stars to spend
 --   ns.ScholarWishes.Open()         opens the wishes window (out of combat)
 --   ns.ScholarWishes.ReportLines()  the report card's lines about wishes and bonus stars
+--   ns.ScholarWishes.WishFor(item, name, price)  a wish for an item, priced from its gold price at a star's worth
+--   ns.ScholarWishes.Worth()        what a star is worth, in copper (the starWorth setting)
 
 -- The most bonus stars one /tlk star gives.
 local MaxBonus = 10
@@ -41,6 +43,10 @@ local MaxPrice = 999
 -- The longest wish, in bytes, so it fits a Krew message.
 local MaxText = 60
 local MaxWishes = 12
+local WorthLabels = { ["10s"] = "10 silver", ["1g"] = "1 gold", ["1s"] = "1 silver", ["50s"] = "50 silver", ["5s"] = "5 silver" }
+-- What a star is worth, in copper, by the starWorth setting, and its labels.
+local Worths = { ["10s"] = 1000, ["1g"] = 10000, ["1s"] = 100, ["50s"] = 5000, ["5s"] = 500 }
+local WorthValues = { "1s", "5s", "10s", "50s", "1g" }
 
 -- The wishes window's controller buttons, summoned while it's open, and the commands they run.
 local WindowButtons = {
@@ -617,6 +623,37 @@ local function ShowWishes()
     end
 end
 
+--- Adds a wish for an item, priced from its gold price at a star's worth (ns.ScholarAdvice.Stars), so the child can ask
+--- for it at once. Without a price, a grown-up sets it.
+---@param item number the item's ID
+---@param name string its name
+---@param price number? its gold price, in copper
+local function WishFor(item, name, price)
+    local wishes = Wishes.Records.wishes
+
+    if wishes:Count() >= MaxWishes then
+        Addon:Print("The wishlist is full. A grown-up can take one off with " .. Addon.Slash[1] .. " unwish <number>.")
+
+        return
+    end
+
+    local id = (Wishes:Get("nextWish") + 1)
+    local stars = (price and ns.ScholarAdvice.Stars(price, Worths[Wishes:Get("starWorth")]))
+    local text = CleanText(name):sub(1, MaxText)
+
+    Wishes:Set("nextWish", id)
+    wishes:Set(tostring(id), { item = item, price = (stars or 0), text = text })
+
+    Addon:Print(((stars and ("Added to your wishes: %s, for %s.")) or "Added to your wishes: %s. A grown-up will set its price.")
+        :format(text, (stars and Stars(stars)) or ""))
+end
+
+--- Returns what a star is worth, in copper.
+---@return number
+local function Worth()
+    return Worths[Wishes:Get("starWorth")]
+end
+
 Wishes = Addon:Module("Wishes", {
     commands = {
         { label = "Wish for something, or for a grown-up, add a wish with its price (wish [stars] <what>)",
@@ -721,6 +758,7 @@ Wishes = Addon:Module("Wishes", {
             end
         end)
     end,
+    page = "Scholar's challenge",
     records = {
         -- The child's wishes: what, its price (0 until a grown-up sets one), and whether it's asked for.
         { fields = {
@@ -747,6 +785,7 @@ Wishes = Addon:Module("Wishes", {
             },
             limit = 50, name = "asks" },
     },
+    section = "Wishes",
     state = {
         { default = 0, kind = "number", min = 0, name = "bonus", scope = "character", step = 1 },
         { default = 0, kind = "number", min = 0, name = "bonusCount", scope = "character", step = 1 },
@@ -756,8 +795,13 @@ Wishes = Addon:Module("Wishes", {
         { default = 0, kind = "number", min = 0, name = "nextWish", scope = "character", step = 1 },
         { default = "", kind = "string", name = "parents", scope = "character" },
         { default = 0, kind = "number", min = 0, name = "spent", scope = "character", step = 1 },
+        { default = "10s",
+            description = ("What one star buys, so a wish for an item from a vendor or the auction house prices itself "
+                .. "from its gold price, and your child can ask for it at once."),
+            kind = "string", label = "A star is worth", lockedBy = "Scholar.locked", name = "starWorth",
+            scope = "character", valueLabels = WorthLabels, values = WorthValues },
     },
     toggle = false,
 })
 
-ns.ScholarWishes = { Balance = Balance, Open = OpenWindow, ReportLines = ReportLines }
+ns.ScholarWishes = { Balance = Balance, Open = OpenWindow, ReportLines = ReportLines, WishFor = WishFor, Worth = Worth }

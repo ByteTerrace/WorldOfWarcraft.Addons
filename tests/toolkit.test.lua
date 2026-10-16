@@ -59,7 +59,8 @@ test("loads cleanly and builds its settings window, organized into pages and sec
         ("Scholar's challenge: Scholar.enabled [Answers] Scholar.missPause Scholar.style"
             .. " [Reading aloud] QuestCount.enabled QuestReader.enabled Scholar.readAloud"
             .. " [Riddles] Scholar.grade Scholar.math Scholar.quests Scholar.reading"
-            .. " [When riddles come] Scholar.onLevelUp Scholar.interval Scholar.onFlight Scholar.onTurnIn Scholar.onDeath"),
+            .. " [When riddles come] Scholar.onLevelUp Scholar.interval Scholar.onFlight Scholar.onTurnIn Scholar.onDeath"
+            .. " [Wishes] Wishes.starWorth Shopping.enabled"),
         ("Sounds: Sounds.enabled Sounds.combatStart Sounds.combatStartFades Sounds.questReady Sounds.channel"
             .. " [Kill streaks] Streaks.enabled Streaks.firstBlood Streaks.sprees Streaks.multiKills Streaks.share"
             .. " [Mortal Kombat] Kombat.chooseYourDestiny Kombat.comboPoints Kombat.deathTaunt Kombat.fatality"

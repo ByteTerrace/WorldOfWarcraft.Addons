@@ -5,7 +5,10 @@
 -- x, y } (normalized to h.mapID), h.instance (nil, or IsInInstance's type: "party", "raid", "pvp", "arena",
 -- "scenario"), h.maps = { [uiMapID] = { name, mapType, parentMapID, flags, canSetWaypoint } } (h:AddMap), h.waypoint ({
 -- uiMapID, x, y, z } or nil), h.superTracked (the user waypoint is super tracked), and h.raidNotices ({ text, color,
--- displayTime } per raid warning message). h.items = { [itemID] = { name, quality, icon, uncached } } (h:AddItem).
+-- displayTime } per raid warning message). h.items = { [itemID] = { name, quality, icon, uncached, level, minLevel,
+-- equipLoc } } (h:AddItem), h.equipped = { [inventory slot] = itemID }, h.merchantItems (the open vendor's { id, price,
+-- usable } in its order, for h:OpenInteraction("Merchant")), and h.auctionResults (the auction house's browse results,
+-- { id, minPrice }).
 --
 -- Modeling decisions ([D] documented, [G] a guess where the docs are silent):
 --   Zones       [D] ZONE_CHANGED_NEW_AREA fires on entering a new zone, ZONE_CHANGED on entering
@@ -19,9 +22,15 @@
 --               unit's own map (parent maps aren't projected); a party member's comes from its
 --               mapID / mapPosition fields. GetBestMapForUnit still answers in an instance
 --               (the instance's map, if the test sets one).
---   Items       [D] C_Item.GetItemInfo(item) returns the item's name, link, and quality first, and its
---               icon tenth, or nothing while the client hasn't cached it (warcraft.wiki.gg
---               API_C_Item.GetItemInfo). [D] C_Item.GetItemIconByID answers at once, cached or not. A link is
+--   Items       [D] C_Item.GetItemInfo(item) takes an ID or a link and returns the item's name, link,
+--               quality, item level, level requirement, type, subtype, stack count, equipLoc, and
+--               icon, or nothing while the client hasn't cached it (ItemDocumentation.lua, forever
+--               branch). [D] C_Item.GetItemIconByID answers at once, cached or not.
+--               [D] GetInventoryItemLink(unit, slot) is the equipped item's link, or nil.
+--               [D] A vendor: GetMerchantNumItems, GetMerchantItemID(i), and
+--               C_MerchantFrame.GetItemInfo(i), a MerchantItemInfo (name, texture, price, ...,
+--               isPurchasable, isUsable). [D] C_AuctionHouse.GetBrowseResults() lists
+--               BrowseResultInfo { itemKey = { itemID }, minPrice, totalQuantity }. A link is
 --               "|c<color>|Hitem:<id>::::::::|h[<name>]|h|r", as a shift-click puts in chat
 --               (h:ItemLink). The harness knows only the items a test adds.
 --   Map IDs     The harness knows no uiMapIDs of its own: a test adds each map it uses with
@@ -347,7 +356,8 @@ local QualityColors = { [0] = "ff9d9d9d", [1] = "ffffffff", [2] = "ff1eff00", [3
 
 local function ItemFakes(h)
     local function Known(item)
-        local known = (h.items or {})[tonumber(item)]
+        local id = (tonumber(item) or tonumber(tostring(item):match("item:(%d+)") or ""))
+        local known = (h.items or {})[id]
 
         return ((((known ~= nil) and not known.uncached) and known) or nil)
     end
@@ -362,17 +372,66 @@ local function ItemFakes(h)
             local known = Known(item)
 
             if known then
-                return known.name, h:ItemLink(tonumber(item)), known.quality, nil, nil, nil, nil, nil, nil, known.icon
+                local id = (tonumber(item) or tonumber(tostring(item):match("item:(%d+)")))
+
+                return known.name, h:ItemLink(id), known.quality, (known.level or 1), (known.minLevel or 0), "", "", 1,
+                    (known.equipLoc or ""), known.icon
             end
         end,
     }
 end
 
+-- The vendor, the auction house, and what's worn: what the shopping helper reads.
+local function ShopFakes(h)
+    local function Merchant(i)
+        return (h.merchantItems or {})[i]
+    end
+
+    return {
+        C_AuctionHouse = {
+            GetBrowseResults = function()
+                local results = {}
+
+                for i, result in ipairs(h.auctionResults or {}) do
+                    results[i] = { itemKey = { itemID = result.id }, minPrice = result.minPrice, totalQuantity = 1 }
+                end
+
+                return results
+            end,
+        },
+        C_MerchantFrame = {
+            GetItemInfo = function(i)
+                local item = Merchant(i)
+                local known = (item and (h.items or {})[item.id])
+
+                if item then
+                    return { isPurchasable = true, isUsable = (item.usable ~= false), name = (known and known.name),
+                        price = item.price, stackCount = 1, texture = (known and known.icon) }
+                end
+            end,
+        },
+        GetInventoryItemLink = function(unit, slot)
+            local id = (((unit == "player") and (h.equipped or {})[slot]) or nil)
+
+            return ((id and h:ItemLink(id)) or nil)
+        end,
+        GetMerchantItemID = function(i)
+            local item = Merchant(i)
+
+            return (item and item.id)
+        end,
+        GetMerchantNumItems = function() return #(h.merchantItems or {}) end,
+    }
+end
+
 -- Adds an item the client knows: name, quality (1 unless given), icon (a file ID), and uncached (GetItemInfo answers
 -- nothing yet).
-function Harness:AddItem(itemID, name, quality, icon, uncached)
+function Harness:AddItem(itemID, name, quality, icon, uncached, gear)
     self.items = (self.items or {})
     self.items[itemID] = { icon = (icon or 134400), name = name, quality = (quality or 1), uncached = uncached }
+
+    -- gear: { level, minLevel, equipLoc } for something worn.
+    for key, value in pairs(gear or {}) do self.items[itemID][key] = value end
 end
 
 -- The item's link, as a shift-click puts it in chat.
@@ -409,6 +468,8 @@ function Harness:WorldFakes()
     }
 
     for name, value in pairs(Harness.GLOBAL_STRINGS) do fakes[name] = value end
+
+    for name, value in pairs(ShopFakes(h)) do fakes[name] = value end
 
     return fakes
 end

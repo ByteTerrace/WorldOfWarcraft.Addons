@@ -47,7 +47,7 @@ The window is laid out like this:
   - Every change goes through `State:Set`, and a locked row is refused with a message.
   - A change made elsewhere refreshes the page that shows.
   - Only that page's rows are watched, so a hidden view or page costs nothing until it shows.
-  - A page taller than its host scrolls in it, clipped, a row a notch of the mouse wheel or a row a step of its scroll bar's thumb (the client's own `Slider`), and always shows whole rows. A section's header sits next to the first setting under it. The window grows with its page up to the screen's height, less a margin.
+  - A page taller than its host scrolls in it, clipped, a row a notch of the mouse wheel or a row a step of its scroll bar's thumb (the client's own `Slider`), and always shows whole rows. Each step moves the page by whole screen pixels (`PixelUtil.GetNearestPixelSize`), so 1-pixel borders stay sharp at any UI scale. A section's header sits next to the first setting under it. The window grows with its page up to the screen's height, less a margin.
   - The controls' column is as wide as the widest dropdown choice needs, and the window as wide as the longest label beside it.
 - **Controller-safe.** Each canvas is marked ignored for the controller UI's navigation (`smartNavigationIgnored`, which covers every child), and the addon registers no Blizzard setting controls. On Forever, controller focus on an addon's control taints what the controller UI remembers, and closing the panel then freezes the game. With the controller UI on, the canvas pages are for the mouse, and the window is the way in.
 

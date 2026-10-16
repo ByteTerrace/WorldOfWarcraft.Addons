@@ -84,6 +84,7 @@ local GameTooltip = GameTooltip
 local ipairs = ipairs
 local max = math.max
 local min = math.min
+local PixelUtil = PixelUtil
 local Settings = Settings
 local tostring = tostring
 local UIParent = UIParent
@@ -236,13 +237,16 @@ local function NewSettingsWindow(addon, pages)
     return window
 end
 
--- Scrolls the page to offset, snapped to a whole row within the page, and moves the scroll bar's thumb there. An open
--- dropdown closes rather than float away from its control.
+-- Scrolls the page to offset, snapped to a whole row within the page (and that to whole pixels), and moves the scroll
+-- bar's thumb there. An open dropdown closes rather than float away from its control.
 local function ScrollTo(window, offset)
     CloseList(window)
     offset = max(0, min(floor((offset / RowHeight) + 0.5) * RowHeight, window.m_range))
     window.m_offset = offset
-    window.Scroll:SetVerticalScroll(offset)
+    -- The page moves by whole screen pixels: a row is rarely whole pixels at the UI's scale, and a fraction of one
+    -- would blur or drop the controls' 1-pixel borders.
+    -- secret: the scroll frame's scale is the UI's own, a plain number
+    window.Scroll:SetVerticalScroll(PixelUtil.GetNearestPixelSize(offset, window.Scroll:GetEffectiveScale()))
     -- Unchanged, it runs nothing; changed (the wheel), its OnValueChanged comes back here with the same offset.
     window.ScrollBar:SetValue(offset)
 end

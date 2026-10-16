@@ -192,6 +192,29 @@ test("every scroll position shows whole rows, in the panel and in the window", f
     Whole("window")
 end)
 
+test("every scroll offset is whole screen pixels, so 1-pixel borders stay sharp at any UI scale", function()
+    local h, addon = NewLongAddOn(40)
+    local window = addon.SettingsWindow
+    -- A 1080-pixel screen at UI scale 0.85: a row is 28 * 0.85 * 1080 / 768 = 33.47 pixels.
+    local pixel = ((768 / 1080) / 0.85)
+
+    h.physicalScreen = { 1920, 1080 }
+    h.env.UIParent:SetScale(0.85)
+    h:SelectSettingsCategory(h.categories[2])
+
+    for notch = 1, 30 do
+        h:MouseWheel(window.Scroll, -1)
+        local offset = window.Scroll:GetVerticalScroll()
+        local pixels = (offset / pixel)
+
+        truthy(math.abs(pixels - math.floor(pixels + 0.5)) < 1e-6, "notch " .. notch .. ": " .. pixels .. " pixels")
+        eq(window.ScrollBar:GetValue() % 28, 0, "notch " .. notch .. ": the thumb is on a whole row")
+
+        truthy(math.abs(offset - window.ScrollBar:GetValue()) <= (pixel / 2),
+            "notch " .. notch .. ": the page is within half a pixel of that row")
+    end
+end)
+
 test("dragging the scroll thumb scrolls the page, a whole row at a time, within the page", function()
     local h, addon = NewLongAddOn(40)
     local window = addon.SettingsWindow

@@ -353,6 +353,8 @@ function Harness.New(player)
     h.opened = {}
     -- The Settings fake's registered categories (env.lua).
     h.categories = {}
+    -- The screen's width and height in pixels (env.lua's PixelUtil).
+    h.physicalScreen = { 1366, 768 }
     h.spellNames = { [5308] = "Execute" }
     -- Each spell's { isUsable, insufficientPower }, by spell name.
     h.usable = {}

@@ -244,6 +244,32 @@ function Harness:BuildEnvironment()
             return function(message) h:ReportError(message) end
         end,
         GetTime = function() return h.time end,
+        -- [D] Blizzard_SharedXML/PixelUtil.lua (forever): GetNearestPixelSize rounds a size in UI units at a layout
+        -- scale to whole pixels (at least minPixels, away from 0), and returns it in UI units. A pixel is 768 / the
+        -- screen's height (GetPhysicalScreenSize) UI units at scale 1. Round is Blizzard's: half away from 0. [G] The
+        -- screen is h.physicalScreen ({ width, height } in pixels), by default 768 high, so a unit at scale 1 is a
+        -- pixel.
+        PixelUtil = {
+            GetNearestPixelSize = function(uiUnitSize, layoutScale, minPixels)
+                if (uiUnitSize == 0) and (not minPixels or (minPixels == 0)) then
+                    return 0
+                end
+
+                local factor = (768 / h.physicalScreen[2])
+                local exact = ((uiUnitSize * layoutScale) / factor)
+                local pixels = (((exact < 0) and math.ceil(exact - 0.5)) or math.floor(exact + 0.5))
+
+                if minPixels then
+                    if uiUnitSize < 0 then
+                        pixels = math.min(pixels, -minPixels)
+                    else
+                        pixels = math.max(pixels, minPixels)
+                    end
+                end
+
+                return ((pixels * factor) / layoutScale)
+            end,
+        },
         -- [G] The client's high-resolution clock in milliseconds; the snapshot records only that it exists. It runs
         -- with GetTime, plus h.workTime: the milliseconds a test says the work in the current frame has taken, since
         -- GetTime holds still within a frame and this clock doesn't. debugprofilestart, which resets it for every

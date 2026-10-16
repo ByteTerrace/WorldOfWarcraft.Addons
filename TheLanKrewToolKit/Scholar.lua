@@ -189,6 +189,11 @@ local function Context()
     }
 end
 
+-- The stars the current riddle is worth: two for a stretch.
+local function Earned()
+    return ((Current.stretch and 2) or 1)
+end
+
 -- Seconds of play toward the next riddle, the running stretch included.
 local function Elapsed()
     local elapsed = Scholar:Get("elapsed")
@@ -282,6 +287,7 @@ end
 -- Ends the riddle, solved (after its celebration) or skipped. Either way, the timer starts over.
 local function Finish(solved)
     local before = Scholar:Get("stars")
+    local earned = ((Current and Earned()) or 1)
 
     if Current and Current.questKey then
         QuestBook.Asked(Current.questKey, Current.kind)
@@ -295,7 +301,8 @@ local function Finish(solved)
     SegmentStart = GetTime()
     Scholar:Set("pending", false)
 
-    if solved and (Rank(before - 1) ~= Rank(before)) then
+    -- A stretch's two stars can land past a rank's first star, so the rank before them is what counts.
+    if solved and (Rank(before - earned) ~= Rank(before)) then
         ns.Cards.Show({ body = (before .. " stars of wisdom. The Owl Sage is proud of you!"),
             icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.LFG_REWARDS,
             title = ("New rank: " .. Rank(before) .. "!") })
@@ -438,7 +445,7 @@ local function Choose(i)
     -- Each subject's level row is the difficulty its riddles are written at: a quest riddle never changes one.
     local adapts = ((Current.questKey == nil) and not Current.stretch)
     local firstTry = Memory.Record(Scholar, Current, i)
-    local earned = ((Current.stretch and 2) or 1)
+    local earned = Earned()
     local levelRow = (Current.subject .. "Level")
     local runRow = (Current.subject .. "Run")
 

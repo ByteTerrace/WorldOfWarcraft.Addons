@@ -57,6 +57,23 @@ test("a stretch riddle asks a kind from a grade or two up, says so, and its help
     eq(addon.State:Get("Scholar.mathLevel"), level, "and its misses don't make riddles easier")
 end)
 
+test("a stretch riddle's two stars can jump a rank, and the rank card still shows", function()
+    local h, addon, ns = LoadKid({ ["Scholar.grade"] = "0", ["Scholar.quests"] = false, ["Scholar.reading"] = false })
+    local shown = Watch(ns)
+    local puzzle = UntilStretch(h, shown, 60)
+
+    truthy(puzzle, "one riddle in five or so is a stretch")
+    -- One star short of Journeyman at 10: the two stars land on 11, past the rank's first star.
+    addon.State:Set("Scholar.stars", 9)
+    h:Key(tostring(puzzle.answer), true)
+    h:Advance(2)
+    eq(addon.State:Get("Scholar.stars"), 11)
+    local card = rawget(h.env, "TheLanKrewToolKitCard")
+
+    truthy(card and card:IsShown(), "the rank card shows")
+    eq(Reveal(Harness.State(card.Title).text), "New rank: Journeyman!")
+end)
+
 test("the next riddle doesn't repeat one of the recent ones", function()
     local _, _, ns = LoadKid()
     local first = ns.Puzzles.Generate({ grade = 0, kind = "reading.rhyme", random = math.random, subject = "reading" })

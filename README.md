@@ -663,7 +663,9 @@ A riddle never comes in combat. It waits for the fight to end, and one on screen
 
 #### How a riddle works
 
-The riddle covers the screen, and holds the mouse and keyboard until it's solved. Answer by pressing 1-4, by selecting an answer, or with the controller's face buttons. **Gate** mode must be solved. **Gentle** mode offers **Skip** after one wrong try.
+The riddle shows its panel over a light shade. Only its own keys and its panel are the riddle's, so you can still walk, chat, click the world, and fight while it's up. Answer by pressing 1-4, by selecting an answer, or with the controller's face buttons. **Gate** mode must be solved. **Gentle** mode offers **Skip** after one wrong try.
+
+**Later** (L, the **Later** tab on the riddle's top edge, or D-pad left) puts a riddle off: it folds into a pill at the top of the screen and gives the keyboard, mouse, and controller back. Click the pill, press D-pad left, or type `/tlk puzzle` to open it again. In **Gate** mode, it comes back by itself after a minute, once no fight is on. In **Gentle** mode, it waits until it's opened. Either way, it's the same riddle, still due: no new riddle and no stars come until it's solved, and its pause waits where it was.
 
 Every riddle teaches. A wrong pick says why that answer is tempting but not it ("That's what you get if you add instead"), and each miss climbs a hint ladder:
 
@@ -806,6 +808,8 @@ A riddle earns a star, and there are streaks and scholar ranks (Apprentice, Jour
 - the skills mastered (box 4 or above)
 - the skills being worked on: the last first try missed, so it comes right back, or, after three riddles, fewer than half of the last five were right
 - the five most recent misses, with the answer chosen and the right one
+
+Last, it says what your child did around the riddles: how many were put off with **Later**, and how many a `/reload` or relog brought back unsolved. Neither is a mark against them. It's there so the report tells the whole story.
 
 ## License
 

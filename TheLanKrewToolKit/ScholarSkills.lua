@@ -14,6 +14,7 @@ local addonName, ns = ...
 --   ns.ScholarSkills.Mastered(record), Struggling(record) -> boolean
 --   ns.ScholarSkills.Name(kind) -> a parent's name for the skill ("adding")
 --   ns.ScholarSkills.Report(name, sections, misses) -> the parent's report card, as lines of text
+--   ns.ScholarSkills.Riddles(count) -> "1 riddle", or "3 riddles"
 --   ns.ScholarSkills.Boxes, Interval, RecentLength
 
 local Boxes = 5
@@ -94,6 +95,20 @@ local function Percent(part, whole)
     return math.floor((((part * 100) / whole) + 0.5))
 end
 
+--- Returns the parent's report card, as lines of text. It starts with a summary, then gives each section's level,
+--- riddles, first-try rate, skills mastered, and skills being worked on, then the recent misses with the answer chosen
+--- and the right one.
+---@param name string? the character's name
+---@param sections table[] { label, level (nil for none), records = { [kind] = a skill's record } } each
+---@param misses table[] the recent misses, newest first: { kind, prompt, chosen, right } each
+---@return string[]
+--- Returns a count of riddles in words: "1 riddle", or "3 riddles".
+---@param count number
+---@return string
+local function Riddles(count)
+    return (((count == 1) and "1 riddle") or (count .. " riddles"))
+end
+
 --- Returns whether a skill is being worked on: its last first try missed (it comes right back), or it has been asked at
 --- least three times and fewer than half of its recent first tries were right.
 ---@param record table
@@ -104,13 +119,6 @@ local function Struggling(record)
     return ((record.recent:sub(-1) == "0") or ((record.asked >= 3) and ((right * 2) < #record.recent)))
 end
 
---- Returns the parent's report card, as lines of text. It starts with a summary, then gives each section's level,
---- riddles, first-try rate, skills mastered, and skills being worked on, then the recent misses with the answer chosen
---- and the right one.
----@param name string? the character's name
----@param sections table[] { label, level (nil for none), records = { [kind] = a skill's record } } each
----@param misses table[] the recent misses, newest first: { kind, prompt, chosen, right } each
----@return string[]
 local function Report(name, sections, misses)
     local lines = {}
     local asked = 0
@@ -130,8 +138,8 @@ local function Report(name, sections, misses)
         if sectionAsked == 0 then
             lines[#lines + 1] = ("%s%s: no riddles yet."):format(section.label, level)
         else
-            lines[#lines + 1] = ("%s%s: %d riddles, %d%% right on the first try. Mastered: %s. Working on: %s."):format(
-                section.label, level, sectionAsked, Percent(sectionRight, sectionAsked),
+            lines[#lines + 1] = ("%s%s: %s, %d%% right on the first try. Mastered: %s. Working on: %s."):format(
+                section.label, level, Riddles(sectionAsked), Percent(sectionRight, sectionAsked),
                 Listed(section.records, Mastered, "none yet"), Listed(section.records, Struggling, "nothing right now"))
         end
     end
@@ -141,7 +149,7 @@ local function Report(name, sections, misses)
     if asked == 0 then
         table.insert(lines, 1, ("Scholar's report card%s: no riddles answered yet."):format(who))
     else
-        table.insert(lines, 1, ("Scholar's report card%s: %d riddles, %d%% right on the first try."):format(who, asked,
+        table.insert(lines, 1, ("Scholar's report card%s: %s, %d%% right on the first try."):format(who, Riddles(asked),
             Percent(right, asked)))
     end
 
@@ -214,5 +222,5 @@ end
 
 ns.ScholarSkills = {
     Boxes = Boxes, Choose = Choose, Interval = Interval, Mastered = Mastered, Name = Name, Next = Next,
-    RecentLength = RecentLength, Report = Report, Struggling = Struggling,
+    RecentLength = RecentLength, Report = Report, Riddles = Riddles, Struggling = Struggling,
 }

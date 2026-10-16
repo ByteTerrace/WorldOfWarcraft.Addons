@@ -16,18 +16,20 @@ local addonName, ns = ...
 --            moment brings the next riddle forward once half its minutes are played: a flight path
 --            (free time), a quest turned in (asked about while it's fresh), or a death (waiting to
 --            come back). Each can be switched off.
---   Where    a riddle covers the screen and holds the mouse and keyboard until it's solved. In
---            Gentle mode, a Skip appears after one try. Never during combat: a riddle waits for the
---            fight to end, and one on screen steps aside if a fight starts and comes back after.
+--   Where    a riddle shows its panel over a light shade, and only its own keys and its panel are
+--            the riddle's: the player can still walk, chat, click the world, and fight. Later puts
+--            it off into a pill (ScholarLater.lua). In Gentle mode, a Skip appears after one try.
+--            Never during combat: a riddle waits for the fight to end, and one on screen steps
+--            aside if a fight starts and comes back after.
 --            Never over Blizzard's windows either: one that comes due while a quest dialog,
 --            gossip, a vendor, the mailbox, a bank, the auction house, a trainer, or the flight
 --            map is open waits for it to close (a quest chain's next offer included). One already
 --            on screen when such a window opens stays.
 --   How      answer with 1-4, the mouse, or the controller's face buttons. Need a hint? (the
 --            quest book, on a quest riddle) is H or the left shoulder, Read aloud is R or the right
---            shoulder, and Skip is Esc or Back. The open quest book scrolls with the wheel, the Up
---            and Down arrows, or the D-pad. Read aloud reads what the screen shows: the riddle, the
---            open quest book, or the feedback after an answer or a hint.
+--            shoulder, Later is L or D-pad left, and Skip is Esc or Back. The open quest book scrolls
+--            with the wheel, the Up and Down arrows, or the D-pad. Read aloud reads what the screen
+--            shows: the riddle, the open quest book, or the feedback after an answer or a hint.
 --   Aloud    the readAloud setting says riddles as they appear (kindergarten and grade 1 by
 --            default), each choice with the key that picks it, and a hovered choice again. A heard
 --            riddle (ScholarWords.heard) always says its word, and its button is Hear it again.
@@ -43,13 +45,17 @@ local addonName, ns = ...
 --   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the
 --            grade (math and reading only: a quest riddle never changes it).
 --
--- Limits, honestly: a controller's sticks still move the character, and a determined child can turn the addon off at
--- character select. Blizzard's parental controls (play time limits) are the place for hard limits. This is meant to be
--- fun.
+-- Limits, honestly: it's a gate a child can step around, by design. It keeps what they do honest instead: a riddle put
+-- off, or brought back by a /reload, is the same riddle, and the parent's report counts both. A determined child can
+-- turn the addon off at character select. Blizzard's parental controls (play time limits) are the place for hard
+-- limits. This is meant to be fun.
 
 -- The screen's other actions: their controller buttons and keyboard keys.
-local ActionKeys = { hint = "H", skip = "Esc", speak = "R" }
-local ActionSources = { hint = "gamepad.leftShoulder", skip = "gamepad.back", speak = "gamepad.rightShoulder" }
+local ActionKeys = { hint = "H", later = "L", skip = "Esc", speak = "R" }
+
+local ActionSources = { hint = "gamepad.leftShoulder", later = "gamepad.dpadLeft", skip = "gamepad.back",
+    speak = "gamepad.rightShoulder" }
+
 local AnswerSources = { "gamepad.south", "gamepad.east", "gamepad.west", "gamepad.north" }
 local FinishDelay = 1.8
 -- How long, in seconds, after losing control to look for a flight path (UnitOnTaxi).
@@ -114,6 +120,7 @@ local wipe = wipe
 
 local Addon = ns.Addon
 local Keep = ns.ScholarKeep
+local Later = ns.ScholarLater
 local Memory = ns.ScholarMemory
 local Puzzles = ns.Puzzles
 local QuestBook = ns.QuestBook
@@ -354,6 +361,7 @@ local function Finish(solved)
     Current, Wrongs = nil, 0
     wipe(Missed)
     Close()
+    Scholar:Set("collapsed", false)
     Scholar:Set("riddle", "")
     Scholar:Set("pauseLeft", 0)
     Scholar:Set("pauseMisses", 0)
@@ -526,12 +534,13 @@ local function Choose(i)
     end
 end
 
--- Shows the riddle and takes the keyboard and controller. Only ever called out of combat. A riddle that comes back
--- after a miss (from a fight, a /reload, or a relog) shows its hint's rung again, and its answers wait out the pause's
--- seconds left (pauseLeft).
+-- Shows the riddle and takes its keys (the rest reach the game) and the controller. Only ever called out of combat. A
+-- riddle that comes back after a miss (from a fight, a /reload, or a relog) shows its hint's rung again, and its
+-- answers wait out the pause's seconds left (pauseLeft).
 local function Open()
     local frame = ScholarView.Show(Current, Progress({
-        actions = { hint = ActionLabel("hint"), skip = ActionLabel("skip"), speak = ActionLabel("speak") },
+        actions = { hint = ActionLabel("hint"), later = ActionLabel("later"), skip = ActionLabel("skip"),
+            speak = ActionLabel("speak") },
         book = (Current.book ~= nil), canSkip = ((Scholar:Get("style") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
         controller = UsingController(), gentle = (Scholar:Get("style") == "gentle"),
         keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, reveal = (select(3, Help())), wrong = Missed,
@@ -673,12 +682,19 @@ ScholarView.Init({
             Addon:Batch(Skip)
         elseif key == "H" then
             Hint()
+        elseif key == "L" then
+            Addon.Commands:Run("Scholar.later")
         elseif key == "R" then
             Speak()
         elseif ScrollKeys[key] then
             ScholarView.ScrollBook(ScrollKeys[key])
+        else
+            return false
         end
+
+        return true
     end,
+    later = function() Addon.Commands:Run("Scholar.later") end,
     skip = function() Addon:Batch(Skip) end,
     speak = Speak,
 })
@@ -706,12 +722,17 @@ local Commands = {
         slash = "report" },
     { label = "Solve a riddle right now", name = "practice",
         run = function()
+            Scholar:Set("collapsed", false)
             Scholar:Set("pending", true)
         end,
         slash = "puzzle" },
 }
 
 for _, command in ipairs(ns.ScholarLock.Commands) do
+    Commands[#Commands + 1] = command
+end
+
+for _, command in ipairs(Later.Commands) do
     Commands[#Commands + 1] = command
 end
 
@@ -777,6 +798,8 @@ Scholar = Addon:Module("Scholar", {
         wipe(Missed)
         wipe(Windows)
         Close()
+        Later.Stop()
+        module:Set("collapsed", false)
         Bank()
         Counting = false
     end,
@@ -795,6 +818,11 @@ Scholar = Addon:Module("Scholar", {
 
         if kept and module:Get("pending") and Usable(kept) then
             Current, Wrongs, Missed = kept, wrongs, missed
+
+            -- Before login is a /reload or a relog. After it, the challenge was switched back on.
+            if not IsLoggedIn() then
+                module:Set("returnCount", module:Get("returnCount") + 1)
+            end
         elseif kept then
             module:Set("riddle", "")
         end
@@ -818,6 +846,9 @@ Scholar = Addon:Module("Scholar", {
         local readingOn = module:Id("reading")
         local questsOn = module:Id("quests")
         local window = module:Id("window")
+        local collapsed = module:Id("collapsed")
+
+        Later.Start(module)
 
         -- Blizzard's windows a riddle waits for (see the header).
         for event, dialog in pairs(DialogEvents) do
@@ -908,23 +939,24 @@ Scholar = Addon:Module("Scholar", {
                 -- Otherwise the riddle waits for a quest to ask about.
                 end
             end,
-            initial = true, reads = { pending, solved, combat, window },
+            initial = true, reads = { pending, solved, combat, window, collapsed },
             when = function(state)
                 return ((state.Values[pending] or state.Values[solved]) and not state.Values[combat]
-                    and not state.Values[window])
+                    and not state.Values[window] and not state.Values[collapsed])
             end,
         })
 
-        -- A fight sends the riddle away until it ends.
+        -- A fight sends the riddle away until it ends, and Later until it's opened again.
         module:Rule({
             changed = function(allowed)
                 if not allowed then
                     Close()
                 end
             end,
-            reads = { pending, solved, combat },
+            reads = { pending, solved, combat, collapsed },
             when = function(state)
-                return ((state.Values[pending] or state.Values[solved]) and not state.Values[combat])
+                return ((state.Values[pending] or state.Values[solved]) and not state.Values[combat]
+                    and not state.Values[collapsed])
             end,
         })
 

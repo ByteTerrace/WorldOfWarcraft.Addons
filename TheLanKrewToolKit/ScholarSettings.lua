@@ -94,6 +94,12 @@ local Rows = {
     -- The riddle on screen until it's solved or skipped, with its misses and missed answers (ScholarKeep.lua), so a
     -- /reload, a relog, or the challenge switched off and on brings back the same riddle. Empty while there's none.
     { default = "", kind = "string", name = "riddle", scope = "character" },
+    -- A riddle put off for later (ScholarLater.lua): it's away until opened again, or in "Solve to keep playing" a
+    -- minute on. Not saved: a /reload is a fine moment for it to come back.
+    { default = false, kind = "boolean", name = "collapsed", persist = false },
+    -- For the parent's report: riddles put off with Later, and riddles a /reload or relog brought back unsolved.
+    { default = 0, kind = "number", min = 0, name = "laterCount", scope = "character", step = 1 },
+    { default = 0, kind = "number", min = 0, name = "returnCount", scope = "character", step = 1 },
     -- The riddle on screen was just solved: its celebration holds the screen until Finish.
     { default = false, kind = "boolean", name = "solved", persist = false },
     -- One of Blizzard's windows a riddle waits for is open (Windows).

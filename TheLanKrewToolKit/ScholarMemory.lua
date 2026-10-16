@@ -148,8 +148,20 @@ local function Report(module)
     end
 
     table.sort(misses, function(a, b) return (a.seq > b.seq) end)
+    local lines = Skills.Report(ByteTerrace.Names.Mine(), sections, misses)
+    local later = module:Get("laterCount")
+    local back = module:Get("returnCount")
 
-    return Skills.Report(ByteTerrace.Names.Mine(), sections, misses)
+    -- What the child did around the riddles, told plainly, so the report is the whole story.
+    if later > 0 then
+        lines[#lines + 1] = ("Put off %s with Later."):format(Skills.Riddles(later))
+    end
+
+    if back > 0 then
+        lines[#lines + 1] = (Skills.Riddles(back) .. " came back after a reload or relog.")
+    end
+
+    return lines
 end
 
 -- A skill's record (ScholarSkills), with every field filled in.

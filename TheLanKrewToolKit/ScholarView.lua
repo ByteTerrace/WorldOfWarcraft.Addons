@@ -26,9 +26,10 @@ local addonName, ns = ...
 --             aloud, Back skips), the keyboard's otherwise
 --
 -- The panel is opaque and sized to its content, never taller than the screen (less ScreenMargin above and below), over
--- a dark shade. The screen only draws. Scholar.lua owns the rules and gives it handlers through ns.ScholarView.Init
--- before the first Show. ScholarFrame.lua builds its widgets, and their colors, textures, and backdrop come from
--- ns.ScholarStyle (ScholarPictures.lua).
+-- a light shade that lets clicks through to the world. Later, a tab on the panel's top edge, puts the riddle away; it
+-- hides while a right answer celebrates. The screen only draws. Scholar.lua owns the rules and gives it handlers
+-- through ns.ScholarView.Init before the first Show. ScholarFrame.lua builds its widgets, and their colors, textures,
+-- and backdrop come from ns.ScholarStyle (ScholarPictures.lua).
 
 local AnswerGap = 14
 -- The least of the open quest book shown, in pixels, however little room the rest of the riddle leaves: about a line.
@@ -497,6 +498,7 @@ function ScholarView.Correct(i, explanation, info)
     Overlay.Gain:SetText("+" .. max(info.earned or 1, 1))
     Overlay.Rise:Stop()
     Overlay.Rise:Play()
+    Overlay.Later:Hide()
     ShowProgress(info)
 end
 
@@ -523,8 +525,9 @@ function ScholarView.Hint(label, hint)
 end
 
 --- Sets the handlers the screen calls back: choose(i) for an answer selected, skip() for Skip, hint() for Need a hint?,
---- speak() for Read aloud, and key(key) for every key pressed while the screen has the keyboard.
----@param handlers table { choose, skip, hint, speak, key }
+--- speak() for Read aloud, later() for Later, and key(key) for every key pressed while the screen has the keyboard,
+--- which returns whether the riddle used the key (any other reaches the game).
+---@param handlers table { choose, skip, hint, speak, later, key }
 function ScholarView.Init(handlers)
     Callbacks = handlers
 end
@@ -599,6 +602,8 @@ function ScholarView.Show(puzzle, info)
     Overlay.Hint.m_text, Overlay.Hint.m_key = ((info.book and "Quest book") or "Need a hint?"), actions.hint
     LabelPill(Overlay.Hint, actions.hint)
     LabelPill(Overlay.Skip, actions.skip)
+    LabelPill(Overlay.Later, actions.later)
+    Overlay.Later:Show()
     Overlay.Speak:SetShown((info.canSpeak and true) or false)
     Overlay.Feedback:Hide()
     Overlay.Hint:Show()

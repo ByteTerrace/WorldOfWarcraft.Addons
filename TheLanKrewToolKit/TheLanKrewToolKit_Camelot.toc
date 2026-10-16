@@ -45,6 +45,7 @@ ScholarFrame.lua
 ScholarView.lua
 ScholarSettings.lua
 ScholarKeep.lua
+ScholarLater.lua
 ScholarLock.lua
 Scholar.lua
 QuestProgress.lua

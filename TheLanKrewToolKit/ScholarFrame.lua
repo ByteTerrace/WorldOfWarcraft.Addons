@@ -3,9 +3,10 @@ local addonName, ns = ...
 -- ScholarFrame: builds the Scholar's challenge screen's widgets, for ScholarView.lua, which lays them out and runs
 -- them. Create(callbacks) makes the full-screen overlay: the shade, the panel, its header (the Owl Sage, the subject
 -- and title, the stars, the rank bar, and the streak), its body (the story, the quest book's page, the picture, the
--- clue, the question band, and the four answers), and its footer (the pills and the feedback banner). The widgets call
--- the callbacks ScholarView.Init was given, at the moment they're used. Paint colors an answer by its state, and
--- LabelPill labels a pill with its key and fits it.
+-- clue, the question band, and the four answers), its footer (the pills and the feedback banner), and the Later tab on
+-- its top edge. Only the panel takes the mouse, and a key reaches the game unless the key callback says the riddle used
+-- it. The widgets call the callbacks ScholarView.Init was given, at the moment they're used. Paint colors an answer by
+-- its state, and LabelPill labels a pill with its key and fits it.
 --
 --   ns.ScholarFrame.Create(callbacks)      the overlay, hidden
 --   ns.ScholarFrame.Paint(button, state)   "normal", "hover", "wrong", "right", "dim", or "reveal"
@@ -37,6 +38,7 @@ local Width = 760
 local ButtonWidth = (((Width - (2 * Pad)) - AnswerGap) / 2)
 
 local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
 
 local ScholarStyle = ns.ScholarStyle
@@ -377,15 +379,18 @@ local function Create(callbacks)
 
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     frame:SetAllPoints(UIParent)
-    frame:EnableMouse(true)
+    -- Only the panel takes the mouse: the world around it can still be clicked, through a shade light enough to see by.
+    frame:EnableMouse(false)
     frame:Hide()
 
     local shade = frame:CreateTexture(nil, "BACKGROUND")
 
     shade:SetAllPoints()
-    shade:SetColorTexture(0, 0, 0, 0.85)
+    shade:SetColorTexture(0, 0, 0, 0.55)
 
     local panel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+
+    panel:EnableMouse(true)
 
     -- A soft shadow behind the panel, so it lifts off the shade.
     frame.Shadow = frame:CreateTexture(nil, "BORDER")
@@ -402,7 +407,22 @@ local function Create(callbacks)
     CreateHeader(frame, panel)
     CreateBody(frame, panel)
     CreateFooter(frame, panel)
-    frame:SetScript("OnKeyDown", function(_, key) Callbacks.key(key) end)
+    -- Later, a tab on the panel's top edge: it puts the riddle away until it's opened again.
+    frame.Later = CreatePill(panel, "Later")
+    frame.Later:SetPoint("CENTER", panel, "TOP", 0, 0)
+    frame.Later:SetFrameLevel(panel:GetFrameLevel() + 5)
+    frame.Later:SetScript("OnClick", function() Callbacks.later() end)
+
+    -- The riddle's own keys stay with it, and every other key reaches the game, so the player can still walk, chat, and
+    -- fight. The choice is made per key, out of combat, since the riddle never shows in one.
+    frame:SetScript("OnKeyDown", function(self, key)
+        local handled = Callbacks.key(key)
+
+        if not InCombatLockdown() then
+            -- protected: only out of combat
+            self:SetPropagateKeyboardInput(not handled)
+        end
+    end)
 
     return frame
 end

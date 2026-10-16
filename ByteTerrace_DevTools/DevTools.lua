@@ -46,6 +46,8 @@ local addonName, ns = ...
 --     damageMeter.currentSession (Probes.NoteDeathState and NoteCurrentSession).
 --   * Nameplates coming and going, for namePlates.events (Probes.NoteNamePlate).
 --   * Quests turned in, for questLog.titleAfterTurnIn (Probes.NoteTurnIn).
+--   * Quest offers and turn-in panels, for quest.giverKind, quest.giverKindInCombat, quest.itemGiverKind,
+--     quest.enderKind, and quest.enderKindInCombat (Probes.NoteQuestDetail and NoteQuestComplete).
 --
 -- On entering the world, it drops any saved probe record it can't read (one without its set of contexts), then says, in
 -- a line each, when the dump is from another build than the client's, and how many probes have no result for this build
@@ -596,6 +598,21 @@ PlateListener:SetScript("OnEvent", function(_, event, value)
         Probes.NoteTurnIn(value)
     else
         Probes.NoteNamePlate(event, value)
+    end
+end)
+
+-- Hears quest offers and turn-in panels for the quest giver and ender probes, from load: an item's offer never shows
+-- the panel the need would otherwise wait for (ProbesOrder.lua says why).
+local QuestListener = CreateFrame("Frame")
+
+QuestListener:RegisterEvent("QUEST_DETAIL")
+QuestListener:RegisterEvent("QUEST_COMPLETE")
+
+QuestListener:SetScript("OnEvent", function(_, event, startItemID)
+    if event == "QUEST_DETAIL" then
+        Probes.NoteQuestDetail(startItemID)
+    else
+        Probes.NoteQuestComplete()
     end
 end)
 

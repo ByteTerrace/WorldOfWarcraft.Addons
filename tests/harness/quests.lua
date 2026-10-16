@@ -7,11 +7,16 @@
 -- | "reward", quest, progress, reward }) with the giver as the "questnpc" and "npc" units while it's open. A quest spec
 -- is { id, title, text (the description), goal (the objective summary), objectives = { { text (what the objective
 -- names: an item, a creature, a task), required, have (how many are done, 0 unless given), type ("item" unless given),
--- uncached } }, header (the log's zone header), level }. Missing fields get stand-ins. h.gossip is the open gossip
--- window's NPC (or nil), and h.interactions the open interaction manager windows ([Enum.PlayerInteractionType value] =
--- true).
+-- uncached } }, header (the log's zone header), level }. Missing fields get stand-ins. h.itemOffers holds the quests an
+-- item offered and nobody accepted yet ([questID] = { quest, giver }), for the objective tracker's popup. h.gossip is
+-- the open gossip window's NPC (or nil), and h.interactions the open interaction manager windows
+-- ([Enum.PlayerInteractionType value] = true).
 --
 --   h:OfferQuest(spec, giver)     the giver's offer panel: QUEST_DETAIL(0)
+--   h:OfferItemQuest(spec, item, itemID)  right-clicks an item that begins a quest: QUEST_DETAIL(itemID),
+--                                 then QUEST_FINISHED with no panel shown; returns the quest's ID
+--   h:ReopenQuestOffer(id)        clicks the tracker's popup for a quest an item offered: its offer
+--                                 panel, QUEST_DETAIL(0)
 --   h:AcceptQuest()               accepts the offer: QUEST_ACCEPTED(id), QUEST_LOG_UPDATE, QUEST_FINISHED
 --   h:AutoAcceptQuest(spec)       an area trigger's quest, straight into the log: no dialog, no text shown
 --   h:OpenProgress(id, ender, text)  the progress panel of a quest in the log, before its
@@ -38,9 +43,18 @@
 --               QUEST_FINISHED hides the frame; the frame's title is UnitName("questnpc"). An area
 --               trigger's auto-accepted quest closes the dialog without showing it. [E] Those texts
 --               and GetQuestID's number are plain out of combat (quest.offer, quest.turnIn,
---               quest.*Identity), and so are the questnpc and npc names. [G] The questnpc unit's GUID is a
---               Creature's unless a test gives the giver one: an item's "Item-...", an object's
---               "GameObject-..." (quest.giverKind and quest.enderKind ask the client). [G] Outside a dialog,
+--               quest.*Identity), and so are the questnpc and npc names. [G] UnitGUID("questnpc") is a
+--               Creature's for h:OfferQuest and h:OpenTurnIn unless a test gives the giver one (an
+--               object's "GameObject-..."), and plain in open-world combat as the identity rule
+--               has it (quest.giverKind, quest.giverKindInCombat, quest.enderKind, and
+--               quest.enderKindInCombat ask the client). [D] A QUEST_DETAIL that carries a start item
+--               never shows the panel: QuestFrame adds the objective tracker's OFFER popup and calls
+--               CloseQuest, and clicking the popup calls ShowQuestOffer
+--               (Blizzard_AutoQuestPopUpTracker.lua). [G] The dialog stays readable through that
+--               QUEST_DETAIL's dispatch and QUEST_FINISHED fires after it; ShowQuestOffer
+--               (h:ReopenQuestOffer) fires QUEST_DETAIL(0) with the same questnpc; and the questnpc of
+--               h:OfferItemQuest is the item itself, its GUID "Item-..." (quest.itemGiverKind asks the
+--               client). [G] Outside a dialog,
 --               GetQuestID answers 0 and the texts "". [G] The accept and turn-in event orders.
 --   Log         [E] GetNumQuestLogEntries answers the shown entries (zone headers included) and the
 --               quests; GetInfo answers the questLog.entry fields; GetQuestObjectives answers
@@ -164,6 +178,7 @@ function Harness:InitQuests()
     self.objectiveHave = {}
     self.questTitles = {}
     self.questDialog = nil
+    self.itemOffers = {}
     self.gossip = nil
     self.interactions = {}
 end
@@ -255,6 +270,7 @@ function Harness:AcceptQuest()
     local dialog = self.questDialog
 
     assert(dialog and (dialog.panel == "detail"), "AcceptQuest: no quest offer is open")
+    self.itemOffers[dialog.quest.id] = nil
     AddToLog(self, dialog.quest)
     CloseDialog(self)
 end
@@ -327,6 +343,30 @@ function Harness:LoadQuestNames()
     end
 
     self:Fire("QUEST_LOG_UPDATE")
+end
+
+--- Right-clicks an item that begins the quest spec describes; item is a unit table or a name. Blizzard's QuestFrame
+--- turns the offer into the objective tracker's popup and closes the dialog, so no panel shows.
+---@return number questID for h:ReopenQuestOffer
+function Harness:OfferItemQuest(spec, item, itemID)
+    assert(not self.questDialog, "OfferItemQuest: a quest dialog is already open")
+    assert((type(itemID) == "number") and (itemID > 0), "OfferItemQuest: the item's ID must be a positive number")
+    QuestSerial = (QuestSerial + 1)
+
+    local giver = (((type(item) == "table") and item)
+        or { guid = ("Item-4372-0-%016X"):format(QuestSerial), name = (item or "A Stained Letter") })
+
+    local quest = FillQuest(spec)
+    local unit = Harness.FillUnit(giver)
+
+    -- The panel stays hidden: only the dialog's APIs answer while QUEST_DETAIL dispatches.
+    self.questDialog = { panel = "detail", quest = quest }
+    self.units.questnpc, self.units.npc = unit, unit
+    self:Fire("QUEST_DETAIL", itemID)
+    self.itemOffers[quest.id] = { giver = giver, quest = quest }
+    CloseDialog(self)
+
+    return quest.id
 end
 
 --- Opens a quest giver's offer panel for spec; giver is a unit table or a name.
@@ -491,4 +531,13 @@ function Harness:QuestFakes(uiParent)
     end
 
     return fakes
+end
+
+--- Clicks the objective tracker's popup for a quest an item offered: its offer panel opens, from the same item.
+function Harness:ReopenQuestOffer(questID)
+    assert(not self.questDialog, "ReopenQuestOffer: a quest dialog is already open")
+    local offer = assert(self.itemOffers[questID], "ReopenQuestOffer: no item offered quest " .. tostring(questID))
+
+    OpenDialog(self, { panel = "detail", quest = offer.quest }, offer.giver)
+    self:Fire("QUEST_DETAIL", 0)
 end

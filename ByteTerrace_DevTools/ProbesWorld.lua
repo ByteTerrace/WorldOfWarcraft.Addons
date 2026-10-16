@@ -89,19 +89,6 @@ local function QuestIdentity()
     }
 end
 
--- The type a quest dialog's questnpc GUID starts with ("Creature", "Item", and so on), "nil", or "secret".
-local function QuestNpcKind()
-    local guid = UnitGUID("questnpc")
-
-    if issecretvalue(guid) then
-        return "secret"
-    elseif type(guid) ~= "string" then
-        return type(guid)
-    end
-
-    return (guid:match("^(%a+)%-") or "other")
-end
-
 -- Returns a number's sign ("positive", "zero", or "negative"), its type when it isn't one, or the marker for a secret.
 local function Sign(value)
     if issecretvalue(value) then
@@ -375,22 +362,6 @@ Probes.Define({
         name = "quest.turnInIdentity",
         needs = { "questTurnIn" },
         run = QuestIdentity,
-    },
-    {
-        accumulates = true,
-        -- What offers a quest, as each offer's questnpc GUID says: its type ("Creature", "GameObject", "Item",
-        -- "Player", and so on), "nil", or "secret". QuestBook.lua's giverKind rests on it.
-        name = "quest.giverKind",
-        needs = { "questOffer" },
-        run = function() return { kinds = QuestNpcKind() } end,
-    },
-    {
-        accumulates = true,
-        -- What takes a quest in, as each turn-in's questnpc GUID says (see quest.giverKind). QuestBook.lua's enderKind
-        -- rests on it.
-        name = "quest.enderKind",
-        needs = { "questTurnIn" },
-        run = function() return { kinds = QuestNpcKind() } end,
     },
     {
         name = "questLog.entry",

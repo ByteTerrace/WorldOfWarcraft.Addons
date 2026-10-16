@@ -354,6 +354,7 @@ Some probes can't ask after the fact, so DevTools listens for these from the mom
 - `PLAYER_DEAD` and `DAMAGE_METER_CURRENT_SESSION_UPDATED`, with combat's state as each dispatches
 - `NAME_PLATE_UNIT_ADDED` and `NAME_PLATE_UNIT_REMOVED`, with whether the plate is shown and its unit exists
 - `QUEST_TURNED_IN`, with whether the quest's title stays known
+- `QUEST_DETAIL` and `QUEST_COMPLETE`, with the questnpc GUID's type, kept by the situation each dispatched in and, for an offer, whether an item started it. An item's offer never opens the quest window, so it can't wait for one
 
 DevTools keeps only the set of shapes each has shown, so a shape seen before costs one table lookup. It follows the restrictions in force from `ADDON_RESTRICTION_STATE_CHANGED`, so the aura and addon-message listeners key what they hear by them without asking the client.
 
@@ -384,6 +385,8 @@ DevTools keeps only the set of shapes each has shown, so a shape seen before cos
       4. Type the command mid-fight.
       5. Kill the mob yourself, and type the command again right away, before the next pull.
       6. Kill a second mob, and type the command once combat ends, for the order of the steps out of combat.
+      7. With an item that says "This Item Begins a Quest" in your bags (a mob may drop one), right-click it out of combat. No quest window opens: click the "Quest Discovered" popup in the objective tracker, and leave the quest unaccepted. Then pull a mob and right-click the item again mid-fight. Accept the quest after the fight.
+      8. If a mob follows you to a quest giver, talk to them mid-fight: open a quest offer, and a turn-in's reward panel.
    5. **After a mob kills you:** let one win, wait 5 seconds, and type the command while you're dead or a ghost.
    6. **Later:** these can wait until you leave the starting zone.
       - Be in each of these situations: resting in an inn, on a flight path, in a party, in a guild, targeting an enemy player, targeting an enemy hunter while they Feign Death, targeting a mob in a dungeon between pulls, on a rogue or a cat-form druid (combo points), and on a character at the max level.

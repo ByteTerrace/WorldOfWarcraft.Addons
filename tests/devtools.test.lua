@@ -334,10 +334,10 @@ test("UNIT_COMBAT on the player and the target is kept as shapes, from load, for
         .. "DAMAGE_METER_COMBAT_SESSION_UPDATED() DAMAGE_METER_CURRENT_SESSION_UPDATED() ENCOUNTER_START() ENCOUNTER_WARNING() GAME_PAD_ACTIVE_CHANGED() "
         .. "GAME_PAD_CONFIGS_CHANGED() GAME_PAD_CONNECTED() GAME_PAD_DISCONNECTED() GAME_PAD_POWER_CHANGED() "
         .. "INPUT_DEVICE_INTERFACE_TRANSITION() NAME_PLATE_UNIT_ADDED() NAME_PLATE_UNIT_REMOVED() PARTY_KILL() PLAYER_DEAD() "
-        .. "PLAYER_ENTERING_WORLD() PLAYER_REGEN_DISABLED() PLAYER_REGEN_ENABLED() PLAYER_TARGET_DIED() QUEST_TURNED_IN() "
-        .. "UNIT_AURA(player,target) UNIT_COMBAT(player,target) UNIT_DIED()",
+        .. "PLAYER_ENTERING_WORLD() PLAYER_REGEN_DISABLED() PLAYER_REGEN_ENABLED() PLAYER_TARGET_DIED() QUEST_COMPLETE() "
+        .. "QUEST_DETAIL() QUEST_TURNED_IN() UNIT_AURA(player,target) UNIT_COMBAT(player,target) UNIT_DIED()",
         "the chat events, restriction changes and combat edges, UNIT_AURA and UNIT_COMBAT for two units, the kill "
-        .. "events, deaths with the meter's updates, and encounters with their warnings")
+        .. "events, deaths with the meter's updates, encounters with their warnings, and the quest dialog's events")
 
     h:Fire("UNIT_COMBAT", "target", "WOUND", "CRITICAL", 42, 1)
     h:Fire("UNIT_COMBAT", "target", "DODGE", "", 0, 1)

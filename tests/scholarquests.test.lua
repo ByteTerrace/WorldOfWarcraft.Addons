@@ -869,9 +869,10 @@ end
 test("a quest an item offers is recorded as the item's, the book says it started from it, and no riddle calls it a giver", function()
     local h, addon, ns = LoadKid()
 
-    h:OfferQuest({ id = 70, text = "The residue whispers of the Lich.", title = "Whispering Horror Residue" },
-        { guid = "Item-4372-0-4000000012345678", name = "Whispering Horror Residue" })
+    local id = h:OfferItemQuest({ id = 70, text = "The residue whispers of the Lich.", title = "Whispering Horror Residue" },
+        { guid = "Item-4372-0-4000000012345678", name = "Whispering Horror Residue" }, 11131)
 
+    h:ReopenQuestOffer(id)
     h:AcceptQuest()
     eq(Quests(addon):Field("70", "giverKind"), "item")
     eq(Quests(addon):Field("70", "giver"), "Whispering Horror Residue", "the name is kept, as the client gave it")

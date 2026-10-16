@@ -11,9 +11,11 @@ local addonName, ns = ...
 -- (QUEST_COMPLETE, then QUEST_TURNED_IN) adds who took it, where, and the reward text. The giver and the ender are
 -- whatever the dialog's questnpc unit names, which can be an item that starts a quest or an object (a wanted poster, a
 -- gravestone), so each is recorded with its kind (giverKind, enderKind): "npc" (a creature or a player), "object",
--- "item", or "" when its GUID doesn't say (probes quest.giverKind and quest.enderKind ask the client). Each exposure,
--- accepting and turning in, makes the quest fresh: something new to ask about. Only these events read the quest APIs,
--- out of combat as quests are, and the book leaves a secret answer out rather than storing it.
+-- "item", or "" when its GUID doesn't say (probes quest.giverKind, quest.giverKindInCombat, quest.itemGiverKind,
+-- quest.enderKind, and quest.enderKindInCombat ask the client). An item's quest offers twice: the item's QUEST_DETAIL,
+-- which Blizzard's QuestFrame turns into the objective tracker's popup, and the popup's, and the later one stands. Each
+-- exposure, accepting and turning in, makes the quest fresh: something new to ask about. Only these events read the
+-- quest APIs, out of combat as quests are, and the book leaves a secret answer out rather than storing it.
 --
 -- When the book starts (the challenge switched on mid-game, or a login), the quests already in the log are recorded as
 -- the log shows them: title, text, and objectives, not fresh, with no giver or place, since nobody saw them given. The

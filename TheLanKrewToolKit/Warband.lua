@@ -316,7 +316,7 @@ local function EndWindow()
         return
     end
 
-    if WarbandModule:Get("alerts") then
+    if WarbandModule:Get("sightingAlerts") then
         AlertTimer = WarbandModule:After(AlertWindow, EndWindow)
         Alert(HeldSummary())
     end
@@ -381,7 +381,7 @@ end
 
 -- Counts hostile players on nameplates. Enough of them in a subzone is a gathering worth reporting.
 local function CountGathering(info)
-    if not WarbandModule:Get("intel") then
+    if not WarbandModule:Get("reportGatherings") then
         return
     end
 
@@ -501,7 +501,7 @@ end
 -- Raises a sighting alert, within the budget: the first opens an AlertWindow, and the ones that follow in it are held
 -- for one summary when it ends.
 local function Raise(key, status, guild, fighting)
-    if not WarbandModule:Get("alerts") then
+    if not WarbandModule:Get("sightingAlerts") then
         return
     end
 
@@ -973,18 +973,18 @@ WarbandModule = Addon:Module("Warband", {
     state = {
         { default = true,
             description = "A raid warning when someone on the ledger, or a member of a guild at war, shows up: a nameplate, your target or mouseover.",
-            kind = "boolean", label = "Sighting alerts", name = "alerts" },
+            kind = "boolean", label = "Sighting alerts", name = "sightingAlerts" },
         { default = true,
             description = "Report sightings of marked and grudge enemies (and champions in a fight) to your group.",
             kind = "boolean", label = "Tell the Krew what I see", name = "shareSightings" },
         { default = true,
             description = "When an enemy player kills you, a card names them and offers to hold a grudge. When the game can't say who, it asks about the enemy player you were fighting.",
-            kind = "boolean", label = "Ask who killed me", name = "deathPrompt" },
+            kind = "boolean", label = "Ask who killed me", name = "askWhoKilledMe" },
         { default = true, description = "When a Krew member rallies, set a map waypoint to them.", kind = "boolean",
             label = "Waypoint to rallies", name = "rallyWaypoint" },
         { default = true,
             description = ("When " .. IntelThreshold .. " or more enemy players gather near you, tell the Krew where."),
-            kind = "boolean", label = "Report enemy gatherings", name = "intel" },
+            kind = "boolean", label = "Report enemy gatherings", name = "reportGatherings" },
     },
     uses = { "kills" },
 })

@@ -120,7 +120,7 @@ test("a riddle never appears in combat, steps aside when a fight starts, and com
 end)
 
 test("a riddle that comes back after a fight keeps its wrong answers and its Skip", function()
-    local h, addon = LoadKid({ ["Scholar.mode"] = "gentle", ["Scholar.mathLevel"] = 2, ["Scholar.readingLevel"] = 2 })
+    local h, addon = LoadKid({ ["Scholar.style"] = "gentle", ["Scholar.mathLevel"] = 2, ["Scholar.readingLevel"] = 2 })
     local view = h.ns.ScholarView
     local puzzle = nil
     local show = view.Show
@@ -165,7 +165,7 @@ test("the gate mode offers no skip; gentle mode does after one try", function()
 
     h:Key("ESCAPE", true)
     truthy(Showing(h), "gate: escape does nothing")
-    local h2, addon = LoadKid({ ["Scholar.mode"] = "gentle" })
+    local h2, addon = LoadKid({ ["Scholar.style"] = "gentle" })
     local watched = Watch(h2)
 
     h2:Slash("/tlk puzzle")
@@ -179,7 +179,7 @@ test("the gate mode offers no skip; gentle mode does after one try", function()
 end)
 
 test("the mouse answers and skips too", function()
-    local h, addon = LoadKid({ ["Scholar.mode"] = "gentle" })
+    local h, addon = LoadKid({ ["Scholar.style"] = "gentle" })
     local watched = Watch(h)
 
     h:Slash("/tlk puzzle")
@@ -232,11 +232,11 @@ test("a parent's PIN locks the settings until unlocked", function()
         if page.name == "Scholar's challenge" then window:Show(i) end
     end
 
-    local button = window.Controls[addon.State:Id("Scholar.mode")]
+    local button = window.Controls[addon.State:Id("Scholar.style")]
     local label = button.Label:GetText()
 
     button:Click()
-    eq(addon.State:Get("Scholar.mode"), "gate", "the window can't change it either")
+    eq(addon.State:Get("Scholar.style"), "gate", "the window can't change it either")
     eq(button.Label:GetText(), label, "the locked value stays visible")
     h:Slash("/tlk unlock 1111")
     eq(addon.State:Get("Scholar.locked"), true, "wrong PIN")
@@ -748,7 +748,7 @@ test("the left shoulder asks for the hint and the right shoulder reads aloud", f
 end)
 
 test("Back skips in Gentle mode after a try, and never in gate mode", function()
-    local h = PadKid({ ["Scholar.mode"] = "gentle" })
+    local h = PadKid({ ["Scholar.style"] = "gentle" })
     local frame = Overlay(h)
 
     Press(h, "PADBACK")
@@ -757,7 +757,7 @@ test("Back skips in Gentle mode after a try, and never in gate mode", function()
     eq(frame.Buttons[1].State, "wrong", "seed 7's riddle doesn't have A as its answer")
     Press(h, "PADBACK")
     falsy(Showing(h), "skipped after a wrong try")
-    local gate = PadKid({ ["Scholar.mode"] = "gate" })
+    local gate = PadKid({ ["Scholar.style"] = "gate" })
 
     Press(gate, "PADBACK")
     truthy(Showing(gate), "gate mode has no skip")

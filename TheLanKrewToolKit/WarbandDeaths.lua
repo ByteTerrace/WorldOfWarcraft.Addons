@@ -8,7 +8,7 @@ local addonName, ns = ...
 --   A creature      nothing: there's no one to hold a grudge against. Nor for your own blow.
 --   Unknown or pet  a card asks about the prime suspect (Warband.TakeFoe): "Slain by Bob?"
 -- On either card, a left-click holds a grudge with the Krew and a right-click lets it go. The cards need
--- Warband.deathPrompt, but the record counts regardless.
+-- Warband.askWhoKilledMe, but the record counts regardless.
 
 local SOUNDKIT = SOUNDKIT
 
@@ -73,7 +73,7 @@ local function OnKiller(state)
 
     Taken, Suspect = false, nil
     local kind = state:Get("death.killerKind")
-    local prompt = state:Get("Warband.deathPrompt")
+    local prompt = state:Get("Warband.askWhoKilledMe")
 
     if kind == "player" then
         local info = KillerInfo(state, suspect)

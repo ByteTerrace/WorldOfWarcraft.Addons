@@ -301,7 +301,7 @@ local function Listen(module)
 
         Members[sender] = version
 
-        if not known and Krew:Get("hello") then
+        if not known and Krew:Get("showKrew") then
             Krew:Cancel(RollCallTimer)
             RollCallTimer = Krew:After(RollCallDelay, ShowRollCall)
         end
@@ -406,7 +406,7 @@ Krew = Addon:Module("Krew", {
     section = "Krew",
     state = {
         { default = true, description = "When you group up, a card shows which friends run the toolkit too.",
-            kind = "boolean", label = "Show who's in the Krew", name = "hello" },
+            kind = "boolean", label = "Show who's in the Krew", name = "showKrew" },
         { default = true, description = "Your Krew sees a card when you level up.", kind = "boolean",
             label = "Share my level-ups", name = "shareDings" },
         { default = true,

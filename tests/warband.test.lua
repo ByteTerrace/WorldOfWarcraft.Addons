@@ -126,7 +126,7 @@ test("a Krew sighting of a champion asks for aid; one of a stranger shows nothin
     truthy(Notices(h):find("Mom Doe: champion Cara Doe needs aid at Tarren Mill (Hillsbrad Foothills)!", 1, true),
         Notices(h))
 
-    addon.State:Set("Warband.alerts", false)
+    addon.State:Set("Warband.sightingAlerts", false)
     h:Slash("/tlk mark Bob Doe")
     Receive(h, "Mom", "SIGHT", Key(h, "Bob"), "Hillsbrad Foothills", "Tarren Mill", "0")
     eq(#h.raidNotices, 1, "alerts are off")
@@ -391,7 +391,7 @@ test("a gathering counts the last minute's enemies, and isn't reported with the 
 
     h:Advance(3)
     eq(#Sent(h, "INTEL"), 0, "four a minute ago and four now aren't five within a minute")
-    addon.State:Set("Warband.intel", false)
+    addon.State:Set("Warband.reportGatherings", false)
 
     for i = 9, 14 do
         h:AddNamePlate(Enemy("Foe" .. i))

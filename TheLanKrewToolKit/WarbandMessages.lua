@@ -265,7 +265,7 @@ function Warband.EnableMessages()
 
         HeardSighting(key)
 
-        if not WarbandModule:Get("alerts") then
+        if not WarbandModule:Get("sightingAlerts") then
             return
         end
 

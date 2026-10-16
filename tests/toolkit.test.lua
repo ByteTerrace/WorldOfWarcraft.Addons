@@ -55,16 +55,16 @@ test("loads cleanly and builds its settings window, organized into pages and sec
         (main .. ": [Fuck-o-meter] FuckOMeter.enabled"
             .. " [Session journal] Journal.enabled Journal.ding Journal.welcome [Advanced] addon.debug"),
         "Controller: [Light bar] LightBar.enabled LightBar.questReady [Rumble] Rumble.enabled Rumble.questReady",
-        "Krew: Krew.enabled Krew.shareFlawless Krew.shareDings Krew.shareScholar Krew.hello",
-        ("Scholar's challenge: Scholar.enabled [Answers] Scholar.missPause Scholar.mode"
+        "Krew: Krew.enabled Krew.shareFlawless Krew.shareDings Krew.shareScholar Krew.showKrew",
+        ("Scholar's challenge: Scholar.enabled [Answers] Scholar.missPause Scholar.style"
             .. " [Reading aloud] QuestCount.enabled QuestReader.enabled Scholar.readAloud"
             .. " [Riddles] Scholar.grade Scholar.math Scholar.quests Scholar.reading"
             .. " [When riddles come] Scholar.onLevelUp Scholar.interval Scholar.onFlight Scholar.onTurnIn Scholar.onDeath"),
-        ("Sounds: Sounds.enabled Sounds.combatStart Sounds.stopOnCombatEnd Sounds.questReady Sounds.channel"
+        ("Sounds: Sounds.enabled Sounds.combatStart Sounds.combatStartFades Sounds.questReady Sounds.channel"
             .. " [Kill streaks] Streaks.enabled Streaks.firstBlood Streaks.sprees Streaks.multiKills Streaks.share"
             .. " [Mortal Kombat] Kombat.chooseYourDestiny Kombat.comboPoints Kombat.deathTaunt Kombat.fatality"
             .. " Kombat.finishHim Kombat.flawlessVictory Kombat.superbVictory Kombat.testYourMight"),
-        ("Warband: Warband.enabled Warband.deathPrompt Warband.intel Warband.alerts Warband.shareSightings"
+        ("Warband: Warband.enabled Warband.askWhoKilledMe Warband.reportGatherings Warband.sightingAlerts Warband.shareSightings"
             .. " Warband.rallyWaypoint [Nameplate badges] Badges.enabled [Nearby enemies window] Radar.enabled Radar.share"),
     }
 

@@ -77,7 +77,7 @@ test("a hint is kept when it only says what the riddle shows, and replaced when 
 end)
 
 test("each miss says why that choice is wrong and climbs the hint ladder, ending with the answer glowing", function()
-    local h, _, ns = LoadKid({ ["Scholar.mode"] = "gate", ["Scholar.quests"] = false })
+    local h, _, ns = LoadKid({ ["Scholar.style"] = "gate", ["Scholar.quests"] = false })
     local shown = Watch(ns)
 
     h:Slash("/tlk puzzle")

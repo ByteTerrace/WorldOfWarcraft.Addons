@@ -64,7 +64,7 @@ local Rows = {
         valueLabels = { long = "Long (4, 7, then 10 seconds)", off = "Off", short = "Short (2, 4, then 6 seconds)" },
         values = { "short", "long", "off" } },
     { default = "gate", description = "Whether a riddle must be solved, or can be skipped after one try.",
-        kind = "string", label = "Riddle style", lockedBy = LockedBy, name = "mode", scope = "character",
+        kind = "string", label = "Riddle style", lockedBy = LockedBy, name = "style", scope = "character",
         valueLabels = { gate = "Solve to keep playing", gentle = "Gentle (Skip after one try)" },
         values = { "gate", "gentle" } },
     -- Progress, per character. elapsed is seconds of play toward the next riddle, and questRun is the quest riddles

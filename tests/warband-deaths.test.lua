@@ -103,7 +103,7 @@ end)
 test("the Ask who killed me setting silences the cards; the record still counts", function()
     local h, addon = Grouped()
 
-    addon.State:Set("Warband.deathPrompt", false)
+    addon.State:Set("Warband.askWhoKilledMe", false)
     h:MeterFight({ duration = 5, sources = { KilledBy(Enemy("Bob")) } })
     eq(Card(h), nil)
     eq(People(addon):Field(Key(h, "Bob"), "deaths"), 1)

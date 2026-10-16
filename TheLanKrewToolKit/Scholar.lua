@@ -355,7 +355,7 @@ local function OnInteractionShown(interaction)
 end
 
 local function Skip()
-    if Current and not Scholar:Get("solved") and (Wrongs > 0) and (Scholar:Get("mode") == "gentle") then
+    if Current and not Scholar:Get("solved") and (Wrongs > 0) and (Scholar:Get("style") == "gentle") then
         Finish(false)
     end
 end
@@ -393,8 +393,8 @@ end
 local function Open()
     local frame = ScholarView.Show(Current, Progress({
         actions = { hint = ActionLabel("hint"), skip = ActionLabel("skip"), speak = ActionLabel("speak") },
-        book = (Current.book ~= nil), canSkip = ((Scholar:Get("mode") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
-        controller = UsingController(), gentle = (Scholar:Get("mode") == "gentle"),
+        book = (Current.book ~= nil), canSkip = ((Scholar:Get("style") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
+        controller = UsingController(), gentle = (Scholar:Get("style") == "gentle"),
         keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, reveal = (select(3, Help())), wrong = Missed,
     }))
 
@@ -492,7 +492,7 @@ local function Choose(i)
 
         local label, help, reveal = Help()
 
-        ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("mode") == "gentle", reveal)
+        ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("style") == "gentle", reveal)
         -- The answers left wait, longer each miss, so the hint gets read before the next try.
         Wait(Current, (Pauses[Scholar:Get("missPause")] or {})[min(Wrongs, 3)] or 0)
     end

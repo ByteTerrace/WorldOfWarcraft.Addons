@@ -279,7 +279,7 @@ test("a quest nobody saw given is never a wrong answer to which quest a giver ga
 end)
 
 test("on the riddle screen, a quest riddle's miss says why and its next miss walks to the line in the book", function()
-    local h, _, ns = LoadKid({ ["Scholar.math"] = false, ["Scholar.mode"] = "gate", ["Scholar.reading"] = false })
+    local h, _, ns = LoadKid({ ["Scholar.math"] = false, ["Scholar.style"] = "gate", ["Scholar.reading"] = false })
     local shown = Watch(ns)
 
     Accept(h, Wolves)

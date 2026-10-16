@@ -75,6 +75,29 @@ test("kills and deaths against a guild at war are tallied", function()
     eq(Collection(addon, "wars"):Field(guild, "deaths"), 1, "Cara killed Mom: the guild's tally too")
 end)
 
+test("a war's tally changing repaints no badge whose standing stays the same", function()
+    local h = Load()
+
+    h:Slash("/tlk war Knights of Light")
+    h:AddNamePlate(Enemy("Cara", { guild = "Knights of Light" }))
+    h:AddNamePlate(Enemy("Dan", { guild = "Knights of Light" }))
+    h:ResetCalls()
+    h:HonorKill(Key(h, "Cara"), "Private", 12)
+    eq(h:CountCalls("SetTexture") + h:CountCalls("Show"), 0)
+end)
+
+test("identifying guilded players on your own realm asks your realm once", function()
+    local h = Load()
+
+    h.apiCalls = {}
+
+    for i = 1, 10 do
+        h:AddNamePlate(Enemy("Foe" .. i, { guild = "Knights of Light" }))
+    end
+
+    eq(h:CountApiCalls("GetNormalizedRealmName"), 1)
+end)
+
 test("every enemy you meet gets a record: sightings, where, and the score", function()
     local h, addon = Load()
 

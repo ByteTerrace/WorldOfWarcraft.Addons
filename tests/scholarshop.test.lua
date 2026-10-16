@@ -95,6 +95,27 @@ test("Wish for it, with L3 or a click, adds the item to the wishes at its price,
     truthy(addon.Modules.Wishes.Records.wishes:Get("1").asked, "and the child can ask for it at once")
 end)
 
+test("a comparison tooltip beside the item doesn't change which item the Owl looks at, or Wish adds", function()
+    local h, addon = Shopper()
+
+    h:OpenInteraction("Merchant")
+    h:ShowItemTooltip(Vest)
+    h:ShowItemTooltip(Worn, h.env.ShoppingTooltip1)
+    eq(Text(Panel(h).Name), "Linen Vest")
+    falsy(table.concat(Harness.State(h.env.ShoppingTooltip1).lines, "\n"):find("The Owl:", 1, true), "the worn item's tooltip gets no take")
+    h:Gamepad("PADLSTICK", true)
+    eq(addon.Modules.Wishes.Records.wishes:Get("1").item, Vest)
+end)
+
+test("an item shown reads the player's level and gold once", function()
+    local h = Shopper()
+
+    h:OpenInteraction("Merchant")
+    h.apiCalls = {}
+    h:ShowItemTooltip(Vest)
+    eq(h:CountApiCalls("GetMoney"), 1)
+end)
+
 test("a grown-up sets what a star is worth, and item wishes are priced by it", function()
     local h, addon = Shopper()
 

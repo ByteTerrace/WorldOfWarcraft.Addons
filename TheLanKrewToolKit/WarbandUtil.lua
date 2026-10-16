@@ -130,8 +130,21 @@ local function MyKey()
     return (Names.Mine() or "")
 end
 
+-- Your realm, read once it's known: it can't change while you play.
+local Realm
+
 local function MyRealm()
-    return (GetNormalizedRealmName() or "")
+    if not Realm then
+        local realm = GetNormalizedRealmName()
+
+        if issecretvalue(realm) or (type(realm) ~= "string") or (realm == "") then
+            return ""
+        end
+
+        Realm = realm
+    end
+
+    return Realm
 end
 
 --- Returns a guild's key. Guild names have no hyphens, so the last one in a key starts the realm.

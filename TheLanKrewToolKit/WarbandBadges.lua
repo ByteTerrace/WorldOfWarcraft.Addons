@@ -44,26 +44,38 @@ local function BadgeFor(plate)
     return badge
 end
 
+-- Hides a badge. m_status is the standing it shows, nil while hidden.
+local function HideBadge(badge)
+    if badge.m_status then
+        badge.m_status = nil
+        badge:Hide()
+    end
+end
+
 local function HideAll()
     for _, badge in pairs(Badges) do
-        badge:Hide()
+        HideBadge(badge)
     end
 
     wipe(Shown)
     wipe(Who)
 end
 
--- Shows or hides a plate's badge for the standing of the player info names.
+-- Shows or hides a plate's badge for the standing of the player info names, touching it only when that changes: a war's
+-- tally moving leaves its members' badges alone.
 local function Paint(plate, info)
     local status = Warband.Status(info.key, info.guild)
 
     if status then
         local badge = BadgeFor(plate)
 
-        badge.Icon:SetTexture(Warband.Icons[status])
-        badge:Show()
+        if badge.m_status ~= status then
+            badge.m_status = status
+            badge.Icon:SetTexture(Warband.Icons[status])
+            badge:Show()
+        end
     elseif Badges[plate] then
-        Badges[plate]:Hide()
+        HideBadge(Badges[plate])
     end
 end
 
@@ -109,7 +121,7 @@ Addon:Module("Badges", {
             Shown[unit], Who[unit] = nil, nil
 
             if plate and Badges[plate] then
-                Badges[plate]:Hide()
+                HideBadge(Badges[plate])
             end
         end)
 

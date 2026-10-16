@@ -59,7 +59,10 @@
 --     own. The AllTypes member itself isn't faked, since no addon names it.
 --   * h:ShowItemTooltip(itemID) is what hovering or focusing an item does (a vendor's, an auction's, a bag's): its
 --     TooltipData is { type = Enum.TooltipDataType.Item, id = itemID, lines = { { leftText = name } } }, and the
---     Item post calls run with (GameTooltip, data) after its lines, as for a unit.
+--     Item post calls run with (GameTooltip, data) after its lines, as for a unit. h:ShowItemTooltip(itemID, tooltip)
+--     shows it on another of the client's item tooltips instead: ShoppingTooltip1 is the comparison tooltip beside
+--     GameTooltip for the item you wear ([D] Blizzard_GameTooltip's GameTooltip.shoppingTooltips), and the post calls
+--     run for it too.
 --   * h:ShowUnitTooltip(token) is what hovering a unit does: GameTooltip is anchored to UIParent,
 --     then GameTooltip:SetUnit(token) builds the unit's TooltipData, adds its lines, runs the post
 --     calls with (GameTooltip, data) (an error is reported and the rest still run), and shows the
@@ -586,11 +589,17 @@ function Harness:InterfaceFakes(uiParent)
     self.contextMenu = nil
     local h = self
 
+    local comparison = self:CreateWidget("GameTooltip", "ShoppingTooltip1", uiParent)
+
+    Harness.State(comparison).shown = false
+    ClearTooltipLines(Harness.State(comparison))
+
     local fakes = {
         GameTooltip = tooltip,
         Menu = MenuFakes(self),
         MenuInputContext = MenuInputContext,
         MenuUtil = { CreateContextMenu = function(...) return CreateContextMenu(h, ...) end },
+        ShoppingTooltip1 = comparison,
         TooltipDataProcessor = TooltipFakes(self),
     }
 
@@ -602,8 +611,8 @@ function Harness:InterfaceFakes(uiParent)
 end
 
 -- Hovering a unit: GameTooltip anchored to UIParent, then SetUnit(token). Returns the data.
-function Harness:ShowItemTooltip(itemID)
-    local tooltip = self.env.GameTooltip
+function Harness:ShowItemTooltip(itemID, tooltip)
+    tooltip = (tooltip or self.env.GameTooltip)
     local s = Harness.State(tooltip)
     local known = (self.items or {})[itemID]
     local data = { id = itemID, lines = { { leftText = (known and known.name) } }, type = self.env.Enum.TooltipDataType.Item }

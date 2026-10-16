@@ -167,8 +167,9 @@ local function WishLabel()
     return (((prompt and (prompt .. "  ")) or "") .. "Wish for it")
 end
 
--- Draws the panel for the item looked at, or says what to do before there's one.
-local function Draw()
+-- Draws the panel for the item looked at, with the Owl's lines about it (ScholarAdvice.Verdict), or says what to do
+-- before there's one.
+local function Draw(lines)
     local panel = PanelFrame()
     local item = Current
 
@@ -184,8 +185,6 @@ local function Draw()
         return
     end
 
-    local lines = Advice.Verdict(item, Player())
-
     panel.Lines:SetText(((#lines > 0) and table.concat(lines, "\n")) or "Looks fine to the Owl.")
 
     local stars = ns.ScholarWishes.PriceInStars(item.price)
@@ -196,9 +195,10 @@ local function Draw()
     panel.Wish:Enable()
 end
 
--- An item's tooltip showed: in an open shop, the Owl looks at it.
+-- An item's tooltip showed: in an open shop, the Owl looks at it. Only the item pointed at counts: a comparison tooltip
+-- beside it (ShoppingTooltip1, the item you wear) is no item to wish for.
 TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
-    if not (Shopping and Shopping:IsRunning() and Open and data and data.id) then
+    if (tooltip ~= GameTooltip) or not (Shopping and Shopping:IsRunning() and Open and data and data.id) then
         return
     end
 
@@ -211,7 +211,7 @@ TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tool
             tooltip:AddLine("The Owl: " .. lines[1], 1, 0.82, 0, true)
         end
 
-        Draw()
+        Draw(lines)
     end
 end)
 

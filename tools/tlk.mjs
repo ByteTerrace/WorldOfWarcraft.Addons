@@ -5,6 +5,7 @@
 //   node tools/tlk.mjs test [filter | files...] [--timeout <s>] [--dir <folder>] [--coverage] behavioral tests in real Lua 5.1
 //   node tools/tlk.mjs clones [paths...] [--min-tokens <n>] [--min-statements <n>] [--json]   duplicated code
 //   node tools/tlk.mjs deploy [--unlink] [--no-test] [--addon <name>]... [--wow-root <path>] [--flavor <_folder_>]
+//   node tools/tlk.mjs guesses [harness files...] [--top <n>] [--json]   the harness guesses worth a probe, ranked
 //   node tools/tlk.mjs format [paths...] [--check] [--only <pass,...>]    the Lua's one canonical form
 //   node tools/tlk.mjs package [--addon <name>]... [--no-test]            the zip players install, in dist/
 //   node tools/tlk.mjs api-sync [--docs <Blizzard_APIDocumentationGenerated dir>] [--globals <dump>]
@@ -22,6 +23,7 @@ const verbs = {
     "api-sync": () => import("./verbs/api-sync.mjs"),
     check: () => import("./verbs/check.mjs"),
     clones: () => import("./verbs/clones.mjs"),
+    guesses: () => import("./verbs/guesses.mjs"),
     deploy: () => import("./verbs/deploy.mjs"),
     format: () => import("./verbs/format.mjs"),
     package: () => import("./verbs/package.mjs"),

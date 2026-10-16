@@ -22,7 +22,7 @@
 -- Modeling decisions ([D] documented, [G] a guess where the docs are silent):
 --   Nameplates  [D] NAME_PLATE_UNIT_ADDED / _REMOVED carry the unit in nameplateN form (the event
 --               docs). h:AddNamePlate takes the lowest free nameplate1-40 token. [G] The unit stays
---               readable while NAME_PLATE_UNIT_REMOVED dispatches and stops existing after it.
+--               readable while NAME_PLATE_UNIT_REMOVED dispatches and stops existing after it (namePlates.events asks the client).
 --               [G] Each token has its own NamePlate frame, created hidden (NAME_PLATE_CREATED) the
 --               first time the token is used in a UI session. [E] It carries Blizzard's UnitFrame
 --               child (namePlate.enemyNPC), a plain Frame here: its bars and texts aren't modeled.
@@ -31,7 +31,7 @@
 --               (Blizzard_NamePlates never calls Show or Hide on it, and NamePlateBaseMixin
 --               checks IsVisible): h:AddNamePlate shows the token's plate before
 --               NAME_PLATE_UNIT_ADDED, and h:RemoveNamePlate hides it after
---               NAME_PLATE_UNIT_REMOVED, once the unit is gone. Frames an addon parents to a plate
+--               NAME_PLATE_UNIT_REMOVED, once the unit is gone (namePlates.events). Frames an addon parents to a plate
 --               hide and show with it, running OnHide / OnShow like any visibility change
 --               (widgets.lua); a recycled plate is the same frame, so its children come back.
 --   Mouseover   [D] UPDATE_MOUSEOVER_UNIT fires when the mouseover changes to a unit, and not when
@@ -41,7 +41,7 @@
 --               coming back to life as a ghost fires PLAYER_UNGHOST, and a resurrection before
 --               releasing fires PLAYER_ALIVE (warcraft.wiki.gg event pages). [G] PLAYER_DEAD
 --               dispatches while combat lockdown still holds, then combat ends like h:LeaveCombat;
---               a revive restores full health.
+--               a revive restores full health (death.combatState asks the client).
 --   Flights     [D] Taking a flight path takes the character's control (PLAYER_CONTROL_LOST) and
 --               landing gives it back (PLAYER_CONTROL_GAINED); UnitOnTaxi("player") is true in
 --               between. [G] Control goes before UnitOnTaxi turns true, and comes back after it

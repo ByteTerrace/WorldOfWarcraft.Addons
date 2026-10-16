@@ -35,8 +35,11 @@ local addonName, ns = ...
 -- SyncRestrictions), for leaving combat in a PvP match, for damageMeter.pvpSecrecy (Probes.NotePvPLeftCombat reads the
 -- meter's totals then and a few seconds later), for your deaths and the damage meter's updates after them, for
 -- damageMeter.afterDeath (Probes.NoteDeath, NoteMeterUpdate), and for boss encounters' starts and warnings, for
--- encounterWarning.seen (Probes.NoteEncounterStart, NoteEncounterWarning), and for controller and interface events, for
--- input.events (Probes.NoteInputEvent).
+-- encounterWarning.seen (Probes.NoteEncounterStart, NoteEncounterWarning), for controller and interface events, for
+-- input.events (Probes.NoteInputEvent), for combat's state at each death and each new damage meter session, for
+-- death.combatState and damageMeter.currentSession (Probes.NoteDeathState, NoteCurrentSession), for nameplates coming
+-- and going, for namePlates.events (Probes.NoteNamePlate), and for quests turned in, for questLog.titleAfterTurnIn
+-- (Probes.NoteTurnIn).
 --
 -- On entering the world it says, in a line each, when the dump is from another build than the client's, and how many
 -- probes have no result for this build yet.
@@ -537,17 +540,37 @@ AuraListener:SetScript("OnEvent", function(_, _, unit)
     Probes.NoteAuraToken(unit)
 end)
 
--- Your deaths and the damage meter's updates after them, for damageMeter.afterDeath, from load.
+-- Your deaths and the damage meter's updates after them, for damageMeter.afterDeath, and combat's state at each death
+-- and each new current session, for death.combatState and damageMeter.currentSession, from load.
 local MeterListener = CreateFrame("Frame")
 
 MeterListener:RegisterEvent("PLAYER_DEAD")
 MeterListener:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED")
+MeterListener:RegisterEvent("DAMAGE_METER_CURRENT_SESSION_UPDATED")
 
 MeterListener:SetScript("OnEvent", function(_, event, meterType)
     if event == "PLAYER_DEAD" then
         Probes.NoteDeath()
+        Probes.NoteDeathState()
+    elseif event == "DAMAGE_METER_CURRENT_SESSION_UPDATED" then
+        Probes.NoteCurrentSession()
     else
         Probes.NoteMeterUpdate(meterType)
+    end
+end)
+
+-- Nameplates coming and going, for namePlates.events, and quests turned in, for questLog.titleAfterTurnIn, from load.
+local PlateListener = CreateFrame("Frame")
+
+PlateListener:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+PlateListener:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+PlateListener:RegisterEvent("QUEST_TURNED_IN")
+
+PlateListener:SetScript("OnEvent", function(_, event, value)
+    if event == "QUEST_TURNED_IN" then
+        Probes.NoteTurnIn(value)
+    else
+        Probes.NoteNamePlate(event, value)
     end
 end)
 

@@ -20,7 +20,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { findAddons, repoRoot, toPosix } from "../lib/repo.mjs";
+import { findAddons, isDevOnly, repoRoot, toPosix } from "../lib/repo.mjs";
 import { writeZip } from "../lib/zip.mjs";
 import { runChecks } from "./check.mjs";
 import { selectAddons } from "./deploy.mjs";
@@ -54,10 +54,6 @@ function gitOrNull(args) {
 
 // What ships and under which name, or why it can't: { addons, name, version, errors }.
 // tracked: the repo paths committed at HEAD; dirty: repo paths with uncommitted changes.
-// Whether an addon is development only: its TOC has ## X-DevOnly, empty or with any value but a
-// false one, so a bare "## X-DevOnly:" line still keeps it out.
-const isDevOnly = (addon) => addon.metadata["X-DevOnly"] !== undefined && !/^(false|0|no)$/i.test(addon.metadata["X-DevOnly"].trim());
-
 export function planPackage(all, names, tracked, dirty) {
     const errors = [];
     const unknown = (names ?? []).filter((name) => !all.some((addon) => addon.name === name));

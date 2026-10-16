@@ -40,13 +40,12 @@ local FooterHeight = 44
 local LiftUp = 30
 -- The least room, in pixels, above and below the panel.
 local ScreenMargin = 20
--- How many pixels the quest book scrolls per wheel notch, arrow key, or D-pad press.
-local ScrollStep = 48
 -- Riddles whose wrong choices are misspellings: Read aloud spells their choices.
 local SpelledKinds = { ["reading.spelling"] = true, ["reading.sight"] = true }
 local SubjectLabels = { math = "MATH", quest = "QUEST", reading = "READING" }
 local WordColor = "|cff7fe0ff"
 
+local ceil = math.ceil
 local concat = table.concat
 local floor = math.floor
 local ipairs = ipairs
@@ -200,18 +199,20 @@ local function Layout(hasStory, puzzle)
         local textHeight = Overlay.BookText:GetStringHeight()
         local view = min(textHeight, BookHeight, Overlay.m_bookRoom)
 
-        -- A book that scrolls shows whole lines: never half of one at its edge.
+        -- A book that scrolls shows whole lines, each with its spacing below, so a line's letters that hang below it
+        -- (g, p, y) aren't cut at the edge. Its page is as tall as whole lines too, so a scroll always stops on one.
+        local pitch = (Overlay.BookText:GetLineHeight() + Overlay.BookText:GetSpacing())
+        local page = textHeight
+
         -- secret: plain, as above
         if view < textHeight then
-            local spacing = Overlay.BookText:GetSpacing()
-            local pitch = (Overlay.BookText:GetLineHeight() + spacing)
-
-            view = max(pitch - spacing, (floor((view + spacing) / pitch) * pitch) - spacing)
+            view = max(pitch, floor(view / pitch) * pitch)
+            -- secret: plain, as above
+            page = (view + (ceil((textHeight - view) / pitch) * pitch))
         end
 
-        -- secret: plain, as above
-        Overlay.m_bookView, Overlay.m_bookRange = view, (textHeight - view)
-        Overlay.BookPage:SetHeight(textHeight)
+        Overlay.m_bookPitch, Overlay.m_bookView, Overlay.m_bookRange = pitch, view, (page - view)
+        Overlay.BookPage:SetHeight(page)
         case:ClearAllPoints()
         case:SetPoint("TOPLEFT", Pad, -y)
         case:SetSize(Width - (2 * Pad), view + (2 * BookInset))
@@ -530,7 +531,7 @@ function ScholarView.IsShown()
     return ((Overlay ~= nil) and Overlay:IsShown())
 end
 
---- Scrolls the open quest book by notches (positive is down, ScrollStep pixels each), never past the top or the end of
+--- Scrolls the open quest book by notches (positive is down, two lines each), never past the top or the end of
 --- its text.
 ---@param notches number
 function ScholarView.ScrollBook(notches)
@@ -538,7 +539,10 @@ function ScholarView.ScrollBook(notches)
         return
     end
 
-    Overlay.m_bookOffset = max(0, min(Overlay.m_bookOffset + (notches * ScrollStep), Overlay.m_bookRange))
+    -- Two whole lines a notch, so the page stops on a line.
+    local step = (2 * Overlay.m_bookPitch)
+
+    Overlay.m_bookOffset = max(0, min(Overlay.m_bookOffset + (notches * step), Overlay.m_bookRange))
     Overlay.Book:SetVerticalScroll(Overlay.m_bookOffset)
     PlaceThumb()
 end

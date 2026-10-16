@@ -242,16 +242,23 @@ test("the question, the open book, and the feedback all start their text the sam
     eq(select(4, overlay.Feedback.Text:GetPoint(1)), bookX, "and the feedback's text sits as far into its banner")
 end)
 
-test("the open book shows whole lines, never half of one at its edge", function()
+test("the open book shows whole lines with room below each, and scrolls whole lines at a time", function()
     local h, _, ns = LoadKid()
 
     h.env.UIParent:SetSize(1366, 600)
     local overlay = BookRiddle(h, ns)
+    local book = overlay.Book
     local pitch = (overlay.BookText:GetLineHeight() + overlay.BookText:GetSpacing())
-    local shown = (overlay.Book:GetHeight() + overlay.BookText:GetSpacing())
 
-    truthy(overlay.Book:GetVerticalScrollRange() > 0, "a long book")
-    eq(shown % pitch, 0, ("%d tall is whole lines of %d"):format(overlay.Book:GetHeight(), pitch))
+    truthy(book:GetVerticalScrollRange() > 0, "a long book")
+
+    eq(book:GetHeight() % pitch, 0, ("%d tall is whole lines of %d, each with its spacing below, so the last line's "
+        .. "letters that hang below it aren't cut"):format(book:GetHeight(), pitch))
+
+    for _ = 1, 3 do
+        ns.ScholarView.ScrollBook(1)
+        eq(book:GetVerticalScroll() % pitch, 0, "a scroll stops on a line: " .. book:GetVerticalScroll())
+    end
 end)
 
 test("the feedback banner's stripe says how it went: red for a miss, gold for a hint, green when it's right", function()

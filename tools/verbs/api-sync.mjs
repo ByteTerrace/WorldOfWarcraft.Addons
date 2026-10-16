@@ -262,7 +262,8 @@ async function checkLatest(values) {
 //   ByteTerraceDevToolsDB = { build = {...}, globals = { [name] = { type =, members =, tables = } } }
 // where `tables` (optional) maps a member name to that nested table's member names. Rows cross
 // from Lua as tab-separated lines, so member names need no escaping; names containing control
-// characters are skipped. Throws on a dump that can't be a real client's.
+// characters are skipped, and so are globals named after an address ("table: 000001F161607270"),
+// which change every session. Throws on a dump that can't be a real client's.
 export async function readGlobals(file) {
     const lua = await createLua();
     try {
@@ -287,7 +288,7 @@ export async function readGlobals(file) {
                 end
             end
             for name, entry in pairs(db.globals) do
-                if clean(name) then
+                if clean(name) and not name:find("^%l+: %x+$") then
                     if type(entry) ~= "table" or type(entry.type) ~= "string" then
                         return "!global " .. name .. " has no type field"
                     end

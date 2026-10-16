@@ -102,6 +102,19 @@ export const tests = [
         }),
     },
     {
+        // The client names some globals after a table's address, which changes every session.
+        name: "api-sync leaves out globals named after an address",
+        run: async () => withTemp(async (dir) => {
+            const dump = join(dir, "dump.lua");
+            writeDump(dump, MIN_GLOBALS);
+            const text = readFileSync(dump, "utf8").replace('["Enum"]', '["table: 000001F161607270"] = { ["type"] = "table" },\n["TWO-HANDED_AXES"] = { ["type"] = "string" },\n["Enum"]');
+            writeFileSync(dump, text);
+            const { globals } = await readGlobals(dump);
+            assert(!("table: 000001F161607270" in globals), "an address isn't a name code can use");
+            assert(globals["TWO-HANDED_AXES"] === "string", "other names the client really has stay");
+        }),
+    },
+    {
         name: "api-sync reads a build from wow-ui-source's version.txt or a commit title",
         run() {
             assert(sourceBuild("1.60.1.70374\n") === "1.60.1 (70374)", sourceBuild("1.60.1.70374\n"));

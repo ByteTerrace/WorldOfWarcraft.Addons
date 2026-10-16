@@ -848,24 +848,86 @@ test("quests already in the log are recorded when the challenge starts, for revi
     eq(shown[1].subject, "quest", "something to ask about straight away")
 end)
 
-test("a quest that began from an item of its own name isn't said to be a quest from itself", function()
+-- Every riddle the quest book's record of key could bring, over seeds.
+local function RiddlesAbout(h, ns, key)
+    local riddles = {}
+    local known = ns.QuestBook.All()
+    local record = nil
+
+    for _, entry in ipairs(known) do
+        if entry.key == key then record = entry end
+    end
+
+    for seed = 1, 200 do
+        h:SeedRandom(seed)
+        riddles[#riddles + 1] = Ask(h, ns, record, known)
+    end
+
+    return riddles
+end
+
+test("a quest an item offers is recorded as the item's, the book says it started from it, and no riddle calls it a giver", function()
+    local h, addon, ns = LoadKid()
+
+    h:OfferQuest({ id = 70, text = "The residue whispers of the Lich.", title = "Whispering Horror Residue" },
+        { guid = "Item-4372-0-4000000012345678", name = "Whispering Horror Residue" })
+
+    h:AcceptQuest()
+    eq(Quests(addon):Field("70", "giverKind"), "item")
+    eq(Quests(addon):Field("70", "giver"), "Whispering Horror Residue", "the name is kept, as the client gave it")
+
+    for _, riddle in ipairs(RiddlesAbout(h, ns, "70")) do
+        truthy(riddle.kind ~= "quest.giver", "no riddle asks who gave it")
+        truthy(riddle.book:find("Started from Whispering Horror Residue", 1, true), riddle.book)
+        falsy(riddle.book:find("From Whispering Horror Residue", 1, true), "the item isn't who it's from")
+    end
+end)
+
+test("a quest an object offers starts from it too, and a person's quest is still from them", function()
+    local h, addon, ns = LoadKid()
+
+    h:OfferQuest({ id = 71, text = "Wanted: Hogger.", title = "Wanted: Hogger" },
+        { guid = "GameObject-0-4372-0-12-68-0000123456", name = "Wanted Poster" })
+
+    h:AcceptQuest()
+    eq(Quests(addon):Field("71", "giverKind"), "object")
+    h:OfferQuest(Wolves, "Eagan Peltskinner")
+    h:AcceptQuest()
+    eq(Quests(addon):Field("33", "giverKind"), "npc")
+    truthy(RiddlesAbout(h, ns, "71")[1].book:find("Started from Wanted Poster", 1, true))
+    truthy(RiddlesAbout(h, ns, "33")[1].book:find("From Eagan Peltskinner", 1, true))
+end)
+
+test("a quest turned in at an object isn't turned in to someone, and isn't asked about as one", function()
+    local h, addon, ns = LoadKid()
+
+    Accept(h, Wolves)
+    h:OpenTurnIn(33, { guid = "GameObject-0-4372-0-12-99-0000654321", name = "Gravestone" }, "Rest now.")
+    h:CompleteQuest()
+    eq(Quests(addon):Field("33", "enderKind"), "object")
+
+    for _, riddle in ipairs(RiddlesAbout(h, ns, "33")) do
+        truthy(riddle.kind ~= "quest.ender", "no riddle asks who it was turned in to")
+        falsy(riddle.book:find("Turned in to Gravestone", 1, true), riddle.book)
+        truthy(riddle.book:find("Turned in at Gravestone", 1, true), riddle.book)
+    end
+end)
+
+test("a record that doesn't say what gave it counts a giver of the quest's own name as an item, and never offers it", function()
     local h, _, ns = LoadKid()
     local mine = { giver = "Magistrate Sevren", key = "1", seen = 2, title = "The Prodigal Lich" }
     local residue = { giver = "Whispering Horror Residue", key = "2", seen = 1, title = "Whispering Horror Residue" }
-    local said = nil
 
     for seed = 1, 300 do
         h:SeedRandom(seed)
         local puzzle = Ask(h, ns, mine, { mine, residue })
 
-        if puzzle.kind == "quest.title" then
-            for i, choice in ipairs(puzzle.choices) do
-                if choice == residue.title then said = puzzle.whys[i] end
-            end
+        for _, why in pairs(puzzle.whys or {}) do
+            falsy(why:find("quest from Whispering Horror Residue", 1, true), why)
         end
 
-        if said then break end
-    end
+        local other = Ask(h, ns, residue, { mine, residue })
 
-    eq(said, "\"Whispering Horror Residue\" is a different quest in your quest book.")
+        truthy((other == nil) or (other.kind ~= "quest.giver"), "nothing asks who gave it")
+    end
 end)

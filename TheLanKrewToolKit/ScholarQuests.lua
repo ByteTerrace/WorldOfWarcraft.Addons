@@ -293,10 +293,13 @@ end
 local function Book(quest)
     local lines = { ("\"" .. quest.title .. "\"") }
 
-    if (quest.giver ~= "") and (quest.place ~= "") then
-        lines[#lines + 1] = ("From %s, in %s."):format(quest.giver, quest.place)
-    elseif quest.giver ~= "" then
-        lines[#lines + 1] = ("From " .. quest.giver .. ".")
+    local from = (((quest.giver ~= "") and ("From " .. quest.giver))
+        or ((quest.starter ~= "") and ("Started from " .. quest.starter)) or "")
+
+    if (from ~= "") and (quest.place ~= "") then
+        lines[#lines + 1] = ("%s, in %s."):format(from, quest.place)
+    elseif from ~= "" then
+        lines[#lines + 1] = (from .. ".")
     elseif quest.place ~= "" then
         lines[#lines + 1] = ("Taken in " .. quest.place .. ".")
     end
@@ -324,11 +327,17 @@ local function Book(quest)
         lines[#lines + 1] = quest.text
     end
 
-    if quest.turnedIn and ((quest.ender ~= "") or (quest.endPlace ~= "")) then
+    if quest.turnedIn and ((quest.ender ~= "") or (quest.endThing ~= "") or (quest.endPlace ~= "")) then
+        local where = (((quest.endPlace ~= "") and quest.endPlace) or "")
+
         lines[#lines + 1] = ""
 
-        lines[#lines + 1] = ("Turned in" .. (((quest.ender ~= "") and (" to " .. quest.ender)) or "")
-            .. (((quest.endPlace ~= "") and (" at " .. quest.endPlace)) or "") .. ".")
+        if quest.endThing ~= "" then
+            lines[#lines + 1] = ("Turned in at " .. quest.endThing .. (((where ~= "") and (", in " .. where)) or "") .. ".")
+        else
+            lines[#lines + 1] = ("Turned in" .. (((quest.ender ~= "") and (" to " .. quest.ender)) or "")
+                .. (((where ~= "") and (" at " .. where)) or "") .. ".")
+        end
     end
 
     return concat(lines, "\n")
@@ -352,6 +361,12 @@ local function FromOthers(state, fields)
     end
 
     return entries
+end
+
+-- Whether the book's giver or ender of a quest is a person: one it recorded as an NPC or a player, or, when the client
+-- didn't say what it was, one not named like the quest (an item that starts a quest shares its name).
+local function IsPerson(name, kind, title)
+    return ((name ~= "") and ((kind == "npc") or ((kind == "") and (lower(name) ~= lower(title)))))
 end
 
 -- The other known quests' objectives of a kind, by name, each saying which quest it was for.
@@ -402,8 +417,10 @@ local function RecordObjective(record, i)
     return { kind = (ObjectiveKinds[logType] or "task"), name = name, required = required }
 end
 
--- A record as the riddles read it: { title, giver, place, zone, ender, endPlace, endZone, turnedIn, goal, text,
--- askedKind, objectives = { { name, kind, required } } }, every field cleaned, or nil without a title.
+-- A record as the riddles read it: { title, giver, starter, place, zone, ender, endThing, endPlace, endZone, turnedIn,
+-- goal, text, askedKind, objectives = { { name, kind, required } } }, every field cleaned, or nil without a title. A
+-- giver or ender that isn't a person (an item, an object) is the starter or the endThing instead, so no riddle asks who
+-- it was or offers it as someone.
 local function Clean(record)
     local quest = {
         askedKind = Line(record.askedKind, MaxLine), ender = Line(record.ender, MaxLine),
@@ -415,6 +432,19 @@ local function Clean(record)
 
     for i = 1, MaxObjectives do
         quest.objectives[#quest.objectives + 1] = RecordObjective(record, i)
+    end
+
+    quest.starter = ""
+    quest.endThing = ""
+
+    if not IsPerson(quest.giver, record.giverKind or "", quest.title) then
+        quest.starter = quest.giver
+        quest.giver = ""
+    end
+
+    if not IsPerson(quest.ender, record.enderKind or "", quest.title) then
+        quest.endThing = quest.ender
+        quest.ender = ""
     end
 
     return (((quest.title ~= "") and quest) or nil)
@@ -650,11 +680,8 @@ Generators["quest.title"] = function(state)
             -- The giver's other quests are right answers too.
             theirs[lower(other.title)] = true
         elseif (other.key ~= quest.key) and (other.giver ~= "") then
-            -- A quest nobody saw given might be the giver's too, so it isn't offered. One whose giver is its own name
-            -- began from an item, which isn't who gave it.
-            local why = (((lower(other.giver) == lower(other.title)) and Words.quest.from.titleAlone) or from)
-
-            others[#others + 1] = { other.title, why = Fill(why, { choice = other.title, other = other.giver }) }
+            -- A quest nobody saw given might be the giver's too, so it isn't offered.
+            others[#others + 1] = { other.title, why = Fill(from, { choice = other.title, other = other.giver }) }
         end
     end
 

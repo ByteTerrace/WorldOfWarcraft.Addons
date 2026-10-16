@@ -8,9 +8,12 @@ local addonName, ns = ...
 -- quest's text and goal, and the giver's name), or the quest log alone for a quest an area trigger accepted, whose text
 -- the player reads by opening the log. Its objectives come from the log (each with its kind: item, monster, ...), and
 -- where it began from the subzone (with the zone around it, never a wrong answer for where). Turning it in
--- (QUEST_COMPLETE, then QUEST_TURNED_IN) adds who took it, where, and the reward text. Each exposure, accepting and
--- turning in, makes the quest fresh: something new to ask about. Only these events read the quest APIs, out of combat
--- as quests are, and the book leaves a secret answer out rather than storing it.
+-- (QUEST_COMPLETE, then QUEST_TURNED_IN) adds who took it, where, and the reward text. The giver and the ender are
+-- whatever the dialog's questnpc unit names, which can be an item that starts a quest or an object (a wanted poster, a
+-- gravestone), so each is recorded with its kind (giverKind, enderKind): "npc" (a creature or a player), "object",
+-- "item", or "" when its GUID doesn't say (probes quest.giverKind and quest.enderKind ask the client). Each exposure,
+-- accepting and turning in, makes the quest fresh: something new to ask about. Only these events read the quest APIs,
+-- out of combat as quests are, and the book leaves a secret answer out rather than storing it.
 --
 -- When the book starts (the challenge switched on mid-game, or a login), the quests already in the log are recorded as
 -- the log shows them: title, text, and objectives, not fresh, with no giver or place, since nobody saw them given. The
@@ -43,6 +46,8 @@ local MaxLine = 120
 -- How many QUEST_LOG_UPDATEs an unnamed quest's objectives are read on before the book gives up.
 local MaxNameReads = 20
 local MaxObjectives = 3
+-- A questnpc GUID's type, as the kind the book records.
+local UnitKinds = { Creature = "npc", GameObject = "object", Item = "item", Player = "npc", Vehicle = "npc" }
 
 local C_QuestLog = C_QuestLog
 local concat = table.concat
@@ -69,6 +74,7 @@ local sub = string.sub
 local tonumber = tonumber
 local tostring = tostring
 local type = type
+local UnitGUID = UnitGUID
 local UnitName = UnitName
 local wipe = wipe
 
@@ -153,6 +159,17 @@ local function Asked(key, kind)
     if quests:Has(key) then
         quests:Set(key, { askedAt = GetServerTime(), askedKind = (kind or ""), fresh = false })
     end
+end
+
+-- What the open dialog's questnpc is, from its GUID's type (see UnitKinds), or "" when the client doesn't say.
+local function KindOf()
+    local guid = UnitGUID("questnpc")
+
+    if issecretvalue(guid) or (type(guid) ~= "string") then
+        return ""
+    end
+
+    return (UnitKinds[match(guid, "^(%a+)%-")] or "")
 end
 
 --- Returns every quest's key in the order to ask about them: the fresh ones (shown and not asked about since), newest
@@ -283,13 +300,13 @@ end
 -- and quest.turnInIdentity).
 local function OnOffer()
     Offer = {
-        giver = NameOf("questnpc"), goal = Plain(GetObjectiveText(), MaxLine), id = GetQuestID(),
+        giver = NameOf("questnpc"), giverKind = KindOf(), goal = Plain(GetObjectiveText(), MaxLine), id = GetQuestID(),
         text = Plain(GetQuestText()), title = Plain(GetTitleText(), MaxLine),
     }
 end
 
 local function OnTurnInPanel()
-    TurnIn = { ender = NameOf("questnpc"), id = GetQuestID(), reward = Plain(GetRewardText()),
+    TurnIn = { ender = NameOf("questnpc"), enderKind = KindOf(), id = GetQuestID(), reward = Plain(GetRewardText()),
         title = Plain(GetTitleText(), MaxLine) }
 end
 
@@ -311,7 +328,7 @@ local function OnTurnedIn(questID)
     local values = { endPlace = endPlace, endZone = endZone, fresh = true, seen = GetServerTime(), turnedIn = true }
 
     if turnIn then
-        values.ender, values.reward = turnIn.ender, turnIn.reward
+        values.ender, values.enderKind, values.reward = turnIn.ender, turnIn.enderKind, turnIn.reward
     end
 
     if not quests:Has(key) then
@@ -346,6 +363,7 @@ local function OnAccepted(questID)
 
     if offer then
         values.title, values.text, values.goal, values.giver = offer.title, offer.text, offer.goal, offer.giver
+        values.giverKind = offer.giverKind
     else
         -- An area trigger's quest: no dialog showed it, so it's what the quest log shows.
         local index = C_QuestLog.GetLogIndexForQuestID(questID)
@@ -426,12 +444,14 @@ end
 local Fields = {
     { default = "", kind = "string", name = "title" },
     { default = "", kind = "string", name = "giver" },
+    { default = "", kind = "string", name = "giverKind", values = { "", "npc", "object", "item" } },
     { default = "", kind = "string", name = "place" },
     { default = "", kind = "string", name = "zone" },
     { default = "", kind = "string", name = "text" },
     { default = "", kind = "string", name = "goal" },
     { default = false, kind = "boolean", name = "turnedIn" },
     { default = "", kind = "string", name = "ender" },
+    { default = "", kind = "string", name = "enderKind", values = { "", "npc", "object", "item" } },
     { default = "", kind = "string", name = "endPlace" },
     { default = "", kind = "string", name = "endZone" },
     { default = "", kind = "string", name = "reward" },

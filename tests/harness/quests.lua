@@ -38,7 +38,9 @@
 --               QUEST_FINISHED hides the frame; the frame's title is UnitName("questnpc"). An area
 --               trigger's auto-accepted quest closes the dialog without showing it. [E] Those texts
 --               and GetQuestID's number are plain out of combat (quest.offer, quest.turnIn,
---               quest.*Identity), and so are the questnpc and npc names. [G] Outside a dialog,
+--               quest.*Identity), and so are the questnpc and npc names. [G] The questnpc unit's GUID is a
+--               Creature's unless a test gives the giver one: an item's "Item-...", an object's
+--               "GameObject-..." (quest.giverKind and quest.enderKind ask the client). [G] Outside a dialog,
 --               GetQuestID answers 0 and the texts "". [G] The accept and turn-in event orders.
 --   Log         [E] GetNumQuestLogEntries answers the shown entries (zone headers included) and the
 --               quests; GetInfo answers the questLog.entry fields; GetQuestObjectives answers

@@ -1,6 +1,7 @@
 -- The pause after a wrong answer (Scholar.lua and ScholarView.lua): the answers left wait a moment before they can be
 -- picked again, longer each miss, so a child reads the hint instead of trying every answer. Each waiting answer's
--- keycap counts the seconds down. The hint, Read aloud, and Skip still work while they wait.
+-- keycap counts the seconds down. The hint, Read aloud, and Skip still work while they wait. The seconds left and the
+-- misses so far are saved until a riddle is solved or skipped, so a /reload or relog doesn't get around them.
 
 local Kit = use("scholar")
 local Banner = Kit.Banner
@@ -127,4 +128,125 @@ test("a wait doesn't follow the child to the next riddle", function()
 
     truthy(nextOne and frame.Buttons[nextOne.answer]:IsEnabled(), "the next riddle's answers don't wait")
     eq(Keycaps(frame), "1 2 3 4")
+end)
+
+-- The riddle on screen after a /reload or a relog, seen through Watch: a fight sends it away and brings it back, so
+-- Watch sees the riddle the new UI asked.
+local function Returned(h)
+    local shown = Watch(h.ns)
+
+    h:EnterCombat()
+    h:LeaveCombat()
+
+    return shown[#shown], rawget(h.env, "TheLanKrewToolKitScholar")
+end
+
+test("a /reload doesn't end the wait: the riddle that comes back waits out the seconds left, without the old hint", function()
+    local h, _, _, puzzle, frame = Riddle("long")
+
+    h:Key(tostring(WrongAnswer(puzzle)), true)
+    h:Advance(1)
+    eq(frame.Buttons[puzzle.answer].Key:GetText(), "3")
+    h:Reload()
+    frame = rawget(h.env, "TheLanKrewToolKitScholar")
+    truthy(frame:IsShown(), "a riddle is still due")
+    eq(Keycaps(frame), "3 3 3 3", "every answer of the riddle that comes back waits the seconds left")
+    falsy(frame.Buttons[1]:IsEnabled())
+    falsy(frame.Feedback:IsShown(), "the old riddle's hint doesn't come with it")
+    h:Advance(2)
+    eq(Keycaps(frame), "1 1 1 1")
+    h:Advance(1)
+    eq(Keycaps(frame), "1 2 3 4", "then the answers wake")
+    truthy(frame.Buttons[1]:IsEnabled())
+end)
+
+test("after a /reload, the next miss waits as long as it would have, and the one after longer", function()
+    local h, _, _, puzzle = Riddle("short")
+
+    h:Key(tostring(WrongAnswer(puzzle)), true)
+    h:Advance(2)
+    h:Reload()
+    local again, frame = Returned(h)
+    local right = frame.Buttons[again.answer]
+
+    eq(Keycaps(frame), "1 2 3 4", "the first wait was over")
+    h:Key(tostring(WrongAnswer(again)), true)
+    eq(right.Key:GetText(), "4", "the second miss waits 4 seconds")
+    h:Advance(4)
+    h:Key(tostring(WrongAnswer(again, WrongAnswer(again))), true)
+    eq(right.Key:GetText(), "6", "and the third 6")
+end)
+
+test("a relog keeps the seconds left, however long the child was away", function()
+    local h, _, _, puzzle = Riddle("long")
+
+    h:Key(tostring(WrongAnswer(puzzle)), true)
+    h:Advance(3)
+    h:Relog(3600)
+    local frame = rawget(h.env, "TheLanKrewToolKitScholar")
+
+    truthy(frame:IsShown(), "a riddle is still due")
+    eq(Keycaps(frame), "1 1 1 1", "the second it had left")
+    h:Advance(1)
+    eq(Keycaps(frame), "1 2 3 4")
+    local again = Returned(h)
+
+    h:Key(tostring(WrongAnswer(again)), true)
+    eq(frame.Buttons[again.answer].Key:GetText(), "7", "and the next miss waits the second step")
+end)
+
+test("solving or skipping ends the growing wait: after a /reload, the next riddle's first miss waits the first step", function()
+    for _, style in ipairs({ "solve", "skip" }) do
+        local h, addon, ns = LoadKid({ ["Scholar.missPause"] = "short", ["Scholar.quests"] = false,
+            ["Scholar.style"] = "gentle" })
+
+        local shown = Watch(ns)
+
+        h:Slash("/tlk puzzle")
+        local puzzle = shown[#shown]
+
+        h:Key(tostring(WrongAnswer(puzzle)), true)
+        h:Advance(1)
+        h:Key(tostring(WrongAnswer(puzzle, WrongAnswer(puzzle))), true)
+
+        if style == "solve" then
+            h:Advance(4)
+            h:Key(tostring(puzzle.answer), true)
+            truthy(addon.State:Get("Scholar.solved"))
+        else
+            h:Key("ESCAPE", true)
+        end
+
+        h:Reload()
+        shown = Watch(h.ns)
+        h:Slash("/tlk puzzle")
+        local frame = rawget(h.env, "TheLanKrewToolKitScholar")
+        local nextOne = shown[#shown]
+
+        eq(Keycaps(frame), "1 2 3 4", style .. ": the next riddle's answers don't wait")
+        h:Key(tostring(WrongAnswer(nextOne)), true)
+        eq(frame.Buttons[nextOne.answer].Key:GetText(), "2", style .. ": its first miss waits the first step")
+    end
+end)
+
+test("the wait runs one timer and writes its seconds once a second on screen, and nothing while a fight has the riddle", function()
+    local h, addon, _, puzzle = Riddle("long")
+    local scholar = addon.Modules.Scholar
+
+    h:Key(tostring(WrongAnswer(puzzle)), true)
+    eq(scholar:PendingTimers(), 1, "one timer counts the wait down")
+    local left = addon.State:Version("Scholar.pauseLeft")
+
+    h:Advance(1)
+    eq(addon.State:Version("Scholar.pauseLeft"), left + 1, "each second writes the seconds left once")
+    eq(scholar:PendingTimers(), 1, "still one timer")
+    h:EnterCombat()
+    left = addon.State:Version("Scholar.pauseLeft")
+    local misses = addon.State:Version("Scholar.pauseMisses")
+
+    eq(scholar:PendingTimers(), 0, "no timer while the riddle is away")
+    h:Advance(10)
+    eq(addon.State:Version("Scholar.pauseLeft"), left, "and no writes")
+    eq(addon.State:Version("Scholar.pauseMisses"), misses)
+    eq(addon.State:Get("Scholar.pauseLeft"), 3)
 end)

@@ -84,6 +84,11 @@ local Rows = {
     -- How many first tries have missed, which numbers the report's recent misses.
     { default = 0, kind = "number", min = 0, name = "missCount", scope = "character", step = 1 },
     { default = 0, kind = "number", name = "elapsed", scope = "character" },
+    -- The pause after a wrong answer: the seconds the answers still wait, counted down only while a riddle shows, and
+    -- the misses since a riddle was last solved or skipped, which lengthen each pause. Saved, so a /reload or relog
+    -- neither ends the wait nor starts it over.
+    { default = 0, kind = "number", min = 0, name = "pauseLeft", scope = "character", step = 1 },
+    { default = 0, kind = "number", min = 0, name = "pauseMisses", scope = "character", step = 1 },
     { default = false, kind = "boolean", name = "pending", scope = "character" },
     { default = 0, kind = "number", min = 0, name = "questRun", scope = "character", step = 1 },
     -- The riddle on screen was just solved: its celebration holds the screen until Finish.

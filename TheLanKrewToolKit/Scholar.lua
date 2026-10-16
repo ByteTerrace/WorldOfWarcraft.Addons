@@ -34,9 +34,12 @@ local addonName, ns = ...
 --            riddle (ScholarWords.heard) always says its word, and its button is Hear it again.
 --            With no text-to-speech voice, nothing speaks and no heard riddle is asked.
 --   Pause    after a miss, the answers left wait (the missPause setting: Pauses seconds, longer
---            each miss), their keycaps counting down, so the hint gets read before the next try. A
---            fight that takes the riddle away stops the count, and the riddle comes back with its
---            hint and the seconds left.
+--            each miss), their keycaps counting down, so the hint gets read before the next try. The
+--            count runs only while the riddle shows: a fight that takes it away stops the count, and
+--            it comes back with its hint and the seconds left. The seconds left and the misses that
+--            lengthen each pause are saved (pauseLeft, pauseMisses) until a riddle is solved or
+--            skipped, so a /reload or relog asks a new riddle that waits them out, and its next miss
+--            waits as long as it would have. The hint's rung stays with its own riddle.
 --   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the
 --            grade (math and reading only: a quest riddle never changes it).
 --
@@ -123,8 +126,8 @@ local Words = ns.ScholarWords
 
 -- Whether the play clock runs, which it does while no riddle is due, you're not AFK, and a subject is on.
 local Counting = false
--- The riddle on screen (or waiting out a fight) until it's solved or skipped, how many tries missed, and which answers
--- they picked ([i] = true), so a riddle that comes back keeps them.
+-- The riddle on screen (or waiting out a fight) until it's solved or skipped, how many of its tries missed (the hint's
+-- rung), and which answers they picked ([i] = true), so a riddle that comes back keeps them.
 local Current = nil
 local LastSubject
 local Missed = {}
@@ -134,9 +137,7 @@ local Pauses = { long = { 4, 7, 10 }, short = { 2, 4, 6 } }
 local Scholar
 -- The GetTime() the running stretch of play started at.
 local SegmentStart
--- The seconds the answers left still wait (the pause after a miss), and the timer counting them down. A fight that
--- takes the riddle away stops the timer, and the riddle comes back with the seconds it had left.
-local WaitLeft = 0
+-- The timer counting down the pause after a miss (the pauseLeft row) while the riddle shows.
 local WaitTimer
 -- Blizzard's windows open now that a riddle waits for: "quest", "gossip", and interaction types.
 local Windows = {}
@@ -335,16 +336,19 @@ local function SetMap(active)
     Addon.Input:SetActiveMaps(maps)
 end
 
--- Hides the riddle and gives input back. The riddle stays current until it's solved.
+-- Hides the riddle and gives input back, stopping the pause's count where it is. The riddle stays current until it's
+-- solved.
 local function Close()
     if ScholarView.IsShown() then
+        Scholar:Cancel(WaitTimer)
+        WaitTimer = nil
         ScholarView.Frame():EnableKeyboard(false)
         ScholarView.Hide()
         SetMap(false)
     end
 end
 
--- Ends the riddle, solved (after its celebration) or skipped. Either way, the timer starts over.
+-- Ends the riddle, solved (after its celebration) or skipped. Either way, the timer and the pause start over.
 local function Finish(solved)
     local before = Scholar:Get("stars")
     local earned = ((Current and Earned()) or 1)
@@ -353,9 +357,11 @@ local function Finish(solved)
         QuestBook.Asked(Current.questKey, Current.kind)
     end
 
-    Current, Wrongs, WaitLeft = nil, 0, 0
+    Current, Wrongs = nil, 0
     wipe(Missed)
     Close()
+    Scholar:Set("pauseLeft", 0)
+    Scholar:Set("pauseMisses", 0)
     Scholar:Set("solved", false)
     Scholar:Set("elapsed", 0)
     SegmentStart = GetTime()
@@ -424,21 +430,18 @@ local function ValidPin(pin)
     return (pin and (pin:match("^%d%d%d%d%d?%d?%d?%d?$") ~= nil))
 end
 
--- The answers left wait left seconds, counted down a second at a time on their keycaps, while puzzle is the riddle on
--- screen and unsolved. Hidden, the count stops where it is (WaitLeft), for Open to take up again.
-local function Wait(puzzle, left)
+-- The answers left on screen wait left seconds, counted down a second at a time on their keycaps and in pauseLeft.
+-- Close stops the count where it is, for Open to take up again.
+local function Wait(left)
     Scholar:Cancel(WaitTimer)
     WaitTimer = nil
-    WaitLeft = left
+    Scholar:Set("pauseLeft", left)
     ScholarView.Wait(left)
 
     if left > 0 then
         WaitTimer = Scholar:After(1, function()
             WaitTimer = nil
-
-            if (Current == puzzle) and not Scholar:Get("solved") and ScholarView.IsShown() then
-                Wait(puzzle, left - 1)
-            end
+            Wait(left - 1)
         end)
     end
 end
@@ -463,6 +466,7 @@ local function Choose(i)
         Scholar:Set("solved", true)
         Scholar:Set("pending", false)
         Scholar:Set("elapsed", 0)
+        Scholar:Set("pauseMisses", 0)
 
         if Current.questKey then
             -- Marked answered, so a /reload in the celebration doesn't ask it again.
@@ -508,13 +512,18 @@ local function Choose(i)
         local label, help, reveal = Help()
 
         ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("style") == "gentle", reveal)
-        -- The answers left wait, longer each miss, so the hint gets read before the next try.
-        Wait(Current, (Pauses[Scholar:Get("missPause")] or {})[min(Wrongs, 3)] or 0)
+        -- The answers left wait, longer each miss since a riddle was last solved or skipped, so the hint gets read
+        -- before the next try.
+        local misses = (Scholar:Get("pauseMisses") + 1)
+
+        Scholar:Set("pauseMisses", misses)
+        Wait((Pauses[Scholar:Get("missPause")] or {})[min(misses, 3)] or 0)
     end
 end
 
 -- Shows the riddle and takes the keyboard and controller. Only ever called out of combat. A riddle that comes back
--- after a miss shows its hint's rung again, and its answers wait out the seconds they had left.
+-- after a miss shows its hint's rung again, and any riddle's answers wait out the pause's seconds left (pauseLeft), a
+-- new one's after a /reload included.
 local function Open()
     local frame = ScholarView.Show(Current, Progress({
         actions = { hint = ActionLabel("hint"), skip = ActionLabel("skip"), speak = ActionLabel("speak") },
@@ -531,10 +540,10 @@ local function Open()
 
     if Wrongs > 0 then
         ScholarView.Hint(Help())
+    end
 
-        if WaitLeft > 0 then
-            Wait(Current, WaitLeft)
-        end
+    if Scholar:Get("pauseLeft") > 0 then
+        Wait(Scholar:Get("pauseLeft"))
     end
 
     -- A heard riddle always speaks. Any other speaks as readAloud says.
@@ -785,7 +794,8 @@ Scholar = Addon:Module("Scholar", {
             Finish(true)
         end
 
-        Current, Wrongs, WaitLeft, WaitTimer = nil, 0, 0, nil
+        -- A riddle still due when the challenge comes back on keeps its pause (pauseLeft, pauseMisses).
+        Current, Wrongs, WaitTimer = nil, 0, nil
         wipe(Missed)
         wipe(Windows)
         Close()

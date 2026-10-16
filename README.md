@@ -670,7 +670,7 @@ Every riddle teaches. A wrong pick says why that answer is tempting but not it (
 
 **Need a hint?** gives the rung the riddle is on. A right answer always shows the working, with praise for the strategy used, or for sticking with it after a miss. It never praises being smart.
 
-After a miss, the answers left wait a moment before they can be picked, so trying every answer in a row doesn't work and the hint gets read. Each waiting answer's keycap counts the seconds down, and the wait grows with each miss on the riddle. **Need a hint?**, **Read aloud**, the quest book, and **Skip** still work while the answers wait. **Pause after a wrong answer**, under **Answers** on the **Scholar's challenge** page, sets it:
+After a miss, the answers left wait a moment before they can be picked, so trying every answer in a row doesn't work and the hint gets read. Each waiting answer's keycap counts the seconds down, and the wait grows with each miss on the riddle. **Need a hint?**, **Read aloud**, the quest book, and **Skip** still work while the answers wait. A fight that takes the riddle away stops the count, and the riddle comes back with its hint and the seconds its answers had left. **Pause after a wrong answer**, under **Answers** on the **Scholar's challenge** page, sets it:
 
 | Setting | After the first, second, and third miss |
 | --- | --- |

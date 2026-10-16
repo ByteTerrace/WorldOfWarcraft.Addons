@@ -3,6 +3,7 @@
 -- keycap counts the seconds down. The hint, Read aloud, and Skip still work while they wait.
 
 local Kit = use("scholar")
+local Banner = Kit.Banner
 local LoadKid = Kit.LoadKid
 local Watch = Kit.Watch
 local WrongAnswer = Kit.WrongAnswer
@@ -87,6 +88,28 @@ test("while the answers wait, Read aloud and the hint still work", function()
     h:Key("R", true)
     truthy(#h.spoken > spoken, "Read aloud speaks")
     truthy(frame.Hint:IsEnabled(), "and the hint is there")
+end)
+
+test("a fight doesn't end the wait: the riddle comes back with its hint and the seconds it had left", function()
+    local h, addon, _, puzzle, frame = Riddle("long")
+
+    h:Key(tostring(WrongAnswer(puzzle)), true)
+    h:Advance(1)
+    h:EnterCombat()
+    h:Advance(10)
+    h:LeaveCombat()
+    truthy(frame:IsShown(), "the riddle came back")
+    local right = frame.Buttons[puzzle.answer]
+
+    falsy(right:IsEnabled(), "the answers still wait")
+    eq(right.Key:GetText(), "3", "with the seconds they had left")
+    truthy(frame.Feedback:IsShown() and Banner(h):find("Hint:", 1, true), "and the hint is back: " .. Banner(h))
+    h:Key(tostring(puzzle.answer), true)
+    falsy(addon.State:Get("Scholar.solved"), "a press while they wait does nothing")
+    h:Advance(3)
+    truthy(right:IsEnabled(), "then the answers wake")
+    h:Key(tostring(puzzle.answer), true)
+    truthy(addon.State:Get("Scholar.solved"))
 end)
 
 test("a wait doesn't follow the child to the next riddle", function()

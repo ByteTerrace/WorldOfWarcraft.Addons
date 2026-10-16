@@ -34,7 +34,9 @@ local addonName, ns = ...
 --            riddle (ScholarWords.heard) always says its word, and its button is Hear it again.
 --            With no text-to-speech voice, nothing speaks and no heard riddle is asked.
 --   Pause    after a miss, the answers left wait (the missPause setting: Pauses seconds, longer
---            each miss), their keycaps counting down, so the hint gets read before the next try.
+--            each miss), their keycaps counting down, so the hint gets read before the next try. A
+--            fight that takes the riddle away stops the count, and the riddle comes back with its
+--            hint and the seconds left.
 --   Rewards  a star per riddle, streaks, scholar ranks, and difficulty that adapts within the
 --            grade (math and reading only: a quest riddle never changes it).
 --
@@ -132,6 +134,10 @@ local Pauses = { long = { 4, 7, 10 }, short = { 2, 4, 6 } }
 local Scholar
 -- The GetTime() the running stretch of play started at.
 local SegmentStart
+-- The seconds the answers left still wait (the pause after a miss), and the timer counting them down. A fight that
+-- takes the riddle away stops the timer, and the riddle comes back with the seconds it had left.
+local WaitLeft = 0
+local WaitTimer
 -- Blizzard's windows open now that a riddle waits for: "quest", "gossip", and interaction types.
 local Windows = {}
 local Wrongs = 0
@@ -347,7 +353,7 @@ local function Finish(solved)
         QuestBook.Asked(Current.questKey, Current.kind)
     end
 
-    Current, Wrongs = nil, 0
+    Current, Wrongs, WaitLeft = nil, 0, 0
     wipe(Missed)
     Close()
     Scholar:Set("solved", false)
@@ -414,38 +420,22 @@ local function KeyLabel(i)
     return tostring(i)
 end
 
--- Shows the riddle and takes the keyboard and controller. Only ever called out of combat.
-local function Open()
-    local frame = ScholarView.Show(Current, Progress({
-        actions = { hint = ActionLabel("hint"), skip = ActionLabel("skip"), speak = ActionLabel("speak") },
-        book = (Current.book ~= nil), canSkip = ((Scholar:Get("style") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
-        controller = UsingController(), gentle = (Scholar:Get("style") == "gentle"),
-        keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, reveal = (select(3, Help())), wrong = Missed,
-    }))
-
-    frame:EnableKeyboard(true)
-    -- protected: Open only runs out of combat (see the combat rule)
-    frame:SetPropagateKeyboardInput(false)
-    SetMap(true)
-    C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN)
-
-    -- A heard riddle always speaks. Any other speaks as readAloud says.
-    if Current.speech or ReadsAloud() then
-        Speak()
-    end
-end
-
 local function ValidPin(pin)
     return (pin and (pin:match("^%d%d%d%d%d?%d?%d?%d?$") ~= nil))
 end
 
 -- The answers left wait left seconds, counted down a second at a time on their keycaps, while puzzle is the riddle on
--- screen and unsolved.
+-- screen and unsolved. Hidden, the count stops where it is (WaitLeft), for Open to take up again.
 local function Wait(puzzle, left)
+    Scholar:Cancel(WaitTimer)
+    WaitTimer = nil
+    WaitLeft = left
     ScholarView.Wait(left)
 
     if left > 0 then
-        Scholar:After(1, function()
+        WaitTimer = Scholar:After(1, function()
+            WaitTimer = nil
+
             if (Current == puzzle) and not Scholar:Get("solved") and ScholarView.IsShown() then
                 Wait(puzzle, left - 1)
             end
@@ -520,6 +510,36 @@ local function Choose(i)
         ScholarView.Wrong(i, Current.whys[i], label, help, Scholar:Get("style") == "gentle", reveal)
         -- The answers left wait, longer each miss, so the hint gets read before the next try.
         Wait(Current, (Pauses[Scholar:Get("missPause")] or {})[min(Wrongs, 3)] or 0)
+    end
+end
+
+-- Shows the riddle and takes the keyboard and controller. Only ever called out of combat. A riddle that comes back
+-- after a miss shows its hint's rung again, and its answers wait out the seconds they had left.
+local function Open()
+    local frame = ScholarView.Show(Current, Progress({
+        actions = { hint = ActionLabel("hint"), skip = ActionLabel("skip"), speak = ActionLabel("speak") },
+        book = (Current.book ~= nil), canSkip = ((Scholar:Get("style") == "gentle") and (Wrongs > 0)), canSpeak = CanHear(),
+        controller = UsingController(), gentle = (Scholar:Get("style") == "gentle"),
+        keys = { KeyLabel(1), KeyLabel(2), KeyLabel(3), KeyLabel(4) }, reveal = (select(3, Help())), wrong = Missed,
+    }))
+
+    frame:EnableKeyboard(true)
+    -- protected: Open only runs out of combat (see the combat rule)
+    frame:SetPropagateKeyboardInput(false)
+    SetMap(true)
+    C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN)
+
+    if Wrongs > 0 then
+        ScholarView.Hint(Help())
+
+        if WaitLeft > 0 then
+            Wait(Current, WaitLeft)
+        end
+    end
+
+    -- A heard riddle always speaks. Any other speaks as readAloud says.
+    if Current.speech or ReadsAloud() then
+        Speak()
     end
 end
 
@@ -761,7 +781,7 @@ Scholar = Addon:Module("Scholar", {
             Finish(true)
         end
 
-        Current, Wrongs = nil, 0
+        Current, Wrongs, WaitLeft, WaitTimer = nil, 0, 0, nil
         wipe(Missed)
         wipe(Windows)
         Close()

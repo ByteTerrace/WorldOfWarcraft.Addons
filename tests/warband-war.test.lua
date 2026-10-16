@@ -467,3 +467,12 @@ test("full rivalry records make room a hundred strangers at a time, keeping ledg
     truthy(people:Has("Old Doe"), "the grudge's record stays")
     falsy(people:Has("Foe1 Doe"))
 end)
+
+test("in the controller interface style, a radar row opens no Blizzard menu", function()
+    local h = Load()
+
+    h.interfaceStyle = h.env.Enum.InputDeviceInterfaceType.Gamepad
+    h:AddNamePlate(Enemy("Bob"))
+    h:Click(Window(h).Rows[1], "RightButton")
+    eq(h.contextMenu, nil, "the controller UI would show it tainted")
+end)

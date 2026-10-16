@@ -586,7 +586,7 @@ When an enemy player kills you, a card names them and the killing blow ("Slain b
 
 Your three most recent marks (and wars) reach Krew members who join the group later, come back, or reload. They're packed into as few messages as fit, however many members say hello at once.
 
-`/tlk ledger` lists everyone and every war, and `/tlk forgive <name>` removes someone. The right-click menu on a player offers the same choices, including war on their guild. A typed name can be in any case: `/tlk mark cara doe` finds Cara Doe in the ledger or among the enemies you've met, and a guild name finds a guild at war or one you've seen.
+`/tlk ledger` lists everyone and every war, and `/tlk forgive <name>` removes someone. With mouse and keyboard, the right-click menu on a player offers the same choices, including war on their guild. With the controller interface style on, the menu leaves them out, since an addon's entries in a menu can freeze the controller UI, so use the slash commands. A typed name can be in any case: `/tlk mark cara doe` finds Cara Doe in the ledger or among the enemies you've met, and a guild name finds a guild at war or one you've seen.
 
 The ledger holds up to 300 people, and never forgets anyone on its own. When it's full, a new mark, grudge, or champion (yours or the Krew's) is turned away with a message in chat, and nothing is sent, until you forgive someone to make room.
 
@@ -594,7 +594,7 @@ The ledger holds up to 300 people, and never forgets anyone on its own. When it'
 
 **Nameplate badges:** marked enemies wear a skull above their nameplate, grudges a cross, members of a guild at war a square, and champions a star. The ledger is shared, so the whole Krew sees the same badges. They're your own markers: the game doesn't let addons set real raid icons.
 
-**Nearby enemies:** a small window lists the enemy players you and your Krew have seen in the last 2 minutes, marked ones first, with class colors, level, how long ago, and who saw them. Right-click a name for the Krew's choices. Drag the window to move it. It shows itself when there's someone to list. New enemies you see are shared with the Krew in one batch, at most every 10 seconds.
+**Nearby enemies:** a small window lists the enemy players you and your Krew have seen in the last 2 minutes, marked ones first, with class colors, level, how long ago, and who saw them. Right-click a name for the Krew's choices (with mouse and keyboard only, as above). Drag the window to move it. It shows itself when there's someone to list. New enemies you see are shared with the Krew in one batch, at most every 10 seconds.
 
 - **Sightings:** when a ledger player's nameplate appears, or you target or mouse over them, a raid warning says so. The Krew hears where you saw them. A champion in a fight asks the Krew for aid.
   - Each person alerts at most once every 90 seconds.

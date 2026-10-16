@@ -227,8 +227,9 @@ local function OnNearby(info)
     end
 end
 
+-- A row's menu, with the mouse and keyboard only: the controller UI runs tainted as it shows a menu addon code opens.
 local function OpenMenu(row)
-    if row.m_entry then
+    if row.m_entry and not ByteTerrace.Input.IsControllerUI() then
         MenuUtil.CreateContextMenu(row, function(_, root)
             Warband.MenuEntries(root, row.m_entry)
         end)

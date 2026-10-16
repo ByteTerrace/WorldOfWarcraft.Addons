@@ -5,7 +5,8 @@ local addonName, ns = ...
 --
 --   Warband.MenuEntries(root, info)  adds the Krew's choices for a player to a menu description
 --                                    (the unit popup, and the nearby-enemies window's menu).
---   Warband.EnableMenus()            hooks the menus and tooltips on the first call. Menu and
+--   Warband.EnableMenus()            hooks the menus and tooltips on the first call (nothing joins a menu
+--                                    in the controller interface style: it taints the controller UI). Menu and
 --   Warband.DisableMenus()           tooltip hooks can't be removed, so these only gate them.
 --   Warband.PrintLedger()            lists the ledger and the wars (/tlk ledger).
 --   Warband.PrintRival(arg)          your record against a player (/tlk rival).
@@ -85,7 +86,9 @@ local function MenuSubject(contextData)
 end
 
 local function AddMenuEntries(_, root, contextData)
-    if not Active then
+    -- In the controller interface style, the controller UI runs tainted as it shows a menu holding an addon's entries
+    -- (ByteTerrace.Input.IsControllerUI), so the menu gets none. The slash commands do the same.
+    if not Active or ByteTerrace.Input.IsControllerUI() then
         return
     end
 

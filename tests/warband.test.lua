@@ -785,3 +785,18 @@ test("the tooltip adds nothing for a creature, a hidden unit, or while Warband i
     addon.State:Set("Warband.enabled", false)
     eq(TooltipExtra(h, bob), "", "Warband is off")
 end)
+
+test("in the controller interface style, Warband adds nothing to Blizzard's unit menus, and its slash commands still work", function()
+    local h, addon = Load()
+
+    h.interfaceStyle = h.env.Enum.InputDeviceInterfaceType.Gamepad
+    h:SetTarget(Enemy())
+
+    eq(h:OpenTargetMenu():Find("Mark for death"), nil,
+        "an addon's entries in a menu taint the controller UI as it shows the menu (taint.log), so there are none")
+
+    h:Slash("/tlk mark Bob Doe")
+    eq(Ledger(addon):Field(Key(h, "Bob"), "kind"), "mark", "marking still works from chat")
+    h.interfaceStyle = h.env.Enum.InputDeviceInterfaceType.Mkb
+    truthy(h:OpenTargetMenu():Find("Forgive"), "with mouse and keyboard, the menu has them again (Bob is marked now)")
+end)

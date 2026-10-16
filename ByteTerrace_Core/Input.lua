@@ -3,8 +3,10 @@
 --
 -- Sources are named by position ("gamepad.south"), never by printed letter, because the letter depends on the
 -- controller family. Input.Label(source) gives the printed name for the connected controller: A on Xbox, Cross on
--- PlayStation, B on Switch. Input.Glyph(source, size) gives the button's own art, as the controller UI draws it, inline
--- in text, and Input.Prompt(source, size) gives the glyph, or the name when the client has no art for the button.
+-- PlayStation, B on Switch. Input.IsControllerUI() says whether the controller interface style is on, when an addon
+-- must add nothing to Blizzard's menus. Input.Glyph(source, size) gives the button's own art, as the controller UI
+-- draws it, inline in text, and Input.Prompt(source, size) gives the glyph, or the name when the client has no art for
+-- the button.
 --
 --   Bind(map, source, command)  before compile. A map binds one module's commands (or the
 --                               addon's own). Compile refuses one that mixes modules.
@@ -275,6 +277,16 @@ function Input.Glyph(source, size)
     local atlas = (textures and textures[1])
 
     return ((atlas and CreateAtlasMarkup(atlas, (size or 20), (size or 20))) or nil)
+end
+
+--- Returns whether the controller interface style is on. Then Blizzard's controller UI wraps every menu and panel it
+--- shows in its own binding groups, and an addon's entry in a menu (Menu.ModifyMenu, or a menu addon code opens) makes
+--- that run tainted: the binding group's protected calls are blocked, and the half-built set stays in its binding
+--- stack, blocking SetPreferredGamepadInteractTarget on every target change until the game freezes (taint.log, client
+--- 1.60.1).
+---@return boolean
+function Input.IsControllerUI()
+    return (C_InputInterfaceStyle.GetCurrentStyle() == Enum.InputDeviceInterfaceType.Gamepad)
 end
 
 --- Returns a source's printed name for a label style (default: the connected controller's).

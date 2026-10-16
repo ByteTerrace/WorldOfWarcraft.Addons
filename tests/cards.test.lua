@@ -136,6 +136,31 @@ test("a focused card holds after the mouse leaves it", function()
     truthy(Card(h), "a focused card doesn't time out when the mouse leaves it")
 end)
 
+test("a riddle over a focused card takes the controller, and leaves the card its map when it closes", function()
+    local h = Harness.New({ saved = { TheLanKrewToolKitCharDB = { ["Scholar.enabled"] = true, ["Scholar.missPause"] = "off" } } })
+
+    h.labelStyle = "Letters"
+    local ns = h:LoadAddon("TheLanKrewToolKit")
+    local addon = ns.Addon
+    local answers = { yes = 0 }
+
+    Ask(ns, answers)
+    h:Gamepad("PADBACK", true)
+    eq(table.concat(addon.Input:ActiveMaps(), ","), "card")
+    h:Slash("/tlk puzzle")
+    eq(table.concat(addon.Input:ActiveMaps(), ","), "card,scholar", "the riddle's map joins the card's, and wins")
+    h:Gamepad("PAD1", true)
+    eq(answers.yes, 0, "A answers the riddle, not the card")
+
+    for key = 1, 4 do
+        h:Key(tostring(key), true)
+    end
+
+    h:Advance(2)
+    falsy(rawget(h.env, "TheLanKrewToolKitScholar"):IsShown(), "the riddle's solved")
+    eq(table.concat(addon.Input:ActiveMaps(), ","), "card", "the card keeps its map")
+end)
+
 test("focusing a card keeps a riddle's controller map, and letting go of the card leaves it", function()
     local h, ns = LoadWithController()
     local addon = ns.Addon

@@ -151,15 +151,6 @@ local function CanHear()
     return (next(C_VoiceChat.GetTtsVoices() or {}) ~= nil)
 end
 
--- Hides the riddle and gives input back. The riddle stays current until it's solved.
-local function Close()
-    if ScholarView.IsShown() then
-        ScholarView.Frame():EnableKeyboard(false)
-        ScholarView.Hide()
-        Addon.Input:SetActiveMaps({})
-    end
-end
-
 -- The child's own game, for personal word problems ("Tessa has 3 potions...").
 local function Context()
     local name
@@ -284,31 +275,6 @@ local function Rank(stars)
     return name
 end
 
--- Ends the riddle, solved (after its celebration) or skipped. Either way, the timer starts over.
-local function Finish(solved)
-    local before = Scholar:Get("stars")
-    local earned = ((Current and Earned()) or 1)
-
-    if Current and Current.questKey then
-        QuestBook.Asked(Current.questKey, Current.kind)
-    end
-
-    Current, Wrongs = nil, 0
-    wipe(Missed)
-    Close()
-    Scholar:Set("solved", false)
-    Scholar:Set("elapsed", 0)
-    SegmentStart = GetTime()
-    Scholar:Set("pending", false)
-
-    -- A stretch's two stars can land past a rank's first star, so the rank before them is what counts.
-    if solved and (Rank(before - earned) ~= Rank(before)) then
-        ns.Cards.Show({ body = (before .. " stars of wisdom. The Owl Sage is proud of you!"),
-            icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.LFG_REWARDS,
-            title = ("New rank: " .. Rank(before) .. "!") })
-    end
-end
-
 -- What the screen shows about progress: stars, rank, the next rank and how far along, and the streak.
 local function Progress(extra)
     local stars = Scholar:Get("stars")
@@ -343,6 +309,58 @@ end
 local function Say(text)
     C_VoiceChat.SpeakText(C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard), text, C_TTSSettings.GetSpeechRate(),
         C_TTSSettings.GetSpeechVolume(), false)
+end
+
+-- Activates or deactivates the riddle's controller map, keeping any other feature's (a focused question card's). The
+-- riddle's map comes last, so its buttons win the ones both bind.
+local function SetMap(active)
+    local maps = {}
+
+    for _, name in ipairs(Addon.Input:ActiveMaps()) do
+        if name ~= "scholar" then
+            maps[#maps + 1] = name
+        end
+    end
+
+    if active then
+        maps[#maps + 1] = "scholar"
+    end
+
+    Addon.Input:SetActiveMaps(maps)
+end
+
+-- Hides the riddle and gives input back. The riddle stays current until it's solved.
+local function Close()
+    if ScholarView.IsShown() then
+        ScholarView.Frame():EnableKeyboard(false)
+        ScholarView.Hide()
+        SetMap(false)
+    end
+end
+
+-- Ends the riddle, solved (after its celebration) or skipped. Either way, the timer starts over.
+local function Finish(solved)
+    local before = Scholar:Get("stars")
+    local earned = ((Current and Earned()) or 1)
+
+    if Current and Current.questKey then
+        QuestBook.Asked(Current.questKey, Current.kind)
+    end
+
+    Current, Wrongs = nil, 0
+    wipe(Missed)
+    Close()
+    Scholar:Set("solved", false)
+    Scholar:Set("elapsed", 0)
+    SegmentStart = GetTime()
+    Scholar:Set("pending", false)
+
+    -- A stretch's two stars can land past a rank's first star, so the rank before them is what counts.
+    if solved and (Rank(before - earned) ~= Rank(before)) then
+        ns.Cards.Show({ body = (before .. " stars of wisdom. The Owl Sage is proud of you!"),
+            icon = "Interface\\Icons\\INV_Misc_Book_09", sound = SOUNDKIT.LFG_REWARDS,
+            title = ("New rank: " .. Rank(before) .. "!") })
+    end
 end
 
 -- A Blizzard window opened (open) or closed. The window row is whether any window a riddle waits for is open.
@@ -408,7 +426,7 @@ local function Open()
     frame:EnableKeyboard(true)
     -- protected: Open only runs out of combat (see the combat rule)
     frame:SetPropagateKeyboardInput(false)
-    Addon.Input:SetActiveMaps({ "scholar" })
+    SetMap(true)
     C_Sound.PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN)
 
     -- A heard riddle always speaks. Any other speaks as readAloud says.

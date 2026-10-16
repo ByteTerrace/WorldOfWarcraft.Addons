@@ -102,3 +102,13 @@ test("on entering the world, DevTools says when the dump is from another build a
     falsy(Printed(current):find("globals dump is from", 1, true), "a dump from this build isn't stale")
     truthy(Printed(current):find("Type /btdev probe in each situation", 1, true), Printed(current))
 end)
+
+test("on entering the world, a saved probe record DevTools can't read is dropped, and good ones stay", function()
+    local h = Load({ ByteTerraceDevToolsDB = { autoProbe = false, probes = {
+        ["chat.lockdownIdle"] = { build = "1.60.1 (70009)", context = { combat = false, restrictions = "none" }, result = {} },
+        ["chatTypeInfo.raidWarning"] = { build = "1.60.1 (70009)", contexts = { ["idle/none"] = true }, result = { g = 72 } },
+    } } })
+
+    eq(Records(h)["chat.lockdownIdle"], nil, "a record without its set of contexts is dropped")
+    truthy(Records(h)["chatTypeInfo.raidWarning"], "a readable one stays")
+end)

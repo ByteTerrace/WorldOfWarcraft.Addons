@@ -47,8 +47,9 @@ local addonName, ns = ...
 --   * Nameplates coming and going, for namePlates.events (Probes.NoteNamePlate).
 --   * Quests turned in, for questLog.titleAfterTurnIn (Probes.NoteTurnIn).
 --
--- On entering the world, it says, in a line each, when the dump is from another build than the client's, and how many
--- probes have no result for this build yet.
+-- On entering the world, it drops any saved probe record it can't read (one without its set of contexts), then says, in
+-- a line each, when the dump is from another build than the client's, and how many probes have no result for this build
+-- yet.
 --
 -- Only the client's own names are dumped. A global or table member any addon set is tainted by that addon
 -- (issecurevariable), so it's counted under `skipped` instead, per addon: other addons' keys in Blizzard tables
@@ -453,6 +454,12 @@ local function Greet()
     local db = Database()
     local build = Probes.Build()
     local _, number = GetBuildInfo()
+
+    for name, record in pairs(((type(db.probes) == "table") and db.probes) or {}) do
+        if (type(record) ~= "table") or (type(record.contexts) ~= "table") then
+            db.probes[name] = nil
+        end
+    end
 
     if (type(db.build) == "table") and (db.build.build ~= number) then
         Say(("the globals dump is from %s (%s), the client is %s: open the achievement window, /btdev dump, /reload, then tlk api-sync --globals."):format(

@@ -401,7 +401,7 @@ DevTools keeps only the set of shapes each has shown, so a shape seen before cos
    - The same result in a new context adds that context. In a known context, nothing changes.
    - A different result, or a newer build, replaces the record, and the earlier contexts go with it. The import prints `Replaced <probe>`.
    - An accumulating probe's answer merges into the record already there from the same build, and so do its contexts, so a session that saw less never shrinks it.
-   - A record in the one-context format, which holds a single context rather than a set, is skipped until its probe runs again. The import names those records in one line.
+   - DevTools drops a saved record it can't read (one without its set of contexts) when you enter the world, and the import refuses one.
 3. Run `node tools/tlk.mjs probes`. It prints each probe with its needs, the client's and the harness's answers, and whether they match, then what's left to do in game.
 
 `probes --check` fails when an answer comes from another build than the API snapshot, from a probe that no longer exists, or from another version of its probe. `probes --check --warn-builds`, as CI runs it, only warns about another build.

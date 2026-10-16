@@ -407,6 +407,48 @@ test("a quest book too long for the screen scrolls, by wheel, arrow keys and D-p
     eq(Offset(), 0, "opened again, it starts at the top")
 end)
 
+test("on a tall screen the quest book is a page of at most BookHeight, scrolling the rest, not the screen's height", function()
+    local h, _, ns = LoadKid()
+
+    -- a small UI scale: far more room than the book needs
+    h.env.UIParent:SetSize(2560, 1440)
+
+    Accept(h, { goal = "Read it all.", header = "Tirisfal Glades", id = 36, objectives = {},
+        text = ("The Scourge gathers in the north, and the Magistrate needs every agent he can find. "):rep(30), title = "Every Word" })
+
+    h:Slash("/tlk puzzle")
+    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
+    local closed = overlay.Panel:GetHeight()
+
+    h:Key("H", true)
+    eq(overlay.Book:GetHeight(), 240, "a page's worth in view")
+    truthy(overlay.BookCase:IsShown() and overlay.Book:IsShown(), "the book opens on its page")
+    truthy(overlay.Book:GetVerticalScrollRange() > 0, "and the rest scrolls")
+
+    truthy(overlay.Panel:GetHeight() < (closed + 300), ("the panel grows by about a page, not the screen: %d, then %d")
+        :format(closed, overlay.Panel:GetHeight()))
+end)
+
+test("feedback too long for its row grows the footer down to fit, and the panel with it", function()
+    local h, _, ns = LoadKid()
+    local shown = Watch(ns)
+
+    Accept(h, Wolves)
+    h:Slash("/tlk puzzle")
+    local overlay = rawget(h.env, "TheLanKrewToolKitScholar")
+    local before = overlay.Panel:GetHeight()
+
+    ns.ScholarView.Wrong(Kit.WrongAnswer(shown[1]), ('"details" is in the quest, but in another sentence. '):rep(3),
+        "Hint", "Open the quest book and find that sentence.", false)
+
+    local banner = overlay.Feedback
+    local text = banner.Text:GetStringHeight()
+
+    truthy(text > 44, "the message takes more than one row: " .. text)
+    eq(banner:GetHeight(), text + 20, "the banner fits it")
+    eq(overlay.Panel:GetHeight(), (before + (text + 20)) - 44, "and the panel grows by what the footer did")
+end)
+
 test("with only quest riddles on, a riddle that comes due waits for a quest", function()
     local h = LoadKid({ ["Scholar.math"] = false, ["Scholar.reading"] = false })
 

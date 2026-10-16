@@ -260,11 +260,11 @@ function Harness:Land()
     self:Fire("PLAYER_CONTROL_GAINED")
 end
 
--- The player reaches level: h.player.level, then PLAYER_LEVEL_UP with the documented payload (level, then eight deltas;
--- [G] the deltas are 0).
+-- The player reaches level: h.player.level, then PLAYER_LEVEL_UP with the documented payload ([D] UnitDocumentation:
+-- level, then nine deltas, the last spiritDelta; [G] the deltas are 0).
 function Harness:LevelUp(level)
     self.player.level = level
-    self:Fire("PLAYER_LEVEL_UP", level, 0, 0, 0, 0, 0, 0, 0, 0)
+    self:Fire("PLAYER_LEVEL_UP", level, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 end
 
 -- Moves the player's combo points, with their count, to another unit and fires COMBO_TARGET_CHANGED (no power event).

@@ -22,17 +22,17 @@
 --                                 its Enum.PlayerInteractionType name ("Merchant", "MailInfo", ...):
 --                                 PLAYER_INTERACTION_MANAGER_FRAME_SHOW / _HIDE(type)
 --
--- Modeling decisions ([D] documented or seen in Blizzard's Forever UI source, [P] probed in game, [G] a guess where
--- neither says):
+-- Modeling decisions ([D] documented or seen in Blizzard's Forever UI source, [E] observed in the client, [G] a guess
+-- where neither says):
 --   Dialogs     [D] Forever loads the Mainline QuestFrame (Blizzard_UIPanels_Game's TOC, [Family]):
 --               QUEST_DETAIL shows QuestFrameDetailPanel, which reads GetTitleText, GetQuestText
 --               and GetObjectiveText; QUEST_COMPLETE shows QuestFrameRewardPanel (GetRewardText);
 --               QUEST_FINISHED hides the frame; the frame's title is UnitName("questnpc"). An area
---               trigger's auto-accepted quest closes the dialog without showing it. [P] Those texts
+--               trigger's auto-accepted quest closes the dialog without showing it. [E] Those texts
 --               and GetQuestID's number are plain out of combat (quest.offer, quest.turnIn,
 --               quest.*Identity), and so are the questnpc and npc names. [G] Outside a dialog,
 --               GetQuestID answers 0 and the texts "". [G] The accept and turn-in event orders.
---   Log         [P] GetNumQuestLogEntries answers the shown entries (zone headers included) and the
+--   Log         [E] GetNumQuestLogEntries answers the shown entries (zone headers included) and the
 --               quests; GetInfo answers the questLog.entry fields; GetQuestObjectives answers
 --               { text, type, finished, numFulfilled, numRequired }. The docs' Nilable
 --               objectiveType comes with some objectives and not others (questLog.objectives saw

@@ -482,7 +482,7 @@ function Harness:Unit(token)
     end
 end
 
--- Restrictions that take hold with no Active event after Activating. [P] combat.edges: entering combat, the client sent
+-- Restrictions that take hold with no Active event after Activating. [E] combat.edges: entering combat, the client sent
 -- Combat Activating and nothing more until Inactive, though the restriction is in force during the fight. [G] The
 -- others send Active (no probe has seen one enter yet).
 Harness.SILENT_ACTIVE = { Combat = true }
@@ -623,7 +623,7 @@ function Harness:CountCalls(method)
     return total
 end
 
--- Combat, in the order [P] combat.edges saw: PLAYER_REGEN_DISABLED (UnitAffectingCombat already true; no lockdown or
+-- Combat, in the order [E] combat.edges saw: PLAYER_REGEN_DISABLED (UnitAffectingCombat already true; no lockdown or
 -- restriction yet), then the Combat restriction, then lockdown and a new damage meter session (meter.lua).
 function Harness:EnterCombat()
     self.inCombat = true
@@ -676,7 +676,7 @@ function Harness:Fire(event, ...)
 end
 
 -- Leaving combat ends lockdown and the damage meter session, then lifts the Combat restriction before
--- PLAYER_REGEN_ENABLED ([P] combat.edges: Combat Inactive comes first).
+-- PLAYER_REGEN_ENABLED ([E] combat.edges: Combat Inactive comes first).
 function Harness:LeaveCombat()
     self.lockdown = false
     self.inCombat = false

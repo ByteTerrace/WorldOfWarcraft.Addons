@@ -509,17 +509,17 @@ end)
 
 test("a test fires only payloads the event documents: every value, no extras, secrets only where flagged, primitives of their type", function()
     local h = Harness.New()
-    local level = { 12, 0, 0, 0, 0, 0, 0, 0, 0 }
+    local level = { 12, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
     throws(function() h:Fire("PLAYER_DEAD", 1) end, "PLAYER_DEAD documents 0 payload values, got 1")
     throws(function() h:Fire("PLAYER_LEVEL_UP", 12) end, "PLAYER_LEVEL_UP payload #2 %(number%) isn't nilable")
-    throws(function() h:Fire("PLAYER_LEVEL_UP", 12, nil, 0, 0, 0, 0, 0, 0, 0) end, "payload #2 %(number%) isn't nilable")
+    throws(function() h:Fire("PLAYER_LEVEL_UP", 12, nil, 0, 0, 0, 0, 0, 0, 0, 0) end, "payload #2 %(number%) isn't nilable")
     level[1] = "12"
     throws(function() h:Fire("PLAYER_LEVEL_UP", unpack(level)) end, "PLAYER_LEVEL_UP payload #1 is a number %(number%), got a string")
     level[1] = Secret(12)
     throws(function() h:Fire("PLAYER_LEVEL_UP", unpack(level)) end, "PLAYER_LEVEL_UP has no secret flags, so payload #1 can't be secret")
     throws(function() h:Fire("CHAT_MSG_ADDON", "TLK", "hi", "PARTY", 42, "", 0, 0, "", 0) end, "payload #4 is a cstring %(string%), got a number")
-    h:Fire("PLAYER_LEVEL_UP", 12, 0, 0, 0, 0, 0, 0, 0, 0)
+    h:Fire("PLAYER_LEVEL_UP", 12, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     -- RUNE_POWER_UPDATE is flagged SecretPayloads, so its payload may be secret.
     h:Fire("RUNE_POWER_UPDATE", Secret(1), true)
     -- FireChat fills in every value, discordInfo included.

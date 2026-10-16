@@ -22,7 +22,7 @@
 --       for Overall, then (type, sessionID) for the current session (DamageMeterSessionWindow.lua:
 --       "Two events are always dispatched"). [G] A DamageDone change also fires for Dps and a
 --       HealingDone change for Hps (Blizzard's window filters by its own type); a death fires for
---       Deaths. Ending a session fires nothing. [P] damageMeter.afterDeath: your own death reaches
+--       Deaths. Ending a session fires nothing. [E] damageMeter.afterDeath: your own death reaches
 --       the meter after PLAYER_DEAD (its DamageTaken and Deaths updates came in the seconds after),
 --       so h:MeterFight adds the local player's dying source then; [G] at once, before combat ends.
 --   [G] No session of the asked kind returns an empty session: no sources,

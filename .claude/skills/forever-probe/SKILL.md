@@ -15,7 +15,7 @@ Look before asking:
 
 1. **`tools/api/probes.json`**: `grep -n '"<probe.name>"' tools/api/probes.json`, or run `node tools/tlk.mjs probes` for every probe with its needs, the client's answer and the harness's. A record from the snapshot's build that covers the context you care about (`idle/none`, `combat/Combat`) settles it.
 2. **`tools/api/forever.json`**: the documented flags (`SecretReturns`, `SecretWhen*`, `HasRestrictions`, `Nilable`). If the docs settle the behavior, the harness models it as `[D]` and no probe is needed.
-3. **The harness's own markers** in `tests/harness/*.lua`: `[D]` documented, `[E]` observed in the client (some files write `[P]` for the same thing), `[G]` a guess, `[C]` a conservative fallback (secrets.lua). A `[G]` or `[C]` that a feature depends on is the usual reason to probe.
+3. **The harness's own markers** in `tests/harness/*.lua`: `[D]` documented, `[E]` observed in the client, `[G]` a guess, `[C]` a conservative fallback (secrets.lua). A `[G]` or `[C]` that a feature depends on is the usual reason to probe.
 
 Probe when the docs are silent, ambiguous, or retail-only, and something depends on the answer. Name what depends on it, because that's what the user is spending play time on.
 

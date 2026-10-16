@@ -300,7 +300,7 @@ end
 
 -- A chat event (CHAT_MSG_SAY, CHAT_MSG_CHANNEL, ...) with the documented 18-field payload around text and sender
 -- ("First Last", or "" for a system message): the other fields are empty ("" / 0 / false), guid is "" (documented
--- non-nil) and the lineID counts up from 1. [P] discordInfo (names.chatDiscordInfo): for a message that isn't from
+-- non-nil) and the lineID counts up from 1. [E] discordInfo (names.chatDiscordInfo): for a message that isn't from
 -- Discord, a table of empty strings, false flags and two numbers, without lastOnlineGUID; [G] the numbers are 0.
 function Harness:FireChat(event, text, sender)
     self.chatLineID = (self.chatLineID + 1)

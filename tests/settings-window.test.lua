@@ -167,6 +167,31 @@ test("a page taller than the panel scrolls inside it, clipped, rather than runni
     eq(window.Scroll:GetVerticalScroll(), 0, "and doesn't scroll")
 end)
 
+test("every scroll position shows whole rows, in the panel and in the window", function()
+    local h, addon = NewLongAddOn(40)
+    local window = addon.SettingsWindow
+    -- A header and a row are each one row tall, so a page is whole rows.
+    local row = 28
+
+    local function Whole(where)
+        local view = h:WidgetHeight(window.Scroll)
+
+        eq(view % row, 0, where .. ": the scroll frame is whole rows tall")
+        eq(h:WidgetHeight(window.Content) % row, 0, where .. ": the page is whole rows tall")
+
+        for _ = 1, 100 do
+            h:MouseWheel(window.Scroll, -1)
+            eq(window.Scroll:GetVerticalScroll() % row, 0, where .. ": each notch stops on a row")
+        end
+    end
+
+    h:SelectSettingsCategory(h.categories[2])
+    Whole("panel")
+    h.env.SettingsPanel:Hide()
+    window:Show(2)
+    Whole("window")
+end)
+
 test("the window never grows past the screen: a long page scrolls in it", function()
     local h, addon = NewLongAddOn(40)
     local window = addon.SettingsWindow
@@ -226,8 +251,9 @@ test("each toolkit setting's label and every dropdown choice fit, in the window 
                     for _, value in ipairs(entry.spec.values or {}) do
                         control.Label:SetText(ValueLabel(entry.spec, value))
 
-                        truthy(control.Label:GetUnboundedStringWidth() <= h:WidgetWidth(control.Label),
-                            name .. " shows " .. ValueLabel(entry.spec, value) .. " whole")
+                        -- The text keeps 6 px clear of the label's end, so it never runs into the chevron.
+                        truthy((control.Label:GetUnboundedStringWidth() + 6) <= h:WidgetWidth(control.Label),
+                            name .. " shows " .. ValueLabel(entry.spec, value) .. " whole, clear of the chevron")
                     end
 
                     if entry.spec.values then

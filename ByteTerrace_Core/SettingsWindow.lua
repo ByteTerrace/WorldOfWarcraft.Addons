@@ -48,9 +48,8 @@ local Border = "Interface\\Tooltips\\UI-Tooltip-Border"
 local CanvasInset = 16
 -- The controls' column is at least this wide.
 local ControlWidth = 170
--- A dropdown's room beside its label: 8 to the left, and 22 to the right for the chevron.
-local DropdownInset = 30
-local HeaderHeight = 30
+-- A dropdown's room beside its text: 8 to the left, 24 to the right for the chevron, and 6 to spare.
+local DropdownInset = 38
 -- The room between a setting's label and its control.
 local LabelGap = 12
 local NavButtonHeight = 26
@@ -58,7 +57,8 @@ local NavWidth = 160
 -- The height of one option in an open dropdown list.
 local OptionHeight = 22
 local Pad = 16
--- One row: a notch of the mouse wheel scrolls this far.
+-- One row, a setting or a section's header: a page and its scroll frame are whole rows tall, and a notch of the mouse
+-- wheel scrolls one, so every scroll position shows whole rows.
 local RowHeight = 28
 -- The room the window leaves above and below it on the screen.
 local ScreenMargin = 24
@@ -282,13 +282,15 @@ local function ShowPage(window, index)
         local room = (((UIParent:GetHeight() - (2 * ScreenMargin)) - TitleHeight) - Pad)
         local navHeight = (#window.Pages * NavButtonHeight)
 
-        window.Frame:SetHeight((TitleHeight + min(max(height, navHeight), room)) + Pad)
+        window.Frame:SetHeight((TitleHeight + min(max(height, navHeight), floor(room / RowHeight) * RowHeight)) + Pad)
     end
 
     local scroll = window.Scroll
 
-    -- secret: the scroll frame is the view's own, sized by its anchors to the host
-    window.m_viewHeight = scroll:GetHeight()
+    -- The scroll frame takes as many whole rows as the view has room for.
+    -- secret: the view is the addon's own, sized by its anchors to the host
+    window.m_viewHeight = (floor(window.View:GetHeight() / RowHeight) * RowHeight)
+    scroll:SetHeight(window.m_viewHeight)
     -- secret: plain, as above
     window.Content:SetWidth(scroll:GetWidth())
     window.Content:SetHeight(height)
@@ -493,7 +495,7 @@ local function BuildRow(window, row, entry)
         control:SetPoint("RIGHT")
         control.Label:ClearAllPoints()
         control.Label:SetPoint("LEFT", 8, 0)
-        control.Label:SetPoint("RIGHT", -22, 0)
+        control.Label:SetPoint("RIGHT", -24, 0)
         control.Label:SetJustifyH("LEFT")
         control.Label:SetWordWrap(false)
         AddChevron(control)
@@ -551,9 +553,9 @@ local function BuildPage(window, content, page, index)
         if entry.header then
             local header = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 
-            header:SetPoint("TOPLEFT", 0, -(y + 10))
+            header:SetPoint("LEFT", container, "TOPLEFT", 0, -(y + (RowHeight / 2)))
             header:SetText(entry.header)
-            y = (y + HeaderHeight)
+            y = (y + RowHeight)
         else
             local row = CreateFrame("Frame", nil, container)
 
@@ -600,7 +602,7 @@ local function BuildView(window)
     local scroll = CreateFrame("ScrollFrame", nil, view)
 
     window.Scroll = scroll
-    scroll:SetPoint("BOTTOMRIGHT", -(ScrollGap + ScrollBarWidth), 0)
+    scroll:SetPoint("TOPRIGHT", -(ScrollGap + ScrollBarWidth), 0)
     scroll:EnableMouseWheel(true)
     scroll:SetScript("OnMouseWheel", function(_, delta) ScrollBy(window, -delta) end)
     local content = CreateFrame("Frame", nil, scroll)

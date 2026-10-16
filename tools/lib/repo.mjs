@@ -28,6 +28,10 @@ const topFolders = (root) => readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules")
     .map((entry) => entry.name);
 
+// Whether an addon is development only: its TOC has ## X-DevOnly, empty or with any value but a
+// false one, so a bare "## X-DevOnly:" line still keeps it out.
+export const isDevOnly = (addon) => addon.metadata["X-DevOnly"] !== undefined && !/^(false|0|no)$/i.test(addon.metadata["X-DevOnly"].trim());
+
 // An addon is a top-level folder holding <Name>_Forever.toc or <Name>_Camelot.toc.
 export function findAddons(root = repoRoot) {
     return topFolders(root).filter((name) => tocFilesOf(name, root).length > 0).map((name) => readToc(name, root));

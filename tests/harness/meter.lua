@@ -6,7 +6,7 @@
 -- Sessions:
 --   [G] Every combat is a session: h:EnterCombat starts one (the next sessionID, counting from 1)
 --       after PLAYER_REGEN_DISABLED and fires DAMAGE_METER_CURRENT_SESSION_UPDATED; h:LeaveCombat
---       ends it before PLAYER_REGEN_ENABLED, freezing its duration. A relog clears every session
+--       ends it before PLAYER_REGEN_ENABLED, freezing its duration (damageMeter.currentSession asks the client). A relog clears every session
 --       and recap; a /reload keeps them (they're the client's, not the UI's).
 --   [G] Current is the latest session, in progress or ended, until the next combat starts one.
 --       [E] Expired is empty after ordinary fights (damageMeter.typesIdle: no sources and no

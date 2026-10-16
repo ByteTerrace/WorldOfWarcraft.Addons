@@ -50,7 +50,7 @@
 --               objective whose item or creature the client hadn't loaded yet comes without its
 --               name: "0/5 " for "0/5 Duskbat Pelt", "0/10  slain" for "0/10 Scarlet Warrior
 --               slain" (seen in a player's saved quest book); an uncached objective reads so until
---               h:LoadQuestNames. [G] A turned-in quest's title stays known to GetTitleForQuestID.
+--               h:LoadQuestNames. [G] A turned-in quest's title stays known to GetTitleForQuestID (questLog.titleAfterTurnIn asks the client).
 --   Windows     [D] Blizzard's Forever UI shows the gossip frame on GOSSIP_SHOW(textureKit) and
 --               hides it on GOSSIP_CLOSED(interactionIsContinuing) (CustomGossipFrameBase.lua).
 --               The merchant, mailbox, bank, auction house, trainer and other windows register

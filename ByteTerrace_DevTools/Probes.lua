@@ -6,7 +6,8 @@ local addonName, ns = ...
 --
 -- This file is the probe engine: the shape helpers probes record with, running and recording a probe, and comparing
 -- records. ProbeNeeds.lua defines the situations probes need (Probes.AddNeeds); ProbesWorld.lua, ProbesUnits.lua,
--- ProbesCombat.lua and ProbesNames.lua define the probes (Probes.Define), in the order they run and print.
+-- ProbesCombat.lua, ProbesNames.lua, ProbesInput.lua and ProbesOrder.lua define the probes (Probes.Define), in the
+-- order they run and print.
 --
 -- A probe is { name, needs = { need key, ... }, run, harness }:
 --   * needs names needs: the situation the probe must run in. Each need has a short label for
@@ -21,7 +22,8 @@ local addonName, ns = ...
 --     run compares with any other's. The exceptions are the accumulating probes below, which list
 --     what sessions happened to show (unitCombat.seen, kills.seen, names.chatSenders, names.chatDiscordInfo,
 --     combat.edges, comms.addonMessageInLockdown, units.secretTokenInAuraEvent, questLog.objectives,
---     questLog.countForm, damageMeter.pvpSecrecy, encounterWarning.seen): that's their point.
+--     questLog.countForm, damageMeter.pvpSecrecy, encounterWarning.seen, input.events, death.combatState,
+--     damageMeter.currentSession, namePlates.events): that's their point.
 --   * harness (optional) is the reason the harness can't run this probe at all.
 --   * accumulates (optional) marks a probe whose result lists what sessions happened to show. Its
 --     new result merges into the current record instead of replacing it (Probes.Merge), so each
@@ -746,8 +748,8 @@ function Probes.SyncRestrictions()
     Restricted.text = RestrictedText()
 end
 
---- The listeners' helpers, for the probe files' own listeners (ProbesCombat.lua's).
-Probes.Note, Probes.Token, Probes.EnumName = Note, Token, EnumName
+--- The listeners' helpers, for the probe files' own listeners (ProbesCombat.lua's and ProbesOrder.lua's).
+Probes.EnumName, Probes.Flag, Probes.Note, Probes.Token = EnumName, Flag, Note, Token
 
 -- The probe's needs' field (text or label) joined with " + ", or none for a probe that runs anywhere.
 local function NeedsJoined(probe, field, none)

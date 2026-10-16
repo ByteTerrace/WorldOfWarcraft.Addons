@@ -11,6 +11,8 @@ local addonName, ns = ...
 --   Ding       your level-ups appear as a card for the rest of the Krew.
 --   Flawless   so do your flawless victories (Victory.flawlessWins, Kombat.lua).
 --   Scholar    and the riddles a young scholar solves (Scholar.stars).
+--   Wishes     a child's wish goes to the grown-up they named (WISH), and the answer comes back (WISHED), in
+--              ScholarWishes.lua.
 --
 -- ns.Krew is the Krew module's Comms (ByteTerrace_Core's Comms.lua). Every feature that talks to the Krew (Warband for
 -- its marks, sightings, and rallies, and Streaks for its sprees) sends and listens through it, so they all play by

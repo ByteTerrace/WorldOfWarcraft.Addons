@@ -1,5 +1,6 @@
 -- Units of the fake client beyond the player and target: enemy players, nameplates, mouseover, the player's death,
--- combo points, raid target icons, realms, and aura sounds (see wow.lua for the rest).
+-- combo points, raid target icons, realms, aura sounds, and switching to another character on the account (see wow.lua
+-- for the rest).
 --
 -- A unit table (h.player, h:SetTarget, h:SetUnit, h:AddNamePlate, h:SetMouseover) holds:
 --   name, surname (players default to Harness.DEFAULT_SURNAME; UnitName returns name, surname,
@@ -343,6 +344,28 @@ function Harness:SetMouseover(unit)
     if unit then
         self:Fire("UPDATE_MOUSEOVER_UNIT")
     end
+end
+
+-- Logs out and in as another character on the same account (a relog, serverSecondsLater default 60): the account's
+-- SavedVariables stay, and each loaded addon's per-character ones become the other character's, empty the first time it
+-- plays. Switching back brings the first character's back.
+function Harness:SwitchCharacter(name, surname, serverSecondsLater)
+    self:Relog(serverSecondsLater, function()
+        self.characters = (self.characters or {})
+        local leaving = {}
+        local arriving = Harness.DisplayName({ name = name, surname = (surname or Harness.DEFAULT_SURNAME) })
+        local kept = (self.characters[arriving] or {})
+
+        for _, addon in ipairs(self.loadOrder) do
+            for _, variable in ipairs(__addons[addon].savedVariablesPerCharacter or {}) do
+                leaving[variable] = self.saved[variable]
+                self.saved[variable] = kept[variable]
+            end
+        end
+
+        self.characters[Harness.DisplayName(self.player)] = leaving
+        self.player.name, self.player.surname = name, (surname or Harness.DEFAULT_SURNAME)
+    end)
 end
 
 -- The player takes a flight path: PLAYER_CONTROL_LOST, then UnitOnTaxi("player") is true.

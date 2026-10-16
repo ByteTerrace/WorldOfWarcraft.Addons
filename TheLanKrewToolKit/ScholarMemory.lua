@@ -161,6 +161,10 @@ local function Report(module)
         lines[#lines + 1] = (Skills.Riddles(back) .. " came back after a reload or relog.")
     end
 
+    for _, line in ipairs(ns.ScholarWishes.ReportLines()) do
+        lines[#lines + 1] = line
+    end
+
     return lines
 end
 

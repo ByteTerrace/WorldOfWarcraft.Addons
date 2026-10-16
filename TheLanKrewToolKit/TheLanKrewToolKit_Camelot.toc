@@ -49,5 +49,6 @@ ScholarKeep.lua
 ScholarLater.lua
 ScholarLock.lua
 Scholar.lua
+ScholarWishes.lua
 QuestProgress.lua
 QuestReader.lua

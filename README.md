@@ -232,7 +232,7 @@ The fake is strict:
   - Protected methods on protected frames and `HasRestrictions` functions are blocked during combat lockdown.
   - Protected globals and the functions in `tools/api/forbidden.json` are always forbidden (`ADDON_ACTION_FORBIDDEN`). Registering a restricted event (`HasRestrictions`, such as `COMBAT_LOG_EVENT_UNFILTERED`) is forbidden the same way, and registers nothing.
   - The docs don't say what `HasRestrictions` means. Lockdown is the harness's guess, unless the entry names a specific restriction (`RestrictedForMacroChatMessages` applies to macros, so addon calls pass).
-- **SavedVariables** are nil while an addon's files run, and restored right before its `ADDON_LOADED`. `h:Reload()` and `h:Relog()` write them the way the client does: numbers, strings, booleans, and tables of them, as copies, without cycles, NaN, or inf. A secret value or a secret table key there is an error. A relog ends combat and restrictions.
+- **SavedVariables** are nil while an addon's files run, and restored right before its `ADDON_LOADED`. `h:Reload()` and `h:Relog()` write them the way the client does: numbers, strings, booleans, and tables of them, as copies, without cycles, NaN, or inf. A secret value or a secret table key there is an error. A relog ends combat and restrictions. `h:SwitchCharacter(name, surname)` logs in as another character on the same account: the account's SavedVariables stay, and the per-character ones are that character's.
 - **Only real APIs exist:** events, widget methods, and fakes that name real client globals. Reading an undefined global is an error.
   - Only what the addons and probes call is faked. A fake nothing calls is deleted, with its tests. `test` checks it: a fake function (a global, or a member of a global table) whose name appears nowhere in the addons' code (identifiers and strings, not comments) fails, unless `tools/api/forbidden.json` names it, since those fakes exist to refuse the call.
   - Lua's own functions are exempt, and so are widget methods. Every documented method of a widget type exists and counts its calls, and the getters with behaviors are how tests read widget state.
@@ -659,7 +659,7 @@ Once half the minutes are played, a good moment brings the next riddle early. Ea
 
 A riddle never comes in combat. It waits for the fight to end, and one on screen steps aside when a fight starts and comes back after. It doesn't come over Blizzard's windows either: a riddle that comes due while a quest dialog, gossip, a vendor, the mailbox, a bank, the auction house, a trainer, or the flight map is open waits for it to close. One already on screen stays.
 
-`/tlk scholar` shows stars and the time to the next riddle, or that one is waiting. `/tlk puzzle` asks one now.
+`/tlk scholar` shows stars, the stars to spend on wishes, and the time to the next riddle, or that one is waiting. `/tlk puzzle` asks one now.
 
 #### How a riddle works
 
@@ -792,6 +792,24 @@ Riddles are written for a chosen grade, and adapt within it, math and reading ea
 
 A riddle earns a star, and there are streaks and scholar ranks (Apprentice, Journeyman, Adept, Sage, and Archmage), each with a card.
 
+#### Wishes
+
+Stars buy wishes from a grown-up, so riddles lead to something that matters in the game: a new pet, gold for a weapon, a dungeon run together, picking the family's next zone, or 15 more minutes of play.
+
+1. A grown-up adds a wish with its price: `/tlk wish 15 Ride the gryphon together`. Start with a cheap one, about 5 stars, so the first wish comes quickly, and add bigger ones as goals.
+2. Your child can wish for something too: `/tlk wish Get a turtle pet`. It waits for a grown-up to set its price with `/tlk price <number> <stars>`. `/tlk unwish <number>` takes a wish off. The list holds 12.
+3. `/tlk wishes` lists them with how close the stars are ("Ride the gryphon together: 12 of 15 stars").
+4. When there are enough stars, the Owl offers to ask with a card, and `/tlk ask <number>` asks too. Asking holds the wish's stars, so they can't be spent twice.
+5. A grown-up answers: a click on the card, or `/tlk grant <number>`, grants it and spends the stars. `/tlk deny <number>` gives them back. The child's character hears the answer at its next login, or at once when you're grouped.
+
+A request reaches a grown-up two ways:
+- **On the same account,** as a card the next time you log in on any character, and in `/tlk wishes`.
+- **In a group,** as a card right away, when the child named you with `/tlk parent <First Last>` on their character, and you both run the toolkit with Krew messages on. Only the grown-up the child named sees it, and only their answer counts.
+
+Ranks count every riddle star ever earned, so spending stars never lowers one. A grown-up can also give bonus stars to spend, for a clever trick or a kind deed: `/tlk star 2 Nice trick with the reload!`. Bonus stars aren't riddles solved, so they don't count toward a rank or show the Krew a solved riddle.
+
+With a PIN set, setting a price, taking a wish off, granting, giving bonus stars, and naming a parent need a grown-up: unlocked on the child's character, or with the PIN at the end of the command on another character (`/tlk grant 1 <your PIN>`). A card can't take a PIN, so it says which command to type. Without a PIN, anyone is trusted.
+
 #### Parent lock
 
 - `/tlk lock <pin>` (4 to 8 digits) locks every Scholar setting, including the on switch, in slash commands and the settings window.
@@ -809,7 +827,7 @@ A riddle earns a star, and there are streaks and scholar ranks (Apprentice, Jour
 - the skills being worked on: the last first try missed, so it comes right back, or, after three riddles, fewer than half of the last five were right
 - the five most recent misses, with the answer chosen and the right one
 
-Last, it says what your child did around the riddles: how many were put off with **Later**, and how many a `/reload` or relog brought back unsolved. Neither is a mark against them. It's there so the report tells the whole story.
+Last, it says what your child did around the riddles: how many were put off with **Later**, and how many a `/reload` or relog brought back unsolved. Neither is a mark against them. It's there so the report tells the whole story. It also counts the bonus stars a grown-up gave, with the last reason, and the wishes granted.
 
 ## License
 

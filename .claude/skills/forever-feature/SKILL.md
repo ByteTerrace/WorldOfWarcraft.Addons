@@ -77,7 +77,7 @@ Turn step 1's list into tests before writing the code that makes them pass, and 
 Then write the code, following [docs/Conventions.md](../../../docs/Conventions.md):
 
 - **Update file headers.** When a file's contract changes, its header changes too.
-- **A new file goes in the TOC.** In game, that means a `deploy` and a client restart, not just `/reload`.
+- **A new file goes in the TOC.** In game, that means a client restart, not just `/reload`: the client reads TOCs only at startup. The addons are linked as whole folders, so the new file is already there; `deploy` is only needed for an addon that isn't linked yet.
 - **Keep files under LENGTH's 1000 lines.** Run `wc -l` on each file you grow. When one would cross the limit, split it along a real seam in the same change, like `WarbandMessages.lua` and `ScholarView.lua` were.
 - Run `node tools/tlk.mjs format`.
 
@@ -105,7 +105,7 @@ Commit on the current branch. The subject is a plain sentence of what the player
 
 End with **Needs you**, **Changed** and **Found**. Under Changed, give an in-game checklist:
 
-- `deploy` and a client restart if a TOC changed; otherwise `/reload`.
+- A client restart if a TOC changed (and `deploy` only for an addon not linked yet); otherwise `/reload`.
 - The steps to see each behavior from step 1, including the case where something is missing.
 - `/tlk debug status`, to confirm nothing errored.
 

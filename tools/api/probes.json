@@ -297,9 +297,9 @@
     },
     "kills.seen": {
       "result": {
-        "partyKill": { "attacker": "you", "attackerKind": "Player", "target": "Creature" },
+        "partyKill": { "attacker": "you", "attackerKind": "Player", "target": "Creature,Player" },
         "targetDied": true,
-        "unitDied": { "unit": "Creature" }
+        "unitDied": { "unit": "Creature,Player" }
       },
       "contexts": { "combat/Combat": true, "idle/none": true }
     },
@@ -372,7 +372,7 @@
         "unitName": { "count": 2, "r1": "Aa", "r2": "Aa" },
         "unitNameUnmodified": { "count": 2, "r1": "Aa", "r2": "Aa" }
       },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "names.player": {
       "result": {
@@ -397,6 +397,15 @@
     "power.comboPointsInCombat": {
       "result": { "comboPoints": "number", "comboPointsMax": "number", "onTarget": "number" },
       "contexts": { "combat/Combat": true }
+    },
+    "power.enemyPlayer": {
+      "result": {
+        "current": { "secret": true, "type": "number" },
+        "max": { "secret": true, "type": "number" },
+        "powerType": "number",
+        "token": "string"
+      },
+      "contexts": { "idle/none": true }
     },
     "power.npcTarget": {
       "result": {
@@ -514,7 +523,7 @@
     },
     "resting.player": {
       "result": { "isResting": "boolean" },
-      "contexts": { "idle/none": true }
+      "contexts": { "combat/Combat": true, "idle/none": true }
     },
     "secrets.operations": {
       "result": {
@@ -643,8 +652,7 @@
     },
     "unitHealth.enemyPlayer": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70009)"
+      "contexts": { "idle/none": true }
     },
     "unitHealth.npcTarget": {
       "result": { "health": { "secret": true, "type": "number" }, "healthMax": { "secret": true, "type": "number" } },
@@ -688,8 +696,7 @@
         "guid": "string",
         "name": "string"
       },
-      "contexts": { "idle/none": true },
-      "build": "1.60.1 (70009)"
+      "contexts": { "idle/none": true }
     },
     "unitIdentity.npcTarget": {
       "result": {

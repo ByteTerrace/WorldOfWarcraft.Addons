@@ -41,7 +41,8 @@
 --   Observed per API                  [E] Harness.OBSERVED_SECRET[api](h, ctx) adds secrecy the
 --                                         flags don't explain: UnitHealthMax is secret for every
 --                                         existing unit but the player, an enemy player too
---                                         (unitHealth.enemyPlayer)
+--                                         (unitHealth.enemyPlayer), and UnitPowerMax for an enemy
+--                                         player, out of combat too (power.enemyPlayer)
 --   SecretWhenUnitHealthMaxRestricted, [D] the unit isn't player-controlled
 --     SecretWhenUnitPowerMaxRestricted     (per-power-type flags aren't modeled)
 --   SecretWhenUnitPowerRestricted     [D] the power type (the PowerType argument, else the one the
@@ -382,6 +383,21 @@ Harness.OBSERVED_SECRET = {
 
         -- A unit that doesn't exist has nothing to hide.
         return ((unit ~= nil) and (unit ~= h.player))
+    end,
+    -- Only the enemy player is observed: another player in your group keeps the flag's documented answer.
+    UnitPowerMax = function(h, ctx)
+        local unit = h:Unit(ctx.unit)
+
+        if (unit == nil) or (unit == h.player) or (unit.isPlayer ~= true) then
+            return false
+        end
+
+        -- isEnemy defaults to canAttack (units.lua).
+        if unit.isEnemy ~= nil then
+            return (unit.isEnemy == true)
+        end
+
+        return (unit.canAttack == true)
     end,
 }
 

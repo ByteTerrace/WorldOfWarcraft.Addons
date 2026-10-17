@@ -6,10 +6,13 @@ local addonName, ns = ...
 --                Cleared when the module stops and at logout.
 --   Rumble       vibrates strongly when combat starts and lightly when it ends.
 --   QuestFlash   turns the light bar gold for FlashSeconds when a quest is ready to turn in
---                (QuestProgress.lua), while LightBar.questReady is on. Combat's red wins over it.
---   QuestRumble  rumbles lightly when a quest is ready, while Rumble.questReady is on.
+--                (QuestProgress.lua), while LightBar.questReady is on and a controller is connected
+--                (controller.connected). Combat's red wins over it.
+--   QuestRumble  rumbles lightly when a quest is ready, while Rumble.questReady is on and a controller
+--                is connected.
 --
--- Blizzard's controller UI uses neither, so nothing conflicts. Both are harmless with no controller connected.
+-- With no controller, the quest modules don't run, so they keep nothing reading the quest log (QuestProgress runs only
+-- while a module uses it). Blizzard's controller UI uses neither the light bar nor rumble, so nothing conflicts.
 
 local C_GamePad = C_GamePad
 local CreateColor = CreateColor
@@ -86,8 +89,10 @@ ns.Addon:Module("Rumble", {
 
 ns.Addon:Module("QuestFlash", {
     active = {
-        reads = { "LightBar.enabled", "LightBar.questReady" },
-        when = function(state) return (state:Get("LightBar.enabled") and state:Get("LightBar.questReady")) end,
+        reads = { "LightBar.enabled", "LightBar.questReady", "controller.connected" },
+        when = function(state)
+            return (state:Get("LightBar.enabled") and state:Get("LightBar.questReady") and state:Get("controller.connected"))
+        end,
     },
     OnEnable = function(module)
         local timer = nil
@@ -112,8 +117,10 @@ ns.Addon:Module("QuestFlash", {
 
 ns.Addon:Module("QuestRumble", {
     active = {
-        reads = { "Rumble.enabled", "Rumble.questReady" },
-        when = function(state) return (state:Get("Rumble.enabled") and state:Get("Rumble.questReady")) end,
+        reads = { "Rumble.enabled", "Rumble.questReady", "controller.connected" },
+        when = function(state)
+            return (state:Get("Rumble.enabled") and state:Get("Rumble.questReady") and state:Get("controller.connected"))
+        end,
     },
     OnEnable = function(module)
         module:OnIncrease("QuestProgress.ready", function() C_GamePad.SetVibration("Low", 0.5) end)

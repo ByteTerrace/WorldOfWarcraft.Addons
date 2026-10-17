@@ -110,6 +110,7 @@ The radial fires EventRegistry's `Gamepad.ShowMainMenu` last as it shows, and `G
 
 - `C_GamePad.SetVibration(type, intensity)` and `StopVibration()`. The client takes `"High"`, `"Low"`, `"LTrigger"`, and `"RTrigger"` without an error (probe `gamePad.vibration`). Only `High` and `Low` are felt on the controllers tried so far, and the trigger types did nothing. Use `High` and `Low`. A vibration stops by itself after a moment (seen in game with `/btdev rumble High 1`), so `StopVibration` is only needed to cut one short.
 - `SetLedColor(color)`, `GetLedColor()`, and `ClearLedColor()` (DualSense light bar).
+- Whether a controller is connected: Core's `controller` fact (`controller.connected`), from `GetDeviceMappedState(GetActiveDeviceID())`, which is nil without one. `GAME_PAD_CONNECTED` and `GAME_PAD_DISCONNECTED` fire with no payload (probe `input.events`).
 - `GetPowerLevel()` returns an `Enum.GamePadPowerLevel`. `GAME_PAD_POWER_CHANGED` fires as the battery drains (Medium and Critical seen, probe `input.events`), and `GAME_PAD_ACTIVE_CHANGED(isActive)` fires when a controller becomes active. Neither fired before the world loaded.
 - Blizzard's UI uses none of these, so they're free for addons.
 

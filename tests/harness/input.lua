@@ -8,6 +8,9 @@
 --   * h:MouseWheel(frame, delta) turns the mouse wheel over a frame (see Harness:MouseWheel).
 --   * h:SeedRandom(n) makes the env's math.random (and random) deterministic.
 --   * h:GamePadMappedState(id) supplies the C_GamePad fake's connected controller state.
+--   * h:ConnectController(labelStyle) and h:DisconnectController() plug a controller in (Letters by default) and
+--     pull it out: h.labelStyle changes, then [E] GAME_PAD_CONNECTED or GAME_PAD_DISCONNECTED fires with no payload
+--     (input.events).
 --   * h:OpenRadial() and h:CloseRadial() open and close the controller UI's radial main menu (Start), firing
 --     EventRegistry's Gamepad.ShowMainMenu and Gamepad.HideMainMenu.
 --
@@ -67,6 +70,18 @@ local function CoversScreen(h, region, depth)
     end
 
     return false
+end
+
+-- Plugs a controller in (see the header).
+function Harness:ConnectController(labelStyle)
+    self.labelStyle = (labelStyle or "Letters")
+    self:Fire("GAME_PAD_CONNECTED")
+end
+
+-- Pulls the controller out (see the header).
+function Harness:DisconnectController()
+    self.labelStyle = nil
+    self:Fire("GAME_PAD_DISCONNECTED")
 end
 
 -- Drags a frame with the mouse button (default "LeftButton") by dx, dy. Only a visible, mouse-enabled frame that

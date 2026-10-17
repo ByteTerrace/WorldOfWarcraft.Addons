@@ -116,7 +116,7 @@ Controller sources are named by position (`gamepad.south`), never by printed let
 
 *Facts* are shared runtime rows. An addon opts in with `facts = { ... }`. A fact's adapter is the only code that reads its API. Facts are declared first and take their real value the moment they're enabled, so a `/reload` in combat doesn't look like combat starting to any rule.
 
-- `combat` and `afk` always run: `combat.active` and `afk.active`.
+- `combat`, `afk`, and `controller` always run: `combat.active`, `afk.active`, and `controller.connected`. A controller is connected while the active device has a mapped state (`C_GamePad.GetDeviceMappedState`), read at start and on `GAME_PAD_CONNECTED` and `GAME_PAD_DISCONNECTED`.
 - `target`, `kills`, `death`, and `restriction` are demand facts, running only while a module that uses them runs:
   - `target`: what your target is (`target.serial`, `enemyPlayer`, `formidable`, `alive`, `died`, and `duelEnded`). A health event only re-reads whether it lives (one API call). Attackability and rank re-read on the events that change them.
   - `kills`: honorable kills and their victim (`kills.honorable` and `kills.victim`), and your world PvP killing blows from `PARTY_KILL` (`kills.blows`). Killing blows with secret GUIDs in instances don't count.

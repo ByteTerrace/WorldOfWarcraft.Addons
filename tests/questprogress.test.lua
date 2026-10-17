@@ -48,6 +48,39 @@ local function Said(h, from)
     return table.concat(texts, " | ")
 end
 
+test("the quest flash and rumble run only while a controller is connected", function()
+    local h = Harness.New()
+    local addon = h:LoadAddon("TheLanKrewToolKit").Addon
+    local modules = addon.Modules
+
+    falsy(modules.QuestFlash:IsRunning(), "no controller, no flash")
+    falsy(modules.QuestRumble:IsRunning(), "nor rumble")
+    h:ConnectController()
+    truthy(modules.QuestFlash:IsRunning(), "a controller plugged in brings them")
+    truthy(modules.QuestRumble:IsRunning())
+    Accept(h, Wolves)
+    h:Advance(1)
+    h:ProgressObjective(33, 1, 8)
+    h:Advance(1)
+    eq(Light(h), Gold)
+    h:DisconnectController()
+    falsy(modules.QuestFlash:IsRunning(), "and pulling it out ends them")
+    falsy(modules.QuestRumble:IsRunning())
+end)
+
+test("with no controller and the quest-ready sound off, nothing keeps the quest log read", function()
+    local h = Harness.New()
+    local addon = h:LoadAddon("TheLanKrewToolKit").Addon
+
+    addon.State:Set("Sounds.questReady", false)
+    falsy(addon.Modules.QuestProgress:IsRunning())
+    h.apiCalls = {}
+    Accept(h, Wolves)
+    h:ProgressObjective(33, 1, 3)
+    h:Advance(1)
+    eq(h:CountApiCalls("C_QuestLog.ReadyForTurnIn"), 0, "no quest progress is read")
+end)
+
 test("a count that wouldn't be read aloud doesn't keep the quest log read", function()
     -- Grade 2 with Read riddles aloud for kindergarten and grade 1: nothing is read aloud. With the QuestReady sound,
     -- flash and rumble off too, nothing needs the log's progress.
@@ -191,6 +224,7 @@ test("a quest ready to turn in plays QuestReady, flashes the light bar gold, and
     local h = Harness.New()
 
     h.files[ReadyFile] = true
+    h.labelStyle = "Letters"
     h:LoadAddon("TheLanKrewToolKit")
     Accept(h, Wolves)
     h:Advance(1)
@@ -214,6 +248,7 @@ end)
 test("combat's red wins over the gold, and the gold doesn't come back once the fight is over", function()
     local h = Harness.New()
 
+    h.labelStyle = "Letters"
     h:LoadAddon("TheLanKrewToolKit")
     Accept(h, Wolves)
     h:Advance(1)

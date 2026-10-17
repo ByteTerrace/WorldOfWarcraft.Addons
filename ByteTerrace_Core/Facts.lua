@@ -9,6 +9,9 @@
 --   combat.active  true while the player is in combat. Set on PLAYER_REGEN_DISABLED, before
 --                  InCombatLockdown() turns true.
 --   afk.active     true while the player is flagged AFK.
+--   controller.connected  true while a controller is connected: the active device has a mapped
+--                  state (GetDeviceMappedState is nil without one), read at start and on
+--                  GAME_PAD_CONNECTED and GAME_PAD_DISCONNECTED.
 --
 -- Demand facts run only while a module that uses them runs (uses = { "target" }), so a fact no running feature reads
 -- registers nothing:
@@ -18,6 +21,7 @@
 --   restriction  which addon restrictions are in force (FactsRestriction.lua).
 
 local ByteTerrace = ByteTerrace
+local C_GamePad = C_GamePad
 local InCombatLockdown = InCombatLockdown
 local issecretvalue = issecretvalue
 local UnitAffectingCombat = UnitAffectingCombat
@@ -67,6 +71,22 @@ ByteTerrace.Facts = {
             Update()
         end,
         state = { { default = false, kind = "boolean", name = "active", persist = false } },
+        toggle = false,
+    },
+    controller = {
+        OnEnable = function(module)
+            local connected = module:Id("connected")
+            local state = module.Addon.State
+
+            local function Update()
+                state:Set(connected, (C_GamePad.GetDeviceMappedState(C_GamePad.GetActiveDeviceID()) ~= nil))
+            end
+
+            module:On("GAME_PAD_CONNECTED", Update)
+            module:On("GAME_PAD_DISCONNECTED", Update)
+            Update()
+        end,
+        state = { { default = false, kind = "boolean", name = "connected", persist = false } },
         toggle = false,
     },
 }

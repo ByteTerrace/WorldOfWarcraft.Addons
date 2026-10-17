@@ -26,6 +26,28 @@ local function NewAddOn()
     return h, addon
 end
 
+test("the controller fact says whether a controller is connected, from load on and as one comes and goes", function()
+    local h = Harness.New()
+
+    h:LoadFiles("ByteTerrace_Core")
+    h.declared.TestDB = true
+    h.labelStyle = "Shapes"
+
+    local addon = h.env.ByteTerrace.NewAddOn({ facts = { "controller" }, name = "TestApp", savedVariable = "TestDB",
+        slash = { "/test" } })
+
+    h:Fire("ADDON_LOADED", "TestApp", false)
+    truthy(addon.State:Get("controller.connected"), "connected at load")
+    h:DisconnectController()
+    falsy(addon.State:Get("controller.connected"))
+    h:ConnectController()
+    truthy(addon.State:Get("controller.connected"))
+    h:ResetCalls()
+    h.apiCalls = {}
+    h:Fire("GAME_PAD_CONNECTED")
+    eq(h:CountApiCalls("C_GamePad.GetActiveDeviceID"), 1, "a connection reads one device")
+end)
+
 test("demand facts register nothing while no module uses them", function()
     local h, addon = NewAddOn()
 

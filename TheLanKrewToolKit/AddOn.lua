@@ -4,7 +4,8 @@ local addonName, ns = ...
 -- on ADDON_LOADED (ByteTerrace_Core's AddOn.lua).
 --
 -- Slash commands are /tlk and /lankrew. The combat, afk, and controller facts publish combat.active, afk.active, and
--- controller.connected for any module to read. The target, kills, and death facts run while a module that uses them runs (ByteTerrace_Core's Facts.lua).
+-- controller.connected for any module to read. The target, kills, and death facts run while a module that uses them
+-- runs (ByteTerrace_Core's Facts.lua).
 
 ns.Addon = ByteTerrace.NewAddOn({
     facts = { "combat", "afk", "controller", "target", "kills", "death" },
